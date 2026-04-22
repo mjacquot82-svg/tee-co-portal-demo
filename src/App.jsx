@@ -1,0 +1,39 @@
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Layout from "./components/Layout";
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+import CategoryView from "./pages/CategoryView";
+import GarmentView from "./pages/GarmentView";
+import OrderPreview from "./pages/OrderPreview";
+import OrderSubmitted from "./pages/OrderSubmitted";
+import MyOrders from "./pages/MyOrders";
+import DepositPayment from "./pages/DepositPayment";
+import PaymentConfirmed from "./pages/PaymentConfirmed";
+import Dashboard from "./admin/Dashboard";
+import Orders from "./admin/Orders";
+import OrderDetail from "./admin/OrderDetail";
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Home />} />
+          <Route path="login" element={<Login />} />
+          <Route path="signup" element={<Signup />} />
+          <Route path="category/:categoryId" element={<CategoryView />} />
+          <Route path="garment/:garmentId" element={<GarmentView />} />
+          <Route path="order-preview" element={<OrderPreview />} />
+          <Route path="order-submitted" element={<OrderSubmitted />} />
+          <Route path="my-orders" element={<MyOrders />} />
+          <Route path="deposit-payment" element={<DepositPayment />} />
+          <Route path="payment-confirmed" element={<PaymentConfirmed />} />
+          <Route path="admin" element={<Dashboard />} />
+          <Route path="admin/orders" element={<Orders />} />
+          <Route path="admin/orders/:orderNumber" element={<OrderDetail />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
+}
