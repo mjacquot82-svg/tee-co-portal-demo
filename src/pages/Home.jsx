@@ -28,6 +28,60 @@ function InstagramIcon() {
 }
 
 export default function Home() {
+  const previewBoxStyle = {
+    width: "100%",
+    aspectRatio: "1 / 1",
+    background: "#fafaf9",
+    borderRadius: "12px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: "10px",
+    padding: "10px",
+    overflow: "hidden",
+  };
+
+  const previewImageStyle = {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+  };
+
+  const popularGarments = [
+    {
+      title: "Gildan Softstyle T-Shirt",
+      subtitle: "Best for everyday team, brand, and event orders.",
+      image: "/garments/gildan-softstyle-tee.jpg",
+      to: "/category/tshirts",
+    },
+    {
+      title: "Heavy Blend Hoodie",
+      subtitle: "A reliable fleece option for staff, schools, and merch drops.",
+      image: "/garments/hoodies.PNG",
+      to: "/category/hoodies",
+    },
+    {
+      title: "Richardson 112 Hat",
+      subtitle: "Structured trucker style that works well for embroidery.",
+      image: "/garments/hat.PNG",
+      to: "/category/hats",
+    },
+  ];
+
+  const orderingSteps = [
+    "Upload your artwork",
+    "Approve your mockup",
+    "Production begins",
+    "Pickup or delivery",
+  ];
+
+  const reassuranceItems = [
+    "No minimums available",
+    "Bulk discounts offered",
+    "Local production turnaround",
+    "Mockups included before printing",
+  ];
+
   function getCategoryImage(categoryName) {
     const firstGarment = garments.find((g) => g.category === categoryName);
     return firstGarment?.image || "/garments/gildan-softstyle-tee.jpg";
@@ -96,9 +150,74 @@ export default function Home() {
 
       <div
         style={{
+          background: "#ffffff",
+          borderRadius: "16px",
+          padding: "18px",
+          border: "1px solid #e7e5e4",
+          boxShadow: "0 8px 18px rgba(0,0,0,0.05)",
+          marginBottom: "18px",
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 6px 0",
+            fontSize: "12px",
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            color: "#78716c",
+            textTransform: "uppercase",
+          }}
+        >
+          Custom Apparel Made Simple
+        </p>
+
+        <h2
+          style={{
+            margin: "0 0 6px 0",
+            fontSize: "24px",
+            letterSpacing: "-0.02em",
+          }}
+        >
+          Start Your Custom Order
+        </h2>
+
+        <p
+          style={{
+            margin: "0 0 14px 0",
+            fontSize: "14px",
+            color: "#78716c",
+            lineHeight: 1.45,
+          }}
+        >
+          Upload artwork, choose garments, and request a quote in minutes.
+        </p>
+
+        <Link
+          to="/category/tshirts"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "42px",
+            padding: "0 16px",
+            borderRadius: "12px",
+            background: "#171717",
+            color: "#ffffff",
+            textDecoration: "none",
+            fontSize: "14px",
+            fontWeight: 700,
+          }}
+        >
+          Start Order
+        </Link>
+      </div>
+
+      <div
+        style={{
           display: "grid",
           gridTemplateColumns: "repeat(2, 1fr)",
           gap: "16px",
+          marginBottom: "22px",
         }}
       >
         {categories.map((category) => (
@@ -117,27 +236,11 @@ export default function Home() {
               transition: "transform 0.08s ease",
             }}
           >
-            <div
-              style={{
-                width: "100%",
-                height: "120px",
-                background: "#fafaf9",
-                borderRadius: "12px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: "10px",
-                padding: "10px",
-              }}
-            >
+            <div style={previewBoxStyle}>
               <img
                 src={getCategoryImage(category.name)}
                 alt={category.name}
-                style={{
-                  maxWidth: "100%",
-                  maxHeight: "100%",
-                  objectFit: "contain",
-                }}
+                style={previewImageStyle}
               />
             </div>
 
@@ -163,6 +266,251 @@ export default function Home() {
             </p>
           </Link>
         ))}
+      </div>
+
+      <div style={{ marginBottom: "22px" }}>
+        <div style={{ marginBottom: "12px" }}>
+          <h2
+            style={{
+              margin: "0 0 4px 0",
+              fontSize: "20px",
+              letterSpacing: "-0.02em",
+            }}
+          >
+            Popular Garments
+          </h2>
+
+          <p
+            style={{
+              margin: 0,
+              fontSize: "13px",
+              color: "#78716c",
+            }}
+          >
+            Common picks for schools, teams, events, and business merch.
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: "16px",
+          }}
+        >
+          {popularGarments.map((item) => (
+            <Link
+              key={item.title}
+              to={item.to}
+              style={{
+                textDecoration: "none",
+                background: "#ffffff",
+                borderRadius: "16px",
+                padding: "14px",
+                border: "1px solid #e7e5e4",
+                boxShadow: "0 8px 18px rgba(0,0,0,0.05)",
+                color: "#171717",
+                display: "block",
+              }}
+            >
+              <div style={previewBoxStyle}>
+                <img src={item.image} alt={item.title} style={previewImageStyle} />
+              </div>
+
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: "15px",
+                  fontWeight: 700,
+                  lineHeight: 1.3,
+                }}
+              >
+                {item.title}
+              </h3>
+
+              <p
+                style={{
+                  margin: "4px 0 0 0",
+                  fontSize: "13px",
+                  color: "#78716c",
+                  lineHeight: 1.4,
+                }}
+              >
+                {item.subtitle}
+              </p>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: "22px" }}>
+        <div style={{ marginBottom: "12px" }}>
+          <h2
+            style={{
+              margin: "0 0 4px 0",
+              fontSize: "20px",
+              letterSpacing: "-0.02em",
+            }}
+          >
+            How Ordering Works
+          </h2>
+
+          <p
+            style={{
+              margin: 0,
+              fontSize: "13px",
+              color: "#78716c",
+            }}
+          >
+            A straightforward process from artwork to finished apparel.
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+            gap: "12px",
+          }}
+        >
+          {orderingSteps.map((step, index) => (
+            <div
+              key={step}
+              style={{
+                background: "#ffffff",
+                borderRadius: "16px",
+                padding: "14px",
+                border: "1px solid #e7e5e4",
+                boxShadow: "0 8px 18px rgba(0,0,0,0.05)",
+              }}
+            >
+              <div
+                style={{
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "999px",
+                  background: "#f5f5f4",
+                  color: "#57534e",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  marginBottom: "10px",
+                }}
+              >
+                {index + 1}
+              </div>
+
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  color: "#171717",
+                  lineHeight: 1.4,
+                }}
+              >
+                {step}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "10px",
+          marginBottom: "22px",
+          padding: "14px",
+          background: "#fafaf9",
+          borderRadius: "16px",
+          border: "1px solid #e7e5e4",
+        }}
+      >
+        {reassuranceItems.map((item) => (
+          <div
+            key={item}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "8px 10px",
+              borderRadius: "999px",
+              background: "#ffffff",
+              border: "1px solid #e7e5e4",
+              color: "#57534e",
+              fontSize: "12px",
+              fontWeight: 600,
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                width: "6px",
+                height: "6px",
+                borderRadius: "999px",
+                background: "#a8a29e",
+                display: "inline-block",
+              }}
+            />
+            {item}
+          </div>
+        ))}
+      </div>
+
+      <div
+        style={{
+          background: "#ffffff",
+          borderRadius: "16px",
+          padding: "18px",
+          border: "1px solid #e7e5e4",
+          boxShadow: "0 8px 18px rgba(0,0,0,0.05)",
+        }}
+      >
+        <h2
+          style={{
+            margin: "0 0 6px 0",
+            fontSize: "20px",
+            letterSpacing: "-0.02em",
+          }}
+        >
+          Need help choosing garments?
+        </h2>
+
+        <p
+          style={{
+            margin: "0 0 14px 0",
+            fontSize: "14px",
+            color: "#78716c",
+            lineHeight: 1.45,
+          }}
+        >
+          Contact us and we&apos;ll help you select the best option for your
+          order.
+        </p>
+
+        <Link
+          to="/login"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "42px",
+            padding: "0 16px",
+            borderRadius: "12px",
+            background: "#ffffff",
+            color: "#171717",
+            textDecoration: "none",
+            fontSize: "14px",
+            fontWeight: 700,
+            border: "1px solid #d6d3d1",
+          }}
+        >
+          Contact Us
+        </Link>
       </div>
     </div>
   );
