@@ -177,8 +177,57 @@
     left: 0;
     border-left-color: var(--border);
   }
-  &::after {
+
+  .timeline::after {
     right: 0;
     border-right-color: var(--border);
+  }
+}
+
+@media print {
+  header,
+  nav,
+  .actions-panel {
+    display: none !important;
+  }
+
+  .order-detail-page button,
+  .order-detail-page input {
+    display: none !important;
+  }
+
+  .order-detail-grid {
+    display: block !important;
+  }
+
+  .order-detail-page {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .order-detail-sheet,
+  .order-detail-card {
+    box-shadow: none !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    break-inside: avoid;
+  }
+
+  .order-detail-sheet {
+    padding: 24px !important;
+  }
+
+  .order-detail-summary-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .order-detail-notes {
+    margin-top: 12px !important;
+  }
+
+  body {
+    background: white !important;
   }
 }

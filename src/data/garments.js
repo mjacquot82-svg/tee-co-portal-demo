@@ -7,6 +7,7 @@ export const categories = [
 export const garments = [
   {
     garment_id: "TSHIRT_GILDAN_64000",
+    image: "/garments/gildan-softstyle-tee.jpg",
     category: "T-Shirts",
     brand: "Gildan",
     style_name: "Softstyle 64000",
@@ -18,6 +19,7 @@ export const garments = [
   },
   {
     garment_id: "TSHIRT_BELLA_3001",
+    image: "/garments/gildan-softstyle-tee.jpg",
     category: "T-Shirts",
     brand: "Bella+Canvas",
     style_name: "3001",
@@ -29,6 +31,7 @@ export const garments = [
   },
   {
     garment_id: "HOODIE_GILDAN_18500",
+    image: "/garments/hoodies.PNG",
     category: "Hoodies",
     brand: "Gildan",
     style_name: "Heavy Blend 18500",
@@ -40,6 +43,7 @@ export const garments = [
   },
   {
     garment_id: "HOODIE_IND_4000",
+    image: "/garments/hoodies.PNG",
     category: "Hoodies",
     brand: "Independent Trading Co",
     style_name: "IND4000",
@@ -51,6 +55,7 @@ export const garments = [
   },
   {
     garment_id: "HAT_RICHARDSON_112",
+    image: "/garments/hat.PNG",
     category: "Hats",
     brand: "Richardson",
     style_name: "112",
@@ -62,6 +67,7 @@ export const garments = [
   },
   {
     garment_id: "HAT_FLEXFIT_6277",
+    image: "/garments/hat.PNG",
     category: "Hats",
     brand: "Flexfit",
     style_name: "6277",

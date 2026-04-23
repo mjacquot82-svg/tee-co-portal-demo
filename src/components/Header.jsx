@@ -12,7 +12,7 @@ export default function Header() {
         style={{
           maxWidth: "1100px",
           margin: "0 auto",
-          padding: "16px 24px",
+          padding: "10px 24px", // reduced from 16px → tighter header height
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -25,12 +25,13 @@ export default function Header() {
           style={{
             textDecoration: "none",
             color: "#171717",
+            lineHeight: "1.1", // tighter vertical stacking
           }}
         >
           <div
             style={{
               fontWeight: "700",
-              fontSize: "20px",
+              fontSize: "18px", // slightly reduced from 20px
             }}
           >
             Tee & Co Ltd.
@@ -38,9 +39,9 @@ export default function Header() {
 
           <div
             style={{
-              fontSize: "12px",
+              fontSize: "11px", // slightly reduced
               color: "#78716c",
-              marginTop: "2px",
+              marginTop: "1px", // reduced from 2px
               letterSpacing: "0.06em",
               textTransform: "uppercase",
             }}
@@ -52,7 +53,7 @@ export default function Header() {
         <nav
           style={{
             display: "flex",
-            gap: "18px",
+            gap: "16px", // slightly tighter spacing
             alignItems: "center",
           }}
         >
@@ -62,6 +63,7 @@ export default function Header() {
               textDecoration: "none",
               color: "#171717",
               fontWeight: "600",
+              fontSize: "14px",
             }}
           >
             My Orders
@@ -73,6 +75,7 @@ export default function Header() {
               textDecoration: "none",
               color: "#57534e",
               fontWeight: "600",
+              fontSize: "14px",
             }}
           >
             Login

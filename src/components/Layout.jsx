@@ -129,62 +129,48 @@ export default function Layout() {
       </header>
 
       {/* BANNER */}
-      <div
-        style={{
-          maxWidth: "1100px",
-          margin: "14px auto 0 auto",
-          padding: "0 20px",
-        }}
-      >
-        <div
-          style={{
-            background: isAdmin ? "#1c1917" : "#292524",
-            color: "#fafaf9",
-            borderRadius: "18px",
-            padding: "14px 18px",
-            boxShadow: "0 10px 26px rgba(28,25,23,0.14)",
-          }}
-        >
-          <p
-            style={{
-              margin: 0,
-              fontSize: "11px",
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "#d6d3d1",
-            }}
-          >
-            {isAdmin ? "Shop Dashboard" : "Customer Portal"}
-          </p>
+<div
+  style={{
+    maxWidth: "1100px",
+    margin: "8px auto 0 auto",
+    padding: "0 14px",
+  }}
+>
+  <div
+    style={{
+      background: isAdmin ? "#1c1917" : "#292524",
+      color: "#fafaf9",
+      borderRadius: "14px",
+      padding: "10px 14px",
+      boxShadow: "0 6px 16px rgba(28,25,23,0.12)",
+    }}
+  >
+    <p
+      style={{
+        margin: 0,
+        fontSize: "10px",
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        color: "#d6d3d1",
+      }}
+    >
+      {isAdmin ? "Shop Dashboard" : "Customer Portal"}
+    </p>
 
-          <h1
-            style={{
-              margin: "4px 0 2px 0",
-              fontSize: "22px",
-              lineHeight: 1.1,
-              letterSpacing: "-0.03em",
-            }}
-          >
-            {isAdmin
-              ? "Manage requests, deposits, and production"
-              : "Custom apparel ordering made simple"}
-          </h1>
-
-          <p
-            style={{
-              margin: 0,
-              fontSize: "14px",
-              color: "#e7e5e4",
-              maxWidth: "640px",
-              lineHeight: 1.45,
-            }}
-          >
-            {isAdmin
-              ? "Review artwork, approve orders, request deposits, and move jobs into production."
-              : "Choose garments, upload artwork, select print placement, and send clean order requests directly to Tee & Co."}
-          </p>
-        </div>
-      </div>
+    <h1
+      style={{
+        margin: "2px 0",
+        fontSize: "16px",
+        lineHeight: 1.2,
+        letterSpacing: "-0.02em",
+      }}
+    >
+      {isAdmin
+        ? "Manage requests and production"
+        : "Custom apparel ordering made simple"}
+    </h1>
+  </div>
+</div>
 
       {/* PAGE CONTENT */}
       <main style={{ padding: "14px 0 26px 0" }}>

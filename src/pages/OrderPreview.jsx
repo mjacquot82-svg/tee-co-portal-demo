@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 const PLACEMENTS = [
@@ -48,6 +48,16 @@ export default function OrderPreview() {
   const [placement, setPlacement] = useState("Full Front");
   const [notes, setNotes] = useState("");
   const [artwork, setArtwork] = useState(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 900);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const selectedPlacement = useMemo(
     () => PLACEMENTS.find((item) => item.value === placement),
@@ -91,15 +101,15 @@ export default function OrderPreview() {
       style={{
         maxWidth: "1100px",
         margin: "0 auto",
-        padding: "14px 20px 28px",
+        padding: isMobile ? "10px 14px 20px" : "12px 20px 24px",
         fontFamily:
           'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
       <div
         style={{
-          marginBottom: "14px",
-          fontSize: "13px",
+          marginBottom: isMobile ? "10px" : "12px",
+          fontSize: isMobile ? "12px" : "13px",
           color: "#78716c",
           display: "flex",
           gap: "8px",
@@ -118,14 +128,16 @@ export default function OrderPreview() {
           Home
         </Link>
         <span>/</span>
-        <span style={{ color: "#171717", fontWeight: 700 }}>Order Preview</span>
+        <span style={{ color: "#171717", fontWeight: 700 }}>
+          Order Preview
+        </span>
       </div>
 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1.02fr 0.98fr",
-          gap: "20px",
+          gridTemplateColumns: isMobile ? "1fr" : "340px minmax(0, 1fr)",
+          gap: isMobile ? "14px" : "18px",
           alignItems: "start",
         }}
       >
@@ -133,75 +145,47 @@ export default function OrderPreview() {
           style={{
             background: "#ffffff",
             borderRadius: "18px",
-            padding: "18px",
+            padding: isMobile ? "14px" : "16px",
             border: "1px solid #e7e5e4",
-            boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
+            boxShadow: "0 8px 18px rgba(0,0,0,0.05)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            position: isMobile ? "static" : "sticky",
+            top: isMobile ? "auto" : "16px",
           }}
         >
           <div
             style={{
+              width: "100%",
+              maxWidth: isMobile ? "100%" : "280px",
+              aspectRatio: "1 / 1",
+              borderRadius: "16px",
+              overflow: "hidden",
+              background: "#fafaf9",
               display: "flex",
-              gap: "16px",
-              alignItems: "flex-start",
-              flexWrap: "wrap",
-              marginBottom: "16px",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "1px solid #e7e5e4",
             }}
           >
             <img
               src={imageSrc}
               alt={garmentName}
               style={{
-                width: "160px",
-                height: "160px",
-                objectFit: "cover",
-                borderRadius: "14px",
-                border: "1px solid #e7e5e4",
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
                 display: "block",
-                flexShrink: 0,
               }}
             />
-
-            <div style={{ flex: 1, minWidth: "220px" }}>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "11px",
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: "#78716c",
-                }}
-              >
-                {brand} · {category}
-              </p>
-
-              <h1
-                style={{
-                  margin: "6px 0 8px 0",
-                  fontSize: "26px",
-                  lineHeight: 1.1,
-                  letterSpacing: "-0.02em",
-                  color: "#171717",
-                }}
-              >
-                {garmentName}
-              </h1>
-
-              <p
-                style={{
-                  margin: 0,
-                  color: "#57534e",
-                  lineHeight: 1.5,
-                  fontSize: "14px",
-                }}
-              >
-                {description}
-              </p>
-            </div>
           </div>
 
           <div
             style={{
-              padding: "14px",
+              width: "100%",
+              marginTop: "12px",
+              padding: "12px",
               borderRadius: "14px",
               background: "#fafaf9",
               border: "1px solid #e7e5e4",
@@ -209,8 +193,8 @@ export default function OrderPreview() {
           >
             <p
               style={{
-                margin: "0 0 8px 0",
-                fontWeight: 700,
+                margin: "0 0 6px 0",
+                fontWeight: "700",
                 fontSize: "14px",
                 color: "#171717",
               }}
@@ -218,10 +202,139 @@ export default function OrderPreview() {
               Order Summary
             </p>
 
+            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
+              Color: {selectedColor}
+            </p>
+            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
+              Order Type: {orderType}
+            </p>
+            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
+              Size: {selectedSize}
+            </p>
+            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
+              Quantity: {quantity}
+            </p>
+            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
+              Placement: {placement}
+            </p>
+            {artwork?.name ? (
+              <p
+                style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}
+              >
+                Artwork: {artwork.name}
+              </p>
+            ) : null}
+          </div>
+
+          {artwork?.previewUrl && artwork.file?.type?.startsWith("image/") && (
+            <div
+              style={{
+                width: "100%",
+                marginTop: "12px",
+                padding: "12px",
+                borderRadius: "14px",
+                background: "#fafaf9",
+                border: "1px solid #e7e5e4",
+              }}
+            >
+              <p
+                style={{
+                  margin: "0 0 8px 0",
+                  fontWeight: "700",
+                  fontSize: "14px",
+                  color: "#171717",
+                }}
+              >
+                Artwork Preview
+              </p>
+
+              <img
+                src={artwork.previewUrl}
+                alt={artwork.name}
+                style={{
+                  width: "100%",
+                  maxWidth: "240px",
+                  height: "auto",
+                  borderRadius: "12px",
+                  border: "1px solid #e7e5e4",
+                  display: "block",
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: "18px",
+            padding: isMobile ? "16px" : "20px",
+            border: "1px solid #e7e5e4",
+            boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: "11px",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "#78716c",
+            }}
+          >
+            {brand} · {category}
+          </p>
+
+          <h1
+            style={{
+              marginTop: "6px",
+              marginBottom: "8px",
+              fontSize: isMobile ? "20px" : "26px",
+              lineHeight: 1.1,
+              letterSpacing: "-0.02em",
+              color: "#171717",
+            }}
+          >
+            {garmentName}
+          </h1>
+
+          <p
+            style={{
+              margin: "0 0 8px 0",
+              color: "#57534e",
+              lineHeight: 1.5,
+              fontSize: isMobile ? "14px" : "15px",
+            }}
+          >
+            {description}
+          </p>
+
+          <div
+            style={{
+              marginTop: "10px",
+              padding: "12px 14px",
+              borderRadius: "14px",
+              background: "#fafaf9",
+              border: "1px solid #e7e5e4",
+            }}
+          >
+            <p
+              style={{
+                margin: "0 0 6px 0",
+                fontWeight: "700",
+                fontSize: "14px",
+                color: "#171717",
+              }}
+            >
+              Garment Details
+            </p>
+
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gridTemplateColumns: isMobile
+                  ? "1fr"
+                  : "repeat(2, minmax(0, 1fr))",
                 gap: "10px 16px",
               }}
             >
@@ -279,122 +392,7 @@ export default function OrderPreview() {
             </div>
           </div>
 
-          <div
-            style={{
-              marginTop: "18px",
-              background: "#ffffff",
-              borderRadius: "16px",
-              padding: "16px",
-              border: "1px solid #e7e5e4",
-            }}
-          >
-            <p
-              style={{
-                margin: "0 0 10px 0",
-                fontWeight: 700,
-                fontSize: "15px",
-                color: "#171717",
-              }}
-            >
-              Artwork Upload
-            </p>
-
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              style={{
-                padding: "11px 14px",
-                borderRadius: "12px",
-                border: "1px solid #d6d3d1",
-                background: "#ffffff",
-                color: "#171717",
-                cursor: "pointer",
-                fontWeight: 600,
-                fontSize: "14px",
-              }}
-            >
-              {artwork ? "Replace Artwork" : "Upload Artwork"}
-            </button>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,.pdf,.ai,.eps,.svg"
-              onChange={handleUpload}
-              style={{ display: "none" }}
-            />
-
-            {artwork ? (
-              <div
-                style={{
-                  marginTop: "14px",
-                  padding: "12px",
-                  borderRadius: "12px",
-                  background: "#fafaf9",
-                  border: "1px solid #e7e5e4",
-                }}
-              >
-                <p
-                  style={{
-                    margin: "0 0 8px 0",
-                    fontSize: "13px",
-                    color: "#57534e",
-                  }}
-                >
-                  Uploaded file
-                </p>
-                <p
-                  style={{
-                    margin: 0,
-                    fontWeight: 600,
-                    color: "#171717",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {artwork.name}
-                </p>
-
-                {artwork.previewUrl && artwork.file?.type?.startsWith("image/") && (
-                  <img
-                    src={artwork.previewUrl}
-                    alt={artwork.name}
-                    style={{
-                      width: "100%",
-                      maxWidth: "260px",
-                      height: "auto",
-                      marginTop: "12px",
-                      borderRadius: "12px",
-                      border: "1px solid #e7e5e4",
-                      display: "block",
-                    }}
-                  />
-                )}
-              </div>
-            ) : (
-              <p
-                style={{
-                  margin: "10px 0 0 0",
-                  color: "#78716c",
-                  fontSize: "13px",
-                  lineHeight: 1.5,
-                }}
-              >
-                Upload artwork, logo, or design reference for this order request.
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div
-          style={{
-            background: "#ffffff",
-            borderRadius: "18px",
-            padding: "20px",
-            border: "1px solid #e7e5e4",
-            boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
-          }}
-        >
-          <div>
+          <div style={{ marginTop: "18px" }}>
             <p
               style={{
                 fontWeight: "700",
@@ -481,6 +479,86 @@ export default function OrderPreview() {
                 fontSize: "15px",
               }}
             >
+              Artwork Upload
+            </p>
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                padding: "11px 14px",
+                borderRadius: "12px",
+                border: "1px solid #d6d3d1",
+                background: "#ffffff",
+                color: "#171717",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: "14px",
+              }}
+            >
+              {artwork ? "Replace Artwork" : "Upload Artwork"}
+            </button>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,.pdf,.ai,.eps,.svg"
+              onChange={handleUpload}
+              style={{ display: "none" }}
+            />
+
+            {artwork ? (
+              <div
+                style={{
+                  marginTop: "12px",
+                  padding: "12px",
+                  borderRadius: "12px",
+                  background: "#fafaf9",
+                  border: "1px solid #e7e5e4",
+                }}
+              >
+                <p
+                  style={{
+                    margin: "0 0 6px 0",
+                    fontSize: "13px",
+                    color: "#57534e",
+                  }}
+                >
+                  Uploaded file
+                </p>
+                <p
+                  style={{
+                    margin: 0,
+                    fontWeight: 600,
+                    color: "#171717",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {artwork.name}
+                </p>
+              </div>
+            ) : (
+              <p
+                style={{
+                  margin: "10px 0 0 0",
+                  color: "#78716c",
+                  fontSize: "13px",
+                  lineHeight: 1.5,
+                }}
+              >
+                Upload artwork, logo, or design reference for this order request.
+              </p>
+            )}
+          </div>
+
+          <div style={{ marginTop: "18px" }}>
+            <p
+              style={{
+                fontWeight: "700",
+                margin: "0 0 8px 0",
+                fontSize: "15px",
+              }}
+            >
               Notes for Tee &amp; Co
             </p>
 
@@ -490,7 +568,7 @@ export default function OrderPreview() {
               placeholder="Optional notes about placement, sizing, timing, or design preferences..."
               style={{
                 width: "100%",
-                minHeight: "120px",
+                minHeight: isMobile ? "110px" : "120px",
                 resize: "vertical",
                 padding: "12px 14px",
                 borderRadius: "14px",
@@ -531,20 +609,21 @@ export default function OrderPreview() {
               Submit Order Request
             </button>
 
-            <Link
-              to={-1}
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
               style={{
                 border: "1px solid #d6d3d1",
                 color: "#171717",
                 padding: "12px 16px",
                 borderRadius: "12px",
-                textDecoration: "none",
                 background: "#ffffff",
+                cursor: "pointer",
                 fontSize: "14px",
               }}
             >
               Back
-            </Link>
+            </button>
           </div>
         </div>
       </div>

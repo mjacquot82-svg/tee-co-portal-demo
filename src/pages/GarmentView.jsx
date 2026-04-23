@@ -1,15 +1,6 @@
 import { Link, useParams } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { garments } from "../data/garments";
-
-const garmentImages = {
-  TSHIRT_GILDAN_64000: "/garments/gildan-softstyle-tee.jpg",
-  TSHIRT_BELLA_3001: "/garments/bella-canvas-3001.jpg",
-  HOODIE_GILDAN_18500: "/garments/gildan-softstyle-tee.jpg",
-  HOODIE_IND_4000: "/garments/bella-canvas-3001.jpg",
-  HAT_RICHARDSON_112: "/garments/gildan-softstyle-tee.jpg",
-  HAT_FLEXFIT_6277: "/garments/bella-canvas-3001.jpg",
-};
 
 const garmentPricing = {
   TSHIRT_GILDAN_64000: { single: "$14.50", bulkText: "Bulk pricing available" },
@@ -23,6 +14,25 @@ const garmentPricing = {
 export default function GarmentView() {
   const { garmentId } = useParams();
   const garment = garments.find((g) => g.garment_id === garmentId);
+
+  const [selectedColor, setSelectedColor] = useState(
+    garment?.available_colors?.[0] || ""
+  );
+  const [orderType, setOrderType] = useState("Single Item");
+  const [selectedSize, setSelectedSize] = useState(
+    garment?.available_sizes?.[0] || ""
+  );
+  const [quantity, setQuantity] = useState(1);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 900);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   if (!garment) {
     return (
@@ -43,17 +53,7 @@ export default function GarmentView() {
     );
   }
 
-  const [selectedColor, setSelectedColor] = useState(
-    garment.available_colors?.[0] || ""
-  );
-  const [orderType, setOrderType] = useState("Single Item");
-  const [selectedSize, setSelectedSize] = useState(
-    garment.available_sizes?.[0] || ""
-  );
-  const [quantity, setQuantity] = useState(1);
-
-  const imageSrc =
-    garmentImages[garment.garment_id] || "/garments/gildan-softstyle-tee.jpg";
+  const imageSrc = garment.image || "/garments/gildan-softstyle-tee.jpg";
 
   const pricing = garmentPricing[garment.garment_id] || {
     single: "$19.00",
@@ -76,15 +76,15 @@ export default function GarmentView() {
       style={{
         maxWidth: "1100px",
         margin: "0 auto",
-        padding: "14px 20px 24px",
+        padding: isMobile ? "10px 14px 20px" : "12px 20px 24px",
         fontFamily:
           'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
       <div
         style={{
-          marginBottom: "14px",
-          fontSize: "13px",
+          marginBottom: isMobile ? "10px" : "12px",
+          fontSize: isMobile ? "12px" : "13px",
           color: "#78716c",
           display: "flex",
           gap: "8px",
@@ -122,8 +122,8 @@ export default function GarmentView() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1.05fr 0.95fr",
-          gap: "20px",
+          gridTemplateColumns: isMobile ? "1fr" : "340px minmax(0, 1fr)",
+          gap: isMobile ? "14px" : "18px",
           alignItems: "start",
         }}
       >
@@ -131,46 +131,77 @@ export default function GarmentView() {
           style={{
             background: "#ffffff",
             borderRadius: "18px",
-            padding: "18px",
+            padding: isMobile ? "14px" : "16px",
             border: "1px solid #e7e5e4",
-            boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
+            boxShadow: "0 8px 18px rgba(0,0,0,0.05)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            position: isMobile ? "static" : "sticky",
+            top: isMobile ? "auto" : "16px",
           }}
         >
-          <img
-            src={imageSrc}
-            alt={garment.display_name}
+          <div
             style={{
               width: "100%",
-              height: "400px",
-              objectFit: "cover",
-              borderRadius: "14px",
-              marginBottom: "14px",
-              display: "block",
+              maxWidth: isMobile ? "100%" : "280px",
+              aspectRatio: "1 / 1",
+              borderRadius: "16px",
+              overflow: "hidden",
+              background: "#fafaf9",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
-          />
+          >
+            <img
+              src={imageSrc}
+              alt={garment.display_name}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                display: "block",
+              }}
+            />
+          </div>
 
           <div
             style={{
-              display: "flex",
-              gap: "8px",
-              flexWrap: "wrap",
+              width: "100%",
+              marginTop: "12px",
+              padding: "12px",
+              borderRadius: "14px",
+              background: "#fafaf9",
+              border: "1px solid #e7e5e4",
             }}
           >
-            {(garment.placements_allowed || []).map((placement) => (
-              <span
-                key={placement}
-                style={{
-                  fontSize: "12px",
-                  padding: "7px 10px",
-                  borderRadius: "999px",
-                  background: "#fafaf9",
-                  border: "1px solid #e7e5e4",
-                  color: "#44403c",
-                }}
+            <p
+              style={{
+                margin: "0 0 6px 0",
+                fontWeight: "700",
+                fontSize: "14px",
+                color: "#171717",
+              }}
+            >
+              Current Demo Selection
+            </p>
+            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
+              Color: {selectedColor}
+            </p>
+            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
+              Order Type: {orderType}
+            </p>
+            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
+              Size: {selectedSize}
+            </p>
+            {orderType === "Single Item" && (
+              <p
+                style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}
               >
-                {placement}
-              </span>
-            ))}
+                Quantity: {quantity}
+              </p>
+            )}
           </div>
         </div>
 
@@ -178,7 +209,7 @@ export default function GarmentView() {
           style={{
             background: "#ffffff",
             borderRadius: "18px",
-            padding: "22px",
+            padding: isMobile ? "16px" : "20px",
             border: "1px solid #e7e5e4",
             boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
           }}
@@ -199,7 +230,7 @@ export default function GarmentView() {
             style={{
               marginTop: "6px",
               marginBottom: "8px",
-              fontSize: "26px",
+              fontSize: isMobile ? "20px" : "26px",
               lineHeight: 1.1,
               letterSpacing: "-0.02em",
             }}
@@ -209,10 +240,10 @@ export default function GarmentView() {
 
           <p
             style={{
-              margin: "0 0 6px 0",
+              margin: "0 0 8px 0",
               color: "#57534e",
               lineHeight: 1.5,
-              fontSize: "15px",
+              fontSize: isMobile ? "14px" : "15px",
             }}
           >
             {garment.description}
@@ -220,7 +251,7 @@ export default function GarmentView() {
 
           <div
             style={{
-              marginTop: "12px",
+              marginTop: "10px",
               padding: "12px 14px",
               borderRadius: "14px",
               background: "#fafaf9",
@@ -230,7 +261,7 @@ export default function GarmentView() {
             <p
               style={{
                 margin: 0,
-                fontSize: "18px",
+                fontSize: isMobile ? "16px" : "18px",
                 fontWeight: 800,
                 color: "#171717",
               }}
@@ -248,7 +279,7 @@ export default function GarmentView() {
             </p>
           </div>
 
-          <div style={{ marginTop: "22px" }}>
+          <div style={{ marginTop: "18px" }}>
             <p
               style={{
                 fontWeight: "700",
@@ -290,7 +321,7 @@ export default function GarmentView() {
             </div>
           </div>
 
-          <div style={{ marginTop: "22px" }}>
+          <div style={{ marginTop: "18px" }}>
             <p
               style={{
                 fontWeight: "700",
@@ -332,7 +363,7 @@ export default function GarmentView() {
             </div>
           </div>
 
-          <div style={{ marginTop: "22px" }}>
+          <div style={{ marginTop: "18px" }}>
             <p
               style={{
                 fontWeight: "700",
@@ -387,8 +418,55 @@ export default function GarmentView() {
             )}
           </div>
 
+          <div style={{ marginTop: "18px" }}>
+            <p
+              style={{
+                fontWeight: "700",
+                margin: "0 0 6px 0",
+                fontSize: "15px",
+              }}
+            >
+              Available Print Locations
+            </p>
+
+            <p
+              style={{
+                margin: "0 0 8px 0",
+                fontSize: "13px",
+                color: "#78716c",
+                lineHeight: 1.4,
+              }}
+            >
+              You’ll choose your final artwork placement on the next step.
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "8px",
+                flexWrap: "wrap",
+              }}
+            >
+              {(garment.placements_allowed || []).map((placement) => (
+                <span
+                  key={placement}
+                  style={{
+                    fontSize: "12px",
+                    padding: "7px 10px",
+                    borderRadius: "999px",
+                    background: "#fafaf9",
+                    border: "1px solid #e7e5e4",
+                    color: "#44403c",
+                  }}
+                >
+                  {placement}
+                </span>
+              ))}
+            </div>
+          </div>
+
           {orderType === "Single Item" && (
-            <div style={{ marginTop: "22px" }}>
+            <div style={{ marginTop: "18px" }}>
               <p
                 style={{
                   fontWeight: "700",
@@ -461,43 +539,7 @@ export default function GarmentView() {
 
           <div
             style={{
-              marginTop: "22px",
-              padding: "14px",
-              borderRadius: "14px",
-              background: "#fafaf9",
-              border: "1px solid #e7e5e4",
-            }}
-          >
-            <p
-              style={{
-                margin: "0 0 6px 0",
-                fontWeight: "700",
-                fontSize: "14px",
-              }}
-            >
-              Current Demo Selection
-            </p>
-            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
-              Color: {selectedColor}
-            </p>
-            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
-              Order Type: {orderType}
-            </p>
-            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
-              Size: {selectedSize}
-            </p>
-            {orderType === "Single Item" && (
-              <p
-                style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}
-              >
-                Quantity: {quantity}
-              </p>
-            )}
-          </div>
-
-          <div
-            style={{
-              marginTop: "22px",
+              marginTop: "20px",
               display: "flex",
               gap: "10px",
               flexWrap: "wrap",
