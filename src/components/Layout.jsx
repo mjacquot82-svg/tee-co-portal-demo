@@ -1,8 +1,41 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 
+function FacebookIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      style={{ width: "18px", height: "18px", fill: "currentColor" }}
+    >
+      <path d="M13.5 22v-8.2h2.8l.4-3.2h-3.2V8.56c0-.93.26-1.56 1.6-1.56H16.8V4.14c-.3-.04-1.34-.14-2.56-.14-2.54 0-4.28 1.55-4.28 4.4v2.2H7.08v3.2h2.88V22h3.54Z" />
+    </svg>
+  );
+}
+
+function InstagramIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      style={{
+        width: "18px",
+        height: "18px",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: 1.8,
+      }}
+    >
+      <rect x="3.5" y="3.5" width="17" height="17" rx="5" />
+      <circle cx="12" cy="12" r="4.2" />
+      <circle cx="17.4" cy="6.6" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export default function Layout() {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith("/admin");
+  const isHome = location.pathname === "/";
 
   const customerLinks = [
     { to: "/", label: "Home" },
@@ -96,42 +129,112 @@ export default function Layout() {
             </div>
           </div>
 
-          {/* NAV */}
-          <nav style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            {links.map((link) => {
-              const active =
-                location.pathname === link.to ||
-                (link.to !== "/" && location.pathname.startsWith(link.to));
-
-              return (
-                <Link
-                  key={link.to}
-                  to={link.to}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-end",
+              gap: "8px",
+              marginLeft: "auto",
+            }}
+          >
+            {isHome ? (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "10px",
+                  width: "100%",
+                }}
+              >
+                <a
+                  href="https://www.facebook.com/login/"
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Open Facebook sign in"
                   style={{
-                    textDecoration: "none",
-                    padding: "8px 12px",
+                    width: "40px",
+                    height: "40px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                     borderRadius: "999px",
-                    border: active
-                      ? "1px solid #171717"
-                      : "1px solid #d6d3d1",
-                    background: active ? "#171717" : "#ffffff",
-                    color: active ? "#ffffff" : "#171717",
-                    fontWeight: 600,
-                    fontSize: "13px",
+                    background: "#ffffff",
+                    color: "#1877f2",
+                    border: "1px solid #e7e5e4",
+                    boxShadow: "0 8px 18px rgba(0,0,0,0.05)",
                   }}
                 >
-                  {link.label}
-                </Link>
-              );
-            })}
-          </nav>
+                  <FacebookIcon />
+                </a>
+
+                <a
+                  href="https://www.instagram.com/accounts/login/"
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Open Instagram log in"
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "999px",
+                    background: "#ffffff",
+                    color: "#e1306c",
+                    border: "1px solid #e7e5e4",
+                    boxShadow: "0 8px 18px rgba(0,0,0,0.05)",
+                  }}
+                >
+                  <InstagramIcon />
+                </a>
+              </div>
+            ) : null}
+
+            {/* NAV */}
+            <nav
+              style={{
+                display: "flex",
+                gap: "8px",
+                flexWrap: "wrap",
+                justifyContent: "flex-end",
+              }}
+            >
+              {links.map((link) => {
+                const active =
+                  location.pathname === link.to ||
+                  (link.to !== "/" && location.pathname.startsWith(link.to));
+
+                return (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    style={{
+                      textDecoration: "none",
+                      padding: "8px 12px",
+                      borderRadius: "999px",
+                      border: active
+                        ? "1px solid #171717"
+                        : "1px solid #d6d3d1",
+                      background: active ? "#171717" : "#ffffff",
+                      color: active ? "#ffffff" : "#171717",
+                      fontWeight: 600,
+                      fontSize: "13px",
+                    }}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
         </div>
       </header>
 
       {/* BANNER */}
 <div
   style={{
-    maxWidth: "1100px",
+    maxWidth: "1360px",
     margin: "8px auto 0 auto",
     padding: "0 14px",
   }}

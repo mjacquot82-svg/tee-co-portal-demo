@@ -8,3 +8,312 @@ body {
   background: #f8fafc;
   color: #0f172a;
 }
+
+.home-main-content {
+  --home-stack-gap: 18px;
+  --home-section-gap: 12px;
+  display: grid;
+  gap: var(--home-stack-gap);
+}
+
+.home-section {
+  display: grid;
+  gap: var(--home-section-gap);
+}
+
+.home-wide-section {
+  width: 100%;
+}
+
+.home-card-row-shell,
+.home-popular-grid-shell {
+  width: 100%;
+}
+
+.home-feature-frame {
+  display: grid;
+  gap: var(--home-stack-gap);
+  grid-template-areas:
+    "steps"
+    "popular"
+    "decorations";
+}
+
+.home-section-header {
+  display: grid;
+  gap: 4px;
+}
+
+.home-popular-header {
+  width: 100%;
+}
+
+.home-section-title {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.home-section-copy {
+  margin: 0;
+  font-size: 13px;
+  color: #78716c;
+}
+
+.home-category-grid,
+.home-three-card-grid,
+.home-steps-grid,
+.home-decoration-grid {
+  display: grid;
+}
+
+.home-category-grid {
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.home-side-panel:first-child {
+  grid-area: steps;
+}
+
+.home-popular-column {
+  grid-area: popular;
+  gap: 8px;
+}
+
+.home-side-panel:last-child {
+  grid-area: decorations;
+}
+
+.home-three-card-grid {
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.home-steps-grid {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.home-decoration-grid {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.home-trust-strip {
+  margin-top: -8px;
+}
+
+.home-support-card {
+  margin-top: -10px;
+}
+
+@media (min-width: 640px) {
+  .home-category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-feature-frame {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "steps decorations"
+      "popular popular";
+    align-items: start;
+  }
+
+  .home-three-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-steps-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-decoration-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .home-page {
+    padding: 12px 14px 22px !important;
+  }
+
+  .home-main-content {
+    --home-stack-gap: 14px;
+    --home-section-gap: 10px;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .home-section-header,
+  .home-popular-header {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .home-section-title {
+    font-size: 19px;
+    text-align: left;
+  }
+
+  .home-section-copy {
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: left;
+  }
+
+  .home-feature-frame {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    grid-template-areas:
+      "popular"
+      "steps"
+      "decorations";
+  }
+
+  .home-category-grid,
+  .home-three-card-grid,
+  .home-steps-grid,
+  .home-decoration-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .home-card-row-shell,
+  .home-popular-grid-shell,
+  .home-section,
+  .home-popular-column,
+  .home-side-panel,
+  .home-top-cta,
+  .home-trust-strip,
+  .home-support-card {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .home-preview-card {
+    display: grid !important;
+    grid-template-columns: 72px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    padding: 10px !important;
+    min-height: 92px;
+  }
+
+  .home-preview-box {
+    width: 72px !important;
+    height: 72px !important;
+    aspect-ratio: 1 / 1;
+    margin-bottom: 0 !important;
+    padding: 8px !important;
+    border-radius: 10px !important;
+    justify-self: start;
+  }
+
+  .home-preview-copy {
+    min-width: 0;
+  }
+
+  .home-preview-title {
+    font-size: 14px !important;
+    line-height: 1.3;
+  }
+
+  .home-preview-description {
+    margin-top: 3px !important;
+    font-size: 12px !important;
+    line-height: 1.4;
+  }
+
+  .home-trust-strip {
+    margin-top: 0;
+    padding: 12px !important;
+    gap: 8px !important;
+  }
+
+  .home-trust-strip > div {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .home-support-card {
+    margin-top: 0;
+  }
+
+  .home-top-cta a,
+  .home-support-card a {
+    width: 100%;
+    min-height: 44px !important;
+    box-sizing: border-box;
+  }
+}
+
+@media (min-width: 900px) {
+  .home-main-content {
+    --home-stack-gap: 18px;
+    grid-template-columns: minmax(180px, 0.6fr) minmax(0, 4.4fr) minmax(180px, 0.6fr);
+    grid-template-areas:
+      "hero hero hero"
+      "steps categories decorations"
+      ". popular ."
+      "trust trust trust"
+      "support support support";
+    align-items: start;
+  }
+
+  .home-top-cta {
+    grid-area: hero;
+  }
+
+  .home-category-row-shell {
+    grid-area: categories;
+  }
+
+  .home-feature-frame {
+    display: contents;
+  }
+
+  .home-popular-column {
+    gap: 6px;
+  }
+
+  .home-category-grid,
+  .home-three-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .home-card-row-shell,
+  .home-popular-grid-shell {
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
+  .home-popular-header {
+    width: 100%;
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
+  .home-trust-strip {
+    grid-area: trust;
+  }
+
+  .home-support-card {
+    grid-area: support;
+  }
+
+  .home-steps-grid,
+  .home-decoration-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-trust-strip {
+    margin-top: -4px;
+  }
+
+  .home-support-card {
+    margin-top: -6px;
+  }
+}
