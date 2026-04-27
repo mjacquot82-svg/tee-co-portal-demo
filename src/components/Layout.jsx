@@ -1,4 +1,5 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
+import logo from "../assets/icon-512.png";
 
 function FacebookIcon() {
   return (
@@ -85,48 +86,16 @@ export default function Layout() {
             flexWrap: "wrap",
           }}
         >
-          {/* LOGO BLOCK */}
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div
+          {/* LOGO */}
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <img
+              src={logo}
+              alt="Tee & Co"
               style={{
-                width: "36px",
-                height: "36px",
-                borderRadius: "10px",
-                background: "#171717",
-                color: "#ffffff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 800,
-                letterSpacing: "0.04em",
-                fontSize: "14px",
+                height: "48px",
+                objectFit: "contain",
               }}
-            >
-              T&C
-            </div>
-
-            <div>
-              <p
-                style={{
-                  margin: 0,
-                  fontWeight: 800,
-                  fontSize: "17px",
-                  letterSpacing: "-0.02em",
-                }}
-              >
-                Tee & Co
-              </p>
-
-              <p
-                style={{
-                  margin: 0,
-                  color: "#57534e",
-                  fontSize: "12px",
-                }}
-              >
-                Made Local. Worn Proud.
-              </p>
-            </div>
+            />
           </div>
 
           <div
@@ -232,48 +201,48 @@ export default function Layout() {
       </header>
 
       {/* BANNER */}
-<div
-  style={{
-    maxWidth: "1360px",
-    margin: "8px auto 0 auto",
-    padding: "0 14px",
-  }}
->
-  <div
-    style={{
-      background: isAdmin ? "#1c1917" : "#292524",
-      color: "#fafaf9",
-      borderRadius: "14px",
-      padding: "10px 14px",
-      boxShadow: "0 6px 16px rgba(28,25,23,0.12)",
-    }}
-  >
-    <p
-      style={{
-        margin: 0,
-        fontSize: "10px",
-        letterSpacing: "0.08em",
-        textTransform: "uppercase",
-        color: "#d6d3d1",
-      }}
-    >
-      {isAdmin ? "Shop Dashboard" : "Customer Portal"}
-    </p>
+      <div
+        style={{
+          maxWidth: "1360px",
+          margin: "8px auto 0 auto",
+          padding: "0 14px",
+        }}
+      >
+        <div
+          style={{
+            background: isAdmin ? "#1c1917" : "#292524",
+            color: "#fafaf9",
+            borderRadius: "14px",
+            padding: "10px 14px",
+            boxShadow: "0 6px 16px rgba(28,25,23,0.12)",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: "10px",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "#d6d3d1",
+            }}
+          >
+            {isAdmin ? "Shop Dashboard" : "Customer Portal"}
+          </p>
 
-    <h1
-      style={{
-        margin: "2px 0",
-        fontSize: "16px",
-        lineHeight: 1.2,
-        letterSpacing: "-0.02em",
-      }}
-    >
-      {isAdmin
-        ? "Manage requests and production"
-        : "Custom apparel ordering made simple"}
-    </h1>
-  </div>
-</div>
+          <h1
+            style={{
+              margin: "2px 0",
+              fontSize: "16px",
+              lineHeight: 1.2,
+              letterSpacing: "-0.02em",
+            }}
+          >
+            {isAdmin
+              ? "Manage requests and production"
+              : "Custom apparel ordering made simple"}
+          </h1>
+        </div>
+      </div>
 
       {/* PAGE CONTENT */}
       <main style={{ padding: "14px 0 26px 0" }}>
