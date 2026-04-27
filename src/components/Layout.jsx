@@ -86,17 +86,34 @@ export default function Layout() {
             flexWrap: "wrap",
           }}
         >
-          {/* LOGO */}
-          <div style={{ display: "flex", alignItems: "center" }}>
-            <img
-              src={logo}
-              alt="Tee & Co"
-              style={{
-                height: "100px",
-                objectFit: "contain",
-              }}
-            />
-          </div>
+          {/* LOGO + COMPANY NAME */}
+<div
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+  }}
+>
+  <img
+    src={logo}
+    alt="Tee & Co Ltd."
+    style={{
+      height: "80px",
+      objectFit: "contain",
+    }}
+  />
+
+  <span
+    style={{
+      fontWeight: 700,
+      fontSize: "22px",
+      letterSpacing: "-0.02em",
+      color: "#171717",
+    }}
+  >
+    Tee & Co Ltd.
+  </span>
+</div>
 
           <div
             style={{
