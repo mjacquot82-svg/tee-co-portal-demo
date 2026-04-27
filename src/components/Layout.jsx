@@ -92,7 +92,7 @@ export default function Layout() {
               src={logo}
               alt="Tee & Co"
               style={{
-                height: "48px",
+                height: "80px",
                 objectFit: "contain",
               }}
             />
