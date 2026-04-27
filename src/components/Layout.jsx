@@ -3,11 +3,7 @@ import logo from "../assets/icon-512.png";
 
 function FacebookIcon() {
   return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      style={{ width: "18px", height: "18px", fill: "currentColor" }}
-    >
+    <svg aria-hidden="true" viewBox="0 0 24 24" style={{ width: "18px", height: "18px", fill: "currentColor" }}>
       <path d="M13.5 22v-8.2h2.8l.4-3.2h-3.2V8.56c0-.93.26-1.56 1.6-1.56H16.8V4.14c-.3-.04-1.34-.14-2.56-.14-2.54 0-4.28 1.55-4.28 4.4v2.2H7.08v3.2h2.88V22h3.54Z" />
     </svg>
   );
@@ -63,7 +59,6 @@ export default function Layout() {
           'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
-      {/* HEADER */}
       <header
         style={{
           background: "rgba(255,255,255,0.92)",
@@ -86,61 +81,81 @@ export default function Layout() {
             flexWrap: "wrap",
           }}
         >
-          {/* LOGO + COMPANY NAME */}
-<div
-  style={{
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-  }}
->
-  <img
-    src={logo}
-    alt="Tee & Co Ltd."
-    style={{
-      height: "80px",
-      objectFit: "contain",
-    }}
-  />
-
-  <span
-    style={{
-      fontWeight: 700,
-      fontSize: "22px",
-      letterSpacing: "-0.02em",
-      color: "#171717",
-    }}
-  >
-    Tee & Co Ltd.
-  </span>
-</div>
-
           <div
             style={{
               display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-end",
+              alignItems: "center",
+              gap: "12px",
+            }}
+          >
+            <img
+              src={logo}
+              alt="Tee & Co Ltd."
+              style={{
+                height: "80px",
+                objectFit: "contain",
+              }}
+            />
+
+            <span
+              style={{
+                fontWeight: 700,
+                fontSize: "22px",
+                letterSpacing: "-0.02em",
+                color: "#171717",
+              }}
+            >
+              Tee & Co Ltd.
+            </span>
+          </div>
+
+          <nav
+            style={{
+              display: "flex",
+              alignItems: "center",
               gap: "8px",
+              flexWrap: "wrap",
+              justifyContent: "flex-end",
               marginLeft: "auto",
             }}
           >
-            {isHome ? (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: "10px",
-                  width: "100%",
-                }}
-              >
+            {links.map((link) => {
+              const active =
+                location.pathname === link.to ||
+                (link.to !== "/" && location.pathname.startsWith(link.to));
+
+              return (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  style={{
+                    textDecoration: "none",
+                    padding: "8px 12px",
+                    borderRadius: "999px",
+                    border: active
+                      ? "1px solid #171717"
+                      : "1px solid #d6d3d1",
+                    background: active ? "#171717" : "#ffffff",
+                    color: active ? "#ffffff" : "#171717",
+                    fontWeight: 600,
+                    fontSize: "13px",
+                  }}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
+
+            {isHome && (
+              <>
                 <a
                   href="https://www.facebook.com/login/"
                   target="_blank"
                   rel="noreferrer"
                   aria-label="Open Facebook sign in"
                   style={{
-                    width: "40px",
-                    height: "40px",
+                    width: "36px",
+                    height: "36px",
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -148,7 +163,6 @@ export default function Layout() {
                     background: "#ffffff",
                     color: "#1877f2",
                     border: "1px solid #e7e5e4",
-                    boxShadow: "0 8px 18px rgba(0,0,0,0.05)",
                   }}
                 >
                   <FacebookIcon />
@@ -160,8 +174,8 @@ export default function Layout() {
                   rel="noreferrer"
                   aria-label="Open Instagram log in"
                   style={{
-                    width: "40px",
-                    height: "40px",
+                    width: "36px",
+                    height: "36px",
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -169,55 +183,16 @@ export default function Layout() {
                     background: "#ffffff",
                     color: "#e1306c",
                     border: "1px solid #e7e5e4",
-                    boxShadow: "0 8px 18px rgba(0,0,0,0.05)",
                   }}
                 >
                   <InstagramIcon />
                 </a>
-              </div>
-            ) : null}
-
-            {/* NAV */}
-            <nav
-              style={{
-                display: "flex",
-                gap: "8px",
-                flexWrap: "wrap",
-                justifyContent: "flex-end",
-              }}
-            >
-              {links.map((link) => {
-                const active =
-                  location.pathname === link.to ||
-                  (link.to !== "/" && location.pathname.startsWith(link.to));
-
-                return (
-                  <Link
-                    key={link.to}
-                    to={link.to}
-                    style={{
-                      textDecoration: "none",
-                      padding: "8px 12px",
-                      borderRadius: "999px",
-                      border: active
-                        ? "1px solid #171717"
-                        : "1px solid #d6d3d1",
-                      background: active ? "#171717" : "#ffffff",
-                      color: active ? "#ffffff" : "#171717",
-                      fontWeight: 600,
-                      fontSize: "13px",
-                    }}
-                  >
-                    {link.label}
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
+              </>
+            )}
+          </nav>
         </div>
       </header>
 
-      {/* BANNER */}
       <div
         style={{
           maxWidth: "1360px",
@@ -261,7 +236,6 @@ export default function Layout() {
         </div>
       </div>
 
-      {/* PAGE CONTENT */}
       <main style={{ padding: "14px 0 26px 0" }}>
         <Outlet />
       </main>
