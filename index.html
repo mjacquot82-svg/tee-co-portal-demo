@@ -2,13 +2,30 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+
+    <!-- PWA manifest -->
     <link rel="manifest" href="/manifest.json" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- iPhone home screen icon -->
+    <link rel="apple-touch-icon" href="/icon-512.png" />
+
+    <!-- Browser tab favicon -->
+    <link rel="icon" type="image/png" href="/icon-192.png" />
+
+    <!-- Mobile viewport -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Optional but recommended theme color -->
+    <meta name="theme-color" content="#111111" />
+
+    <!-- App title -->
     <title>Tee & Co Portal</title>
   </head>
+
   <body>
     <div id="root"></div>
+
+    <!-- React entry point -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
