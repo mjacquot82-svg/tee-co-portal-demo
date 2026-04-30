@@ -41,6 +41,34 @@ function findMatchingCustomer(customers, form) {
   });
 }
 
+function findCustomerSuggestions(customers, value) {
+  const searchValue = normalizeLookup(value);
+  const searchPhone = searchValue.replace(/\D/g, "");
+
+  if (searchValue.length < 2) return [];
+
+  return customers
+    .filter((customer) => {
+      const searchableText = [
+        customer.name,
+        customer.company,
+        customer.email,
+        customer.phone,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      const customerPhone = normalizeLookup(customer.phone).replace(/\D/g, "");
+
+      return (
+        searchableText.includes(searchValue) ||
+        (searchPhone.length >= 3 && customerPhone.includes(searchPhone))
+      );
+    })
+    .slice(0, 5);
+}
+
 const fieldStyle = {
   border: "1px solid #cbd5e1",
   borderRadius: "12px",
@@ -61,6 +89,7 @@ export default function NewOrder() {
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [customerSearchResults, setCustomerSearchResults] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [selectedProductId, setSelectedProductId] = useState("");
   const [form, setForm] = useState({
@@ -105,30 +134,12 @@ export default function NewOrder() {
     }, 0);
   }, [sizes]);
 
-  function updateField(event) {
-    const { name, value } = event.target;
-    setForm((current) => ({ ...current, [name]: value }));
-
-    if (name === "customer_name" || name === "customer_phone" || name === "customer_email") {
-      setSelectedCustomerId("");
-      setForm((current) => ({ ...current, customer_id: "", [name]: value }));
-    }
-  }
-
-  function selectCustomer(event) {
-    const customerId = event.target.value;
-    setSelectedCustomerId(customerId);
-
-    if (!customerId) {
-      setForm((current) => ({
-        ...current,
-        customer_id: "",
-      }));
-      return;
-    }
-
+  function selectCustomerById(customerId) {
     const customer = customers.find((item) => item.id === customerId);
     if (!customer) return;
+
+    setSelectedCustomerId(customer.id);
+    setCustomerSearchResults([]);
 
     setForm((current) => ({
       ...current,
@@ -139,6 +150,39 @@ export default function NewOrder() {
       customer_company: customer.company || "",
       source: current.source === "Walk-in" ? "Repeat Order" : current.source,
     }));
+  }
+
+  function updateField(event) {
+    const { name, value } = event.target;
+
+    setForm((current) => ({
+      ...current,
+      [name]: value,
+      ...(name === "customer_name" || name === "customer_phone" || name === "customer_email"
+        ? { customer_id: "" }
+        : {}),
+    }));
+
+    if (name === "customer_name" || name === "customer_phone" || name === "customer_email") {
+      setSelectedCustomerId("");
+      setCustomerSearchResults(findCustomerSuggestions(customers, value));
+    }
+  }
+
+  function selectCustomer(event) {
+    const customerId = event.target.value;
+    setSelectedCustomerId(customerId);
+    setCustomerSearchResults([]);
+
+    if (!customerId) {
+      setForm((current) => ({
+        ...current,
+        customer_id: "",
+      }));
+      return;
+    }
+
+    selectCustomerById(customerId);
   }
 
   function selectProduct(event) {
@@ -263,9 +307,51 @@ export default function NewOrder() {
               </select>
             </label>
 
-            <label style={labelStyle}>
+            <label style={{ ...labelStyle, position: "relative" }}>
               Customer Name
               <input name="customer_name" value={form.customer_name} onChange={updateField} required placeholder="ABC Construction" style={fieldStyle} />
+
+              {customerSearchResults.length > 0 && !selectedCustomerId && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "78px",
+                    left: 0,
+                    right: 0,
+                    zIndex: 20,
+                    background: "#ffffff",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "12px",
+                    boxShadow: "0 12px 24px rgba(15, 23, 42, 0.12)",
+                    overflow: "hidden",
+                  }}
+                >
+                  {customerSearchResults.map((customer) => (
+                    <button
+                      key={customer.id}
+                      type="button"
+                      onClick={() => selectCustomerById(customer.id)}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        padding: "11px 12px",
+                        background: "#ffffff",
+                        border: "none",
+                        borderBottom: "1px solid #f1f5f9",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        color: "#292524",
+                      }}
+                    >
+                      <strong>{customer.name}</strong>
+                      {customer.company ? ` — ${customer.company}` : ""}
+                      <span style={{ display: "block", marginTop: "3px", color: "#64748b", fontSize: "13px" }}>
+                        {[customer.phone, customer.email].filter(Boolean).join(" • ") || "Saved customer"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </label>
 
             <label style={labelStyle}>
