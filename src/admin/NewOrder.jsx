@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createStoredOrder } from "../lib/ordersStore";
 import { getStoredProducts } from "../lib/productsStore";
-import { getStoredCustomers, linkOrderToCustomer } from "../lib/customersStore";
+import {
+  createStoredCustomer,
+  getStoredCustomers,
+  linkOrderToCustomer,
+} from "../lib/customersStore";
 
 const fallbackSizeKeys = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"];
 
@@ -11,6 +15,30 @@ function buildSizeState(sizeKeys) {
     sizes[size] = "";
     return sizes;
   }, {});
+}
+
+function normalizeLookup(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function findMatchingCustomer(customers, form) {
+  const typedEmail = normalizeLookup(form.customer_email);
+  const typedPhone = normalizeLookup(form.customer_phone).replace(/\D/g, "");
+  const typedName = normalizeLookup(form.customer_name);
+  const typedCompany = normalizeLookup(form.customer_company);
+
+  return customers.find((customer) => {
+    const customerEmail = normalizeLookup(customer.email);
+    const customerPhone = normalizeLookup(customer.phone).replace(/\D/g, "");
+    const customerName = normalizeLookup(customer.name);
+    const customerCompany = normalizeLookup(customer.company);
+
+    if (typedEmail && customerEmail && typedEmail === customerEmail) return true;
+    if (typedPhone && customerPhone && typedPhone === customerPhone) return true;
+    if (typedName && customerName === typedName && typedCompany === customerCompany) return true;
+
+    return false;
+  });
 }
 
 const fieldStyle = {
@@ -150,8 +178,28 @@ export default function NewOrder() {
     setSizes((current) => ({ ...current, [size]: value }));
   }
 
+  function resolveCustomerForOrder() {
+    if (form.customer_id) return form.customer_id;
+
+    const matchingCustomer = findMatchingCustomer(customers, form);
+    if (matchingCustomer) return matchingCustomer.id;
+
+    const customer = createStoredCustomer({
+      name: form.customer_name,
+      company: form.customer_company,
+      phone: form.customer_phone,
+      email: form.customer_email,
+      notes: "Auto-created from staff order entry.",
+    });
+
+    setCustomers((current) => [customer, ...current]);
+    return customer.id;
+  }
+
   function handleSubmit(event) {
     event.preventDefault();
+
+    const customerId = resolveCustomerForOrder();
 
     const normalizedSizes = Object.fromEntries(
       Object.entries(sizes).map(([size, value]) => [size, Number(value) || 0])
@@ -159,15 +207,14 @@ export default function NewOrder() {
 
     const order = createStoredOrder({
       ...form,
+      customer_id: customerId,
       product_image: selectedProduct?.image || "",
       product_notes: selectedProduct?.notes || "",
       qty: totalQty,
       size_breakdown: normalizedSizes,
     });
 
-    if (form.customer_id) {
-      linkOrderToCustomer(form.customer_id, order.order_number);
-    }
+    linkOrderToCustomer(customerId, order.order_number);
 
     navigate(`/admin/orders/${order.order_number}`);
   }
@@ -242,9 +289,13 @@ export default function NewOrder() {
               </select>
             </label>
           </div>
-          {selectedCustomerId && (
+          {selectedCustomerId ? (
             <p style={{ margin: "12px 0 0", color: "#166534", fontWeight: 700 }}>
               This order will be linked to the selected customer profile.
+            </p>
+          ) : (
+            <p style={{ margin: "12px 0 0", color: "#475569", fontWeight: 700 }}>
+              If this customer is not already saved, a new customer profile will be created automatically when the order is saved.
             </p>
           )}
         </section>
