@@ -30,6 +30,23 @@ function readFileAsDataUrl(file) {
   });
 }
 
+function sizeRowsFromOrder(order) {
+  if (Array.isArray(order?.size_breakdown) && order.size_breakdown.length) {
+    return order.size_breakdown;
+  }
+
+  if (order?.size) {
+    return [{ size: order.size, quantity: Number(order.qty || 0) }];
+  }
+
+  return [
+    { size: "S", quantity: 0 },
+    { size: "M", quantity: 0 },
+    { size: "L", quantity: 0 },
+    { size: "XL", quantity: 0 },
+  ];
+}
+
 export default function OrderDetail() {
   const { orderNumber } = useParams();
   const [order, setOrder] = useState(null);
@@ -40,6 +57,7 @@ export default function OrderDetail() {
   const [depositValue, setDepositValue] = useState("50");
   const [paymentMethod, setPaymentMethod] = useState("e-transfer");
   const [paymentNote, setPaymentNote] = useState("");
+  const [sizeRows, setSizeRows] = useState([]);
 
   useEffect(() => {
     const stored = findStoredOrder(orderNumber);
@@ -51,6 +69,7 @@ export default function OrderDetail() {
       setDepositValue(String(stored.deposit?.value ?? "50"));
       setPaymentMethod(stored.deposit?.method || "e-transfer");
       setPaymentNote(stored.deposit?.note || "");
+      setSizeRows(sizeRowsFromOrder(stored));
     }
   }, [orderNumber]);
 
@@ -65,6 +84,8 @@ export default function OrderDetail() {
     if (!order) return null;
     return generateQuoteSnapshot(order, selectedProduct);
   }, [order, selectedProduct]);
+
+  const sizeTotal = sizeRows.reduce((total, row) => total + Number(row.quantity || 0), 0);
 
   function saveOrderUpdates(updates) {
     const updated = updateStoredOrder(orderNumber, updates);
@@ -88,6 +109,40 @@ export default function OrderDetail() {
 
   function handleStatusChange(event) {
     saveOrderUpdates({ status: event.target.value });
+  }
+
+  function updateSizeRow(index, field, value) {
+    setSizeRows((current) =>
+      current.map((row, rowIndex) =>
+        rowIndex === index
+          ? {
+              ...row,
+              [field]: field === "quantity" ? Number(value || 0) : value,
+            }
+          : row
+      )
+    );
+  }
+
+  function addSizeRow() {
+    setSizeRows((current) => [...current, { size: "", quantity: 0 }]);
+  }
+
+  function removeSizeRow(index) {
+    setSizeRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+  }
+
+  function saveSizeBreakdown() {
+    const cleanedRows = sizeRows
+      .filter((row) => row.size || Number(row.quantity || 0) > 0)
+      .map((row) => ({ size: row.size, quantity: Number(row.quantity || 0) }));
+
+    const total = cleanedRows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+
+    saveOrderUpdates({
+      size_breakdown: cleanedRows,
+      qty: total,
+    });
   }
 
   function saveQuoteSnapshot() {
@@ -225,7 +280,7 @@ export default function OrderDetail() {
         <div>
           <h1 style={{ margin: 0 }}>Order {orderNumber}</h1>
           <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-            Job details, quote preview, deposits, workflow status, artwork files, and approval tracking.
+            Job details, quote preview, deposits, size breakdowns, artwork files, and approval tracking.
           </p>
         </div>
 
@@ -343,6 +398,53 @@ export default function OrderDetail() {
               </div>
             </section>
           )}
+
+          <section
+            style={{
+              background: "#ffffff",
+              borderRadius: "20px",
+              padding: "24px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+            }}
+          >
+            <h2 style={{ marginTop: 0 }}>Size Breakdown</h2>
+            <p style={{ color: "#64748b" }}>
+              Track size splits for garments and product variants. The total updates the order quantity.
+            </p>
+
+            <div style={{ display: "grid", gap: "10px" }}>
+              {sizeRows.map((row, index) => (
+                <div key={`${row.size}-${index}`} style={{ display: "grid", gridTemplateColumns: "1fr 140px auto", gap: "10px", alignItems: "center" }}>
+                  <input
+                    value={row.size}
+                    onChange={(event) => updateSizeRow(index, "size", event.target.value)}
+                    placeholder="Size / Variant"
+                    style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "11px" }}
+                  />
+                  <input
+                    type="number"
+                    value={row.quantity}
+                    onChange={(event) => updateSizeRow(index, "quantity", event.target.value)}
+                    placeholder="Qty"
+                    style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "11px" }}
+                  />
+                  <button type="button" onClick={() => removeSizeRow(index)} style={{ border: "1px solid #fecaca", color: "#991b1b", background: "#fff", borderRadius: "10px", padding: "9px 10px", cursor: "pointer", fontWeight: 700 }}>
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginTop: "14px" }}>
+              <button type="button" onClick={addSizeRow} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: "12px", padding: "11px 14px", cursor: "pointer", fontWeight: 700 }}>
+                Add Size / Variant
+              </button>
+              <button type="button" onClick={saveSizeBreakdown} style={{ border: "none", background: "#171717", color: "#fff", borderRadius: "12px", padding: "11px 14px", cursor: "pointer", fontWeight: 700 }}>
+                Save Size Breakdown
+              </button>
+              <strong>Total Qty: {sizeTotal}</strong>
+            </div>
+          </section>
 
           <section
             style={{
