@@ -14,6 +14,7 @@ import Dashboard from "./admin/Dashboard";
 import Orders from "./admin/Orders";
 import OrderDetail from "./admin/OrderDetail";
 import Products from "./admin/Products";
+import Queue from "./admin/Queue";
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="admin/orders" element={<Orders />} />
           <Route path="admin/orders/:orderNumber" element={<OrderDetail />} />
           <Route path="admin/products" element={<Products />} />
+          <Route path="admin/queue" element={<Queue />} />
         </Route>
       </Routes>
     </BrowserRouter>
