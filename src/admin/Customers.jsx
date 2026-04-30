@@ -1,95 +1,78 @@
+cat > src/admin/Customers.jsx <<'EOF'
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getStoredCustomers } from "../lib/customersStore";
+import { createStoredCustomer, getStoredCustomers } from "../lib/customersStore";
 
 export default function Customers() {
   const [customers, setCustomers] = useState([]);
+  const [form, setForm] = useState({
+    name: "",
+    company: "",
+    phone: "",
+    email: "",
+    notes: "",
+  });
 
   useEffect(() => {
     setCustomers(getStoredCustomers());
   }, []);
 
+  function updateForm(field, value) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+
+    if (!form.name.trim()) {
+      alert("Please enter a customer name.");
+      return;
+    }
+
+    createStoredCustomer(form);
+    setCustomers(getStoredCustomers());
+    setForm({ name: "", company: "", phone: "", email: "", notes: "" });
+  }
+
   return (
-    <div
-      style={{
-        maxWidth: "1100px",
-        margin: "0 auto",
-        padding: "24px",
-        fontFamily:
-          'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "20px",
-        }}
-      >
-        <div>
-          <h1 style={{ margin: 0 }}>Customers</h1>
-          <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-            Search customers and open profiles to view repeat order history.
-          </p>
-        </div>
+    <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "24px" }}>
+      <h1>Customers</h1>
 
-        <Link
-          to="/admin"
-          style={{
-            border: "1px solid #cbd5e1",
-            borderRadius: "12px",
-            padding: "10px 14px",
-            textDecoration: "none",
-            fontWeight: 600,
-          }}
-        >
-          Back to Dashboard
-        </Link>
-      </div>
+      <form onSubmit={handleSubmit} style={{ background: "#fff", padding: "20px", borderRadius: "18px", marginBottom: "18px", display: "grid", gap: "12px" }}>
+        <h2>Add Customer</h2>
 
-      <div
-        style={{
-          background: "#ffffff",
-          borderRadius: "18px",
-          padding: "20px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-        }}
-      >
+        <input placeholder="Customer name" value={form.name} onChange={(e) => updateForm("name", e.target.value)} />
+        <input placeholder="Company" value={form.company} onChange={(e) => updateForm("company", e.target.value)} />
+        <input placeholder="Phone" value={form.phone} onChange={(e) => updateForm("phone", e.target.value)} />
+        <input placeholder="Email" value={form.email} onChange={(e) => updateForm("email", e.target.value)} />
+        <textarea placeholder="Notes" value={form.notes} onChange={(e) => updateForm("notes", e.target.value)} />
+
+        <button type="submit">Save Customer</button>
+      </form>
+
+      <div style={{ background: "#fff", padding: "20px", borderRadius: "18px" }}>
+        <h2>Customer List</h2>
+
         {customers.length ? (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ textAlign: "left", color: "#64748b" }}>
-                <th>Name</th>
-                <th>Company</th>
-                <th>Phone</th>
-                <th>Email</th>
-                <th>Orders</th>
-              </tr>
-            </thead>
-            <tbody>
-              {customers.map((customer) => (
-                <tr key={customer.id} style={{ borderTop: "1px solid #e2e8f0" }}>
-                  <td>
-                    <Link
-                      to={`/admin/customers/${customer.id}`}
-                      style={{ fontWeight: 600, textDecoration: "none" }}
-                    >
-                      {customer.name}
-                    </Link>
-                  </td>
-                  <td>{customer.company || "—"}</td>
-                  <td>{customer.phone || "—"}</td>
-                  <td>{customer.email || "—"}</td>
-                  <td>{customer.order_numbers?.length || 0}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          customers.map((customer) => (
+            <div key={customer.id} style={{ borderBottom: "1px solid #e2e8f0", padding: "12px 0" }}>
+              <Link to={`/admin/customers/${customer.id}`} style={{ fontWeight: 700 }}>
+                {customer.name}
+              </Link>
+              <div>{customer.company || "No company"}</div>
+              <div>{customer.phone || "No phone"}</div>
+              <div>{customer.email || "No email"}</div>
+            </div>
+          ))
         ) : (
-          <p style={{ color: "#94a3b8" }}>No customers yet.</p>
+          <p>No customers yet.</p>
         )}
       </div>
     </div>
   );
 }
+EOF
+
+git add src/admin/Customers.jsx
+git commit -m "Add customer creation form"
+git push
