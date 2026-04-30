@@ -42,12 +42,13 @@ export default function Layout() {
 
   const adminLinks = [
     { to: "/admin", label: "Dashboard" },
-    { to: "/admin/orders", label: "Orders" },
-    { to: "/admin/orders/new", label: "New Order" },
+    { to: "/admin/sales/new", label: "Quick Sale" },
+    { to: "/admin/orders", label: "Production Orders" },
+    { to: "/admin/orders/new", label: "New Production Order" },
     { to: "/admin/queue", label: "Production Queue" },
-    { to: "/admin/products", label: "Products" },
     { to: "/admin/customers", label: "Customers" },
-    { to: "/", label: "Customer View" },
+    { to: "/admin/products", label: "Products" },
+    { to: "/", label: "Public Site" },
   ];
 
   const links = isAdmin ? adminLinks : customerLinks;
@@ -222,7 +223,7 @@ export default function Layout() {
               color: "#d6d3d1",
             }}
           >
-            {isAdmin ? "Shop Dashboard" : "Customer Portal"}
+            {isAdmin ? "Staff Workspace" : "Customer Portal"}
           </p>
 
           <h1
@@ -234,7 +235,7 @@ export default function Layout() {
             }}
           >
             {isAdmin
-              ? "Manage requests and production"
+              ? "Manage counter sales, production orders, and customer records"
               : "Custom apparel ordering made simple"}
           </h1>
         </div>
