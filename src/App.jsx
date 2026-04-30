@@ -20,6 +20,7 @@ import Products from "./admin/Products";
 import Queue from "./admin/Queue";
 import Customers from "./admin/Customers";
 import CustomerDetail from "./admin/CustomerDetail";
+import QuickSale from "./admin/QuickSale";
 
 export default function App() {
   return (
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="admin" element={<Dashboard />} />
           <Route path="admin/orders" element={<Orders />} />
           <Route path="admin/orders/new" element={<NewOrder />} />
+          <Route path="admin/sales/new" element={<QuickSale />} />
           <Route path="admin/orders/:orderNumber" element={<OrderDetail />} />
           <Route path="admin/products" element={<Products />} />
           <Route path="admin/queue" element={<Queue />} />
