@@ -10,6 +10,7 @@ import OrderSubmitted from "./pages/OrderSubmitted";
 import MyOrders from "./pages/MyOrders";
 import DepositPayment from "./pages/DepositPayment";
 import PaymentConfirmed from "./pages/PaymentConfirmed";
+import ApprovalReview from "./pages/ApprovalReview";
 import Dashboard from "./admin/Dashboard";
 import Orders from "./admin/Orders";
 import OrderDetail from "./admin/OrderDetail";
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="my-orders" element={<MyOrders />} />
           <Route path="deposit-payment" element={<DepositPayment />} />
           <Route path="payment-confirmed" element={<PaymentConfirmed />} />
+          <Route path="approval/:orderNumber" element={<ApprovalReview />} />
           <Route path="admin" element={<Dashboard />} />
           <Route path="admin/orders" element={<Orders />} />
           <Route path="admin/orders/:orderNumber" element={<OrderDetail />} />
