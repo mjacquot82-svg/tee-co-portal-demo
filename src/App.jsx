@@ -17,6 +17,7 @@ import OrderDetail from "./admin/OrderDetail";
 import Products from "./admin/Products";
 import Queue from "./admin/Queue";
 import Customers from "./admin/Customers";
+import CustomerDetail from "./admin/CustomerDetail";
 
 export default function App() {
   return (
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="admin/products" element={<Products />} />
           <Route path="admin/queue" element={<Queue />} />
           <Route path="admin/customers" element={<Customers />} />
+          <Route path="admin/customers/:customerId" element={<CustomerDetail />} />
         </Route>
       </Routes>
     </BrowserRouter>
