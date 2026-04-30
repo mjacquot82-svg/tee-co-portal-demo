@@ -1,4 +1,3 @@
-cat > src/admin/Customers.jsx <<'EOF'
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { createStoredCustomer, getStoredCustomers } from "../lib/customersStore";
@@ -71,8 +70,3 @@ export default function Customers() {
     </div>
   );
 }
-EOF
-
-git add src/admin/Customers.jsx
-git commit -m "Add customer creation form"
-git push
