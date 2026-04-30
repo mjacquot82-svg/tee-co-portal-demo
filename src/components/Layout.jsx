@@ -43,6 +43,10 @@ export default function Layout() {
   const adminLinks = [
     { to: "/admin", label: "Dashboard" },
     { to: "/admin/orders", label: "Orders" },
+    { to: "/admin/orders/new", label: "New Order" },
+    { to: "/admin/queue", label: "Production Queue" },
+    { to: "/admin/products", label: "Products" },
+    { to: "/admin/customers", label: "Customers" },
     { to: "/", label: "Customer View" },
   ];
 
