@@ -15,6 +15,8 @@ const statusOptions = [
   "Cancelled",
 ];
 
+const paymentMethods = ["e-transfer", "cash", "card terminal", "cheque", "other"];
+
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
@@ -34,6 +36,10 @@ export default function OrderDetail() {
   const [status, setStatus] = useState("Awaiting Artwork");
   const [approvalNote, setApprovalNote] = useState("");
   const [showQuotePreview, setShowQuotePreview] = useState(false);
+  const [depositType, setDepositType] = useState("percentage");
+  const [depositValue, setDepositValue] = useState("50");
+  const [paymentMethod, setPaymentMethod] = useState("e-transfer");
+  const [paymentNote, setPaymentNote] = useState("");
 
   useEffect(() => {
     const stored = findStoredOrder(orderNumber);
@@ -41,6 +47,10 @@ export default function OrderDetail() {
       setOrder(stored);
       setStatus(stored.status || "Awaiting Artwork");
       setApprovalNote(stored.approval_note || "");
+      setDepositType(stored.deposit?.type || "percentage");
+      setDepositValue(String(stored.deposit?.value ?? "50"));
+      setPaymentMethod(stored.deposit?.method || "e-transfer");
+      setPaymentNote(stored.deposit?.note || "");
     }
   }, [orderNumber]);
 
@@ -62,7 +72,18 @@ export default function OrderDetail() {
       setOrder(updated);
       setStatus(updated.status || "Awaiting Artwork");
       setApprovalNote(updated.approval_note || "");
+      setDepositType(updated.deposit?.type || depositType);
+      setDepositValue(String(updated.deposit?.value ?? depositValue));
+      setPaymentMethod(updated.deposit?.method || paymentMethod);
+      setPaymentNote(updated.deposit?.note || paymentNote);
     }
+  }
+
+  function calculateDepositAmount() {
+    const total = Number((order?.quote || quoteSnapshot)?.total || 0);
+    const value = Number(depositValue || 0);
+    if (depositType === "fixed") return value;
+    return (total * value) / 100;
   }
 
   function handleStatusChange(event) {
@@ -73,6 +94,59 @@ export default function OrderDetail() {
     if (!quoteSnapshot) return;
     saveOrderUpdates({ quote: quoteSnapshot });
     setShowQuotePreview(true);
+  }
+
+  function applyDepositRule() {
+    const amount = calculateDepositAmount();
+    saveOrderUpdates({
+      deposit: {
+        ...(order?.deposit || {}),
+        required: true,
+        type: depositType,
+        value: Number(depositValue || 0),
+        amount,
+        status: order?.deposit?.status || "pending",
+        method: order?.deposit?.method || paymentMethod,
+        note: order?.deposit?.note || paymentNote,
+        provider: "manual",
+      },
+      production_ready: order?.deposit?.status === "paid",
+    });
+  }
+
+  function clearDepositRequirement() {
+    saveOrderUpdates({
+      deposit: {
+        required: false,
+        type: "none",
+        value: 0,
+        amount: 0,
+        status: "not required",
+        method: "manual",
+        note: "No deposit required for this order.",
+        provider: "manual",
+      },
+      production_ready: order?.approval_status === "Approved",
+    });
+  }
+
+  function markDepositReceived() {
+    const amount = order?.deposit?.amount ?? calculateDepositAmount();
+    saveOrderUpdates({
+      deposit: {
+        ...(order?.deposit || {}),
+        required: true,
+        type: depositType,
+        value: Number(depositValue || 0),
+        amount,
+        status: "paid",
+        method: paymentMethod,
+        note: paymentNote,
+        provider: "manual",
+        received_at: new Date().toISOString(),
+      },
+      production_ready: true,
+    });
   }
 
   function markApprovalSent() {
@@ -125,6 +199,8 @@ export default function OrderDetail() {
 
   const artworkFiles = order?.artwork_files || [];
   const approvalStatus = order?.approval_status || "Not Sent";
+  const activeQuote = order?.quote || quoteSnapshot;
+  const depositAmount = calculateDepositAmount();
 
   return (
     <div
@@ -149,7 +225,7 @@ export default function OrderDetail() {
         <div>
           <h1 style={{ margin: 0 }}>Order {orderNumber}</h1>
           <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-            Job details, quote preview, workflow status, artwork files, and approval tracking.
+            Job details, quote preview, deposits, workflow status, artwork files, and approval tracking.
           </p>
         </div>
 
@@ -267,6 +343,68 @@ export default function OrderDetail() {
               </div>
             </section>
           )}
+
+          <section
+            style={{
+              background: "#ffffff",
+              borderRadius: "20px",
+              padding: "24px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+            }}
+          >
+            <h2 style={{ marginTop: 0 }}>Deposit / Payment Tracking</h2>
+            <p style={{ color: "#64748b" }}>
+              Manual payment tracking now; Stripe payment links can be added later as a premium upgrade.
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
+              <label style={{ display: "grid", gap: "6px", fontWeight: 600 }}>
+                Deposit Type
+                <select value={depositType} onChange={(event) => setDepositType(event.target.value)} style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "11px" }}>
+                  <option value="percentage">Percentage</option>
+                  <option value="fixed">Fixed Amount</option>
+                </select>
+              </label>
+
+              <label style={{ display: "grid", gap: "6px", fontWeight: 600 }}>
+                Deposit Value
+                <input type="number" value={depositValue} onChange={(event) => setDepositValue(event.target.value)} style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "11px" }} />
+              </label>
+
+              <label style={{ display: "grid", gap: "6px", fontWeight: 600 }}>
+                Payment Method
+                <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "11px" }}>
+                  {paymentMethods.map((method) => (
+                    <option key={method}>{method}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <label style={{ display: "grid", gap: "6px", fontWeight: 600, marginTop: "12px" }}>
+              Payment Notes
+              <textarea value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} placeholder="Example: e-transfer received from customer email." style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "11px", minHeight: "76px" }} />
+            </label>
+
+            <div style={{ marginTop: "14px", display: "grid", gap: "6px" }}>
+              <span><strong>Quote Total:</strong> {money(activeQuote?.total)}</span>
+              <span><strong>Calculated Deposit:</strong> {money(order.deposit?.amount ?? depositAmount)}</span>
+              <span><strong>Deposit Status:</strong> {order.deposit?.status || "not set"}</span>
+              <span><strong>Production Ready:</strong> {order.production_ready ? "Yes" : "No"}</span>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "14px" }}>
+              <button type="button" onClick={applyDepositRule} style={{ border: "1px solid #cbd5e1", background: "#ffffff", borderRadius: "12px", padding: "11px 14px", cursor: "pointer", fontWeight: 700 }}>
+                Apply Deposit Rule
+              </button>
+              <button type="button" onClick={markDepositReceived} style={{ border: "none", background: "#166534", color: "#ffffff", borderRadius: "12px", padding: "11px 14px", cursor: "pointer", fontWeight: 700 }}>
+                Mark Deposit Received
+              </button>
+              <button type="button" onClick={clearDepositRequirement} style={{ border: "1px solid #cbd5e1", background: "#ffffff", borderRadius: "12px", padding: "11px 14px", cursor: "pointer", fontWeight: 700 }}>
+                No Deposit Required
+              </button>
+            </div>
+          </section>
 
           <section
             style={{
