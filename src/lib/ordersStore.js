@@ -26,7 +26,7 @@ export function createStoredOrder(orderInput) {
   const order = {
     ...orderInput,
     order_number: orderNumber,
-    status: "Submitted",
+    status: orderInput.status || "Awaiting Artwork",
     date: new Date(createdAt).toLocaleDateString(),
     created_at: createdAt,
     source: orderInput.source || "Staff Entry",
@@ -39,4 +39,20 @@ export function createStoredOrder(orderInput) {
 
 export function findStoredOrder(orderNumber) {
   return getStoredOrders().find((order) => order.order_number === orderNumber);
+}
+
+export function updateStoredOrder(orderNumber, updates) {
+  const currentOrders = getStoredOrders();
+  const nextOrders = currentOrders.map((order) =>
+    order.order_number === orderNumber
+      ? {
+          ...order,
+          ...updates,
+          updated_at: new Date().toISOString(),
+        }
+      : order
+  );
+
+  saveStoredOrders(nextOrders);
+  return nextOrders.find((order) => order.order_number === orderNumber);
 }
