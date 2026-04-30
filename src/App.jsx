@@ -14,6 +14,7 @@ import ApprovalReview from "./pages/ApprovalReview";
 import QuoteView from "./public/QuoteView";
 import Dashboard from "./admin/Dashboard";
 import Orders from "./admin/Orders";
+import NewOrder from "./admin/NewOrder";
 import OrderDetail from "./admin/OrderDetail";
 import Products from "./admin/Products";
 import Queue from "./admin/Queue";
@@ -39,6 +40,7 @@ export default function App() {
           <Route path="quote/:orderNumber" element={<QuoteView />} />
           <Route path="admin" element={<Dashboard />} />
           <Route path="admin/orders" element={<Orders />} />
+          <Route path="admin/orders/new" element={<NewOrder />} />
           <Route path="admin/orders/:orderNumber" element={<OrderDetail />} />
           <Route path="admin/products" element={<Products />} />
           <Route path="admin/queue" element={<Queue />} />
