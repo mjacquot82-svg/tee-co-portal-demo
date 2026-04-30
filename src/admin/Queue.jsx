@@ -21,7 +21,51 @@ function normalizeOrder(order) {
     garment: order.garment || order.item || "Custom garment",
     status: order.status || fallbackStatus,
     due_date: order.due_date || "",
+    production_ready: Boolean(order.production_ready),
+    deposit_status: order.deposit?.status || "not set",
   };
+}
+
+function OrderCard({ order, highlightReady = false }) {
+  return (
+    <Link
+      to={`/admin/orders/${order.order_number}`}
+      style={{
+        display: "grid",
+        gap: "7px",
+        textDecoration: "none",
+        color: "#0f172a",
+        background: highlightReady ? "#f0fdf4" : "#f8fafc",
+        border: highlightReady ? "1px solid #86efac" : "1px solid #e2e8f0",
+        borderRadius: "14px",
+        padding: "12px",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: "8px",
+          alignItems: "center",
+        }}
+      >
+        <strong>{order.order_number}</strong>
+        <StatusBadge status={order.status} />
+      </div>
+      <span style={{ color: "#334155", fontWeight: 600 }}>{order.customer_name}</span>
+      <span style={{ color: "#64748b", fontSize: "14px" }}>{order.garment}</span>
+      {order.due_date && (
+        <span style={{ color: "#92400e", fontSize: "13px", fontWeight: 700 }}>
+          Due: {order.due_date}
+        </span>
+      )}
+      {order.production_ready && (
+        <span style={{ color: "#166534", fontSize: "13px", fontWeight: 800 }}>
+          Production Ready • Deposit {order.deposit_status}
+        </span>
+      )}
+    </Link>
+  );
 }
 
 export default function Queue() {
@@ -36,6 +80,7 @@ export default function Queue() {
   );
 
   const orders = storedOrders.length ? storedOrders : demoQueueOrders;
+  const productionReadyOrders = orders.filter((order) => order.production_ready);
 
   const groupedOrders = queueStatuses.reduce((groups, status) => {
     groups[status] = orders.filter((order) => order.status === status);
@@ -77,7 +122,7 @@ export default function Queue() {
           </p>
           <h1 style={{ margin: "6px 0 8px", fontSize: "30px" }}>Production Queue</h1>
           <p style={{ margin: 0, color: "#64748b" }}>
-            Track jobs by production stage so the shop can see what is waiting, approved, in progress, and ready.
+            Track jobs by production stage, deposit readiness, and shop production priority.
           </p>
         </div>
 
@@ -95,6 +140,56 @@ export default function Queue() {
           New Order
         </Link>
       </div>
+
+      <section
+        style={{
+          background: "#ffffff",
+          borderRadius: "18px",
+          border: "1px solid #bbf7d0",
+          padding: "16px",
+          marginBottom: "18px",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "10px",
+            marginBottom: "12px",
+          }}
+        >
+          <div>
+            <h2 style={{ margin: 0, fontSize: "20px" }}>Ready to Stitch</h2>
+            <p style={{ margin: "4px 0 0", color: "#64748b" }}>
+              Jobs with approval and payment/deposit complete enough to begin production.
+            </p>
+          </div>
+          <span
+            style={{
+              background: "#dcfce7",
+              borderRadius: "999px",
+              padding: "5px 10px",
+              color: "#166534",
+              fontWeight: 800,
+              fontSize: "13px",
+            }}
+          >
+            {productionReadyOrders.length}
+          </span>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "10px" }}>
+          {productionReadyOrders.length ? (
+            productionReadyOrders.map((order) => (
+              <OrderCard key={`ready-${order.order_number}`} order={order} highlightReady />
+            ))
+          ) : (
+            <p style={{ color: "#94a3b8", margin: "8px 0" }}>No jobs are production-ready yet.</p>
+          )}
+        </div>
+      </section>
 
       <div
         style={{
@@ -143,41 +238,7 @@ export default function Queue() {
             <div style={{ display: "grid", gap: "10px" }}>
               {groupedOrders[status]?.length ? (
                 groupedOrders[status].map((order) => (
-                  <Link
-                    key={order.order_number}
-                    to={`/admin/orders/${order.order_number}`}
-                    style={{
-                      display: "grid",
-                      gap: "7px",
-                      textDecoration: "none",
-                      color: "#0f172a",
-                      background: "#f8fafc",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "14px",
-                      padding: "12px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "8px",
-                        alignItems: "center",
-                      }}
-                    >
-                      <strong>{order.order_number}</strong>
-                      <StatusBadge status={order.status} />
-                    </div>
-                    <span style={{ color: "#334155", fontWeight: 600 }}>
-                      {order.customer_name}
-                    </span>
-                    <span style={{ color: "#64748b", fontSize: "14px" }}>{order.garment}</span>
-                    {order.due_date && (
-                      <span style={{ color: "#92400e", fontSize: "13px", fontWeight: 700 }}>
-                        Due: {order.due_date}
-                      </span>
-                    )}
-                  </Link>
+                  <OrderCard key={order.order_number} order={order} />
                 ))
               ) : (
                 <p style={{ color: "#94a3b8", margin: "12px 0" }}>No jobs in this stage.</p>
