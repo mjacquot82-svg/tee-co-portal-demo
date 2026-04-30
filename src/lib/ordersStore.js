@@ -56,3 +56,30 @@ export function updateStoredOrder(orderNumber, updates) {
   saveStoredOrders(nextOrders);
   return nextOrders.find((order) => order.order_number === orderNumber);
 }
+
+export function duplicateStoredOrder(orderNumber) {
+  const original = findStoredOrder(orderNumber);
+  if (!original) return null;
+
+  const copiedOrder = {
+    ...original,
+    status: "Awaiting Artwork",
+    approval_status: "Not Sent",
+    approval_note: "",
+    approval_sent_at: null,
+    approved_at: null,
+    revision_requested_at: null,
+    customer_approval_note: "",
+    customer_approved_at: null,
+    customer_revision_requested_at: null,
+    source: "Repeat Order",
+    notes: original.notes ? `Repeat order copied from ${original.order_number}. ${original.notes}` : `Repeat order copied from ${original.order_number}.`,
+  };
+
+  delete copiedOrder.order_number;
+  delete copiedOrder.created_at;
+  delete copiedOrder.updated_at;
+  delete copiedOrder.date;
+
+  return createStoredOrder(copiedOrder);
+}
