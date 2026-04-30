@@ -1,13 +1,16 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createStoredOrder } from "../lib/ordersStore";
+import { getStoredProducts } from "../lib/productsStore";
 
-const sizeKeys = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"];
+const fallbackSizeKeys = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"];
 
-const initialSizes = sizeKeys.reduce((sizes, size) => {
-  sizes[size] = "";
-  return sizes;
-}, {});
+function buildSizeState(sizeKeys) {
+  return sizeKeys.reduce((sizes, size) => {
+    sizes[size] = "";
+    return sizes;
+  }, {});
+}
 
 const fieldStyle = {
   border: "1px solid #cbd5e1",
@@ -27,19 +30,39 @@ const labelStyle = {
 
 export default function NewOrder() {
   const navigate = useNavigate();
+  const [products, setProducts] = useState([]);
+  const [selectedProductId, setSelectedProductId] = useState("");
   const [form, setForm] = useState({
     customer_name: "",
     customer_phone: "",
     customer_email: "",
+    product_id: "",
     garment: "",
+    garment_category: "",
+    brand_model: "",
     garment_color: "",
-    placement: "Left Chest",
-    decoration_type: "Embroidery",
+    placement: "",
+    decoration_type: "",
     due_date: "",
     notes: "",
     source: "Walk-in",
   });
-  const [sizes, setSizes] = useState(initialSizes);
+  const [sizes, setSizes] = useState(buildSizeState(fallbackSizeKeys));
+
+  useEffect(() => {
+    setProducts(getStoredProducts().filter((product) => product.status !== "Inactive"));
+  }, []);
+
+  const selectedProduct = useMemo(() => {
+    return products.find((product) => product.id === selectedProductId);
+  }, [products, selectedProductId]);
+
+  const sizeKeys = selectedProduct?.sizes?.length ? selectedProduct.sizes : fallbackSizeKeys;
+  const colorOptions = selectedProduct?.colors?.length ? selectedProduct.colors : [];
+  const placementOptions = selectedProduct?.placements?.length ? selectedProduct.placements : [];
+  const decorationOptions = selectedProduct?.decoration_types?.length
+    ? selectedProduct.decoration_types
+    : [];
 
   const totalQty = useMemo(() => {
     return Object.values(sizes).reduce((total, value) => {
@@ -51,6 +74,39 @@ export default function NewOrder() {
   function updateField(event) {
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function selectProduct(event) {
+    const productId = event.target.value;
+    const product = products.find((item) => item.id === productId);
+    setSelectedProductId(productId);
+
+    if (!product) {
+      setForm((current) => ({
+        ...current,
+        product_id: "",
+        garment: "",
+        garment_category: "",
+        brand_model: "",
+        garment_color: "",
+        placement: "",
+        decoration_type: "",
+      }));
+      setSizes(buildSizeState(fallbackSizeKeys));
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      product_id: product.id,
+      garment: product.name,
+      garment_category: product.category,
+      brand_model: product.brand_model || "",
+      garment_color: product.colors?.[0] || "",
+      placement: product.placements?.[0] || "",
+      decoration_type: product.decoration_types?.[0] || "",
+    }));
+    setSizes(buildSizeState(product.sizes?.length ? product.sizes : fallbackSizeKeys));
   }
 
   function updateSize(size, value) {
@@ -66,6 +122,8 @@ export default function NewOrder() {
 
     const order = createStoredOrder({
       ...form,
+      product_image: selectedProduct?.image || "",
+      product_notes: selectedProduct?.notes || "",
       qty: totalQty,
       size_breakdown: normalizedSizes,
     });
@@ -107,7 +165,7 @@ export default function NewOrder() {
           </p>
           <h1 style={{ margin: "6px 0 8px", fontSize: "30px" }}>New Order</h1>
           <p style={{ margin: 0, color: "#475569" }}>
-            Enter walk-in, phone, email, and repeat customer orders into one shared workflow.
+            Select a catalog garment so sizes, placements, decoration options, and previews stay accurate.
           </p>
         </div>
 
@@ -169,61 +227,140 @@ export default function NewOrder() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: "16px",
+            gridTemplateColumns: "minmax(240px, 1fr) minmax(220px, 320px)",
+            gap: "18px",
+            alignItems: "start",
           }}
         >
-          <label style={labelStyle}>
-            Garment / Item
-            <input
-              name="garment"
-              value={form.garment}
-              onChange={updateField}
-              required
-              placeholder="Gildan hoodie, Richardson hat, tee, etc."
-              style={fieldStyle}
-            />
-          </label>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: "16px",
+            }}
+          >
+            <label style={labelStyle}>
+              Garment / Product
+              <select value={selectedProductId} onChange={selectProduct} required style={fieldStyle}>
+                <option value="">Select a catalog product...</option>
+                {products.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.name}{product.brand_model ? ` (${product.brand_model})` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label style={labelStyle}>
-            Garment Color
-            <input
-              name="garment_color"
-              value={form.garment_color}
-              onChange={updateField}
-              placeholder="Black"
-              style={fieldStyle}
-            />
-          </label>
+            <label style={labelStyle}>
+              Garment Color
+              {colorOptions.length ? (
+                <select
+                  name="garment_color"
+                  value={form.garment_color}
+                  onChange={updateField}
+                  style={fieldStyle}
+                >
+                  {colorOptions.map((color) => (
+                    <option key={color}>{color}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  name="garment_color"
+                  value={form.garment_color}
+                  onChange={updateField}
+                  placeholder="Black"
+                  style={fieldStyle}
+                />
+              )}
+            </label>
 
-          <label style={labelStyle}>
-            Decoration Type
-            <select
-              name="decoration_type"
-              value={form.decoration_type}
-              onChange={updateField}
-              style={fieldStyle}
+            <label style={labelStyle}>
+              Decoration Type
+              {decorationOptions.length ? (
+                <select
+                  name="decoration_type"
+                  value={form.decoration_type}
+                  onChange={updateField}
+                  style={fieldStyle}
+                >
+                  {decorationOptions.map((method) => (
+                    <option key={method}>{method}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  name="decoration_type"
+                  value={form.decoration_type}
+                  onChange={updateField}
+                  placeholder="Embroidery"
+                  style={fieldStyle}
+                />
+              )}
+            </label>
+
+            <label style={labelStyle}>
+              Logo Placement
+              {placementOptions.length ? (
+                <select name="placement" value={form.placement} onChange={updateField} style={fieldStyle}>
+                  {placementOptions.map((placement) => (
+                    <option key={placement}>{placement}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  name="placement"
+                  value={form.placement}
+                  onChange={updateField}
+                  placeholder="Left Chest"
+                  style={fieldStyle}
+                />
+              )}
+            </label>
+          </div>
+
+          <div
+            style={{
+              border: "1px solid #e2e8f0",
+              borderRadius: "18px",
+              padding: "14px",
+              background: "#f8fafc",
+            }}
+          >
+            <p style={{ margin: "0 0 10px", fontWeight: 700 }}>Garment Preview</p>
+            <div
+              style={{
+                height: "210px",
+                borderRadius: "14px",
+                background: "#ffffff",
+                border: "1px solid #e2e8f0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                overflow: "hidden",
+                color: "#94a3b8",
+                textAlign: "center",
+                padding: "10px",
+              }}
             >
-              <option>Embroidery</option>
-              <option>Screen Print</option>
-              <option>Heat Press</option>
-              <option>DTF Transfer</option>
-              <option>Other</option>
-            </select>
-          </label>
-
-          <label style={labelStyle}>
-            Logo Placement
-            <select name="placement" value={form.placement} onChange={updateField} style={fieldStyle}>
-              <option>Left Chest</option>
-              <option>Right Chest</option>
-              <option>Front Center</option>
-              <option>Back Center</option>
-              <option>Sleeve</option>
-              <option>Hat Front Panel</option>
-              <option>Other</option>
-            </select>
-          </label>
+              {selectedProduct?.image ? (
+                <img
+                  src={selectedProduct.image}
+                  alt={selectedProduct.name}
+                  style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                />
+              ) : (
+                "Select a product with an image to preview it here"
+              )}
+            </div>
+            {selectedProduct && (
+              <div style={{ marginTop: "10px", color: "#475569", fontSize: "14px" }}>
+                <strong>{selectedProduct.name}</strong>
+                {selectedProduct.brand_model ? ` • ${selectedProduct.brand_model}` : ""}
+                {selectedProduct.notes && <p style={{ marginBottom: 0 }}>{selectedProduct.notes}</p>}
+              </div>
+            )}
+          </div>
         </div>
 
         <div
@@ -248,7 +385,7 @@ export default function NewOrder() {
             <div>
               <h2 style={{ margin: 0, fontSize: "20px" }}>Size Breakdown</h2>
               <p style={{ margin: "4px 0 0", color: "#64748b" }}>
-                Enter quantities by size. Total quantity updates automatically.
+                Size fields now come from the selected catalog product.
               </p>
             </div>
             <strong style={{ fontSize: "18px" }}>Total: {totalQty}</strong>
@@ -268,7 +405,7 @@ export default function NewOrder() {
                   type="number"
                   min="0"
                   inputMode="numeric"
-                  value={sizes[size]}
+                  value={sizes[size] || ""}
                   onChange={(event) => updateSize(size, event.target.value)}
                   placeholder="0"
                   style={{ ...fieldStyle, textAlign: "center" }}
