@@ -1,6 +1,8 @@
 import { useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { findStoredOrder, updateStoredOrder } from "../lib/ordersStore";
+import { getStoredProducts } from "../lib/productsStore";
+import { generateQuoteSnapshot } from "../lib/quoteEngine";
 
 const statusOptions = [
   "Awaiting Artwork",
@@ -12,6 +14,10 @@ const statusOptions = [
   "On Hold",
   "Cancelled",
 ];
+
+function money(value) {
+  return `$${Number(value || 0).toFixed(2)}`;
+}
 
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -27,6 +33,7 @@ export default function OrderDetail() {
   const [order, setOrder] = useState(null);
   const [status, setStatus] = useState("Awaiting Artwork");
   const [approvalNote, setApprovalNote] = useState("");
+  const [showQuotePreview, setShowQuotePreview] = useState(false);
 
   useEffect(() => {
     const stored = findStoredOrder(orderNumber);
@@ -36,6 +43,18 @@ export default function OrderDetail() {
       setApprovalNote(stored.approval_note || "");
     }
   }, [orderNumber]);
+
+  const selectedProduct = useMemo(() => {
+    if (!order) return null;
+    return getStoredProducts().find(
+      (product) => product.id === order.product_id || product.name === order.garment
+    );
+  }, [order]);
+
+  const quoteSnapshot = useMemo(() => {
+    if (!order) return null;
+    return generateQuoteSnapshot(order, selectedProduct);
+  }, [order, selectedProduct]);
 
   function saveOrderUpdates(updates) {
     const updated = updateStoredOrder(orderNumber, updates);
@@ -48,6 +67,12 @@ export default function OrderDetail() {
 
   function handleStatusChange(event) {
     saveOrderUpdates({ status: event.target.value });
+  }
+
+  function saveQuoteSnapshot() {
+    if (!quoteSnapshot) return;
+    saveOrderUpdates({ quote: quoteSnapshot });
+    setShowQuotePreview(true);
   }
 
   function markApprovalSent() {
@@ -124,24 +149,41 @@ export default function OrderDetail() {
         <div>
           <h1 style={{ margin: 0 }}>Order {orderNumber}</h1>
           <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-            Job details, workflow status, artwork files, approval tracking, and printable production information.
+            Job details, quote preview, workflow status, artwork files, and approval tracking.
           </p>
         </div>
 
-        <button
-          onClick={() => window.print()}
-          style={{
-            background: "#171717",
-            color: "#ffffff",
-            border: "none",
-            borderRadius: "12px",
-            padding: "12px 16px",
-            cursor: "pointer",
-            fontWeight: 700,
-          }}
-        >
-          Print Work Order
-        </button>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={saveQuoteSnapshot}
+            style={{
+              background: "#ffffff",
+              color: "#171717",
+              border: "1px solid #cbd5e1",
+              borderRadius: "12px",
+              padding: "12px 16px",
+              cursor: "pointer",
+              fontWeight: 700,
+            }}
+          >
+            Preview Quote
+          </button>
+          <button
+            onClick={() => window.print()}
+            style={{
+              background: "#171717",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: "12px",
+              padding: "12px 16px",
+              cursor: "pointer",
+              fontWeight: 700,
+            }}
+          >
+            Print Work Order
+          </button>
+        </div>
       </div>
 
       <div
@@ -171,6 +213,61 @@ export default function OrderDetail() {
 
       {order ? (
         <div style={{ display: "grid", gap: "18px" }}>
+          {showQuotePreview && quoteSnapshot && (
+            <section
+              style={{
+                background: "#ffffff",
+                borderRadius: "20px",
+                padding: "24px",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+              }}
+            >
+              <h2 style={{ marginTop: 0 }}>Quote Preview</h2>
+              <p style={{ color: "#64748b" }}>
+                Pricing is generated from product placement pricing and the order quantity.
+              </p>
+
+              <div style={{ display: "grid", gap: "8px", marginBottom: "16px" }}>
+                <span><strong>Customer:</strong> {quoteSnapshot.customer_name || "—"}</span>
+                <span><strong>Garment:</strong> {quoteSnapshot.garment || "—"}</span>
+                <span><strong>Quantity:</strong> {quoteSnapshot.quantity}</span>
+              </div>
+
+              {quoteSnapshot.placement_lines.length ? (
+                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px" }}>
+                  <thead>
+                    <tr style={{ textAlign: "left", borderBottom: "1px solid #e2e8f0" }}>
+                      <th style={{ padding: "10px 8px" }}>Placement</th>
+                      <th style={{ padding: "10px 8px" }}>Decoration</th>
+                      <th style={{ padding: "10px 8px" }}>Unit</th>
+                      <th style={{ padding: "10px 8px" }}>Qty</th>
+                      <th style={{ padding: "10px 8px" }}>Line Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {quoteSnapshot.placement_lines.map((line, index) => (
+                      <tr key={`${line.placement}-${index}`} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                        <td style={{ padding: "10px 8px" }}>{line.placement || "—"}</td>
+                        <td style={{ padding: "10px 8px" }}>{line.decoration_type || "—"}</td>
+                        <td style={{ padding: "10px 8px" }}>{money(line.unit_price)}</td>
+                        <td style={{ padding: "10px 8px" }}>{line.quantity}</td>
+                        <td style={{ padding: "10px 8px", fontWeight: 700 }}>{money(line.line_total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p style={{ color: "#94a3b8" }}>No placement lines available for this quote yet.</p>
+              )}
+
+              <div style={{ display: "grid", justifyContent: "end", gap: "6px", fontSize: "16px" }}>
+                <span><strong>Placement subtotal:</strong> {money(quoteSnapshot.placement_subtotal)}</span>
+                <span><strong>Setup fees:</strong> {money(quoteSnapshot.setup_subtotal)}</span>
+                <span style={{ fontSize: "20px" }}><strong>Total:</strong> {money(quoteSnapshot.total)}</span>
+              </div>
+            </section>
+          )}
+
           <section
             style={{
               background: "#ffffff",
