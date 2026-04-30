@@ -40,14 +40,16 @@ export default function Layout() {
     { to: "/login", label: "Login" },
   ];
 
+  /**
+   * Keep admin top bar focused on PRIMARY workflow only.
+   * Secondary areas (Customers, Products) stay inside dashboard.
+   */
   const adminLinks = [
     { to: "/admin", label: "Dashboard" },
+    { to: "/admin/sales", label: "Counter Sales" },
     { to: "/admin/sales/new", label: "Quick Sale" },
     { to: "/admin/orders", label: "Production Orders" },
-    { to: "/admin/orders/new", label: "New Production Order" },
     { to: "/admin/queue", label: "Production Queue" },
-    { to: "/admin/customers", label: "Customers" },
-    { to: "/admin/products", label: "Products" },
     { to: "/", label: "Public Site" },
   ];
 
