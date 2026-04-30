@@ -13,6 +13,7 @@ import PaymentConfirmed from "./pages/PaymentConfirmed";
 import Dashboard from "./admin/Dashboard";
 import Orders from "./admin/Orders";
 import OrderDetail from "./admin/OrderDetail";
+import Products from "./admin/Products";
 
 export default function App() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="admin" element={<Dashboard />} />
           <Route path="admin/orders" element={<Orders />} />
           <Route path="admin/orders/:orderNumber" element={<OrderDetail />} />
+          <Route path="admin/products" element={<Products />} />
         </Route>
       </Routes>
     </BrowserRouter>
