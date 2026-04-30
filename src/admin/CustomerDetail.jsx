@@ -1,11 +1,12 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { findStoredCustomer } from "../lib/customersStore";
-import { getStoredOrders } from "../lib/ordersStore";
+import { duplicateStoredOrder, getStoredOrders } from "../lib/ordersStore";
 import StatusBadge from "../components/StatusBadge";
 
 export default function CustomerDetail() {
   const { customerId } = useParams();
+  const navigate = useNavigate();
   const [customer, setCustomer] = useState(null);
   const [orders, setOrders] = useState([]);
 
@@ -24,6 +25,13 @@ export default function CustomerDetail() {
         order.customer_name === customer.name
     );
   }, [customer, orders]);
+
+  function handleDuplicate(orderNumber) {
+    const duplicated = duplicateStoredOrder(orderNumber);
+    if (duplicated) {
+      navigate(`/admin/orders/${duplicated.order_number}`);
+    }
+  }
 
   if (!customer) {
     return (
@@ -156,6 +164,7 @@ export default function CustomerDetail() {
                     <th style={{ padding: "10px 8px" }}>Qty</th>
                     <th style={{ padding: "10px 8px" }}>Status</th>
                     <th style={{ padding: "10px 8px" }}>Due</th>
+                    <th style={{ padding: "10px 8px" }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -172,6 +181,22 @@ export default function CustomerDetail() {
                         <StatusBadge status={order.status || "Awaiting Artwork"} />
                       </td>
                       <td style={{ padding: "12px 8px" }}>{order.due_date || "—"}</td>
+                      <td style={{ padding: "12px 8px" }}>
+                        <button
+                          type="button"
+                          onClick={() => handleDuplicate(order.order_number)}
+                          style={{
+                            border: "1px solid #cbd5e1",
+                            background: "#ffffff",
+                            borderRadius: "10px",
+                            padding: "8px 10px",
+                            cursor: "pointer",
+                            fontWeight: 700,
+                          }}
+                        >
+                          Duplicate
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
