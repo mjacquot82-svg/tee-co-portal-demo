@@ -4,12 +4,20 @@ import { getStoredOrders } from "../lib/ordersStore";
 import StatusBadge from "../components/StatusBadge";
 
 const queueStatuses = [
-  "Awaiting Artwork",
-  "Mockup Sent",
   "Approved",
   "In Production",
+  "Printing",
+  "Embroidery",
   "Ready for Pickup",
-  "Completed",
+];
+
+const waitingStatuses = [
+  "Awaiting Artwork",
+  "Mockup Sent",
+  "Quote Sent",
+  "Awaiting Approval",
+  "Awaiting Deposit",
+  "Deposit Requested",
 ];
 
 const fallbackStatus = "Awaiting Artwork";
@@ -24,6 +32,18 @@ function normalizeOrder(order) {
     production_ready: Boolean(order.production_ready),
     deposit_status: order.deposit?.status || "not set",
   };
+}
+
+function normalizeStatus(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isShopReady(order) {
+  const status = normalizeStatus(order.status);
+  return (
+    order.production_ready ||
+    ["approved", "paid", "in production", "printing", "embroidery", "ready for pickup"].includes(status)
+  );
 }
 
 function OrderCard({ order, highlightReady = false }) {
@@ -59,9 +79,9 @@ function OrderCard({ order, highlightReady = false }) {
           Due: {order.due_date}
         </span>
       )}
-      {order.production_ready && (
+      {highlightReady && (
         <span style={{ color: "#166534", fontSize: "13px", fontWeight: 800 }}>
-          Production Ready • Deposit {order.deposit_status}
+          Ready for shop work • Deposit {order.deposit_status}
         </span>
       )}
     </Link>
@@ -80,10 +100,18 @@ export default function Queue() {
   );
 
   const orders = storedOrders.length ? storedOrders : demoQueueOrders;
-  const productionReadyOrders = orders.filter((order) => order.production_ready);
+  const productionReadyOrders = orders.filter(isShopReady);
+  const waitingOrders = orders.filter((order) =>
+    waitingStatuses.map(normalizeStatus).includes(normalizeStatus(order.status))
+  );
 
   const groupedOrders = queueStatuses.reduce((groups, status) => {
-    groups[status] = orders.filter((order) => order.status === status);
+    const statusKey = normalizeStatus(status);
+    groups[status] = orders.filter((order) => {
+      const orderStatus = normalizeStatus(order.status);
+      if (statusKey === "approved") return orderStatus === "approved" || orderStatus === "paid";
+      return orderStatus === statusKey;
+    });
     return groups;
   }, {});
 
@@ -118,28 +146,88 @@ export default function Queue() {
               textTransform: "uppercase",
             }}
           >
-            Production Pipeline
+            Shop Floor View
           </p>
           <h1 style={{ margin: "6px 0 8px", fontSize: "30px" }}>Production Queue</h1>
           <p style={{ margin: 0, color: "#64748b" }}>
-            Track jobs by production stage, deposit readiness, and shop production priority.
+            Focus on orders that are approved, paid enough, in production, or ready for pickup.
           </p>
         </div>
 
-        <Link
-          to="/admin/orders/new"
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <Link
+            to="/admin/orders"
+            style={{
+              background: "#ffffff",
+              color: "#171717",
+              textDecoration: "none",
+              border: "1px solid #cbd5e1",
+              borderRadius: "12px",
+              padding: "12px 16px",
+              fontWeight: 700,
+            }}
+          >
+            Production Orders
+          </Link>
+          <Link
+            to="/admin/orders/new"
+            style={{
+              background: "#171717",
+              color: "#ffffff",
+              textDecoration: "none",
+              borderRadius: "12px",
+              padding: "12px 16px",
+              fontWeight: 700,
+            }}
+          >
+            New Production Order
+          </Link>
+        </div>
+      </div>
+
+      {waitingOrders.length > 0 && (
+        <section
           style={{
-            background: "#171717",
-            color: "#ffffff",
-            textDecoration: "none",
-            borderRadius: "12px",
-            padding: "12px 16px",
-            fontWeight: 700,
+            background: "#fffbeb",
+            borderRadius: "18px",
+            border: "1px solid #fde68a",
+            padding: "16px",
+            marginBottom: "18px",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
           }}
         >
-          New Order
-        </Link>
-      </div>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "10px",
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <h2 style={{ margin: 0, fontSize: "20px" }}>Waiting Before Production</h2>
+              <p style={{ margin: "4px 0 0", color: "#92400e" }}>
+                {waitingOrders.length} order{waitingOrders.length === 1 ? "" : "s"} still need artwork, approval, or deposit before the shop should start.
+              </p>
+            </div>
+            <Link
+              to="/admin/orders"
+              style={{
+                background: "#ffffff",
+                color: "#92400e",
+                textDecoration: "none",
+                border: "1px solid #fbbf24",
+                borderRadius: "12px",
+                padding: "10px 14px",
+                fontWeight: 800,
+              }}
+            >
+              Review in Production Orders
+            </Link>
+          </div>
+        </section>
+      )}
 
       <section
         style={{
@@ -161,9 +249,9 @@ export default function Queue() {
           }}
         >
           <div>
-            <h2 style={{ margin: 0, fontSize: "20px" }}>Ready to Stitch</h2>
+            <h2 style={{ margin: 0, fontSize: "20px" }}>Ready for Shop Work</h2>
             <p style={{ margin: "4px 0 0", color: "#64748b" }}>
-              Jobs with approval and payment/deposit complete enough to begin production.
+              Approved or paid orders that should now be visible to production staff.
             </p>
           </div>
           <span
@@ -186,7 +274,7 @@ export default function Queue() {
               <OrderCard key={`ready-${order.order_number}`} order={order} highlightReady />
             ))
           ) : (
-            <p style={{ color: "#94a3b8", margin: "8px 0" }}>No jobs are production-ready yet.</p>
+            <p style={{ color: "#94a3b8", margin: "8px 0" }}>No jobs are ready for shop work yet.</p>
           )}
         </div>
       </section>
