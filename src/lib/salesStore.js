@@ -1,4 +1,5 @@
 const STORAGE_KEY = "teeCoQuickSales";
+import { buildStaffAuditFields } from "./staffUsersStore";
 
 export function getStoredQuickSales() {
   if (typeof window === "undefined") return [];
@@ -22,6 +23,8 @@ export function createStoredQuickSale(saleInput) {
   const createdAt = new Date().toISOString();
   const saleNumber = saleInput.sale_number || `SALE-${Date.now().toString().slice(-6)}`;
 
+  const staffAudit = buildStaffAuditFields("created");
+
   const sale = {
     id: `quick-sale-${Date.now()}`,
     sale_number: saleNumber,
@@ -41,6 +44,7 @@ export function createStoredQuickSale(saleInput) {
     notes: saleInput.notes || "",
     square_payment_id: saleInput.square_payment_id || "",
     production_order_numbers: saleInput.production_order_numbers || [],
+    ...staffAudit,
     created_at: createdAt,
     updated_at: createdAt,
   };
