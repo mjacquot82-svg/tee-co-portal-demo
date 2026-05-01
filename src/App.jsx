@@ -23,6 +23,7 @@ import CustomerDetail from "./admin/CustomerDetail";
 import QuickSale from "./admin/QuickSale";
 import Sales from "./admin/Sales";
 import SaleReceipt from "./admin/SaleReceipt";
+import StaffUsers from "./admin/StaffUsers";
 
 export default function App() {
   return (
@@ -52,6 +53,7 @@ export default function App() {
           <Route path="admin/queue" element={<Queue />} />
           <Route path="admin/customers" element={<Customers />} />
           <Route path="admin/customers/:customerId" element={<CustomerDetail />} />
+          <Route path="admin/staff-users" element={<StaffUsers />} />
         </Route>
       </Routes>
     </BrowserRouter>
