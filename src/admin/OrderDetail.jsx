@@ -2,6 +2,7 @@ import { useParams, Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { findStoredOrder, updateStoredOrder } from "../lib/ordersStore";
 import { getStoredProducts } from "../lib/productsStore";
+import { getActiveStaffUser } from "../lib/staffUsersStore";
 import { generateQuoteSnapshot } from "../lib/quoteEngine";
 import StatusBadge from "../components/StatusBadge";
 
@@ -317,6 +318,7 @@ export default function OrderDetail() {
     const file = event.target.files?.[0];
     if (!file || !order) return;
 
+    const activeStaff = getActiveStaffUser();
     const uploadedAt = new Date().toISOString();
     const artworkId = `artwork-${Date.now()}`;
     const dataUrl = await readFileAsDataUrl(file);
@@ -329,6 +331,15 @@ export default function OrderDetail() {
         size: file.size,
         preview: dataUrl,
         uploaded_at: uploadedAt,
+        order_id: order.order_number || orderNumber,
+        order_number: order.order_number || orderNumber,
+        customer_id: order.customer_id || "",
+        customer_name: order.customer_name || "Walk-in Customer",
+        uploaded_by_staff_id: activeStaff?.id || "",
+        uploaded_by_staff_name: activeStaff?.name || "Unknown Staff",
+        uploaded_by_staff_role: activeStaff?.role || "",
+        reusable_customer_asset: true,
+        customer_asset_key: `${order.customer_id || order.customer_name || "walk-in"}/${file.name}`,
         storage_status: "active",
         archived: false,
         archive_after: getArchiveAfterDate(uploadedAt),
@@ -535,6 +546,14 @@ export default function OrderDetail() {
                     <span style={{ display: "block", marginTop: "4px", color: file.archived ? "#92400e" : "#047857", fontSize: "12px", fontWeight: 700 }}>
                       {file.archived ? "Archived" : "Active storage"}
                     </span>
+                    <span style={{ display: "block", marginTop: "2px", color: "#64748b", fontSize: "12px" }}>
+                      Customer asset: {file.customer_name || order.customer_name || "Walk-in Customer"}
+                    </span>
+                    {file.uploaded_by_staff_name && (
+                      <span style={{ display: "block", marginTop: "2px", color: "#64748b", fontSize: "12px" }}>
+                        Uploaded by {file.uploaded_by_staff_name}
+                      </span>
+                    )}
                     {file.archive_after && (
                       <span style={{ display: "block", marginTop: "2px", color: "#64748b", fontSize: "12px" }}>
                         Archive after {formatDateTime(file.archive_after)}
