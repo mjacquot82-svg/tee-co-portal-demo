@@ -172,15 +172,16 @@ export default function Queue() {
           <Link
             to="/admin/orders/new"
             style={{
-              background: "#171717",
-              color: "#ffffff",
+              background: "#ffffff",
+              color: "#171717",
               textDecoration: "none",
+              border: "1px solid #cbd5e1",
               borderRadius: "12px",
               padding: "12px 16px",
               fontWeight: 700,
             }}
           >
-            New Production Order
+            + New Production Order
           </Link>
         </div>
       </div>
