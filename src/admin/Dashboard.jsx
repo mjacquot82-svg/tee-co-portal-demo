@@ -13,21 +13,27 @@ function isToday(isoDate) {
   return date.toDateString() === today.toDateString();
 }
 
-function SnapshotCard({ title, value, helper }) {
+function SnapshotCard({ title, value, helper, to }) {
+  const Wrapper = to ? Link : "div";
+
   return (
-    <div
+    <Wrapper
+      to={to}
       style={{
+        display: "block",
+        textDecoration: "none",
         background: "#ffffff",
         borderRadius: "18px",
         padding: "20px",
         boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
         border: "1px solid #e7e5e4",
+        cursor: to ? "pointer" : "default",
       }}
     >
       <p style={{ margin: 0, color: "#64748b", fontWeight: 800, fontSize: "13px" }}>{title}</p>
-      <h2 style={{ margin: "8px 0 4px", fontSize: "32px", letterSpacing: "-0.03em" }}>{value}</h2>
+      <h2 style={{ margin: "8px 0 4px", fontSize: "32px", letterSpacing: "-0.03em", color: "#171717" }}>{value}</h2>
       {helper && <p style={{ margin: 0, color: "#78716c", fontSize: "14px", lineHeight: 1.4 }}>{helper}</p>}
-    </div>
+    </Wrapper>
   );
 }
 
@@ -172,10 +178,10 @@ export default function Dashboard() {
             gap: "14px",
           }}
         >
-          <SnapshotCard title="Today’s Sales" value={currency(todaysSalesTotal)} helper={`${todaysSales.length} counter sale${todaysSales.length === 1 ? "" : "s"} today`} />
-          <SnapshotCard title="Waiting Approval" value={waitingApproval} helper="Quotes or orders waiting on customer approval." />
-          <SnapshotCard title="Ready for Shop" value={readyForShop} helper="Approved jobs that need production attention." />
-          <SnapshotCard title="Pickup Ready" value={pickupReady} helper="Completed jobs that may need customer pickup." />
+          <SnapshotCard title="Today’s Sales" value={currency(todaysSalesTotal)} helper={`${todaysSales.length} counter sale${todaysSales.length === 1 ? "" : "s"} today`} to="/admin/sales" />
+          <SnapshotCard title="Waiting Approval" value={waitingApproval} helper="Click to review jobs waiting on customer approval." to="/admin/orders" />
+          <SnapshotCard title="Ready for Shop" value={readyForShop} helper="Click to review production-ready jobs." to="/admin/queue" />
+          <SnapshotCard title="Pickup Ready" value={pickupReady} helper="Click to review pickup-ready jobs." to="/admin/orders" />
         </div>
       </section>
 
