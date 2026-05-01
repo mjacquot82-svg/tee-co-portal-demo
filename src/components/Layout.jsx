@@ -90,16 +90,16 @@ const adminSections = [
   },
 ];
 
-function isActivePath(pathname, linkTo) {
-  if (linkTo === "/admin") return pathname === "/admin";
-  if (linkTo === "/admin/orders/new") return pathname === "/admin/orders/new";
-  if (linkTo === "/admin/orders") {
-    return pathname === "/admin/orders" || (pathname.startsWith("/admin/orders/") && pathname !== "/admin/orders/new");
-  }
-  if (linkTo === "/admin/queue") return pathname === "/admin/queue";
-  if (linkTo === "/admin/sales/new") return pathname === "/admin/sales/new";
-  if (linkTo === "/admin/sales") return pathname === "/admin/sales";
-  return pathname === linkTo || pathname.startsWith(`${linkTo}/`);
+function getActiveSidebarLink(pathname) {
+  if (pathname === "/admin") return "/admin";
+  if (pathname === "/admin/sales/new") return "/admin/sales/new";
+  if (pathname === "/admin/sales") return "/admin/sales";
+  if (pathname === "/admin/orders/new") return "/admin/orders/new";
+  if (pathname === "/admin/orders" || pathname.startsWith("/admin/orders/")) return "/admin/orders";
+  if (pathname === "/admin/queue") return "/admin/queue";
+  if (pathname.startsWith("/admin/customers")) return "/admin/customers";
+  if (pathname.startsWith("/admin/products")) return "/admin/products";
+  return "";
 }
 
 function WorkspaceBadge({ isAdmin }) {
@@ -159,6 +159,7 @@ function AttentionBadge({ count, active }) {
 
 function AdminSidebar({ pathname }) {
   const badgeCounts = getSidebarCounts();
+  const activeLink = getActiveSidebarLink(pathname);
 
   return (
     <aside
@@ -183,8 +184,8 @@ function AdminSidebar({ pathname }) {
           borderRadius: "14px",
           padding: "12px",
           marginBottom: "12px",
-          background: pathname === "/admin" ? "#171717" : "#f8fafc",
-          color: pathname === "/admin" ? "#ffffff" : "#171717",
+          background: activeLink === "/admin" ? "#171717" : "#f8fafc",
+          color: activeLink === "/admin" ? "#ffffff" : "#171717",
           fontWeight: 800,
         }}
       >
@@ -207,7 +208,7 @@ function AdminSidebar({ pathname }) {
           </p>
           <div style={{ display: "grid", gap: "6px" }}>
             {section.links.map((link) => {
-              const active = isActivePath(pathname, link.to);
+              const active = activeLink === link.to;
               const badgeCount = link.badgeKey ? badgeCounts[link.badgeKey] : 0;
               return (
                 <Link
