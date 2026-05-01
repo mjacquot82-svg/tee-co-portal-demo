@@ -155,9 +155,9 @@ export default function Layout() {
   const isAdmin = location.pathname.startsWith("/admin");
   const isHome = location.pathname === "/";
 
+  // Updated: hide My Orders until customer auth exists
   const customerLinks = [
     { to: "/", label: "Home" },
-    { to: "/my-orders", label: "My Orders" },
     { to: "/login", label: "Login" },
   ];
 
