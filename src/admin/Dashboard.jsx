@@ -145,23 +145,6 @@ export default function Dashboard() {
       </div>
 
       <LauncherSection
-        title="Counter Sales"
-        description="Use these for walk-in purchases and reviewing completed counter transactions."
-      >
-        <ActionCard
-          to="/admin/sales/new"
-          title="New Quick Sale"
-          description="Sell stocked items at the counter. Customer name is optional."
-          primary
-        />
-        <ActionCard
-          to="/admin/sales"
-          title="Sales History"
-          description="Review completed counter sales, totals, payment methods, and walk-in transactions."
-        />
-      </LauncherSection>
-
-      <LauncherSection
         title="Production"
         description="Use these for custom decorated orders and work that needs the shop."
       >
@@ -185,8 +168,13 @@ export default function Dashboard() {
 
       <LauncherSection
         title="Admin Records"
-        description="Use these less often for customer records and product setup."
+        description="Use these for sales history, customer records, and product setup."
       >
+        <ActionCard
+          to="/admin/sales"
+          title="Sales History"
+          description="Review completed counter sales, totals, payment methods, and walk-in transactions."
+        />
         <ActionCard
           to="/admin/customers"
           title="Customers"
