@@ -5,6 +5,20 @@ import {
   getStoredProducts,
 } from "../lib/productsStore";
 
+const baseProductTypeOptions = [
+  "Pullover Hoodie",
+  "Zip Hoodie",
+  "Crewneck",
+  "T-Shirt",
+  "Long Sleeve Tee",
+  "Polo",
+  "Snapback",
+  "Beanie",
+  "Safety Vest",
+  "Softshell Jacket",
+  "Add New Type…",
+];
+
 const brandModelOptions = [
   "Gildan 5000",
   "Gildan 64000",
@@ -18,6 +32,17 @@ const brandModelOptions = [
   "Flexfit 6277",
   "Yupoong 6606",
   "Carhartt Workwear",
+  "Other / Custom",
+];
+
+const supplierOptions = [
+  "S&S Activewear",
+  "SanMar",
+  "AlphaBroder",
+  "Canada Sportswear",
+  "Independent Trading Co.",
+  "AJM International",
+  "Local Supplier",
   "Other / Custom",
 ];
 
@@ -40,9 +65,12 @@ const labelStyle = {
 const emptyProduct = {
   name: "",
   category: "Hoodie / Sweater",
-  product_type: "",
+  product_type: "Pullover Hoodie",
+  custom_product_type: "",
   brand_model: "Gildan 18500",
   custom_brand_model: "",
+  supplier: "S&S Activewear",
+  custom_supplier: "",
   image: "",
   colors: "Black, Navy, Gray, White",
   sizes: "S, M, L, XL, 2XL, 3XL",
@@ -61,6 +89,10 @@ function fileToDataUrl(file) {
   });
 }
 
+function uniqueSorted(values) {
+  return Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b));
+}
+
 export default function Products() {
   const [products, setProducts] = useState([]);
   const [form, setForm] = useState(emptyProduct);
@@ -68,24 +100,24 @@ export default function Products() {
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [typeFilter, setTypeFilter] = useState("All");
   const [brandFilter, setBrandFilter] = useState("All");
+  const [supplierFilter, setSupplierFilter] = useState("All");
   const [searchFilter, setSearchFilter] = useState("");
 
   useEffect(() => {
     setProducts(getStoredProducts());
   }, []);
 
-  const categories = useMemo(() => {
-    const unique = new Set(products.map((p) => p.category));
-    return ["All", ...Array.from(unique)];
+  const categories = useMemo(() => ["All", ...uniqueSorted(products.map((p) => p.category))], [products]);
+
+  const productTypeOptions = useMemo(() => {
+    const existingTypes = uniqueSorted(products.map((p) => p.product_type));
+    const options = uniqueSorted([...baseProductTypeOptions.filter((type) => type !== "Add New Type…"), ...existingTypes]);
+    return [...options, "Add New Type…"];
   }, [products]);
 
   const productTypes = useMemo(() => {
-    const filtered = categoryFilter === "All"
-      ? products
-      : products.filter((p) => p.category === categoryFilter);
-
-    const unique = new Set(filtered.map((p) => p.product_type));
-    return ["All", ...Array.from(unique)];
+    const filtered = categoryFilter === "All" ? products : products.filter((p) => p.category === categoryFilter);
+    return ["All", ...uniqueSorted(filtered.map((p) => p.product_type))];
   }, [products, categoryFilter]);
 
   const brands = useMemo(() => {
@@ -95,24 +127,37 @@ export default function Products() {
       return matchesCategory && matchesType;
     });
 
-    const unique = new Set(filtered.map((p) => p.brand_model).filter(Boolean));
-    return ["All", ...Array.from(unique)];
+    return ["All", ...uniqueSorted(filtered.map((p) => p.brand_model))];
   }, [products, categoryFilter, typeFilter]);
+
+  const suppliers = useMemo(() => {
+    const filtered = products.filter((product) => {
+      const matchesCategory = categoryFilter === "All" || product.category === categoryFilter;
+      const matchesType = typeFilter === "All" || product.product_type === typeFilter;
+      const matchesBrand = brandFilter === "All" || product.brand_model === brandFilter;
+      return matchesCategory && matchesType && matchesBrand;
+    });
+
+    return ["All", ...uniqueSorted(filtered.map((p) => p.supplier))];
+  }, [products, categoryFilter, typeFilter, brandFilter]);
 
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
       const matchesCategory = categoryFilter === "All" || product.category === categoryFilter;
       const matchesType = typeFilter === "All" || product.product_type === typeFilter;
       const matchesBrand = brandFilter === "All" || product.brand_model === brandFilter;
+      const matchesSupplier = supplierFilter === "All" || product.supplier === supplierFilter;
 
       const matchesSearch =
         !searchFilter ||
         product.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
-        product.brand_model?.toLowerCase().includes(searchFilter.toLowerCase());
+        product.product_type?.toLowerCase().includes(searchFilter.toLowerCase()) ||
+        product.brand_model?.toLowerCase().includes(searchFilter.toLowerCase()) ||
+        product.supplier?.toLowerCase().includes(searchFilter.toLowerCase());
 
-      return matchesCategory && matchesType && matchesBrand && matchesSearch;
+      return matchesCategory && matchesType && matchesBrand && matchesSupplier && matchesSearch;
     });
-  }, [products, categoryFilter, typeFilter, brandFilter, searchFilter]);
+  }, [products, categoryFilter, typeFilter, brandFilter, supplierFilter, searchFilter]);
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -133,15 +178,26 @@ export default function Products() {
 
     const productInput = {
       ...form,
+      product_type:
+        form.product_type === "Add New Type…"
+          ? form.custom_product_type.trim()
+          : form.product_type,
       brand_model:
         form.brand_model === "Other / Custom"
           ? form.custom_brand_model.trim()
           : form.brand_model,
+      supplier:
+        form.supplier === "Other / Custom"
+          ? form.custom_supplier.trim()
+          : form.supplier,
     };
 
+    if (!productInput.product_type) return;
+    if (!productInput.brand_model) return;
+    if (!productInput.supplier) return;
+
     createStoredProduct(productInput);
-    const updated = getStoredProducts();
-    setProducts(updated);
+    setProducts(getStoredProducts());
     setForm(emptyProduct);
   }
 
@@ -219,14 +275,25 @@ export default function Products() {
 
             <label style={labelStyle}>
               Product Type
-              <input
-                name="product_type"
-                value={form.product_type}
-                onChange={updateField}
-                placeholder="Pullover Hoodie / Snapback / Safety Vest"
-                style={fieldStyle}
-              />
+              <select name="product_type" value={form.product_type} onChange={updateField} style={fieldStyle}>
+                {productTypeOptions.map((option) => (
+                  <option key={option}>{option}</option>
+                ))}
+              </select>
             </label>
+
+            {form.product_type === "Add New Type…" && (
+              <label style={labelStyle}>
+                New Product Type
+                <input
+                  name="custom_product_type"
+                  value={form.custom_product_type}
+                  onChange={updateField}
+                  placeholder="Enter new product type"
+                  style={fieldStyle}
+                />
+              </label>
+            )}
 
             <label style={labelStyle}>
               Brand / Model
@@ -245,6 +312,28 @@ export default function Products() {
                   value={form.custom_brand_model}
                   onChange={updateField}
                   placeholder="Enter custom brand/model"
+                  style={fieldStyle}
+                />
+              </label>
+            )}
+
+            <label style={labelStyle}>
+              Supplier
+              <select name="supplier" value={form.supplier} onChange={updateField} style={fieldStyle}>
+                {supplierOptions.map((option) => (
+                  <option key={option}>{option}</option>
+                ))}
+              </select>
+            </label>
+
+            {form.supplier === "Other / Custom" && (
+              <label style={labelStyle}>
+                Custom Supplier
+                <input
+                  name="custom_supplier"
+                  value={form.custom_supplier}
+                  onChange={updateField}
+                  placeholder="Enter custom supplier"
                   style={fieldStyle}
                 />
               </label>
@@ -288,7 +377,7 @@ export default function Products() {
             <div>
               <h1 style={{ margin: 0, fontSize: "28px" }}>Products</h1>
               <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-                Filter by category, type, brand, or search.
+                Filter by category, type, brand, supplier, or search.
               </p>
             </div>
             <strong>{filteredProducts.length} shown</strong>
@@ -301,6 +390,7 @@ export default function Products() {
                 setCategoryFilter(e.target.value);
                 setTypeFilter("All");
                 setBrandFilter("All");
+                setSupplierFilter("All");
               }}
               style={{ ...fieldStyle, maxWidth: "220px" }}
             >
@@ -314,6 +404,7 @@ export default function Products() {
               onChange={(e) => {
                 setTypeFilter(e.target.value);
                 setBrandFilter("All");
+                setSupplierFilter("All");
               }}
               style={{ ...fieldStyle, maxWidth: "220px" }}
             >
@@ -324,7 +415,10 @@ export default function Products() {
 
             <select
               value={brandFilter}
-              onChange={(e) => setBrandFilter(e.target.value)}
+              onChange={(e) => {
+                setBrandFilter(e.target.value);
+                setSupplierFilter("All");
+              }}
               style={{ ...fieldStyle, maxWidth: "220px" }}
             >
               {brands.map((brand) => (
@@ -332,8 +426,18 @@ export default function Products() {
               ))}
             </select>
 
+            <select
+              value={supplierFilter}
+              onChange={(e) => setSupplierFilter(e.target.value)}
+              style={{ ...fieldStyle, maxWidth: "220px" }}
+            >
+              {suppliers.map((supplier) => (
+                <option key={supplier}>{supplier}</option>
+              ))}
+            </select>
+
             <input
-              placeholder="Search product name or model…"
+              placeholder="Search product name, type, brand, supplier…"
               value={searchFilter}
               onChange={(e) => setSearchFilter(e.target.value)}
               style={{ ...fieldStyle, maxWidth: "280px" }}
@@ -387,6 +491,7 @@ export default function Products() {
                   <p style={{ margin: "0 0 10px", color: "#64748b" }}>
                     {product.category} • {product.product_type}
                     {product.brand_model ? ` • ${product.brand_model}` : ""}
+                    {product.supplier ? ` • ${product.supplier}` : ""}
                   </p>
                 </div>
 
