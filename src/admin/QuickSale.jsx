@@ -25,6 +25,11 @@ function currency(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
+function isTypingField(element) {
+  if (!element) return false;
+  return ["INPUT", "SELECT", "TEXTAREA"].includes(element.tagName);
+}
+
 export default function QuickSale() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -63,6 +68,21 @@ export default function QuickSale() {
 
   const taxTotal = subtotal * taxRate;
   const total = subtotal + taxTotal;
+  const canAddItem = lineItem.name.trim() && Number(lineItem.qty) > 0;
+  const canCompleteSale = cart.length > 0;
+
+  useEffect(() => {
+    function handleGlobalEnter(event) {
+      if (completedSaleNumber || event.key !== "Enter" || !canCompleteSale) return;
+      if (isTypingField(document.activeElement)) return;
+
+      event.preventDefault();
+      saveSale();
+    }
+
+    window.addEventListener("keydown", handleGlobalEnter);
+    return () => window.removeEventListener("keydown", handleGlobalEnter);
+  }, [completedSaleNumber, canCompleteSale, cart, customerName, paymentMethod, subtotal, taxTotal, total, notes]);
 
   function selectProduct(event) {
     const productId = event.target.value;
@@ -86,6 +106,15 @@ export default function QuickSale() {
   function updateLineItem(event) {
     const { name, value } = event.target;
     setLineItem((current) => ({ ...current, [name]: value }));
+  }
+
+  function handleLineItemKeyDown(event) {
+    if (event.key !== "Enter") return;
+
+    event.preventDefault();
+    if (canAddItem) {
+      addToCart();
+    }
   }
 
   function addToCart() {
@@ -115,8 +144,7 @@ export default function QuickSale() {
     setCart((current) => current.filter((item) => item.id !== itemId));
   }
 
-  function completeSale(event) {
-    event.preventDefault();
+  function saveSale() {
     if (!cart.length) return;
 
     const sale = createStoredQuickSale({
@@ -132,6 +160,11 @@ export default function QuickSale() {
     });
 
     navigate(`/admin/sales/new?completed=${sale.sale_number}`);
+  }
+
+  function completeSale(event) {
+    event.preventDefault();
+    saveSale();
   }
 
   if (completedSaleNumber) {
@@ -225,9 +258,6 @@ export default function QuickSale() {
     );
   }
 
-  const canAddItem = lineItem.name.trim() && Number(lineItem.qty) > 0;
-  const canCompleteSale = cart.length > 0;
-
   return (
     <div
       style={{
@@ -286,7 +316,7 @@ export default function QuickSale() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "14px" }}>
               <label style={labelStyle}>
                 Product
-                <select ref={productSelectRef} value={selectedProductId} onChange={selectProduct} style={fieldStyle}>
+                <select ref={productSelectRef} value={selectedProductId} onChange={selectProduct} onKeyDown={handleLineItemKeyDown} style={fieldStyle}>
                   <option value="">Select product or type manually...</option>
                   {products.map((product) => (
                     <option key={product.id} value={product.id}>
@@ -298,39 +328,39 @@ export default function QuickSale() {
 
               <label style={labelStyle}>
                 Item Name
-                <input name="name" value={lineItem.name} onChange={updateLineItem} placeholder="T-Shirt" style={fieldStyle} />
+                <input name="name" value={lineItem.name} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} placeholder="T-Shirt" style={fieldStyle} />
               </label>
 
               <label style={labelStyle}>
                 Color
                 {selectedProduct?.colors?.length ? (
-                  <select name="color" value={lineItem.color} onChange={updateLineItem} style={fieldStyle}>
+                  <select name="color" value={lineItem.color} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} style={fieldStyle}>
                     {selectedProduct.colors.map((color) => <option key={color}>{color}</option>)}
                   </select>
                 ) : (
-                  <input name="color" value={lineItem.color} onChange={updateLineItem} placeholder="Black" style={fieldStyle} />
+                  <input name="color" value={lineItem.color} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} placeholder="Black" style={fieldStyle} />
                 )}
               </label>
 
               <label style={labelStyle}>
                 Size
                 {selectedProduct?.sizes?.length ? (
-                  <select name="size" value={lineItem.size} onChange={updateLineItem} style={fieldStyle}>
+                  <select name="size" value={lineItem.size} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} style={fieldStyle}>
                     {selectedProduct.sizes.map((size) => <option key={size}>{size}</option>)}
                   </select>
                 ) : (
-                  <input name="size" value={lineItem.size} onChange={updateLineItem} placeholder="L" style={fieldStyle} />
+                  <input name="size" value={lineItem.size} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} placeholder="L" style={fieldStyle} />
                 )}
               </label>
 
               <label style={labelStyle}>
                 Qty
-                <input type="number" min="1" name="qty" value={lineItem.qty} onChange={updateLineItem} style={fieldStyle} />
+                <input type="number" min="1" name="qty" value={lineItem.qty} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} style={fieldStyle} />
               </label>
 
               <label style={labelStyle}>
                 Unit Price
-                <input type="number" min="0" step="0.01" name="unit_price" value={lineItem.unit_price} onChange={updateLineItem} placeholder="24.99" style={fieldStyle} />
+                <input type="number" min="0" step="0.01" name="unit_price" value={lineItem.unit_price} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} placeholder="24.99" style={fieldStyle} />
               </label>
             </div>
 
