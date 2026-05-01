@@ -70,6 +70,29 @@ const statusOptions = [
   "Cancelled",
 ];
 
+const cardStyle = {
+  background: "#ffffff",
+  borderRadius: "20px",
+  padding: "24px",
+  boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+};
+
+const inputStyle = {
+  border: "1px solid #cbd5e1",
+  borderRadius: "12px",
+  padding: "11px",
+  boxSizing: "border-box",
+};
+
+const actionButtonStyle = {
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  borderRadius: "12px",
+  padding: "11px 14px",
+  cursor: "pointer",
+  fontWeight: 700,
+};
+
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
@@ -115,6 +138,44 @@ function readFileAsDataUrl(file) {
   });
 }
 
+function ActivityTimeline({ events }) {
+  return (
+    <section style={{ ...cardStyle, marginBottom: "18px" }}>
+      <h2 style={{ marginTop: 0 }}>Activity Timeline</h2>
+      <p style={{ color: "#64748b", marginTop: 0 }}>
+        Internal history of order changes, staff actions, workflow movement, and uploaded files.
+      </p>
+
+      {!events.length ? (
+        <p style={{ color: "#94a3b8" }}>No activity recorded yet.</p>
+      ) : (
+        <div style={{ display: "grid", gap: "10px" }}>
+          {events.map((event) => (
+            <article
+              key={event.id || `${event.created_at}-${event.note}`}
+              style={{
+                border: "1px solid #e2e8f0",
+                borderRadius: "14px",
+                padding: "12px 14px",
+                background: "#f8fafc",
+              }}
+            >
+              <div style={{ color: "#171717", fontWeight: 800, lineHeight: 1.4 }}>
+                {event.note || "Order activity recorded."}
+              </div>
+              <div style={{ marginTop: "4px", color: "#64748b", fontSize: "13px", fontWeight: 700 }}>
+                {event.staff_name || "Unknown Staff"}
+                {event.staff_role ? ` (${event.staff_role})` : ""}
+                {event.created_at ? ` • ${formatDateTime(event.created_at)}` : ""}
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function OrderDetail() {
   const { orderNumber } = useParams();
   const [order, setOrder] = useState(null);
@@ -129,16 +190,16 @@ export default function OrderDetail() {
 
   useEffect(() => {
     const stored = findStoredOrder(orderNumber);
-    if (stored) {
-      setOrder(stored);
-      setStatus(stored.status || "Awaiting Artwork");
-      setApprovalNote(stored.approval_note || "");
-      setSizeRows(getSizeRows(stored));
-      setDepositType(stored.deposit?.type || "percentage");
-      setDepositValue(String(stored.deposit?.value ?? "50"));
-      setPaymentMethod(stored.deposit?.method || "e-transfer");
-      setPaymentNote(stored.deposit?.note || "");
-    }
+    if (!stored) return;
+
+    setOrder(stored);
+    setStatus(stored.status || "Awaiting Artwork");
+    setApprovalNote(stored.approval_note || "");
+    setSizeRows(getSizeRows(stored));
+    setDepositType(stored.deposit?.type || "percentage");
+    setDepositValue(String(stored.deposit?.value ?? "50"));
+    setPaymentMethod(stored.deposit?.method || "e-transfer");
+    setPaymentNote(stored.deposit?.note || "");
   }, [orderNumber]);
 
   const selectedProduct = useMemo(() => {
@@ -156,6 +217,7 @@ export default function OrderDetail() {
   const activeQuote = order?.quote || quoteSnapshot;
   const artworkFiles = order?.artwork_files || [];
   const sizeTotal = sizeRows.reduce((total, row) => total + Number(row.quantity || 0), 0);
+  const activityEvents = order?.activity_log || [];
 
   function saveOrderUpdates(updates) {
     const updated = updateStoredOrder(orderNumber, updates);
@@ -178,6 +240,8 @@ export default function OrderDetail() {
     const updates = {
       status: action.status,
       workflow_note: action.note,
+      activity_type: "workflow",
+      activity_note: action.label,
     };
 
     if (action.approval_status) updates.approval_status = action.approval_status;
@@ -203,12 +267,16 @@ export default function OrderDetail() {
   }
 
   function handleStatusChange(event) {
-    saveOrderUpdates({ status: event.target.value });
+    saveOrderUpdates({
+      status: event.target.value,
+      activity_type: "status_change",
+      activity_note: `Manual status changed to ${event.target.value}.`,
+    });
   }
 
   function saveQuoteSnapshot() {
     if (!quoteSnapshot) return;
-    saveOrderUpdates({ quote: quoteSnapshot });
+    saveOrderUpdates({ quote: quoteSnapshot, activity_type: "quote", activity_note: "Quote snapshot saved." });
     setShowQuotePreview(true);
   }
 
@@ -218,7 +286,7 @@ export default function OrderDetail() {
       .map((row) => ({ size: row.size, quantity: Number(row.quantity || 0) }));
 
     const qty = cleanedRows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
-    saveOrderUpdates({ size_breakdown: cleanedRows, qty });
+    saveOrderUpdates({ size_breakdown: cleanedRows, qty, activity_type: "sizes", activity_note: "Size breakdown updated." });
   }
 
   function updateSizeRow(index, field, value) {
@@ -256,7 +324,11 @@ export default function OrderDetail() {
       },
     ];
 
-    saveOrderUpdates({ artwork_files: nextArtwork });
+    saveOrderUpdates({
+      artwork_files: nextArtwork,
+      activity_type: "artwork",
+      activity_note: `Artwork uploaded: ${file.name}`,
+    });
     event.target.value = "";
   }
 
@@ -301,7 +373,7 @@ export default function OrderDetail() {
         </div>
 
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "start" }}>
-          <Link to="/admin/orders" style={{ border: "1px solid #cbd5e1", color: "#171717", background: "#ffffff", borderRadius: "12px", padding: "12px 16px", textDecoration: "none", fontWeight: 700 }}>
+          <Link to="/admin/orders" style={{ ...actionButtonStyle, color: "#171717", textDecoration: "none" }}>
             Production Orders
           </Link>
           <button type="button" onClick={() => window.print()} style={{ background: "#171717", color: "#ffffff", border: "none", borderRadius: "12px", padding: "12px 16px", cursor: "pointer", fontWeight: 700 }}>
@@ -310,7 +382,7 @@ export default function OrderDetail() {
         </div>
       </div>
 
-      <section style={{ background: "#ffffff", borderRadius: "20px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)", marginBottom: "18px" }}>
+      <section style={{ ...cardStyle, marginBottom: "18px" }}>
         <h2 style={{ marginTop: 0 }}>Workflow Actions</h2>
         <p style={{ color: "#64748b", marginTop: 0 }}>
           Use these buttons to move the order through quote, approval, deposit, production, and pickup.
@@ -344,24 +416,24 @@ export default function OrderDetail() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", alignItems: "end" }}>
           <label style={{ display: "grid", gap: "6px", fontWeight: 700 }}>
             Manual Status
-            <select value={status} onChange={handleStatusChange} style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "11px" }}>
+            <select value={status} onChange={handleStatusChange} style={inputStyle}>
               {statusOptions.map((option) => <option key={option}>{option}</option>)}
             </select>
           </label>
           <label style={{ display: "grid", gap: "6px", fontWeight: 700 }}>
             Deposit Type
-            <select value={depositType} onChange={(event) => setDepositType(event.target.value)} style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "11px" }}>
+            <select value={depositType} onChange={(event) => setDepositType(event.target.value)} style={inputStyle}>
               <option value="percentage">Percentage</option>
               <option value="fixed">Fixed Amount</option>
             </select>
           </label>
           <label style={{ display: "grid", gap: "6px", fontWeight: 700 }}>
             Deposit Value
-            <input type="number" value={depositValue} onChange={(event) => setDepositValue(event.target.value)} style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "11px" }} />
+            <input type="number" value={depositValue} onChange={(event) => setDepositValue(event.target.value)} style={inputStyle} />
           </label>
           <label style={{ display: "grid", gap: "6px", fontWeight: 700 }}>
             Payment Method
-            <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "11px" }}>
+            <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} style={inputStyle}>
               <option>e-transfer</option>
               <option>cash</option>
               <option>card terminal</option>
@@ -373,7 +445,7 @@ export default function OrderDetail() {
 
         <label style={{ display: "grid", gap: "6px", fontWeight: 700, marginTop: "12px" }}>
           Workflow / Payment Note
-          <textarea value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} placeholder="Example: deposit received by e-transfer, customer approved mockup by phone, etc." style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "11px", minHeight: "72px" }} />
+          <textarea value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} placeholder="Example: deposit received by e-transfer, customer approved mockup by phone, etc." style={{ ...inputStyle, minHeight: "72px" }} />
         </label>
 
         <div style={{ marginTop: "14px", display: "grid", gap: "5px", color: "#475569" }}>
@@ -384,15 +456,17 @@ export default function OrderDetail() {
         </div>
       </section>
 
+      <ActivityTimeline events={activityEvents} />
+
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 360px)", gap: "18px", alignItems: "start" }}>
         <div style={{ display: "grid", gap: "18px" }}>
-          <section style={{ background: "#ffffff", borderRadius: "20px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+          <section style={cardStyle}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
               <div>
                 <h2 style={{ margin: 0 }}>Quote Snapshot</h2>
                 <p style={{ color: "#64748b", margin: "4px 0 0" }}>Pricing generated from product placement pricing and order quantity.</p>
               </div>
-              <button type="button" onClick={saveQuoteSnapshot} style={{ border: "1px solid #cbd5e1", background: "#ffffff", borderRadius: "12px", padding: "11px 14px", cursor: "pointer", fontWeight: 700 }}>
+              <button type="button" onClick={saveQuoteSnapshot} style={actionButtonStyle}>
                 Save / Preview Quote
               </button>
             </div>
@@ -409,25 +483,25 @@ export default function OrderDetail() {
             )}
           </section>
 
-          <section style={{ background: "#ffffff", borderRadius: "20px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+          <section style={cardStyle}>
             <h2 style={{ marginTop: 0 }}>Size Breakdown</h2>
             <div style={{ display: "grid", gap: "10px" }}>
               {sizeRows.length ? sizeRows.map((row, index) => (
                 <div key={`${row.size}-${index}`} style={{ display: "grid", gridTemplateColumns: "1fr 120px auto", gap: "10px", alignItems: "center" }}>
-                  <input value={row.size} onChange={(event) => updateSizeRow(index, "size", event.target.value)} placeholder="Size / Variant" style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "11px" }} />
-                  <input type="number" value={row.quantity} onChange={(event) => updateSizeRow(index, "quantity", event.target.value)} placeholder="Qty" style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "11px" }} />
+                  <input value={row.size} onChange={(event) => updateSizeRow(index, "size", event.target.value)} placeholder="Size / Variant" style={inputStyle} />
+                  <input type="number" value={row.quantity} onChange={(event) => updateSizeRow(index, "quantity", event.target.value)} placeholder="Qty" style={inputStyle} />
                   <button type="button" onClick={() => removeSizeRow(index)} style={{ border: "1px solid #fecaca", color: "#991b1b", background: "#fff", borderRadius: "10px", padding: "9px 10px", cursor: "pointer", fontWeight: 700 }}>Remove</button>
                 </div>
               )) : <p style={{ color: "#94a3b8" }}>No size breakdown saved yet.</p>}
             </div>
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginTop: "14px" }}>
-              <button type="button" onClick={addSizeRow} style={{ border: "1px solid #cbd5e1", background: "#fff", borderRadius: "12px", padding: "11px 14px", cursor: "pointer", fontWeight: 700 }}>Add Size</button>
+              <button type="button" onClick={addSizeRow} style={actionButtonStyle}>Add Size</button>
               <button type="button" onClick={saveSizeBreakdown} style={{ border: "none", background: "#171717", color: "#fff", borderRadius: "12px", padding: "11px 14px", cursor: "pointer", fontWeight: 700 }}>Save Sizes</button>
               <strong>Total Qty: {sizeTotal}</strong>
             </div>
           </section>
 
-          <section style={{ background: "#ffffff", borderRadius: "20px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+          <section style={cardStyle}>
             <h2 style={{ marginTop: 0 }}>Artwork Files</h2>
             <label style={{ display: "inline-block", background: "#171717", color: "#ffffff", borderRadius: "12px", padding: "12px 16px", cursor: "pointer", fontWeight: 700, marginBottom: "14px" }}>
               Upload Artwork
@@ -450,7 +524,7 @@ export default function OrderDetail() {
         </div>
 
         <aside style={{ display: "grid", gap: "18px" }}>
-          <section style={{ background: "#ffffff", borderRadius: "20px", padding: "22px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+          <section style={{ ...cardStyle, padding: "22px" }}>
             <h2 style={{ marginTop: 0 }}>Production Details</h2>
             <p><strong>Customer:</strong> {order.customer_name || "—"}</p>
             <p><strong>Garment:</strong> {order.garment || "—"}</p>
@@ -462,11 +536,11 @@ export default function OrderDetail() {
             {order.notes && <p><strong>Notes:</strong> {order.notes}</p>}
           </section>
 
-          <section style={{ background: "#ffffff", borderRadius: "20px", padding: "22px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+          <section style={{ ...cardStyle, padding: "22px" }}>
             <h2 style={{ marginTop: 0 }}>Approval Notes</h2>
             <p><strong>Status:</strong> {order.approval_status || "Not Sent"}</p>
-            <textarea value={approvalNote} onChange={(event) => setApprovalNote(event.target.value)} placeholder="Approval or revision notes" style={{ width: "100%", boxSizing: "border-box", border: "1px solid #cbd5e1", borderRadius: "12px", padding: "12px", minHeight: "90px" }} />
-            <button type="button" onClick={() => saveOrderUpdates({ approval_note: approvalNote })} style={{ marginTop: "10px", border: "1px solid #cbd5e1", background: "#ffffff", borderRadius: "12px", padding: "11px 14px", cursor: "pointer", fontWeight: 700 }}>
+            <textarea value={approvalNote} onChange={(event) => setApprovalNote(event.target.value)} placeholder="Approval or revision notes" style={{ ...inputStyle, width: "100%", minHeight: "90px" }} />
+            <button type="button" onClick={() => saveOrderUpdates({ approval_note: approvalNote, activity_type: "approval_note", activity_note: "Approval note updated." })} style={{ ...actionButtonStyle, marginTop: "10px" }}>
               Save Approval Note
             </button>
           </section>
