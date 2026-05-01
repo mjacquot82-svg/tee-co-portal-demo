@@ -1,20 +1,25 @@
 {
-  "name": "Tee & Co Portal",
+  "name": "Tee & Co Central Operations",
   "short_name": "Tee & Co",
+  "description": "Central operations workspace for Tee & Co staff, production orders, customers, and artwork.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#ffffff",
-  "theme_color": "#111111",
+  "theme_color": "#171717",
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
