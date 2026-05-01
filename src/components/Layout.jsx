@@ -92,10 +92,13 @@ const adminSections = [
 
 function isActivePath(pathname, linkTo) {
   if (linkTo === "/admin") return pathname === "/admin";
-  if (linkTo === "/admin/sales") return pathname === "/admin/sales";
+  if (linkTo === "/admin/orders/new") return pathname === "/admin/orders/new";
   if (linkTo === "/admin/orders") {
-    return pathname === "/admin/orders" || (pathname.startsWith("/admin/orders/") && !pathname.startsWith("/admin/orders/new"));
+    return pathname === "/admin/orders" || (pathname.startsWith("/admin/orders/") && pathname !== "/admin/orders/new");
   }
+  if (linkTo === "/admin/queue") return pathname === "/admin/queue";
+  if (linkTo === "/admin/sales/new") return pathname === "/admin/sales/new";
+  if (linkTo === "/admin/sales") return pathname === "/admin/sales";
   return pathname === linkTo || pathname.startsWith(`${linkTo}/`);
 }
 
