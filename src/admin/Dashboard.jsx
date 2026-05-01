@@ -13,8 +13,31 @@ function isToday(isoDate) {
   return date.toDateString() === today.toDateString();
 }
 
-function SnapshotCard({ title, value, helper, to }) {
+function isDueSoon(dateValue) {
+  if (!dateValue) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const dueDate = new Date(`${dateValue}T00:00:00`);
+  const fiveDaysFromNow = new Date(today);
+  fiveDaysFromNow.setDate(today.getDate() + 5);
+
+  return dueDate >= today && dueDate <= fiveDaysFromNow;
+}
+
+function SnapshotCard({ title, value, helper, to, tone = "neutral" }) {
   const Wrapper = to ? Link : "div";
+  const hasAttention = Number(value || 0) > 0;
+  const toneStyles = {
+    neutral: { background: "#ffffff", border: "#e7e5e4", accent: "#64748b" },
+    sales: { background: hasAttention ? "#f0fdf4" : "#ffffff", border: hasAttention ? "#bbf7d0" : "#e7e5e4", accent: "#15803d" },
+    approval: { background: hasAttention ? "#fffbeb" : "#ffffff", border: hasAttention ? "#fde68a" : "#e7e5e4", accent: "#b45309" },
+    deposit: { background: hasAttention ? "#fff7ed" : "#ffffff", border: hasAttention ? "#fed7aa" : "#e7e5e4", accent: "#c2410c" },
+    production: { background: hasAttention ? "#eff6ff" : "#ffffff", border: hasAttention ? "#bfdbfe" : "#e7e5e4", accent: "#1d4ed8" },
+    urgent: { background: hasAttention ? "#fef2f2" : "#ffffff", border: hasAttention ? "#fecaca" : "#e7e5e4", accent: "#b91c1c" },
+    pickup: { background: hasAttention ? "#ecfdf5" : "#ffffff", border: hasAttention ? "#a7f3d0" : "#e7e5e4", accent: "#047857" },
+  };
+  const styles = toneStyles[tone] || toneStyles.neutral;
 
   return (
     <Wrapper
@@ -22,15 +45,15 @@ function SnapshotCard({ title, value, helper, to }) {
       style={{
         display: "block",
         textDecoration: "none",
-        background: "#ffffff",
+        background: styles.background,
         borderRadius: "18px",
         padding: "20px",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-        border: "1px solid #e7e5e4",
+        boxShadow: hasAttention ? "0 10px 24px rgba(15,23,42,0.08)" : "0 1px 3px rgba(0,0,0,0.08)",
+        border: `1px solid ${styles.border}`,
         cursor: to ? "pointer" : "default",
       }}
     >
-      <p style={{ margin: 0, color: "#64748b", fontWeight: 800, fontSize: "13px" }}>{title}</p>
+      <p style={{ margin: 0, color: styles.accent, fontWeight: 800, fontSize: "13px" }}>{title}</p>
       <h2 style={{ margin: "8px 0 4px", fontSize: "32px", letterSpacing: "-0.03em", color: "#171717" }}>{value}</h2>
       {helper && <p style={{ margin: 0, color: "#78716c", fontSize: "14px", lineHeight: 1.4 }}>{helper}</p>}
     </Wrapper>
@@ -95,12 +118,23 @@ export default function Dashboard() {
 
   const todaysSales = quickSales.filter((sale) => isToday(sale.created_at));
   const todaysSalesTotal = todaysSales.reduce((total, sale) => total + Number(sale.total || 0), 0);
+
   const waitingApproval = orders.filter((order) =>
-    ["Quote Sent", "Awaiting Approval", "Awaiting Customer Approval"].includes(order.status)
+    ["Quote Sent", "Mockup Sent", "Awaiting Approval", "Awaiting Customer Approval"].includes(order.status)
   ).length;
+
+  const depositsNeeded = orders.filter((order) =>
+    ["Approved", "Awaiting Deposit"].includes(order.status) && order.deposit?.status !== "paid"
+  ).length;
+
   const readyForShop = orders.filter((order) =>
-    ["Approved", "Deposit Paid", "Ready for Production", "In Production"].includes(order.status)
+    ["Approved", "Deposit Paid", "Ready for Production", "In Production"].includes(order.status) || order.production_ready
   ).length;
+
+  const dueSoon = orders.filter((order) =>
+    isDueSoon(order.due_date) && !["Completed", "Cancelled"].includes(order.status)
+  ).length;
+
   const pickupReady = orders.filter((order) =>
     ["Ready for Pickup", "Pickup Ready", "Completed"].includes(order.status)
   ).length;
@@ -178,10 +212,12 @@ export default function Dashboard() {
             gap: "14px",
           }}
         >
-          <SnapshotCard title="Today’s Sales" value={currency(todaysSalesTotal)} helper={`${todaysSales.length} counter sale${todaysSales.length === 1 ? "" : "s"} today`} to="/admin/sales" />
-          <SnapshotCard title="Waiting Approval" value={waitingApproval} helper="Click to review jobs waiting on customer approval." to="/admin/orders" />
-          <SnapshotCard title="Ready for Shop" value={readyForShop} helper="Click to review production-ready jobs." to="/admin/queue" />
-          <SnapshotCard title="Pickup Ready" value={pickupReady} helper="Click to review pickup-ready jobs." to="/admin/orders" />
+          <SnapshotCard title="Today’s Sales" value={currency(todaysSalesTotal)} helper={`${todaysSales.length} counter sale${todaysSales.length === 1 ? "" : "s"} today`} to="/admin/sales" tone="sales" />
+          <SnapshotCard title="Waiting Approval" value={waitingApproval} helper="Click to review jobs waiting on customer approval." to="/admin/orders?filter=approval" tone="approval" />
+          <SnapshotCard title="Deposits Needed" value={depositsNeeded} helper="Approved jobs waiting for deposit payment." to="/admin/orders?filter=deposit-required" tone="deposit" />
+          <SnapshotCard title="Ready for Shop" value={readyForShop} helper="Click to review production-ready jobs." to="/admin/queue" tone="production" />
+          <SnapshotCard title="Due Soon" value={dueSoon} helper="Open jobs needed within the next 5 days." to="/admin/orders?filter=due-soon" tone="urgent" />
+          <SnapshotCard title="Pickup Ready" value={pickupReady} helper="Click to review pickup-ready jobs." to="/admin/orders?filter=pickup-ready" tone="pickup" />
         </div>
       </section>
 
