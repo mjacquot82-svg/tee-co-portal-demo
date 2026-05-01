@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import logo from "../assets/icon-512.png";
+import { getStoredOrders } from "../lib/ordersStore";
 
 function FacebookIcon() {
   return (
@@ -29,6 +30,43 @@ function InstagramIcon() {
   );
 }
 
+function normalizeStatus(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isDueSoon(dateValue) {
+  if (!dateValue) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const dueDate = new Date(`${dateValue}T00:00:00`);
+  const fiveDaysFromNow = new Date(today);
+  fiveDaysFromNow.setDate(today.getDate() + 5);
+
+  return dueDate >= today && dueDate <= fiveDaysFromNow;
+}
+
+function getSidebarCounts() {
+  const orders = getStoredOrders();
+
+  const needsAttention = orders.filter((order) =>
+    ["quote sent", "mockup sent", "awaiting approval", "awaiting customer approval", "approved", "awaiting deposit"].includes(normalizeStatus(order.status)) && order.deposit?.status !== "paid"
+  ).length;
+
+  const productionReady = orders.filter((order) =>
+    ["approved", "paid", "deposit paid", "ready for production", "in production", "printing", "embroidery", "production"].includes(normalizeStatus(order.status)) || order.production_ready
+  ).length;
+
+  const dueSoon = orders.filter((order) =>
+    isDueSoon(order.due_date) && !["completed", "cancelled"].includes(normalizeStatus(order.status))
+  ).length;
+
+  return {
+    productionOrders: needsAttention + dueSoon,
+    productionQueue: productionReady,
+  };
+}
+
 const adminSections = [
   {
     title: "Counter",
@@ -38,8 +76,8 @@ const adminSections = [
     title: "Production",
     links: [
       { to: "/admin/orders/new", label: "New Production Order" },
-      { to: "/admin/orders", label: "Production Orders" },
-      { to: "/admin/queue", label: "Production Queue" },
+      { to: "/admin/orders", label: "Production Orders", badgeKey: "productionOrders" },
+      { to: "/admin/queue", label: "Production Queue", badgeKey: "productionQueue" },
     ],
   },
   {
@@ -92,7 +130,33 @@ function WorkspaceBadge({ isAdmin }) {
   );
 }
 
+function AttentionBadge({ count, active }) {
+  if (!count) return null;
+
+  return (
+    <span
+      style={{
+        minWidth: "22px",
+        height: "22px",
+        padding: "0 7px",
+        borderRadius: "999px",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: active ? "#ffffff" : "#f97316",
+        color: active ? "#171717" : "#ffffff",
+        fontSize: "12px",
+        fontWeight: 900,
+      }}
+    >
+      {count}
+    </span>
+  );
+}
+
 function AdminSidebar({ pathname }) {
+  const badgeCounts = getSidebarCounts();
+
   return (
     <aside
       style={{
@@ -141,11 +205,16 @@ function AdminSidebar({ pathname }) {
           <div style={{ display: "grid", gap: "6px" }}>
             {section.links.map((link) => {
               const active = isActivePath(pathname, link.to);
+              const badgeCount = link.badgeKey ? badgeCounts[link.badgeKey] : 0;
               return (
                 <Link
                   key={link.to}
                   to={link.to}
                   style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "8px",
                     textDecoration: "none",
                     borderRadius: "12px",
                     padding: "10px 11px",
@@ -155,7 +224,8 @@ function AdminSidebar({ pathname }) {
                     fontSize: "14px",
                   }}
                 >
-                  {link.label}
+                  <span>{link.label}</span>
+                  <AttentionBadge count={badgeCount} active={active} />
                 </Link>
               );
             })}
