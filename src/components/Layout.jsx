@@ -4,7 +4,7 @@ import logo from "../assets/icon-512.png";
 function FacebookIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24" style={{ width: "18px", height: "18px", fill: "currentColor" }}>
-      <path d="M13.5 22v-8.2h2.8l.4-3.2h-3.2V8.56c0-.93.26-1.56 1.6-1.56H16.8V4.14c-.3-.04-1.34-.14-2.56-.14-2.54 0-2.54 0-4.28 1.55-4.28 4.4v2.2H7.08v3.2h2.88V22h3.54Z" />
+      <path d="M13.5 22v-8.2h2.8l.4-3.2h-3.2V8.56c0-.93.26-1.56 1.6-1.56H16.8V4.14c-.3-.04-1.34-.14-2.56-.14-2.54 0-4.28 1.55-4.28 4.28v2.2H7.08v3.2h2.88V22h3.54Z" />
     </svg>
   );
 }
@@ -32,10 +32,7 @@ function InstagramIcon() {
 const adminSections = [
   {
     title: "Counter",
-    links: [
-      { to: "/admin/sales/new", label: "New Quick Sale" },
-      { to: "/admin/sales", label: "Sales History" },
-    ],
+    links: [{ to: "/admin/sales/new", label: "New Quick Sale" }],
   },
   {
     title: "Production",
@@ -48,6 +45,7 @@ const adminSections = [
   {
     title: "Records",
     links: [
+      { to: "/admin/sales", label: "Sales History" },
       { to: "/admin/customers", label: "Customers" },
       { to: "/admin/products", label: "Products" },
     ],
@@ -56,6 +54,10 @@ const adminSections = [
 
 function isActivePath(pathname, linkTo) {
   if (linkTo === "/admin") return pathname === "/admin";
+  if (linkTo === "/admin/sales") return pathname === "/admin/sales";
+  if (linkTo === "/admin/orders") {
+    return pathname === "/admin/orders" || (pathname.startsWith("/admin/orders/") && !pathname.startsWith("/admin/orders/new"));
+  }
   return pathname === linkTo || pathname.startsWith(`${linkTo}/`);
 }
 
