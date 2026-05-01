@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   createStoredProduct,
   deleteStoredProduct,
@@ -47,9 +47,30 @@ export default function Products() {
   const [products, setProducts] = useState([]);
   const [form, setForm] = useState(emptyProduct);
 
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [searchFilter, setSearchFilter] = useState("");
+
   useEffect(() => {
     setProducts(getStoredProducts());
   }, []);
+
+  const categories = useMemo(() => {
+    const unique = new Set(products.map((p) => p.category));
+    return ["All", ...Array.from(unique)];
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const matchesCategory = categoryFilter === "All" || product.category === categoryFilter;
+
+      const matchesSearch =
+        !searchFilter ||
+        product.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
+        product.brand_model?.toLowerCase().includes(searchFilter.toLowerCase());
+
+      return matchesCategory && matchesSearch;
+    });
+  }, [products, categoryFilter, searchFilter]);
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -69,7 +90,8 @@ export default function Products() {
     if (!form.name.trim()) return;
 
     createStoredProduct(form);
-    setProducts(getStoredProducts());
+    const updated = getStoredProducts();
+    setProducts(updated);
     setForm(emptyProduct);
   }
 
@@ -118,9 +140,6 @@ export default function Products() {
             Product Catalog
           </p>
           <h1 style={{ margin: "6px 0 8px", fontSize: "28px" }}>Add Garment</h1>
-          <p style={{ marginTop: 0, color: "#64748b" }}>
-            Define the garment image, sizes, decoration methods, and allowed logo placements.
-          </p>
 
           <div style={{ display: "grid", gap: "14px" }}>
             <label style={labelStyle}>
@@ -145,86 +164,6 @@ export default function Products() {
                 <option>Workwear</option>
                 <option>Tool / Hard Good</option>
                 <option>Other</option>
-              </select>
-            </label>
-
-            <label style={labelStyle}>
-              Brand / Model (optional)
-              <input
-                name="brand_model"
-                value={form.brand_model}
-                onChange={updateField}
-                placeholder="Gildan 18500, Richardson 112, etc."
-                style={fieldStyle}
-              />
-            </label>
-
-            <label style={labelStyle}>
-              Garment Image
-              <input type="file" accept="image/*" onChange={updateImage} style={fieldStyle} />
-            </label>
-
-            {form.image && (
-              <img
-                src={form.image}
-                alt="Selected garment preview"
-                style={{
-                  width: "100%",
-                  maxHeight: "220px",
-                  objectFit: "contain",
-                  borderRadius: "16px",
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                }}
-              />
-            )}
-
-            <label style={labelStyle}>
-              Available Colors
-              <input name="colors" value={form.colors} onChange={updateField} style={fieldStyle} />
-            </label>
-
-            <label style={labelStyle}>
-              Available Sizes
-              <input name="sizes" value={form.sizes} onChange={updateField} style={fieldStyle} />
-            </label>
-
-            <label style={labelStyle}>
-              Allowed Logo Placements
-              <textarea
-                name="placements"
-                value={form.placements}
-                onChange={updateField}
-                style={{ ...fieldStyle, minHeight: "74px" }}
-              />
-            </label>
-
-            <label style={labelStyle}>
-              Decoration Methods
-              <input
-                name="decoration_types"
-                value={form.decoration_types}
-                onChange={updateField}
-                style={fieldStyle}
-              />
-            </label>
-
-            <label style={labelStyle}>
-              Notes / Restrictions
-              <textarea
-                name="notes"
-                value={form.notes}
-                onChange={updateField}
-                placeholder="Example: embroidery only on left chest; large back print not recommended."
-                style={{ ...fieldStyle, minHeight: "90px" }}
-              />
-            </label>
-
-            <label style={labelStyle}>
-              Status
-              <select name="status" value={form.status} onChange={updateField} style={fieldStyle}>
-                <option>Active</option>
-                <option>Inactive</option>
               </select>
             </label>
 
@@ -260,20 +199,39 @@ export default function Products() {
               gap: "12px",
               flexWrap: "wrap",
               alignItems: "center",
-              marginBottom: "18px",
+              marginBottom: "12px",
             }}
           >
             <div>
               <h1 style={{ margin: 0, fontSize: "28px" }}>Products</h1>
               <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-                These garments will drive order-entry sizes, placements, and image previews.
+                Filter products by category or search by name.
               </p>
             </div>
-            <strong>{products.length} products</strong>
+            <strong>{filteredProducts.length} shown</strong>
+          </div>
+
+          <div style={{ display: "flex", gap: "10px", marginBottom: "18px", flexWrap: "wrap" }}>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              style={{ ...fieldStyle, maxWidth: "220px" }}
+            >
+              {categories.map((category) => (
+                <option key={category}>{category}</option>
+              ))}
+            </select>
+
+            <input
+              placeholder="Search product name or model…"
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              style={{ ...fieldStyle, maxWidth: "280px" }}
+            />
           </div>
 
           <div style={{ display: "grid", gap: "14px" }}>
-            {products.map((product) => (
+            {filteredProducts.map((product) => (
               <article
                 key={product.id}
                 style={{
@@ -320,14 +278,6 @@ export default function Products() {
                     {product.category}
                     {product.brand_model ? ` • ${product.brand_model}` : ""}
                   </p>
-
-                  <div style={{ display: "grid", gap: "6px", color: "#334155", fontSize: "14px" }}>
-                    <span><strong>Sizes:</strong> {product.sizes?.join(", ") || "—"}</span>
-                    <span><strong>Colors:</strong> {product.colors?.join(", ") || "—"}</span>
-                    <span><strong>Placements:</strong> {product.placements?.join(", ") || "—"}</span>
-                    <span><strong>Decoration:</strong> {product.decoration_types?.join(", ") || "—"}</span>
-                    {product.notes && <span><strong>Notes:</strong> {product.notes}</span>}
-                  </div>
                 </div>
 
                 <div style={{ display: "grid", gap: "8px", justifyItems: "end" }}>
