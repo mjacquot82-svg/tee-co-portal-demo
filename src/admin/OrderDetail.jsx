@@ -74,6 +74,20 @@ function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
+function formatDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 function getSizeRows(order) {
   if (Array.isArray(order?.size_breakdown)) {
     return order.size_breakdown.map((row) => ({
@@ -255,6 +269,11 @@ export default function OrderDetail() {
     );
   }
 
+  const createdBy = order.created_by_staff_name || "Unknown Staff";
+  const createdAt = formatDateTime(order.created_at);
+  const updatedBy = order.updated_by_staff_name;
+  const updatedAt = formatDateTime(order.updated_at);
+
   return (
     <div
       style={{
@@ -274,6 +293,10 @@ export default function OrderDetail() {
           <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             <StatusBadge status={order.status} />
             <span style={{ color: "#64748b" }}>{order.customer_name || "Walk-in Customer"}</span>
+          </div>
+          <div style={{ marginTop: "10px", display: "flex", gap: "8px", flexWrap: "wrap", color: "#64748b", fontSize: "13px", fontWeight: 700 }}>
+            <span>Created by {createdBy}{createdAt ? ` • ${createdAt}` : ""}</span>
+            {updatedBy && <span>Updated by {updatedBy}{updatedAt ? ` • ${updatedAt}` : ""}</span>}
           </div>
         </div>
 
