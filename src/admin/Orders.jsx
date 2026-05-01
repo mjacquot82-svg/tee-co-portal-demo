@@ -173,16 +173,16 @@ export default function Orders() {
             <Link
               to="/admin/orders/new"
               style={{
-                border: "1px solid #171717",
-                background: "#171717",
-                color: "#ffffff",
+                border: "1px solid #cbd5e1",
+                background: "#ffffff",
+                color: "#0f172a",
                 borderRadius: "12px",
                 padding: "12px 16px",
                 textDecoration: "none",
                 fontWeight: 700,
               }}
             >
-              New Production Order
+              + New Production Order
             </Link>
           </div>
         </div>
@@ -301,16 +301,16 @@ export default function Orders() {
               to="/admin/orders/new"
               style={{
                 display: "inline-block",
-                border: "1px solid #171717",
-                background: "#171717",
-                color: "#ffffff",
+                border: "1px solid #cbd5e1",
+                background: "#ffffff",
+                color: "#171717",
                 borderRadius: "12px",
                 padding: "12px 16px",
                 textDecoration: "none",
                 fontWeight: 700,
               }}
             >
-              Create Production Order
+              + Create Production Order
             </Link>
           </div>
         )}
