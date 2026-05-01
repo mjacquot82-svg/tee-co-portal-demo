@@ -1,19 +1,32 @@
 import { Link } from "react-router-dom";
+import { getStoredOrders } from "../lib/ordersStore";
+import { getStoredQuickSales } from "../lib/salesStore";
 
-function StatCard({ title, value, helper }) {
+function currency(value) {
+  return `$${Number(value || 0).toFixed(2)}`;
+}
+
+function isToday(isoDate) {
+  if (!isoDate) return false;
+  const date = new Date(isoDate);
+  const today = new Date();
+  return date.toDateString() === today.toDateString();
+}
+
+function SnapshotCard({ title, value, helper }) {
   return (
     <div
       style={{
         background: "#ffffff",
-        borderRadius: "20px",
-        padding: "22px",
+        borderRadius: "18px",
+        padding: "20px",
         boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-        border: "1px solid #f1f5f9",
+        border: "1px solid #e7e5e4",
       }}
     >
-      <p style={{ margin: 0, color: "#64748b", fontWeight: 700 }}>{title}</p>
-      <h2 style={{ margin: "8px 0 4px", fontSize: "32px" }}>{value}</h2>
-      {helper && <p style={{ margin: 0, color: "#78716c", fontSize: "14px" }}>{helper}</p>}
+      <p style={{ margin: 0, color: "#64748b", fontWeight: 800, fontSize: "13px" }}>{title}</p>
+      <h2 style={{ margin: "8px 0 4px", fontSize: "32px", letterSpacing: "-0.03em" }}>{value}</h2>
+      {helper && <p style={{ margin: 0, color: "#78716c", fontSize: "14px", lineHeight: 1.4 }}>{helper}</p>}
     </div>
   );
 }
@@ -71,6 +84,21 @@ function LauncherSection({ title, description, children }) {
 }
 
 export default function Dashboard() {
+  const orders = getStoredOrders();
+  const quickSales = getStoredQuickSales();
+
+  const todaysSales = quickSales.filter((sale) => isToday(sale.created_at));
+  const todaysSalesTotal = todaysSales.reduce((total, sale) => total + Number(sale.total || 0), 0);
+  const waitingApproval = orders.filter((order) =>
+    ["Quote Sent", "Awaiting Approval", "Awaiting Customer Approval"].includes(order.status)
+  ).length;
+  const readyForShop = orders.filter((order) =>
+    ["Approved", "Deposit Paid", "Ready for Production", "In Production"].includes(order.status)
+  ).length;
+  const pickupReady = orders.filter((order) =>
+    ["Ready for Pickup", "Pickup Ready", "Completed"].includes(order.status)
+  ).length;
+
   return (
     <div
       style={{
@@ -130,19 +158,26 @@ export default function Dashboard() {
         </div>
       </Link>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "16px",
-          marginBottom: "24px",
-        }}
-      >
-        <StatCard title="Counter Sales" value="POS" helper="Walk-in purchases and sale history." />
-        <StatCard title="Production" value="Jobs" helper="Custom orders and shop queue." />
-        <StatCard title="Customers" value="CRM" helper="Profiles, repeat orders, and contacts." />
-        <StatCard title="Products" value="Catalog" helper="Items used for sales and production." />
-      </div>
+      <section style={{ marginBottom: "24px" }}>
+        <div style={{ marginBottom: "12px" }}>
+          <h2 style={{ margin: "0 0 4px", fontSize: "22px" }}>Shop Snapshot</h2>
+          <p style={{ margin: 0, color: "#64748b" }}>
+            Quick view of today’s counter activity and production workload.
+          </p>
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+            gap: "14px",
+          }}
+        >
+          <SnapshotCard title="Today’s Sales" value={currency(todaysSalesTotal)} helper={`${todaysSales.length} counter sale${todaysSales.length === 1 ? "" : "s"} today`} />
+          <SnapshotCard title="Waiting Approval" value={waitingApproval} helper="Quotes or orders waiting on customer approval." />
+          <SnapshotCard title="Ready for Shop" value={readyForShop} helper="Approved jobs that need production attention." />
+          <SnapshotCard title="Pickup Ready" value={pickupReady} helper="Completed jobs that may need customer pickup." />
+        </div>
+      </section>
 
       <LauncherSection
         title="Production"
