@@ -300,7 +300,10 @@ export default function QuickSale() {
           The transaction has been saved successfully.
         </p>
         <div style={{ display: "flex", justifyContent: "center", gap: "14px", flexWrap: "wrap" }}>
-          <button onClick={() => navigate("/admin/sales/new")} style={{ background: "#171717", color: "#ffffff", border: "none", borderRadius: "14px", padding: "14px 20px", fontWeight: 800, cursor: "pointer" }}>
+          <button onClick={() => navigate(`/admin/sales/receipt/${completedSaleNumber}`)} style={{ background: "#171717", color: "#ffffff", border: "none", borderRadius: "14px", padding: "14px 20px", fontWeight: 800, cursor: "pointer" }}>
+            Print Receipt
+          </button>
+          <button onClick={() => navigate("/admin/sales/new")} style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "14px", padding: "14px 20px", fontWeight: 800, cursor: "pointer" }}>
             Start Another Sale
           </button>
           <button onClick={() => navigate("/admin/sales")} style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "14px", padding: "14px 20px", fontWeight: 700, cursor: "pointer" }}>
