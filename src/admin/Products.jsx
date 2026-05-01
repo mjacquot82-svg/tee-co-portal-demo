@@ -24,6 +24,7 @@ const labelStyle = {
 const emptyProduct = {
   name: "",
   category: "Hoodie / Sweater",
+  product_type: "",
   brand_model: "",
   image: "",
   colors: "Black, Navy, Gray, White",
@@ -48,6 +49,7 @@ export default function Products() {
   const [form, setForm] = useState(emptyProduct);
 
   const [categoryFilter, setCategoryFilter] = useState("All");
+  const [typeFilter, setTypeFilter] = useState("All");
   const [searchFilter, setSearchFilter] = useState("");
 
   useEffect(() => {
@@ -59,18 +61,29 @@ export default function Products() {
     return ["All", ...Array.from(unique)];
   }, [products]);
 
+  const productTypes = useMemo(() => {
+    const filtered = categoryFilter === "All"
+      ? products
+      : products.filter((p) => p.category === categoryFilter);
+
+    const unique = new Set(filtered.map((p) => p.product_type));
+    return ["All", ...Array.from(unique)];
+  }, [products, categoryFilter]);
+
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
       const matchesCategory = categoryFilter === "All" || product.category === categoryFilter;
+
+      const matchesType = typeFilter === "All" || product.product_type === typeFilter;
 
       const matchesSearch =
         !searchFilter ||
         product.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
         product.brand_model?.toLowerCase().includes(searchFilter.toLowerCase());
 
-      return matchesCategory && matchesSearch;
+      return matchesCategory && matchesType && matchesSearch;
     });
-  }, [products, categoryFilter, searchFilter]);
+  }, [products, categoryFilter, typeFilter, searchFilter]);
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -167,6 +180,17 @@ export default function Products() {
               </select>
             </label>
 
+            <label style={labelStyle}>
+              Product Type
+              <input
+                name="product_type"
+                value={form.product_type}
+                onChange={updateField}
+                placeholder="Pullover Hoodie / Snapback / Safety Vest"
+                style={fieldStyle}
+              />
+            </label>
+
             <button
               type="submit"
               style={{
@@ -205,7 +229,7 @@ export default function Products() {
             <div>
               <h1 style={{ margin: 0, fontSize: "28px" }}>Products</h1>
               <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-                Filter products by category or search by name.
+                Filter by category, product type, or search.
               </p>
             </div>
             <strong>{filteredProducts.length} shown</strong>
@@ -214,11 +238,24 @@ export default function Products() {
           <div style={{ display: "flex", gap: "10px", marginBottom: "18px", flexWrap: "wrap" }}>
             <select
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value);
+                setTypeFilter("All");
+              }}
               style={{ ...fieldStyle, maxWidth: "220px" }}
             >
               {categories.map((category) => (
                 <option key={category}>{category}</option>
+              ))}
+            </select>
+
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              style={{ ...fieldStyle, maxWidth: "220px" }}
+            >
+              {productTypes.map((type) => (
+                <option key={type}>{type}</option>
               ))}
             </select>
 
@@ -275,7 +312,7 @@ export default function Products() {
                 <div>
                   <h2 style={{ margin: "0 0 4px", fontSize: "20px" }}>{product.name}</h2>
                   <p style={{ margin: "0 0 10px", color: "#64748b" }}>
-                    {product.category}
+                    {product.category} • {product.product_type}
                     {product.brand_model ? ` • ${product.brand_model}` : ""}
                   </p>
                 </div>
