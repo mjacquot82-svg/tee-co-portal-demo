@@ -23,6 +23,13 @@ const labelStyle = {
   color: "#292524",
 };
 
+const compactFieldStyle = {
+  ...fieldStyle,
+  padding: "8px 10px",
+  borderRadius: "10px",
+  fontSize: "14px",
+};
+
 function currency(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
@@ -188,6 +195,25 @@ export default function QuickSale() {
     setSelectedProductId("");
     setLineItem({ name: "", color: "", size: "", qty: "1", unit_price: "" });
     setTimeout(() => productSelectRef.current?.focus(), 0);
+  }
+
+  function updateCartItem(itemId, field, value) {
+    setCart((current) =>
+      current.map((item) => {
+        if (item.id !== itemId) return item;
+
+        const nextValue = field === "qty" ? Math.max(1, Number(value) || 1) : Math.max(0, Number(value) || 0);
+        const nextItem = {
+          ...item,
+          [field]: nextValue,
+        };
+
+        return {
+          ...nextItem,
+          line_total: nextItem.qty * nextItem.unit_price,
+        };
+      })
+    );
   }
 
   function removeCartItem(itemId) {
@@ -505,8 +531,31 @@ export default function QuickSale() {
                     <p style={{ margin: "4px 0", color: "#64748b", fontSize: "14px" }}>
                       {[item.color, item.size].filter(Boolean).join(" • ") || "No variant"}
                     </p>
-                    <p style={{ margin: 0, color: "#292524" }}>
-                      {item.qty} × {currency(item.unit_price)} = <strong>{currency(item.line_total)}</strong>
+                    <div style={{ display: "grid", gridTemplateColumns: "72px 1fr", gap: "8px", alignItems: "end" }}>
+                      <label style={{ display: "grid", gap: "5px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
+                        Qty
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.qty}
+                          onChange={(event) => updateCartItem(item.id, "qty", event.target.value)}
+                          style={compactFieldStyle}
+                        />
+                      </label>
+                      <label style={{ display: "grid", gap: "5px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
+                        Unit Price
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={item.unit_price}
+                          onChange={(event) => updateCartItem(item.id, "unit_price", event.target.value)}
+                          style={compactFieldStyle}
+                        />
+                      </label>
+                    </div>
+                    <p style={{ margin: "8px 0 0", color: "#292524" }}>
+                      Line Total: <strong>{currency(item.line_total)}</strong>
                     </p>
                   </div>
                 ))}
