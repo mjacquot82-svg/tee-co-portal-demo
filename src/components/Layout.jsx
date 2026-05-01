@@ -188,7 +188,6 @@ function AdminSidebar({ pathname }) {
           background: activeLink === "/admin" ? "#171717" : "#f8fafc",
           color: activeLink === "/admin" ? "#ffffff" : "#171717",
           fontWeight: 800,
-          borderLeft: activeLink === "/admin" ? "5px solid #f97316" : "5px solid transparent",
         }}
       >
         Dashboard
@@ -227,7 +226,6 @@ function AdminSidebar({ pathname }) {
                     background: active ? "#292524" : "#ffffff",
                     color: active ? "#ffffff" : "#292524",
                     border: active ? "1px solid #292524" : "1px solid #f1f5f9",
-                    borderLeft: active ? "5px solid #f97316" : "5px solid transparent",
                     fontWeight: active ? 800 : 650,
                     fontSize: "14px",
                   }}
