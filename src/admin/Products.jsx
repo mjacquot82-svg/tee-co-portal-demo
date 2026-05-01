@@ -5,6 +5,22 @@ import {
   getStoredProducts,
 } from "../lib/productsStore";
 
+const brandModelOptions = [
+  "Gildan 5000",
+  "Gildan 64000",
+  "Gildan 18500",
+  "Gildan 18000",
+  "ATC Everyday Tee",
+  "ATC Pro Team Hoodie",
+  "Bella + Canvas 3001",
+  "Independent Trading Co. SS4500",
+  "Richardson 112",
+  "Flexfit 6277",
+  "Yupoong 6606",
+  "Carhartt Workwear",
+  "Other / Custom",
+];
+
 const fieldStyle = {
   border: "1px solid #cbd5e1",
   borderRadius: "12px",
@@ -25,7 +41,8 @@ const emptyProduct = {
   name: "",
   category: "Hoodie / Sweater",
   product_type: "",
-  brand_model: "",
+  brand_model: "Gildan 18500",
+  custom_brand_model: "",
   image: "",
   colors: "Black, Navy, Gray, White",
   sizes: "S, M, L, XL, 2XL, 3XL",
@@ -50,6 +67,7 @@ export default function Products() {
 
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [typeFilter, setTypeFilter] = useState("All");
+  const [brandFilter, setBrandFilter] = useState("All");
   const [searchFilter, setSearchFilter] = useState("");
 
   useEffect(() => {
@@ -70,20 +88,31 @@ export default function Products() {
     return ["All", ...Array.from(unique)];
   }, [products, categoryFilter]);
 
+  const brands = useMemo(() => {
+    const filtered = products.filter((product) => {
+      const matchesCategory = categoryFilter === "All" || product.category === categoryFilter;
+      const matchesType = typeFilter === "All" || product.product_type === typeFilter;
+      return matchesCategory && matchesType;
+    });
+
+    const unique = new Set(filtered.map((p) => p.brand_model).filter(Boolean));
+    return ["All", ...Array.from(unique)];
+  }, [products, categoryFilter, typeFilter]);
+
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
       const matchesCategory = categoryFilter === "All" || product.category === categoryFilter;
-
       const matchesType = typeFilter === "All" || product.product_type === typeFilter;
+      const matchesBrand = brandFilter === "All" || product.brand_model === brandFilter;
 
       const matchesSearch =
         !searchFilter ||
         product.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
         product.brand_model?.toLowerCase().includes(searchFilter.toLowerCase());
 
-      return matchesCategory && matchesType && matchesSearch;
+      return matchesCategory && matchesType && matchesBrand && matchesSearch;
     });
-  }, [products, categoryFilter, typeFilter, searchFilter]);
+  }, [products, categoryFilter, typeFilter, brandFilter, searchFilter]);
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -102,7 +131,15 @@ export default function Products() {
     event.preventDefault();
     if (!form.name.trim()) return;
 
-    createStoredProduct(form);
+    const productInput = {
+      ...form,
+      brand_model:
+        form.brand_model === "Other / Custom"
+          ? form.custom_brand_model.trim()
+          : form.brand_model,
+    };
+
+    createStoredProduct(productInput);
     const updated = getStoredProducts();
     setProducts(updated);
     setForm(emptyProduct);
@@ -191,6 +228,28 @@ export default function Products() {
               />
             </label>
 
+            <label style={labelStyle}>
+              Brand / Model
+              <select name="brand_model" value={form.brand_model} onChange={updateField} style={fieldStyle}>
+                {brandModelOptions.map((option) => (
+                  <option key={option}>{option}</option>
+                ))}
+              </select>
+            </label>
+
+            {form.brand_model === "Other / Custom" && (
+              <label style={labelStyle}>
+                Custom Brand / Model
+                <input
+                  name="custom_brand_model"
+                  value={form.custom_brand_model}
+                  onChange={updateField}
+                  placeholder="Enter custom brand/model"
+                  style={fieldStyle}
+                />
+              </label>
+            )}
+
             <button
               type="submit"
               style={{
@@ -229,7 +288,7 @@ export default function Products() {
             <div>
               <h1 style={{ margin: 0, fontSize: "28px" }}>Products</h1>
               <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-                Filter by category, product type, or search.
+                Filter by category, type, brand, or search.
               </p>
             </div>
             <strong>{filteredProducts.length} shown</strong>
@@ -241,6 +300,7 @@ export default function Products() {
               onChange={(e) => {
                 setCategoryFilter(e.target.value);
                 setTypeFilter("All");
+                setBrandFilter("All");
               }}
               style={{ ...fieldStyle, maxWidth: "220px" }}
             >
@@ -251,11 +311,24 @@ export default function Products() {
 
             <select
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
+              onChange={(e) => {
+                setTypeFilter(e.target.value);
+                setBrandFilter("All");
+              }}
               style={{ ...fieldStyle, maxWidth: "220px" }}
             >
               {productTypes.map((type) => (
                 <option key={type}>{type}</option>
+              ))}
+            </select>
+
+            <select
+              value={brandFilter}
+              onChange={(e) => setBrandFilter(e.target.value)}
+              style={{ ...fieldStyle, maxWidth: "220px" }}
+            >
+              {brands.map((brand) => (
+                <option key={brand}>{brand}</option>
               ))}
             </select>
 
