@@ -91,6 +91,45 @@ export default function Dashboard() {
         </p>
       </div>
 
+      <Link
+        to="/admin/sales/new"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr auto",
+          gap: "18px",
+          alignItems: "center",
+          textDecoration: "none",
+          background: "#171717",
+          color: "#ffffff",
+          borderRadius: "24px",
+          padding: "26px",
+          boxShadow: "0 18px 45px rgba(23,23,23,0.18)",
+          marginBottom: "24px",
+        }}
+      >
+        <div>
+          <p style={{ margin: "0 0 8px", color: "#d6d3d1", fontSize: "13px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Counter Staff Shortcut
+          </p>
+          <h2 style={{ margin: "0 0 8px", fontSize: "32px", lineHeight: 1.1 }}>Start a New Quick Sale</h2>
+          <p style={{ margin: 0, color: "#e7e5e4", fontSize: "16px", lineHeight: 1.5 }}>
+            One-click entry for walk-in customers, stocked products, payment method, and receipt-style sale records.
+          </p>
+        </div>
+        <div
+          style={{
+            background: "#ffffff",
+            color: "#171717",
+            borderRadius: "999px",
+            padding: "14px 20px",
+            fontWeight: 900,
+            whiteSpace: "nowrap",
+          }}
+        >
+          New Quick Sale →
+        </div>
+      </Link>
+
       <div
         style={{
           display: "grid",
