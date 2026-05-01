@@ -20,7 +20,7 @@ export function saveStoredQuickSales(sales) {
 export function createStoredQuickSale(saleInput) {
   const currentSales = getStoredQuickSales();
   const createdAt = new Date().toISOString();
-  const saleNumber = `SALE-${Date.now().toString().slice(-6)}`;
+  const saleNumber = saleInput.sale_number || `SALE-${Date.now().toString().slice(-6)}`;
 
   const sale = {
     id: `quick-sale-${Date.now()}`,
@@ -28,13 +28,18 @@ export function createStoredQuickSale(saleInput) {
     customer_name: saleInput.customer_name || "Walk-in Customer",
     payment_method: saleInput.payment_method || "Not Recorded",
     payment_status: saleInput.payment_status || "Paid",
+    payment_reference: saleInput.payment_reference || "",
     items: saleInput.items || [],
     subtotal: Number(saleInput.subtotal) || 0,
+    discount_amount: Number(saleInput.discount_amount) || 0,
     tax_rate: Number(saleInput.tax_rate) || 0,
     tax_total: Number(saleInput.tax_total) || 0,
     total: Number(saleInput.total) || 0,
+    amount_paid: Number(saleInput.amount_paid) || 0,
+    balance_due: Number(saleInput.balance_due) || 0,
     notes: saleInput.notes || "",
     square_payment_id: saleInput.square_payment_id || "",
+    production_order_numbers: saleInput.production_order_numbers || [],
     created_at: createdAt,
     updated_at: createdAt,
   };
