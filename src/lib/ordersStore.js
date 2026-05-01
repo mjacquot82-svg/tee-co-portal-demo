@@ -1,3 +1,5 @@
+import { buildStaffAuditFields } from "./staffUsersStore";
+
 const STORAGE_KEY = "teeCoStaffOrders";
 
 export function getStoredOrders() {
@@ -25,6 +27,7 @@ export function createStoredOrder(orderInput) {
 
   const order = {
     ...orderInput,
+    ...buildStaffAuditFields("created"),
     order_number: orderNumber,
     status: orderInput.status || "Awaiting Artwork",
     date: new Date(createdAt).toLocaleDateString(),
@@ -48,6 +51,7 @@ export function updateStoredOrder(orderNumber, updates) {
       ? {
           ...order,
           ...updates,
+          ...buildStaffAuditFields("updated"),
           updated_at: new Date().toISOString(),
         }
       : order
@@ -80,6 +84,12 @@ export function duplicateStoredOrder(orderNumber) {
   delete copiedOrder.created_at;
   delete copiedOrder.updated_at;
   delete copiedOrder.date;
+  delete copiedOrder.created_by_staff_id;
+  delete copiedOrder.created_by_staff_name;
+  delete copiedOrder.created_by_staff_role;
+  delete copiedOrder.updated_by_staff_id;
+  delete copiedOrder.updated_by_staff_name;
+  delete copiedOrder.updated_by_staff_role;
 
   return createStoredOrder(copiedOrder);
 }
