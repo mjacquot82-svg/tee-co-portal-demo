@@ -1,6 +1,7 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import logo from "../assets/icon-512.png";
 import { getStoredOrders } from "../lib/ordersStore";
+import { getActiveStaffUser } from "../lib/staffUsersStore";
 
 function FacebookIcon() {
   return (
@@ -67,29 +68,33 @@ function getSidebarCounts() {
   };
 }
 
-const adminSections = [
-  {
-    title: "Counter",
-    links: [{ to: "/admin/sales/new", label: "New Quick Sale" }],
-  },
-  {
-    title: "Production",
-    links: [
-      { to: "/admin/orders/new", label: "New Production Order" },
-      { to: "/admin/orders", label: "Production Orders", badgeKey: "productionOrders" },
-      { to: "/admin/queue", label: "Production Queue", badgeKey: "productionQueue" },
-    ],
-  },
-  {
-    title: "Records",
-    links: [
-      { to: "/admin/sales", label: "Sales History" },
-      { to: "/admin/customers", label: "Customers" },
-      { to: "/admin/products", label: "Products" },
-      { to: "/admin/staff-users", label: "Staff Users" },
-    ],
-  },
-];
+function getAdminSections(role) {
+  const isOwner = role === "Owner";
+
+  return [
+    {
+      title: "Counter",
+      links: [{ to: "/admin/sales/new", label: "New Quick Sale" }],
+    },
+    {
+      title: "Production",
+      links: [
+        { to: "/admin/orders/new", label: "New Production Order" },
+        { to: "/admin/orders", label: "Production Orders", badgeKey: "productionOrders" },
+        { to: "/admin/queue", label: "Production Queue", badgeKey: "productionQueue" },
+      ],
+    },
+    {
+      title: "Records",
+      links: [
+        { to: "/admin/sales", label: "Sales History" },
+        { to: "/admin/customers", label: "Customers" },
+        ...(isOwner ? [{ to: "/admin/products", label: "Products" }] : []),
+        ...(isOwner ? [{ to: "/admin/staff-users", label: "Staff Users" }] : []),
+      ],
+    },
+  ];
+}
 
 function getActiveSidebarLink(pathname) {
   if (pathname === "/admin") return "/admin";
@@ -135,6 +140,29 @@ function WorkspaceBadge({ isAdmin }) {
   );
 }
 
+function ActiveStaffBadge({ staffUser }) {
+  if (!staffUser) return null;
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "8px",
+        borderRadius: "999px",
+        padding: "7px 11px",
+        background: "#ecfdf5",
+        color: "#047857",
+        border: "1px solid #a7f3d0",
+        fontSize: "12px",
+        fontWeight: 900,
+      }}
+    >
+      Logged in as: {staffUser.name} ({staffUser.role})
+    </span>
+  );
+}
+
 function AttentionBadge({ count, active }) {
   if (!count) return null;
 
@@ -160,9 +188,11 @@ function AttentionBadge({ count, active }) {
   );
 }
 
-function AdminSidebar({ pathname }) {
+function AdminSidebar({ pathname, staffUser }) {
   const badgeCounts = getSidebarCounts();
   const activeLink = getActiveSidebarLink(pathname);
+  const role = staffUser?.role || "Staff";
+  const adminSections = getAdminSections(role);
 
   return (
     <aside
@@ -265,8 +295,8 @@ export default function Layout() {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith("/admin");
   const isHome = location.pathname === "/";
+  const activeStaffUser = isAdmin ? getActiveStaffUser() : null;
 
-  // Updated: hide My Orders until customer auth exists
   const customerLinks = [
     { to: "/", label: "Home" },
     { to: "/login", label: "Login" },
@@ -311,6 +341,7 @@ export default function Layout() {
               Tee & Co Ltd.
             </span>
             <WorkspaceBadge isAdmin={isAdmin} />
+            {isAdmin && <ActiveStaffBadge staffUser={activeStaffUser} />}
           </div>
 
           {!isAdmin && (
@@ -382,7 +413,7 @@ export default function Layout() {
             alignItems: "flex-start",
           }}
         >
-          <AdminSidebar pathname={location.pathname} />
+          <AdminSidebar pathname={location.pathname} staffUser={activeStaffUser} />
           <main style={{ flex: 1, minWidth: 0, paddingBottom: "26px" }}>
             <Outlet />
           </main>
