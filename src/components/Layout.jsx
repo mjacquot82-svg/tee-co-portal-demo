@@ -1,7 +1,7 @@
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import logo from "../assets/icon-512.png";
 import { getStoredOrders } from "../lib/ordersStore";
-import { getActiveStaffUser } from "../lib/staffUsersStore";
+import { getActiveStaffUser, setActiveStaffUser } from "../lib/staffUsersStore";
 
 function FacebookIcon() {
   return (
@@ -160,6 +160,36 @@ function ActiveStaffBadge({ staffUser }) {
     >
       Logged in as: {staffUser.name} ({staffUser.role})
     </span>
+  );
+}
+
+function SwitchStaffButton({ isAdmin }) {
+  const navigate = useNavigate();
+
+  if (!isAdmin) return null;
+
+  function handleSwitchStaff() {
+    setActiveStaffUser(null);
+    navigate("/login");
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleSwitchStaff}
+      style={{
+        border: "1px solid #d6d3d1",
+        background: "#ffffff",
+        color: "#171717",
+        borderRadius: "999px",
+        padding: "8px 12px",
+        fontSize: "12px",
+        fontWeight: 900,
+        cursor: "pointer",
+      }}
+    >
+      Switch Staff
+    </button>
   );
 }
 
@@ -342,6 +372,7 @@ export default function Layout() {
             </span>
             <WorkspaceBadge isAdmin={isAdmin} />
             {isAdmin && <ActiveStaffBadge staffUser={activeStaffUser} />}
+            <SwitchStaffButton isAdmin={isAdmin} />
           </div>
 
           {!isAdmin && (
