@@ -1,8 +1,20 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { demoOrders } from "../data/demoOrders";
 import { getStoredOrders } from "../lib/ordersStore";
 import StatusBadge from "../components/StatusBadge";
+
+function isDueSoon(dateValue) {
+  if (!dateValue) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const dueDate = new Date(`${dateValue}T00:00:00`);
+  const fiveDaysFromNow = new Date(today);
+  fiveDaysFromNow.setDate(today.getDate() + 5);
+
+  return dueDate >= today && dueDate <= fiveDaysFromNow;
+}
 
 const statusTabs = [
   {
@@ -14,28 +26,44 @@ const statusTabs = [
   {
     key: "quote",
     label: "Quotes / Approval",
-    statuses: ["Submitted", "Awaiting Artwork", "Quote Sent", "Awaiting Approval"],
+    statuses: ["Submitted", "Awaiting Artwork", "Quote Sent", "Mockup Sent", "Awaiting Approval", "Awaiting Customer Approval"],
     description: "Orders that still need artwork, quote review, or customer approval.",
   },
   {
     key: "deposit",
     label: "Awaiting Deposit",
-    statuses: ["Awaiting Deposit", "Deposit Requested"],
-    description: "Approved orders that should not move forward until payment is handled.",
+    statuses: ["Approved", "Awaiting Deposit", "Deposit Requested"],
+    description: "Approved orders that should not move forward until deposit payment is handled.",
+    match: (order) => ["approved", "awaiting deposit", "deposit requested"].includes(normalizeStatus(order.status)) && order.deposit?.status !== "paid",
   },
   {
     key: "production",
     label: "In Production",
-    statuses: ["Approved", "Paid", "In Production", "Printing", "Embroidery", "Production"],
+    statuses: ["Approved", "Paid", "Deposit Paid", "Ready for Production", "In Production", "Printing", "Embroidery", "Production"],
     description: "Orders currently ready for or actively moving through shop work.",
+    match: (order) => ["approved", "paid", "deposit paid", "ready for production", "in production", "printing", "embroidery", "production"].includes(normalizeStatus(order.status)) || order.production_ready,
+  },
+  {
+    key: "due-soon",
+    label: "Due Soon",
+    statuses: [],
+    description: "Open orders needed within the next 5 days.",
+    match: (order) => isDueSoon(order.due_date) && !["completed", "cancelled"].includes(normalizeStatus(order.status)),
   },
   {
     key: "pickup",
     label: "Ready for Pickup",
-    statuses: ["Ready", "Ready for Pickup", "Completed"],
+    statuses: ["Ready", "Ready for Pickup", "Pickup Ready", "Completed"],
     description: "Finished orders waiting for customer pickup or delivery.",
   },
 ];
+
+const filterToTab = {
+  approval: "quote",
+  "deposit-required": "deposit",
+  "due-soon": "due-soon",
+  "pickup-ready": "pickup",
+};
 
 function normalizeOrder(order, index = 0) {
   return {
@@ -57,14 +85,22 @@ function normalizeStatus(value) {
   return String(value || "").trim().toLowerCase();
 }
 
-function countOrdersForTab(orders, tab) {
-  if (tab.key === "all") return orders.length;
+function tabMatchesOrder(order, tab) {
+  if (tab.key === "all") return true;
+  if (tab.match) return tab.match(order);
   const allowedStatuses = tab.statuses.map(normalizeStatus);
-  return orders.filter((order) => allowedStatuses.includes(normalizeStatus(order.status))).length;
+  return allowedStatuses.includes(normalizeStatus(order.status));
+}
+
+function countOrdersForTab(orders, tab) {
+  return orders.filter((order) => tabMatchesOrder(order, tab)).length;
 }
 
 export default function Orders() {
-  const [activeTabKey, setActiveTabKey] = useState("all");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filterParam = searchParams.get("filter");
+  const initialTabKey = filterToTab[filterParam] || "all";
+  const [activeTabKey, setActiveTabKey] = useState(initialTabKey);
   const storedOrders = getStoredOrders().map(normalizeOrder);
   const demoQueueOrders = demoOrders.map(normalizeOrder);
   const orders = storedOrders.length ? storedOrders : demoQueueOrders;
@@ -72,10 +108,13 @@ export default function Orders() {
   const activeTab = statusTabs.find((tab) => tab.key === activeTabKey) || statusTabs[0];
 
   const filteredOrders = useMemo(() => {
-    if (activeTab.key === "all") return orders;
-    const allowedStatuses = activeTab.statuses.map(normalizeStatus);
-    return orders.filter((order) => allowedStatuses.includes(normalizeStatus(order.status)));
+    return orders.filter((order) => tabMatchesOrder(order, activeTab));
   }, [activeTab, orders]);
+
+  function selectTab(tabKey) {
+    setActiveTabKey(tabKey);
+    setSearchParams(tabKey === "all" ? {} : { filter: tabKey });
+  }
 
   return (
     <div
@@ -165,7 +204,7 @@ export default function Orders() {
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => setActiveTabKey(tab.key)}
+                onClick={() => selectTab(tab.key)}
                 style={{
                   whiteSpace: "nowrap",
                   border: active ? "1px solid #171717" : "1px solid #d6d3d1",
