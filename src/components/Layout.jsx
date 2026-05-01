@@ -86,6 +86,7 @@ const adminSections = [
       { to: "/admin/sales", label: "Sales History" },
       { to: "/admin/customers", label: "Customers" },
       { to: "/admin/products", label: "Products" },
+      { to: "/admin/staff-users", label: "Staff Users" },
     ],
   },
 ];
@@ -99,6 +100,7 @@ function getActiveSidebarLink(pathname) {
   if (pathname === "/admin/queue") return "/admin/queue";
   if (pathname.startsWith("/admin/customers")) return "/admin/customers";
   if (pathname.startsWith("/admin/products")) return "/admin/products";
+  if (pathname.startsWith("/admin/staff-users")) return "/admin/staff-users";
   return "";
 }
 
