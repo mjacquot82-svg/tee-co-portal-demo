@@ -25,6 +25,7 @@ export function createStoredQuickSale(saleInput) {
   const sale = {
     id: `quick-sale-${Date.now()}`,
     sale_number: saleNumber,
+    customer_id: saleInput.customer_id || "",
     customer_name: saleInput.customer_name || "Walk-in Customer",
     payment_method: saleInput.payment_method || "Not Recorded",
     payment_status: saleInput.payment_status || "Paid",
