@@ -111,6 +111,12 @@ function formatDateTime(value) {
   });
 }
 
+function getArchiveAfterDate(uploadedAt) {
+  const date = new Date(uploadedAt);
+  date.setFullYear(date.getFullYear() + 2);
+  return date.toISOString();
+}
+
 function getSizeRows(order) {
   if (Array.isArray(order?.size_breakdown)) {
     return order.size_breakdown.map((row) => ({
@@ -311,16 +317,26 @@ export default function OrderDetail() {
     const file = event.target.files?.[0];
     if (!file || !order) return;
 
+    const uploadedAt = new Date().toISOString();
+    const artworkId = `artwork-${Date.now()}`;
     const dataUrl = await readFileAsDataUrl(file);
     const nextArtwork = [
       ...(order.artwork_files || []),
       {
-        id: `artwork-${Date.now()}`,
+        id: artworkId,
         name: file.name,
         type: file.type,
         size: file.size,
         preview: dataUrl,
-        uploaded_at: new Date().toISOString(),
+        uploaded_at: uploadedAt,
+        storage_status: "active",
+        archived: false,
+        archive_after: getArchiveAfterDate(uploadedAt),
+        archive_policy_months: 24,
+        storage_bucket: "artwork-active",
+        archive_bucket: "artwork-archive",
+        storage_path: `orders/${order.order_number || orderNumber}/artwork/${artworkId}-${file.name}`,
+        archived_at: null,
       },
     ];
 
@@ -516,6 +532,14 @@ export default function OrderDetail() {
                     </div>
                     <strong style={{ display: "block", fontSize: "14px" }}>{file.name}</strong>
                     <span style={{ color: "#64748b", fontSize: "12px" }}>{Math.round((file.size || 0) / 1024)} KB</span>
+                    <span style={{ display: "block", marginTop: "4px", color: file.archived ? "#92400e" : "#047857", fontSize: "12px", fontWeight: 700 }}>
+                      {file.archived ? "Archived" : "Active storage"}
+                    </span>
+                    {file.archive_after && (
+                      <span style={{ display: "block", marginTop: "2px", color: "#64748b", fontSize: "12px" }}>
+                        Archive after {formatDateTime(file.archive_after)}
+                      </span>
+                    )}
                   </article>
                 ))}
               </div>
