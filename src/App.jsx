@@ -22,6 +22,7 @@ import Customers from "./admin/Customers";
 import CustomerDetail from "./admin/CustomerDetail";
 import QuickSale from "./admin/QuickSale";
 import Sales from "./admin/Sales";
+import SaleReceipt from "./admin/SaleReceipt";
 
 export default function App() {
   return (
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="admin/orders/new" element={<NewOrder />} />
           <Route path="admin/sales" element={<Sales />} />
           <Route path="admin/sales/new" element={<QuickSale />} />
+          <Route path="admin/sales/receipt/:saleNumber" element={<SaleReceipt />} />
           <Route path="admin/orders/:orderNumber" element={<OrderDetail />} />
           <Route path="admin/products" element={<Products />} />
           <Route path="admin/queue" element={<Queue />} />
