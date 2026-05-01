@@ -69,6 +69,16 @@ function findCustomerMatches(customers, value) {
     .slice(0, 5);
 }
 
+function cartItemsMatch(existingItem, newItem) {
+  return (
+    existingItem.product_id === newItem.product_id &&
+    normalize(existingItem.name) === normalize(newItem.name) &&
+    normalize(existingItem.color) === normalize(newItem.color) &&
+    normalize(existingItem.size) === normalize(newItem.size) &&
+    Number(existingItem.unit_price) === Number(newItem.unit_price)
+  );
+}
+
 export default function QuickSale() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -174,6 +184,12 @@ export default function QuickSale() {
     }
   }
 
+  function handleCartEditKeyDown(event) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    productSelectRef.current?.focus();
+  }
+
   function addToCart() {
     const qty = Number(lineItem.qty) || 0;
     const unitPrice = Number(lineItem.unit_price) || 0;
@@ -191,7 +207,22 @@ export default function QuickSale() {
       line_total: qty * unitPrice,
     };
 
-    setCart((current) => [...current, item]);
+    setCart((current) => {
+      const match = current.find((existingItem) => cartItemsMatch(existingItem, item));
+
+      if (!match) return [...current, item];
+
+      return current.map((existingItem) => {
+        if (!cartItemsMatch(existingItem, item)) return existingItem;
+        const nextQty = existingItem.qty + item.qty;
+        return {
+          ...existingItem,
+          qty: nextQty,
+          line_total: nextQty * existingItem.unit_price,
+        };
+      });
+    });
+
     setSelectedProductId("");
     setLineItem({ name: "", color: "", size: "", qty: "1", unit_price: "" });
     setTimeout(() => productSelectRef.current?.focus(), 0);
@@ -261,75 +292,21 @@ export default function QuickSale() {
             'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         }}
       >
-        <p
-          style={{
-            margin: 0,
-            fontSize: "13px",
-            fontWeight: 800,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "#16a34a",
-          }}
-        >
+        <p style={{ margin: 0, fontSize: "13px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#16a34a" }}>
           Sale Completed
         </p>
-
-        <h1 style={{ margin: "10px 0 12px", fontSize: "32px" }}>
-          Sale #{completedSaleNumber}
-        </h1>
-
+        <h1 style={{ margin: "10px 0 12px", fontSize: "32px" }}>Sale #{completedSaleNumber}</h1>
         <p style={{ marginBottom: "28px", color: "#64748b", fontSize: "16px" }}>
           The transaction has been saved successfully.
         </p>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            gap: "14px",
-            flexWrap: "wrap",
-          }}
-        >
-          <button
-            onClick={() => navigate("/admin/sales/new")}
-            style={{
-              background: "#171717",
-              color: "#ffffff",
-              border: "none",
-              borderRadius: "14px",
-              padding: "14px 20px",
-              fontWeight: 800,
-              cursor: "pointer",
-            }}
-          >
+        <div style={{ display: "flex", justifyContent: "center", gap: "14px", flexWrap: "wrap" }}>
+          <button onClick={() => navigate("/admin/sales/new")} style={{ background: "#171717", color: "#ffffff", border: "none", borderRadius: "14px", padding: "14px 20px", fontWeight: 800, cursor: "pointer" }}>
             Start Another Sale
           </button>
-
-          <button
-            onClick={() => navigate("/admin/sales")}
-            style={{
-              background: "#ffffff",
-              border: "1px solid #cbd5e1",
-              borderRadius: "14px",
-              padding: "14px 20px",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
+          <button onClick={() => navigate("/admin/sales")} style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "14px", padding: "14px 20px", fontWeight: 700, cursor: "pointer" }}>
             View Sales History
           </button>
-
-          <button
-            onClick={() => navigate("/admin")}
-            style={{
-              background: "#ffffff",
-              border: "1px solid #cbd5e1",
-              borderRadius: "14px",
-              padding: "14px 20px",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
+          <button onClick={() => navigate("/admin")} style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "14px", padding: "14px 20px", fontWeight: 700, cursor: "pointer" }}>
             Return to Dashboard
           </button>
         </div>
@@ -338,24 +315,8 @@ export default function QuickSale() {
   }
 
   return (
-    <div
-      style={{
-        maxWidth: "1100px",
-        margin: "0 auto",
-        padding: "24px",
-        fontFamily:
-          'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      }}
-    >
-      <form
-        onSubmit={completeSale}
-        style={{
-          background: "#ffffff",
-          borderRadius: "20px",
-          padding: "24px",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-        }}
-      >
+    <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "24px", fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+      <form onSubmit={completeSale} style={{ background: "#ffffff", borderRadius: "20px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
         <div style={{ marginBottom: "22px" }}>
           <p style={{ margin: 0, color: "#78716c", fontSize: "12px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
             Counter Sale
@@ -372,41 +333,11 @@ export default function QuickSale() {
             <label style={{ ...labelStyle, position: "relative" }}>
               Customer Name <span style={{ color: "#78716c", fontWeight: 500 }}>(optional)</span>
               <input value={customerName} onChange={(event) => updateCustomerName(event.target.value)} placeholder="Walk-in Customer" style={fieldStyle} />
-
               {customerMatches.length > 0 && !linkedCustomerId && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "78px",
-                    left: 0,
-                    right: 0,
-                    zIndex: 20,
-                    background: "#ffffff",
-                    border: "1px solid #e2e8f0",
-                    borderRadius: "12px",
-                    boxShadow: "0 12px 24px rgba(15, 23, 42, 0.12)",
-                    overflow: "hidden",
-                  }}
-                >
+                <div style={{ position: "absolute", top: "78px", left: 0, right: 0, zIndex: 20, background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", boxShadow: "0 12px 24px rgba(15, 23, 42, 0.12)", overflow: "hidden" }}>
                   {customerMatches.map((customer) => (
-                    <button
-                      key={customer.id}
-                      type="button"
-                      onClick={() => selectCustomer(customer)}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        padding: "11px 12px",
-                        background: "#ffffff",
-                        border: "none",
-                        borderBottom: "1px solid #f1f5f9",
-                        textAlign: "left",
-                        cursor: "pointer",
-                        color: "#292524",
-                      }}
-                    >
-                      <strong>{customer.name}</strong>
-                      {customer.company ? ` — ${customer.company}` : ""}
+                    <button key={customer.id} type="button" onClick={() => selectCustomer(customer)} style={{ display: "block", width: "100%", padding: "11px 12px", background: "#ffffff", border: "none", borderBottom: "1px solid #f1f5f9", textAlign: "left", cursor: "pointer", color: "#292524" }}>
+                      <strong>{customer.name}</strong>{customer.company ? ` — ${customer.company}` : ""}
                       <span style={{ display: "block", marginTop: "3px", color: "#64748b", fontSize: "13px" }}>
                         {[customer.phone, customer.email].filter(Boolean).join(" • ") || "Saved customer"}
                       </span>
@@ -415,7 +346,6 @@ export default function QuickSale() {
                 </div>
               )}
             </label>
-
             <label style={labelStyle}>
               Payment Method
               <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} style={fieldStyle}>
@@ -428,171 +358,63 @@ export default function QuickSale() {
               </select>
             </label>
           </div>
-
           {linkedCustomerId ? (
-            <p style={{ margin: "12px 0 0", color: "#166534", fontWeight: 700 }}>
-              Linked to existing customer: {linkedCustomerName}
-            </p>
+            <p style={{ margin: "12px 0 0", color: "#166534", fontWeight: 700 }}>Linked to existing customer: {linkedCustomerName}</p>
           ) : (
-            <p style={{ margin: "12px 0 0", color: "#64748b", fontWeight: 700 }}>
-              Start typing a saved customer name, company, phone, or email to link this sale.
-            </p>
+            <p style={{ margin: "12px 0 0", color: "#64748b", fontWeight: 700 }}>Start typing a saved customer name, company, phone, or email to link this sale.</p>
           )}
         </section>
 
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.5fr) minmax(280px, 0.8fr)", gap: "18px", alignItems: "start" }}>
           <section style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "18px", padding: "18px" }}>
             <h2 style={{ margin: "0 0 12px", fontSize: "20px" }}>Add Item</h2>
-
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "14px" }}>
-              <label style={labelStyle}>
-                Product
-                <select ref={productSelectRef} value={selectedProductId} onChange={selectProduct} onKeyDown={handleLineItemKeyDown} style={fieldStyle}>
-                  <option value="">Select product or type manually...</option>
-                  {products.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.name}{product.brand_model ? ` (${product.brand_model})` : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label style={labelStyle}>
-                Item Name
-                <input name="name" value={lineItem.name} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} placeholder="T-Shirt" style={fieldStyle} />
-              </label>
-
-              <label style={labelStyle}>
-                Color
-                {selectedProduct?.colors?.length ? (
-                  <select name="color" value={lineItem.color} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} style={fieldStyle}>
-                    {selectedProduct.colors.map((color) => <option key={color}>{color}</option>)}
-                  </select>
-                ) : (
-                  <input name="color" value={lineItem.color} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} placeholder="Black" style={fieldStyle} />
-                )}
-              </label>
-
-              <label style={labelStyle}>
-                Size
-                {selectedProduct?.sizes?.length ? (
-                  <select name="size" value={lineItem.size} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} style={fieldStyle}>
-                    {selectedProduct.sizes.map((size) => <option key={size}>{size}</option>)}
-                  </select>
-                ) : (
-                  <input name="size" value={lineItem.size} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} placeholder="L" style={fieldStyle} />
-                )}
-              </label>
-
-              <label style={labelStyle}>
-                Qty
-                <input type="number" min="1" name="qty" value={lineItem.qty} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} style={fieldStyle} />
-              </label>
-
-              <label style={labelStyle}>
-                Unit Price
-                <input type="number" min="0" step="0.01" name="unit_price" value={lineItem.unit_price} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} placeholder="24.99" style={fieldStyle} />
-              </label>
+              <label style={labelStyle}>Product<select ref={productSelectRef} value={selectedProductId} onChange={selectProduct} onKeyDown={handleLineItemKeyDown} style={fieldStyle}><option value="">Select product or type manually...</option>{products.map((product) => (<option key={product.id} value={product.id}>{product.name}{product.brand_model ? ` (${product.brand_model})` : ""}</option>))}</select></label>
+              <label style={labelStyle}>Item Name<input name="name" value={lineItem.name} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} placeholder="T-Shirt" style={fieldStyle} /></label>
+              <label style={labelStyle}>Color{selectedProduct?.colors?.length ? (<select name="color" value={lineItem.color} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} style={fieldStyle}>{selectedProduct.colors.map((color) => <option key={color}>{color}</option>)}</select>) : (<input name="color" value={lineItem.color} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} placeholder="Black" style={fieldStyle} />)}</label>
+              <label style={labelStyle}>Size{selectedProduct?.sizes?.length ? (<select name="size" value={lineItem.size} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} style={fieldStyle}>{selectedProduct.sizes.map((size) => <option key={size}>{size}</option>)}</select>) : (<input name="size" value={lineItem.size} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} placeholder="L" style={fieldStyle} />)}</label>
+              <label style={labelStyle}>Qty<input type="number" min="1" name="qty" value={lineItem.qty} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} style={fieldStyle} /></label>
+              <label style={labelStyle}>Unit Price<input type="number" min="0" step="0.01" name="unit_price" value={lineItem.unit_price} onChange={updateLineItem} onKeyDown={handleLineItemKeyDown} placeholder="24.99" style={fieldStyle} /></label>
             </div>
-
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px" }}>
-              <button
-                type="button"
-                onClick={addToCart}
-                disabled={!canAddItem}
-                style={{
-                  background: canAddItem ? "#171717" : "#a8a29e",
-                  color: "#ffffff",
-                  border: "none",
-                  borderRadius: "12px",
-                  padding: "13px 18px",
-                  cursor: canAddItem ? "pointer" : "not-allowed",
-                  fontWeight: 700,
-                }}
-              >
-                Add to Cart
-              </button>
+              <button type="button" onClick={addToCart} disabled={!canAddItem} style={{ background: canAddItem ? "#171717" : "#a8a29e", color: "#ffffff", border: "none", borderRadius: "12px", padding: "13px 18px", cursor: canAddItem ? "pointer" : "not-allowed", fontWeight: 700 }}>Add to Cart</button>
             </div>
           </section>
 
           <aside style={{ border: "1px solid #e2e8f0", borderRadius: "18px", padding: "18px", background: "#ffffff", position: "sticky", top: "18px" }}>
             <h2 style={{ margin: "0 0 12px", fontSize: "20px" }}>Cart</h2>
-
             {cart.length ? (
               <div style={{ display: "grid", gap: "10px" }}>
                 {cart.map((item) => (
                   <div key={item.id} style={{ border: "1px solid #e7e5e4", borderRadius: "12px", padding: "10px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "10px" }}>
                       <strong>{item.name}</strong>
-                      <button type="button" onClick={() => removeCartItem(item.id)} style={{ border: "none", background: "transparent", color: "#b91c1c", cursor: "pointer", fontWeight: 700 }}>
-                        Remove
-                      </button>
+                      <button type="button" onClick={() => removeCartItem(item.id)} style={{ border: "none", background: "transparent", color: "#b91c1c", cursor: "pointer", fontWeight: 700 }}>Remove</button>
                     </div>
-                    <p style={{ margin: "4px 0", color: "#64748b", fontSize: "14px" }}>
-                      {[item.color, item.size].filter(Boolean).join(" • ") || "No variant"}
-                    </p>
+                    <p style={{ margin: "4px 0", color: "#64748b", fontSize: "14px" }}>{[item.color, item.size].filter(Boolean).join(" • ") || "No variant"}</p>
                     <div style={{ display: "grid", gridTemplateColumns: "72px 1fr", gap: "8px", alignItems: "end" }}>
-                      <label style={{ display: "grid", gap: "5px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
-                        Qty
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.qty}
-                          onChange={(event) => updateCartItem(item.id, "qty", event.target.value)}
-                          style={compactFieldStyle}
-                        />
-                      </label>
-                      <label style={{ display: "grid", gap: "5px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
-                        Unit Price
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={item.unit_price}
-                          onChange={(event) => updateCartItem(item.id, "unit_price", event.target.value)}
-                          style={compactFieldStyle}
-                        />
-                      </label>
+                      <label style={{ display: "grid", gap: "5px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>Qty<input type="number" min="1" value={item.qty} onChange={(event) => updateCartItem(item.id, "qty", event.target.value)} onKeyDown={handleCartEditKeyDown} style={compactFieldStyle} /></label>
+                      <label style={{ display: "grid", gap: "5px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>Unit Price<input type="number" min="0" step="0.01" value={item.unit_price} onChange={(event) => updateCartItem(item.id, "unit_price", event.target.value)} onKeyDown={handleCartEditKeyDown} style={compactFieldStyle} /></label>
                     </div>
-                    <p style={{ margin: "8px 0 0", color: "#292524" }}>
-                      Line Total: <strong>{currency(item.line_total)}</strong>
-                    </p>
+                    <p style={{ margin: "8px 0 0", color: "#292524" }}>Line Total: <strong>{currency(item.line_total)}</strong></p>
                   </div>
                 ))}
               </div>
             ) : (
               <p style={{ color: "#64748b", marginTop: 0 }}>No items added yet.</p>
             )}
-
             <div style={{ borderTop: "1px solid #e2e8f0", marginTop: "16px", paddingTop: "14px", display: "grid", gap: "8px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>Subtotal</span>
-                <strong>{currency(subtotal)}</strong>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>Tax (13%)</span>
-                <strong>{currency(taxTotal)}</strong>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "20px" }}>
-                <span>Total</span>
-                <strong>{currency(total)}</strong>
-              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><span>Subtotal</span><strong>{currency(subtotal)}</strong></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><span>Tax (13%)</span><strong>{currency(taxTotal)}</strong></div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "20px" }}><span>Total</span><strong>{currency(total)}</strong></div>
             </div>
           </aside>
         </div>
 
-        <label style={{ ...labelStyle, marginTop: "20px" }}>
-          Notes
-          <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional sale note, receipt note, or payment reference." style={{ ...fieldStyle, minHeight: "86px", resize: "vertical" }} />
-        </label>
-
+        <label style={{ ...labelStyle, marginTop: "20px" }}>Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional sale note, receipt note, or payment reference." style={{ ...fieldStyle, minHeight: "86px", resize: "vertical" }} /></label>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "24px", flexWrap: "wrap" }}>
-          <button type="button" onClick={() => navigate("/admin")} style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "12px", padding: "13px 18px", cursor: "pointer", fontWeight: 600 }}>
-            Cancel
-          </button>
-          <button type="submit" disabled={!canCompleteSale} style={{ background: canCompleteSale ? "#171717" : "#a8a29e", color: "#ffffff", border: "none", borderRadius: "12px", padding: "13px 18px", cursor: canCompleteSale ? "pointer" : "not-allowed", fontWeight: 700 }}>
-            Complete Sale
-          </button>
+          <button type="button" onClick={() => navigate("/admin")} style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "12px", padding: "13px 18px", cursor: "pointer", fontWeight: 600 }}>Cancel</button>
+          <button type="submit" disabled={!canCompleteSale} style={{ background: canCompleteSale ? "#171717" : "#a8a29e", color: "#ffffff", border: "none", borderRadius: "12px", padding: "13px 18px", cursor: canCompleteSale ? "pointer" : "not-allowed", fontWeight: 700 }}>Complete Sale</button>
         </div>
       </form>
     </div>
