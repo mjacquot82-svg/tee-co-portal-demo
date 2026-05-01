@@ -59,6 +59,37 @@ function isActivePath(pathname, linkTo) {
   return pathname === linkTo || pathname.startsWith(`${linkTo}/`);
 }
 
+function WorkspaceBadge({ isAdmin }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "7px",
+        borderRadius: "999px",
+        padding: "7px 11px",
+        background: isAdmin ? "#171717" : "#f8fafc",
+        color: isAdmin ? "#ffffff" : "#292524",
+        border: isAdmin ? "1px solid #171717" : "1px solid #d6d3d1",
+        fontSize: "12px",
+        fontWeight: 800,
+        letterSpacing: "0.02em",
+        textTransform: "uppercase",
+      }}
+    >
+      <span
+        style={{
+          width: "8px",
+          height: "8px",
+          borderRadius: "999px",
+          background: isAdmin ? "#22c55e" : "#94a3b8",
+        }}
+      />
+      {isAdmin ? "Staff Workspace" : "Customer Portal"}
+    </span>
+  );
+}
+
 function AdminSidebar({ pathname }) {
   return (
     <aside
@@ -194,11 +225,12 @@ export default function Layout() {
             flexWrap: "wrap",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             <img src={logo} alt="Tee & Co Ltd." style={{ height: "80px", objectFit: "contain" }} />
             <span style={{ fontWeight: 700, fontSize: "22px", letterSpacing: "-0.02em", color: "#171717" }}>
               Tee & Co Ltd.
             </span>
+            <WorkspaceBadge isAdmin={isAdmin} />
           </div>
 
           {!isAdmin && (
