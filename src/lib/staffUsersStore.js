@@ -1,4 +1,5 @@
 const STORAGE_KEY = "teeCoStaffUsers";
+const ACTIVE_STAFF_KEY = "teeCoActiveStaffUser";
 
 const DEFAULT_STAFF_USERS = [
   {
@@ -56,4 +57,47 @@ export function validateStaffPin(pin) {
   return getStoredStaffUsers().find(
     (user) => user.status !== "Inactive" && user.pin === cleanedPin
   );
+}
+
+export function setActiveStaffUser(user) {
+  if (typeof window === "undefined") return;
+  if (!user) {
+    window.localStorage.removeItem(ACTIVE_STAFF_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(
+    ACTIVE_STAFF_KEY,
+    JSON.stringify({ id: user.id, name: user.name, role: user.role })
+  );
+}
+
+export function getActiveStaffUser() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const rawUser = window.localStorage.getItem(ACTIVE_STAFF_KEY);
+    return rawUser ? JSON.parse(rawUser) : null;
+  } catch (error) {
+    console.error("Unable to read active Tee & Co staff user", error);
+    return null;
+  }
+}
+
+export function buildStaffAuditFields(prefix = "created") {
+  const activeStaff = getActiveStaffUser();
+
+  if (!activeStaff) {
+    return {
+      [`${prefix}_by_staff_id`]: "",
+      [`${prefix}_by_staff_name`]: "Unknown Staff",
+      [`${prefix}_by_staff_role`]: "",
+    };
+  }
+
+  return {
+    [`${prefix}_by_staff_id`]: activeStaff.id || "",
+    [`${prefix}_by_staff_name`]: activeStaff.name || "Unknown Staff",
+    [`${prefix}_by_staff_role`]: activeStaff.role || "",
+  };
 }
