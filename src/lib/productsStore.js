@@ -5,6 +5,7 @@ export const defaultProducts = [
     id: "product-hoodie",
     name: "Pullover Hoodie",
     category: "Hoodie / Sweater",
+    product_type: "Pullover Hoodie",
     status: "Active",
     image: "",
     colors: ["Black", "Navy", "Gray", "White"],
@@ -23,6 +24,7 @@ export const defaultProducts = [
     id: "product-hat",
     name: "Hat",
     category: "Hat",
+    product_type: "Cap / Hat",
     status: "Active",
     image: "",
     colors: ["Black", "Navy", "Gray", "White"],
@@ -40,6 +42,7 @@ export const defaultProducts = [
     id: "product-tee",
     name: "T-Shirt",
     category: "Shirt",
+    product_type: "T-Shirt",
     status: "Active",
     image: "",
     colors: ["Black", "White", "Gray", "Navy"],
@@ -85,27 +88,35 @@ function normalizePlacementPrices(placements, value) {
   return prices;
 }
 
+function normalizeProduct(product) {
+  return {
+    ...product,
+    product_type: product.product_type || product.type || product.name || "General",
+  };
+}
+
 export function getStoredProducts() {
-  if (typeof window === "undefined") return defaultProducts;
+  if (typeof window === "undefined") return defaultProducts.map(normalizeProduct);
 
   try {
     const rawProducts = window.localStorage.getItem(STORAGE_KEY);
-    return rawProducts ? JSON.parse(rawProducts) : defaultProducts;
+    const products = rawProducts ? JSON.parse(rawProducts) : defaultProducts;
+    return products.map(normalizeProduct);
   } catch (error) {
     console.error("Unable to read Tee & Co products", error);
-    return defaultProducts;
+    return defaultProducts.map(normalizeProduct);
   }
 }
 
 export function saveStoredProducts(products) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(products.map(normalizeProduct)));
 }
 
 export function createStoredProduct(productInput) {
   const products = getStoredProducts();
   const placements = normalizeList(productInput.placements);
-  const product = {
+  const product = normalizeProduct({
     ...productInput,
     id: `product-${Date.now()}`,
     status: productInput.status || "Active",
@@ -114,7 +125,7 @@ export function createStoredProduct(productInput) {
     placements,
     placement_prices: normalizePlacementPrices(placements, productInput.placement_prices),
     decoration_types: normalizeList(productInput.decoration_types),
-  };
+  });
 
   const nextProducts = [product, ...products];
   saveStoredProducts(nextProducts);
@@ -128,7 +139,7 @@ export function updateStoredProduct(productId, updates) {
 
     const placements = updates.placements ? normalizeList(updates.placements) : product.placements;
 
-    return {
+    return normalizeProduct({
       ...product,
       ...updates,
       colors: updates.colors ? normalizeList(updates.colors) : product.colors,
@@ -140,7 +151,7 @@ export function updateStoredProduct(productId, updates) {
       decoration_types: updates.decoration_types
         ? normalizeList(updates.decoration_types)
         : product.decoration_types,
-    };
+    });
   });
 
   saveStoredProducts(nextProducts);
