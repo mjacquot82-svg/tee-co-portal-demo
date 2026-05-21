@@ -2,8 +2,9 @@ import {
   normalizeProductionType,
   PRODUCTION_TYPES,
 } from "../constants/productionTypes";
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { getRawStorageItem, hasBrowserStorage, setRawStorageItem } from "./browserStorage";
+import { isSupabaseConfigured, supabase } from "./supabaseClient";
 
 const STORAGE_KEY = "teeCoProducts";
 const EMPTY_PRODUCTS = [];
@@ -12,6 +13,8 @@ let cachedProductsStorageRaw = null;
 let cachedProductsSnapshotRaw = null;
 let cachedProductsSnapshot = EMPTY_PRODUCTS;
 let cachedDefaultProductsSnapshot = null;
+let productsLoadStarted = false;
+let productsLoadPromise = null;
 
 function emitProductsUpdated() {
   productListeners.forEach((listener) => {
@@ -397,6 +400,99 @@ function cacheProductsSnapshot(products) {
   };
 }
 
+function setProductsSnapshot(products) {
+  const { normalizedProducts, normalizedSnapshot } = cacheProductsSnapshot(products);
+  cachedProductsStorageRaw = normalizedSnapshot;
+
+  if (hasBrowserStorage()) {
+    setRawStorageItem(STORAGE_KEY, normalizedSnapshot);
+  }
+
+  emitProductsUpdated();
+  return normalizedProducts;
+}
+
+function buildSupabaseProductRecord(product = {}, options = {}) {
+  const record = {
+    name: product.name || "",
+    category: product.category || "Catalog",
+    image: product.image || "",
+    active:
+      typeof product.active === "boolean"
+        ? product.active
+        : normalizeProductStatus(product.status) === "active",
+    price: resolveProductBasePrice(product) ?? normalizeNumericPrice(product.price) ?? 0,
+  };
+
+  if (options.includeId && product.id) {
+    record.id = product.id;
+  }
+
+  return record;
+}
+
+function normalizeSupabaseProduct(product = {}) {
+  return normalizeProduct({
+    ...product,
+    status: product?.active === false ? "Archived" : "Active",
+    price: normalizeNumericPrice(product?.price),
+    base_price: normalizeNumericPrice(product?.price),
+    unit_price: normalizeNumericPrice(product?.price),
+    base_garment_price: normalizeNumericPrice(product?.price),
+    calculated_base_price: normalizeNumericPrice(product?.price),
+  });
+}
+
+async function fetchProductsFromSupabase() {
+  if (!isSupabaseConfigured || !supabase) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, created_at, name, category, price, image, active")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Unable to fetch Tee & Co products from Supabase", error);
+    throw error;
+  }
+
+  return Array.isArray(data) ? data.map(normalizeSupabaseProduct).filter(Boolean) : [];
+}
+
+export async function refreshStoredProducts() {
+  const remoteProducts = await fetchProductsFromSupabase();
+
+  if (!remoteProducts) {
+    return getStoredProducts();
+  }
+
+  return setProductsSnapshot(remoteProducts);
+}
+
+function ensureStoredProductsLoaded() {
+  if (productsLoadPromise) {
+    return productsLoadPromise;
+  }
+
+  if (productsLoadStarted) {
+    return Promise.resolve(cachedProductsSnapshot);
+  }
+
+  productsLoadStarted = true;
+  productsLoadPromise = refreshStoredProducts()
+    .catch((error) => {
+      console.error("Falling back to cached Tee & Co products", error);
+      return getStoredProducts();
+    })
+    .finally(() => {
+      productsLoadPromise = null;
+    });
+
+  return productsLoadPromise;
+}
+
 export function getStoredProducts() {
   if (!hasBrowserStorage()) return getDefaultProductsSnapshot();
 
@@ -424,12 +520,7 @@ export function getStoredProducts() {
 }
 
 export function saveStoredProducts(products) {
-  if (!hasBrowserStorage()) return;
-
-  const { normalizedSnapshot } = cacheProductsSnapshot(products);
-  cachedProductsStorageRaw = normalizedSnapshot;
-  setRawStorageItem(STORAGE_KEY, normalizedSnapshot);
-  emitProductsUpdated();
+  setProductsSnapshot(products);
 }
 
 export function subscribeToStoredProducts(listener) {
@@ -460,15 +551,20 @@ export function subscribeToStoredProducts(listener) {
 }
 
 export function useStoredProducts() {
-  return useSyncExternalStore(
+  const products = useSyncExternalStore(
     subscribeToStoredProducts,
     getStoredProducts,
     () => EMPTY_PRODUCTS
   );
+
+  useEffect(() => {
+    ensureStoredProductsLoaded();
+  }, []);
+
+  return products;
 }
 
-export function createStoredProduct(productInput) {
-  const products = getStoredProducts();
+export async function createStoredProduct(productInput) {
   const placements = normalizeList(productInput.placements);
   const placementPrices = normalizePlacementPrices(placements, productInput.placement_prices);
   const placementConfig = buildPlacementConfig(
@@ -479,7 +575,6 @@ export function createStoredProduct(productInput) {
   );
   const product = normalizeProduct({
     ...productInput,
-    id: `product-${Date.now()}`,
     status: productInput.status || "Active",
     colors: normalizeList(productInput.colors),
     sizes: normalizeList(productInput.sizes),
@@ -489,16 +584,43 @@ export function createStoredProduct(productInput) {
     decoration_types: normalizeList(productInput.decoration_types),
   });
 
-  const nextProducts = [product, ...products];
+  if (!isSupabaseConfigured || !supabase) {
+    const localProduct = {
+      ...product,
+      id: `product-${Date.now()}`,
+    };
+    const nextProducts = [localProduct, ...getStoredProducts()];
+    saveStoredProducts(nextProducts);
+    return localProduct;
+  }
+
+  const { data, error } = await supabase
+    .from("products")
+    .insert(buildSupabaseProductRecord(product, { includeId: true }))
+    .select("id, created_at, name, category, price, image, active")
+    .single();
+
+  if (error) {
+    console.error("Unable to create Tee & Co product in Supabase", error);
+    throw error;
+  }
+
+  const createdProduct = normalizeSupabaseProduct(data);
+  const nextProducts = [
+    createdProduct,
+    ...getStoredProducts().filter(
+      (existingProduct) => existingProduct.id !== createdProduct.id
+    ),
+  ];
   saveStoredProducts(nextProducts);
-  return product;
+  return createdProduct;
 }
 
 export function getStoredProduct(productId) {
   return getStoredProducts().find((product) => product.id === productId) || null;
 }
 
-export function updateStoredProduct(productId, updates) {
+export async function updateStoredProduct(productId, updates) {
   const products = getStoredProducts();
   const hasOwn = (key) => Object.prototype.hasOwnProperty.call(updates, key);
   const nextProducts = products.map((product) => {
@@ -531,11 +653,45 @@ export function updateStoredProduct(productId, updates) {
     });
   });
 
-  saveStoredProducts(nextProducts);
-  return nextProducts.find((product) => product.id === productId);
+  const updatedProduct = nextProducts.find((product) => product.id === productId) || null;
+  if (!updatedProduct) return null;
+
+  if (!isSupabaseConfigured || !supabase) {
+    saveStoredProducts(nextProducts);
+    return updatedProduct;
+  }
+
+  const { data, error } = await supabase
+    .from("products")
+    .update(buildSupabaseProductRecord(updatedProduct))
+    .eq("id", productId)
+    .select("id, created_at, name, category, price, image, active")
+    .single();
+
+  if (error) {
+    console.error("Unable to update Tee & Co product in Supabase", error);
+    throw error;
+  }
+
+  const normalizedUpdatedProduct = normalizeSupabaseProduct(data);
+  saveStoredProducts(
+    nextProducts.map((product) =>
+      product.id === productId ? normalizedUpdatedProduct : product
+    )
+  );
+  return normalizedUpdatedProduct;
 }
 
-export function deleteStoredProduct(productId) {
+export async function deleteStoredProduct(productId) {
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase.from("products").delete().eq("id", productId);
+
+    if (error) {
+      console.error("Unable to delete Tee & Co product from Supabase", error);
+      throw error;
+    }
+  }
+
   const nextProducts = getStoredProducts().filter((product) => product.id !== productId);
   saveStoredProducts(nextProducts);
 }

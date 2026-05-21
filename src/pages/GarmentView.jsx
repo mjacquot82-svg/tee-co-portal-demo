@@ -3,6 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 import { garments } from "../data/garments";
 import { findProductForGarment } from "../lib/orderConfiguration";
 import { resolveProductBasePrice, useStoredProducts } from "../lib/productsStore";
+import {
+  getStorefrontCategoryById,
+  getStorefrontProductImage,
+  normalizeCategorySlug,
+} from "../lib/storefrontCatalog";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -16,19 +21,59 @@ function formatBasePrice(value) {
 
 export default function GarmentView() {
   const { garmentId } = useParams();
-  const garment = garments.find((g) => g.garment_id === garmentId);
   const catalogProducts = useStoredProducts();
+  const productById = useMemo(
+    () => catalogProducts.find((product) => product.id === garmentId) || null,
+    [catalogProducts, garmentId]
+  );
+  const garment = useMemo(
+    () => garments.find((g) => g.garment_id === garmentId) || null,
+    [garmentId]
+  );
   const selectedProduct = useMemo(
-    () => findProductForGarment(catalogProducts, garment),
-    [catalogProducts, garment]
+    () => productById || findProductForGarment(catalogProducts, garment),
+    [catalogProducts, garment, productById]
   );
+  const storefrontCategory = useMemo(
+    () =>
+      getStorefrontCategoryById(
+        catalogProducts,
+        normalizeCategorySlug(selectedProduct?.category || garment?.category)
+      ),
+    [catalogProducts, garment?.category, selectedProduct?.category]
+  );
+  const detailTitle =
+    garment?.display_name || selectedProduct?.name || "Catalog Product";
+  const detailBrand =
+    garment?.brand || selectedProduct?.brand_model || "Tee & Co";
+  const detailDescription =
+    garment?.description ||
+    selectedProduct?.notes ||
+    selectedProduct?.product_type ||
+    "Custom garment configuration";
+  const detailCategory =
+    garment?.category || selectedProduct?.category || "Catalog";
+  const availableColors =
+    garment?.available_colors?.length
+      ? garment.available_colors
+      : selectedProduct?.colors?.length
+      ? selectedProduct.colors
+      : ["Black"];
+  const availableSizes =
+    garment?.available_sizes?.length
+      ? garment.available_sizes
+      : selectedProduct?.sizes?.length
+      ? selectedProduct.sizes
+      : ["One Size"];
+  const currentSelectedColor = availableColors.includes(selectedColor)
+    ? selectedColor
+    : availableColors[0] || "";
+  const currentSelectedSize = availableSizes.includes(selectedSize)
+    ? selectedSize
+    : availableSizes[0] || "";
 
-  const [selectedColor, setSelectedColor] = useState(
-    garment?.available_colors?.[0] || ""
-  );
-  const [selectedSize, setSelectedSize] = useState(
-    garment?.available_sizes?.[0] || ""
-  );
+  const [selectedColor, setSelectedColor] = useState("");
+  const [selectedSize, setSelectedSize] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
 
@@ -41,7 +86,7 @@ export default function GarmentView() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  if (!garment) {
+  if (!garment && !selectedProduct) {
     return (
       <div
         style={{
@@ -60,7 +105,7 @@ export default function GarmentView() {
     );
   }
 
-  const imageSrc = garment.image || "/garments/gildan-softstyle-tee.jpg";
+  const imageSrc = garment?.image || getStorefrontProductImage(selectedProduct);
   const startingPrice = resolveProductBasePrice(selectedProduct);
 
   const decreaseQuantity = () => {
@@ -71,8 +116,7 @@ export default function GarmentView() {
     setQuantity((prev) => prev + 1);
   };
 
-  const categorySlug =
-    garment.category?.toLowerCase().replace(/\s+/g, "-") || "catalog";
+  const categorySlug = storefrontCategory?.id || normalizeCategorySlug(detailCategory) || "catalog";
 
   return (
     <div
@@ -114,11 +158,11 @@ export default function GarmentView() {
             fontWeight: 600,
           }}
         >
-          {garment.category}
+          {detailCategory}
         </Link>
         <span>/</span>
         <span style={{ color: "#171717", fontWeight: 700 }}>
-          {garment.display_name}
+          {detailTitle}
         </span>
       </div>
 
@@ -159,7 +203,7 @@ export default function GarmentView() {
           >
             <img
               src={imageSrc}
-              alt={garment.display_name}
+              alt={detailTitle}
               style={{
                 width: "100%",
                 height: "100%",
@@ -187,13 +231,13 @@ export default function GarmentView() {
                 color: "#171717",
               }}
             >
-              Current Demo Selection
+              Current Selection
             </p>
             <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
-              Color: {selectedColor}
+              Color: {currentSelectedColor}
             </p>
             <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
-              Size: {selectedSize}
+              Size: {currentSelectedSize}
             </p>
             <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
               Quantity: {quantity}
@@ -219,7 +263,7 @@ export default function GarmentView() {
               color: "#78716c",
             }}
           >
-            {garment.brand}
+            {detailBrand}
           </p>
 
           <h1
@@ -231,7 +275,7 @@ export default function GarmentView() {
               letterSpacing: "-0.02em",
             }}
           >
-            {garment.display_name}
+            {detailTitle}
           </h1>
 
           <p
@@ -242,7 +286,7 @@ export default function GarmentView() {
               fontSize: isMobile ? "14px" : "15px",
             }}
           >
-            {garment.description}
+            {detailDescription}
           </p>
 
           <div
@@ -284,7 +328,7 @@ export default function GarmentView() {
                 gap: "8px",
               }}
             >
-              {garment.available_colors.map((color) => (
+              {availableColors.map((color) => (
                 <button
                   key={color}
                   onClick={() => setSelectedColor(color)}
@@ -292,11 +336,13 @@ export default function GarmentView() {
                     padding: "9px 14px",
                     borderRadius: "999px",
                     border:
-                      selectedColor === color
+                      currentSelectedColor === color
                         ? "2px solid #171717"
                         : "1px solid #d6d3d1",
-                    background: selectedColor === color ? "#171717" : "#ffffff",
-                    color: selectedColor === color ? "#ffffff" : "#171717",
+                    background:
+                      currentSelectedColor === color ? "#171717" : "#ffffff",
+                    color:
+                      currentSelectedColor === color ? "#ffffff" : "#171717",
                     cursor: "pointer",
                     fontWeight: 600,
                     fontSize: "14px",
@@ -326,7 +372,7 @@ export default function GarmentView() {
                 gap: "8px",
               }}
             >
-              {garment.available_sizes.map((size) => (
+              {availableSizes.map((size) => (
                 <button
                   key={size}
                   onClick={() => setSelectedSize(size)}
@@ -334,11 +380,13 @@ export default function GarmentView() {
                     padding: "9px 12px",
                     borderRadius: "12px",
                     border:
-                      selectedSize === size
+                      currentSelectedSize === size
                         ? "2px solid #171717"
                         : "1px solid #d6d3d1",
-                    background: selectedSize === size ? "#171717" : "#ffffff",
-                    color: selectedSize === size ? "#ffffff" : "#171717",
+                    background:
+                      currentSelectedSize === size ? "#171717" : "#ffffff",
+                    color:
+                      currentSelectedSize === size ? "#ffffff" : "#171717",
                     cursor: "pointer",
                     fontWeight: 600,
                     minWidth: "60px",
@@ -480,15 +528,15 @@ export default function GarmentView() {
             <Link
               to="/order-preview"
               state={{
-                garmentId: garment.garment_id,
-                productId: selectedProduct?.id || garment.product_id || "",
-                garmentName: garment.display_name,
-                brand: garment.brand,
-                category: garment.category,
-                description: garment.description,
+                garmentId: garment?.garment_id || "",
+                productId: selectedProduct?.id || garment?.product_id || "",
+                garmentName: detailTitle,
+                brand: detailBrand,
+                category: detailCategory,
+                description: detailDescription,
                 imageSrc,
-                selectedColor,
-                selectedSize,
+                selectedColor: currentSelectedColor,
+                selectedSize: currentSelectedSize,
                 quantity,
               }}
               style={{

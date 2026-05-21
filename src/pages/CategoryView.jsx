@@ -1,22 +1,28 @@
 import { Link, useParams } from "react-router-dom";
-import { categories, garments } from "../data/garments";
+import { useMemo } from "react";
+import { resolveProductBasePrice, useStoredProducts } from "../lib/productsStore";
+import {
+  getStorefrontCategoryById,
+  getStorefrontProductImage,
+  getStorefrontProductsByCategory,
+} from "../lib/storefrontCatalog";
 
-const garmentPricing = {
-  TSHIRT_GILDAN_64000: { single: "$14.50" },
-  TSHIRT_BELLA_3001: { single: "$18.00" },
-  HOODIE_GILDAN_18500: { single: "$32.00" },
-  HOODIE_IND_4000: { single: "$38.00" },
-  HAT_RICHARDSON_112: { single: "$24.00" },
-  HAT_FLEXFIT_6277: { single: "$26.00" },
-};
+function formatBasePrice(value) {
+  return Number.isFinite(value) && Number(value) > 0
+    ? `From $${Number(value).toFixed(2)}`
+    : "Price unavailable";
+}
 
 export default function CategoryView() {
   const { categoryId } = useParams();
-
-  const category = categories.find((c) => c.id === categoryId);
-
-  const categoryGarments = garments.filter(
-    (g) => g.category === category?.name
+  const storedProducts = useStoredProducts();
+  const category = useMemo(
+    () => getStorefrontCategoryById(storedProducts, categoryId),
+    [categoryId, storedProducts]
+  );
+  const categoryProducts = useMemo(
+    () => getStorefrontProductsByCategory(storedProducts, categoryId),
+    [categoryId, storedProducts]
   );
 
   if (!category) {
@@ -92,15 +98,11 @@ export default function CategoryView() {
           gap: "16px",
         }}
       >
-        {categoryGarments.map((item) => {
-          const pricing = garmentPricing[item.garment_id] || {
-            single: "$19.00",
-          };
-
+        {categoryProducts.map((item) => {
           return (
             <Link
-              key={item.garment_id}
-              to={`/garment/${item.garment_id}`}
+              key={item.id}
+              to={`/garment/${item.id}`}
               style={{
                 textDecoration: "none",
                 background: "#ffffff",
@@ -111,11 +113,10 @@ export default function CategoryView() {
                 color: "#171717",
                 display: "block",
               }}
-            >
-              {/* Image container */}
-              <div
-                style={{
-                  width: "100%",
+              >
+                <div
+                  style={{
+                    width: "100%",
                   aspectRatio: "1 / 1",
                   background: "#fafaf9",
                   borderRadius: "12px",
@@ -126,20 +127,17 @@ export default function CategoryView() {
                   padding: "10px",
                   overflow: "hidden",
                 }}
-              >
-                <img
-                  src={
-                    item.image ||
-                    "/garments/gildan-softstyle-tee.jpg"
-                  }
-                  alt={item.display_name}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "contain",
-                  }}
-                />
-              </div>
+                >
+                  <img
+                    src={getStorefrontProductImage(item)}
+                    alt={item.name}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "contain",
+                    }}
+                  />
+                </div>
 
               <h3
                 style={{
@@ -149,8 +147,8 @@ export default function CategoryView() {
                   lineHeight: 1.25,
                 }}
               >
-                {item.display_name}
-              </h3>
+                  {item.name}
+                </h3>
 
               <p
                 style={{
@@ -159,8 +157,8 @@ export default function CategoryView() {
                   fontSize: "13px",
                 }}
               >
-                {item.description}
-              </p>
+                  {item.notes || item.product_type || item.category}
+                </p>
 
               <div style={{ marginTop: "8px" }}>
                 <p
@@ -170,7 +168,7 @@ export default function CategoryView() {
                     fontWeight: 700,
                   }}
                 >
-                  From {pricing.single}
+                  {formatBasePrice(resolveProductBasePrice(item))}
                 </p>
               </div>
             </Link>

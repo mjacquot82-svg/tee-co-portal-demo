@@ -1,7 +1,22 @@
 import { Link } from "react-router-dom";
-import { categories, garments } from "../data/garments";
+import { useMemo } from "react";
+import {
+  buildStorefrontCategories,
+  getStorefrontProductImage,
+  getStorefrontProducts,
+} from "../lib/storefrontCatalog";
+import { useStoredProducts } from "../lib/productsStore";
 
 export default function Home() {
+  const storedProducts = useStoredProducts();
+  const storefrontProducts = useMemo(
+    () => getStorefrontProducts(storedProducts),
+    [storedProducts]
+  );
+  const categories = useMemo(
+    () => buildStorefrontCategories(storefrontProducts),
+    [storefrontProducts]
+  );
   const previewCardStyle = {
     textDecoration: "none",
     background: "#ffffff",
@@ -40,31 +55,21 @@ export default function Home() {
     display: "block",
   };
 
-  const popularGarments = [
-    {
-      title: "Gildan Softstyle T-Shirt",
-      subtitle: "Best for everyday team, brand, and event orders.",
-      image: "/garments/gildan-softstyle-tee.jpg",
-      to: "/category/tshirts",
-    },
-    {
-      title: "Heavy Blend Hoodie",
-      subtitle: "A reliable fleece option for staff, schools, and merch drops.",
-      image: "/garments/hoodies.PNG",
-      to: "/category/hoodies",
-    },
-    {
-      title: "Richardson 112 Hat",
-      subtitle: "Structured trucker style that works well for embroidery.",
-      image: "/garments/hat.PNG",
-      to: "/category/hats",
-    },
-  ];
+  const popularGarments = useMemo(
+    () =>
+      storefrontProducts.slice(0, 3).map((product) => ({
+        title: product?.name || product?.product_type || "Catalog Product",
+        subtitle:
+          product?.notes || product?.category || "Available for custom orders.",
+        image: getStorefrontProductImage(product),
+        to: `/garment/${product.id}`,
+      })),
+    [storefrontProducts]
+  );
 
-  function getCategoryImage(categoryName) {
-    const firstGarment = garments.find((g) => g.category === categoryName);
-    return firstGarment?.image || "/garments/gildan-softstyle-tee.jpg";
-  }
+  const primaryCategoryLink = categories[0]
+    ? `/category/${categories[0].id}`
+    : "/";
 
   function renderPreviewCard({ key, to, image, title, description }) {
     return (
@@ -84,7 +89,7 @@ export default function Home() {
         <p style={{ margin: "0 0 6px", fontSize: "12px", fontWeight: 700, letterSpacing: "0.08em", color: "#78716c", textTransform: "uppercase" }}>Custom Apparel Made Simple</p>
         <h2 style={{ margin: "0 0 6px", fontSize: "24px" }}>Start Your Custom Order</h2>
         <p style={{ margin: "0 0 14px", fontSize: "14px", color: "#78716c" }}>Upload artwork, choose garments, and request a quote in minutes.</p>
-        <Link to="/category/tshirts" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minHeight: "42px", padding: "0 16px", borderRadius: "12px", background: "#171717", color: "#ffffff", textDecoration: "none", fontSize: "14px", fontWeight: 700 }}>Start Order</Link>
+        <Link to={primaryCategoryLink} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minHeight: "42px", padding: "0 16px", borderRadius: "12px", background: "#171717", color: "#ffffff", textDecoration: "none", fontSize: "14px", fontWeight: 700 }}>Start Order</Link>
       </div>
 
       <div style={{ marginBottom: "24px" }}>
@@ -93,7 +98,7 @@ export default function Home() {
           {categories.map((category) => renderPreviewCard({
             key: category.id,
             to: `/category/${category.id}`,
-            image: getCategoryImage(category.name),
+            image: category.image,
             title: category.name,
             description: category.description,
           }))}

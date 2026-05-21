@@ -219,6 +219,8 @@ export default function Products() {
   const [selectedMethod, setSelectedMethod] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
+  const [saveError, setSaveError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   const placementOptions = normalizeListInput(form.placementsText);
   const editingProduct = editingProductId
@@ -407,8 +409,9 @@ export default function Products() {
     });
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
+    setSaveError("");
 
     const placements = placementOptions;
     const placementPrices = placements.reduce((accumulator, placement) => {
@@ -444,21 +447,37 @@ export default function Products() {
       notes: form.notes,
     };
 
-    if (editingProductId) {
-      updateStoredProduct(editingProductId, productPayload);
-    } else {
-      createStoredProduct(productPayload);
-    }
+    try {
+      setIsSaving(true);
 
-    resetForm();
-    pageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (editingProductId) {
+        await updateStoredProduct(editingProductId, productPayload);
+      } else {
+        await createStoredProduct(productPayload);
+      }
+
+      resetForm();
+      pageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (error) {
+      console.error("Product save failed", error);
+      setSaveError("Unable to save this product right now. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
-  function handleDelete(productId) {
-    deleteStoredProduct(productId);
+  async function handleDelete(productId) {
+    setSaveError("");
 
-    if (editingProductId === productId) {
-      resetForm();
+    try {
+      await deleteStoredProduct(productId);
+
+      if (editingProductId === productId) {
+        resetForm();
+      }
+    } catch (error) {
+      console.error("Product delete failed", error);
+      setSaveError("Unable to delete this product right now. Please try again.");
     }
   }
 
@@ -541,6 +560,22 @@ export default function Products() {
               <p style={{ margin: 0, color: "#475569", fontSize: "13px" }}>
                 Changes will update catalog pricing and order workflows.
               </p>
+            </div>
+          ) : null}
+
+          {saveError ? (
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: "14px",
+                border: "1px solid #fecaca",
+                background: "#fef2f2",
+                color: "#991b1b",
+                fontSize: "14px",
+                fontWeight: 600,
+              }}
+            >
+              {saveError}
             </div>
           ) : null}
 
@@ -787,6 +822,7 @@ export default function Products() {
           >
             <button
               type="submit"
+              disabled={isSaving}
               style={{
                 background: "#171717",
                 color: "#ffffff",
@@ -795,9 +831,10 @@ export default function Products() {
                 padding: "13px 18px",
                 fontWeight: 800,
                 cursor: "pointer",
+                opacity: isSaving ? 0.7 : 1,
               }}
             >
-              {editingProductId ? "Update Product" : "Save Product"}
+              {isSaving ? "Saving..." : editingProductId ? "Update Product" : "Save Product"}
             </button>
 
             {editingProductId ? (
