@@ -55,10 +55,12 @@ const emptyLibraryForm = {
 };
 
 function buildFormFromGarment(item, brands, categories, garmentModels, sizeLookups) {
+  const garmentModel = findLookupById(garmentModels, item?.garment_model_lookup_id);
+
   return {
     ...emptyLibraryForm,
     ...item,
-    garmentSearch: buildGarmentLibraryLabel(item, brands, categories, garmentModels),
+    garmentSearch: buildGarmentModelLabel(garmentModel, brands, categories),
     sizes: sortSizesByLookup(item?.sizes || [], sizeLookups),
     default_production_methods:
       item?.default_production_methods?.length ? item.default_production_methods : ["Screen Print"],
@@ -69,6 +71,14 @@ function buildVariantDraft() {
   return {
     name: "",
     supplier_sku: "",
+  };
+}
+
+function buildModelDraftFromModel(model, fallbackBrandId = "") {
+  return {
+    brand_id: model?.brand_id || fallbackBrandId || "",
+    display_name: model?.display_name || "",
+    model_code: model?.model_code || "",
   };
 }
 
@@ -90,11 +100,7 @@ export default function GarmentLibrary() {
   const [variantDraft, setVariantDraft] = useState(buildVariantDraft());
   const [brandDraft, setBrandDraft] = useState("");
   const [sizeDraft, setSizeDraft] = useState("");
-  const [modelDraft, setModelDraft] = useState({
-    brand_id: "",
-    display_name: "",
-    model_code: "",
-  });
+  const [modelDraft, setModelDraft] = useState(buildModelDraftFromModel());
 
   const filteredModels = useMemo(
     () =>
@@ -135,14 +141,41 @@ export default function GarmentLibrary() {
     setEditingId(null);
     setSaveError("");
     setVariantDraft(buildVariantDraft());
+    setBrandDraft("");
+    setSizeDraft("");
+    setModelDraft(buildModelDraftFromModel());
+    setVariantSearch("");
   }
 
   function updateField(event) {
     const { name, value, type, checked } = event.target;
-    setForm((current) => ({
-      ...current,
-      [name]: type === "checkbox" ? checked : value,
-    }));
+    setForm((current) => {
+      const nextValue = type === "checkbox" ? checked : value;
+      const nextForm = {
+        ...current,
+        [name]: nextValue,
+      };
+
+      if ((name === "brand_lookup_id" || name === "category_lookup_id") && current.garment_model_lookup_id) {
+        const selectedModel = garmentModels.find((model) => model.id === current.garment_model_lookup_id);
+        const nextBrandId = name === "brand_lookup_id" ? nextValue : nextForm.brand_lookup_id;
+        const nextCategoryId = name === "category_lookup_id" ? nextValue : nextForm.category_lookup_id;
+
+        if (
+          selectedModel &&
+          (selectedModel.brand_id !== nextBrandId || selectedModel.category_id !== nextCategoryId)
+        ) {
+          nextForm.garment_model_lookup_id = "";
+          nextForm.garmentSearch = "";
+        }
+      }
+
+      return nextForm;
+    });
+
+    if (name === "brand_lookup_id") {
+      setModelDraft((current) => ({ ...current, brand_id: value }));
+    }
   }
 
   function handleGarmentModelSearchChange(event) {
@@ -168,6 +201,7 @@ export default function GarmentLibrary() {
       garment_model_lookup_id: model.id,
       garmentSearch: buildGarmentModelLabel(model, brands, categories),
     }));
+    setModelDraft(buildModelDraftFromModel(model, brand?.id || ""));
   }
 
   function toggleSize(sizeName) {
@@ -253,6 +287,7 @@ export default function GarmentLibrary() {
 
     const created = await createCatalogLookup("brands", { name: nextName, active: true });
     setForm((current) => ({ ...current, brand_lookup_id: created.id }));
+    setModelDraft((current) => ({ ...current, brand_id: created.id }));
     setBrandDraft("");
   }
 
@@ -273,60 +308,79 @@ export default function GarmentLibrary() {
     setSizeDraft("");
   }
 
-  async function handleCreateModel() {
+  async function resolveGarmentModelForSave() {
     const displayName = normalizeText(modelDraft.display_name);
     const modelCode = normalizeText(modelDraft.model_code);
-    const brandId = modelDraft.brand_id || form.brand_lookup_id;
+    const brandId = form.brand_lookup_id || modelDraft.brand_id;
     const categoryId = form.category_lookup_id;
+    const selectedModel = garmentModels.find((model) => model.id === form.garment_model_lookup_id);
 
     if (!displayName || !brandId || !categoryId) {
-      setSaveError("Select a brand and category before creating a garment model.");
-      return;
+      throw new Error("Choose a category, brand, and garment model details before saving.");
     }
 
-    const created = await createCatalogLookup("garment_models", {
+    const selectedStillMatches =
+      selectedModel &&
+      selectedModel.brand_id === brandId &&
+      selectedModel.category_id === categoryId &&
+      normalizeTextKey(selectedModel.display_name) === normalizeTextKey(displayName) &&
+      normalizeTextKey(selectedModel.model_code) === normalizeTextKey(modelCode);
+
+    if (selectedStillMatches) {
+      return selectedModel;
+    }
+
+    const matchingModel = garmentModels.find(
+      (model) =>
+        model.brand_id === brandId &&
+        model.category_id === categoryId &&
+        normalizeTextKey(model.display_name) === normalizeTextKey(displayName) &&
+        normalizeTextKey(model.model_code) === normalizeTextKey(modelCode)
+    );
+
+    if (matchingModel) {
+      return matchingModel;
+    }
+
+    return createCatalogLookup("garment_models", {
       brand_id: brandId,
       model_code: modelCode,
       display_name: displayName,
       category_id: categoryId,
       active: true,
     });
-
-    handleGarmentModelSelect(created);
-    setModelDraft({ brand_id: brandId, display_name: "", model_code: "" });
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
     setSaveError("");
 
-    if (!form.garment_model_lookup_id) {
-      setSaveError("Select a garment model for this library item.");
-      return;
-    }
-
-    const payload = {
-      title: normalizeText(form.title),
-      category_lookup_id: form.category_lookup_id,
-      brand_lookup_id: form.brand_lookup_id,
-      garment_model_lookup_id: form.garment_model_lookup_id,
-      image: form.image,
-      sizes: sortSizesByLookup(uniqueList(form.sizes), sizes),
-      variants: form.variants
-        .map((variant) => ({
-          ...variant,
-          name: normalizeText(variant.name),
-          supplier_sku: normalizeText(variant.supplier_sku),
-        }))
-        .filter((variant) => variant.name),
-      default_placements: uniqueList(form.default_placements),
-      default_production_methods: uniqueList(form.default_production_methods),
-      notes: form.notes,
-      active: form.active,
-    };
-
     try {
       setIsSaving(true);
+      const garmentModel = await resolveGarmentModelForSave();
+      const brand = findLookupById(brands, garmentModel.brand_id);
+      const fallbackTitle = [brand?.name, garmentModel.model_code, garmentModel.display_name]
+        .filter(Boolean)
+        .join(" ");
+      const payload = {
+        title: normalizeText(form.title) || fallbackTitle,
+        category_lookup_id: form.category_lookup_id,
+        brand_lookup_id: form.brand_lookup_id,
+        garment_model_lookup_id: garmentModel.id,
+        image: form.image,
+        sizes: sortSizesByLookup(uniqueList(form.sizes), sizes),
+        variants: form.variants
+          .map((variant) => ({
+            ...variant,
+            name: normalizeText(variant.name),
+            supplier_sku: normalizeText(variant.supplier_sku),
+          }))
+          .filter((variant) => variant.name),
+        default_placements: uniqueList(form.default_placements),
+        default_production_methods: uniqueList(form.default_production_methods),
+        notes: form.notes,
+        active: form.active,
+      };
 
       if (editingId) {
         await updateGarmentLibraryItem(editingId, payload);
@@ -337,7 +391,7 @@ export default function GarmentLibrary() {
       resetForm();
     } catch (error) {
       console.error("Unable to save garment library item", error);
-      setSaveError("Unable to save this garment right now. Please try again.");
+      setSaveError(error?.message || "Unable to save this garment right now. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -357,134 +411,168 @@ export default function GarmentLibrary() {
 
           {saveError ? <div className="products-error-banner">{saveError}</div> : null}
 
-          <label style={labelStyle}>
-            Garment Title
-            <input
-              name="title"
-              value={form.title}
-              onChange={updateField}
-              placeholder="Richardson 112 Trucker"
-              required
-              style={fieldStyle}
-            />
-          </label>
-
-          <div className="products-editor-grid">
-            <label style={labelStyle}>
-              Category
-              <select
-                name="category_lookup_id"
-                value={form.category_lookup_id}
-                onChange={updateField}
-                style={fieldStyle}
-              >
-                <option value="">Select category</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label style={labelStyle}>
-              Brand
-              <select
-                name="brand_lookup_id"
-                value={form.brand_lookup_id}
-                onChange={updateField}
-                style={fieldStyle}
-              >
-                <option value="">Select brand</option>
-                {brands.map((brand) => (
-                  <option key={brand.id} value={brand.id}>
-                    {brand.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="products-inline-create-panel">
-            <input
-              value={brandDraft}
-              onChange={(event) => setBrandDraft(event.target.value)}
-              placeholder="Create new brand"
-              style={{ ...fieldStyle, flex: 1 }}
-            />
-            <button type="button" className="products-inline-save" onClick={handleCreateBrand}>
-              Save Brand
-            </button>
-          </div>
-
-          <SearchableLookupField
-            label="Garment Model"
-            value={form.garmentSearch}
-            onChange={handleGarmentModelSearchChange}
-            onSelect={handleGarmentModelSelect}
-            options={filteredModels}
-            placeholder="Search garment models"
-            helperText="Models stay normalized and reusable across the garment library and customer catalog."
-            renderOptionLabel={(model) => buildGarmentModelLabel(model, brands, categories)}
-            renderOptionMeta={(model) => {
-              const brand = findLookupById(brands, model.brand_id);
-              return [brand?.name, model.model_code].filter(Boolean).join(" • ");
-            }}
-          />
-
-          <div className="products-inline-model-panel">
-            <div className="products-inline-model-grid">
-              <input
-                value={modelDraft.display_name}
-                onChange={(event) =>
-                  setModelDraft((current) => ({ ...current, display_name: event.target.value }))
-                }
-                placeholder="New model display name"
-                style={fieldStyle}
-              />
-              <input
-                value={modelDraft.model_code}
-                onChange={(event) =>
-                  setModelDraft((current) => ({ ...current, model_code: event.target.value }))
-                }
-                placeholder="Model code"
-                style={fieldStyle}
-              />
+          <section className="products-editor-section">
+            <div className="products-section-header">
+              <div>
+                <p className="products-section-step">Section 1</p>
+                <h2>Basic Garment Info</h2>
+              </div>
+              <p>Set the core garment details first, then finish the rest of the setup before saving.</p>
             </div>
-            <button type="button" className="products-inline-save" onClick={handleCreateModel}>
-              Create Garment Model
-            </button>
-          </div>
 
-          <ProductImageUploader
-            image={form.image}
-            onImageChange={(image) => setForm((current) => ({ ...current, image }))}
-          />
+            <div className="products-editor-grid">
+              <label style={labelStyle}>
+                Category
+                <select
+                  name="category_lookup_id"
+                  value={form.category_lookup_id}
+                  onChange={updateField}
+                  style={fieldStyle}
+                >
+                  <option value="">Select category</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-          <MultiSelectLookupField
-            label="Available Sizes"
-            helperText="This becomes the reusable size run for storefront products built from this garment."
-            options={sizes.map((size) => ({ id: size.id, name: size.name }))}
-            selectedValues={form.sizes}
-            onToggle={toggleSize}
-            createHelper="Add a size below if it does not exist yet."
-          />
+              <label style={labelStyle}>
+                Brand
+                <select
+                  name="brand_lookup_id"
+                  value={form.brand_lookup_id}
+                  onChange={updateField}
+                  style={fieldStyle}
+                >
+                  <option value="">Select brand</option>
+                  {brands.map((brand) => (
+                    <option key={brand.id} value={brand.id}>
+                      {brand.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
-          <div className="products-inline-create-panel">
-            <input
-              value={sizeDraft}
-              onChange={(event) => setSizeDraft(event.target.value)}
-              placeholder="Create new size"
-              style={{ ...fieldStyle, flex: 1 }}
+            <details className="products-helper-details">
+              <summary className="products-helper-summary">Add a new brand</summary>
+              <div className="products-inline-create-panel">
+                <input
+                  value={brandDraft}
+                  onChange={(event) => setBrandDraft(event.target.value)}
+                  placeholder="Create new brand"
+                  style={{ ...fieldStyle, flex: 1 }}
+                />
+                <button type="button" className="products-inline-save" onClick={handleCreateBrand}>
+                  Save Brand
+                </button>
+              </div>
+            </details>
+
+            <div className="products-inline-model-grid">
+              <label style={labelStyle}>
+                Garment Model Name
+                <input
+                  value={modelDraft.display_name}
+                  onChange={(event) =>
+                    setModelDraft((current) => ({ ...current, display_name: event.target.value }))
+                  }
+                  placeholder="Unisex Jersey Tee"
+                  style={fieldStyle}
+                />
+              </label>
+              <label style={labelStyle}>
+                Garment Model Code
+                <input
+                  value={modelDraft.model_code}
+                  onChange={(event) =>
+                    setModelDraft((current) => ({ ...current, model_code: event.target.value }))
+                  }
+                  placeholder="3001"
+                  style={fieldStyle}
+                />
+              </label>
+            </div>
+
+            <label style={labelStyle}>
+              Garment Display Name
+              <input
+                name="title"
+                value={form.title}
+                onChange={updateField}
+                placeholder="Richardson 112 Trucker"
+                style={fieldStyle}
+              />
+            </label>
+
+            <SearchableLookupField
+              label="Use Existing Garment Model (Optional)"
+              value={form.garmentSearch}
+              onChange={handleGarmentModelSearchChange}
+              onSelect={handleGarmentModelSelect}
+              options={filteredModels}
+              placeholder="Search existing garment models"
+              helperText="If you pick an existing model, Save Garment will reuse it. If not, the model name and code above will be saved as a new garment model."
+              renderOptionLabel={(model) => buildGarmentModelLabel(model, brands, categories)}
+              renderOptionMeta={(model) => {
+                const brand = findLookupById(brands, model.brand_id);
+                return [brand?.name, model.model_code].filter(Boolean).join(" • ");
+              }}
             />
-            <button type="button" className="products-inline-save" onClick={handleCreateSize}>
-              Save Size
-            </button>
-          </div>
 
-          <div className="products-editor-section">
+            <ProductImageUploader
+              image={form.image}
+              onImageChange={(image) => setForm((current) => ({ ...current, image }))}
+            />
+          </section>
+
+          <section className="products-editor-section">
+            <div className="products-section-header">
+              <div>
+                <p className="products-section-step">Section 2</p>
+                <h2>Available Sizes</h2>
+              </div>
+              <p>Select the size run this garment should support.</p>
+            </div>
+
+            <MultiSelectLookupField
+              label="Available Sizes"
+              helperText="This becomes the reusable size run for storefront products built from this garment."
+              options={sizes.map((size) => ({ id: size.id, name: size.name }))}
+              selectedValues={form.sizes}
+              onToggle={toggleSize}
+              createHelper="Add a size below if it does not exist yet."
+            />
+
+            <details className="products-helper-details">
+              <summary className="products-helper-summary">Add a new size</summary>
+              <div className="products-inline-create-panel">
+                <input
+                  value={sizeDraft}
+                  onChange={(event) => setSizeDraft(event.target.value)}
+                  placeholder="Create new size"
+                  style={{ ...fieldStyle, flex: 1 }}
+                />
+                <button type="button" className="products-inline-save" onClick={handleCreateSize}>
+                  Save Size
+                </button>
+              </div>
+            </details>
+          </section>
+
+          <section className="products-editor-section">
+            <div className="products-section-header">
+              <div>
+                <p className="products-section-step">Section 3</p>
+                <h2>Supplier Variants / Colors</h2>
+              </div>
+              <p>Capture supplier-facing colors and SKUs without interrupting the main setup flow.</p>
+            </div>
+
             <div className="products-multiselect-header">
-              <strong>Supplier Variants / Colors</strong>
+              <strong>Variant List</strong>
               <p>Large variant lists and supplier SKUs belong here, not on the storefront publishing form.</p>
             </div>
 
@@ -558,13 +646,14 @@ export default function GarmentLibrary() {
                 <div className="products-selection-empty">No variants added yet.</div>
               )}
             </div>
-          </div>
+          </section>
 
           <details className="products-editor-section products-advanced-section" open>
             <summary className="products-advanced-summary">
               <div>
+                <p className="products-section-step">Section 4</p>
                 <strong>Garment Defaults</strong>
-                <span>Store reusable production defaults here so storefront products can inherit them.</span>
+                <span>Store reusable placements and production defaults here so storefront products can inherit them.</span>
               </div>
             </summary>
 
@@ -613,25 +702,35 @@ export default function GarmentLibrary() {
             </div>
           </details>
 
-          <label style={labelStyle}>
-            Notes
-            <textarea
-              name="notes"
-              value={form.notes}
-              onChange={updateField}
-              placeholder="Supplier or garment setup notes."
-              style={{ ...fieldStyle, minHeight: "96px", resize: "vertical" }}
-            />
-          </label>
+          <section className="products-editor-section">
+            <div className="products-section-header">
+              <div>
+                <p className="products-section-step">Section 5</p>
+                <h2>Notes / Active Status</h2>
+              </div>
+              <p>Leave internal setup notes here and control whether this garment stays active.</p>
+            </div>
 
-          <label style={labelStyle}>
-            Active
-            <input type="checkbox" name="active" checked={form.active} onChange={updateField} />
-          </label>
+            <label style={labelStyle}>
+              Notes
+              <textarea
+                name="notes"
+                value={form.notes}
+                onChange={updateField}
+                placeholder="Supplier or garment setup notes."
+                style={{ ...fieldStyle, minHeight: "96px", resize: "vertical" }}
+              />
+            </label>
+
+            <label className="products-status-row">
+              <span>Active Garment</span>
+              <input type="checkbox" name="active" checked={form.active} onChange={updateField} />
+            </label>
+          </section>
 
           <div style={{ display: "grid", gridTemplateColumns: editingId ? "1fr 1fr" : "1fr", gap: "10px" }}>
             <button type="submit" disabled={isSaving} className="products-primary-button">
-              {isSaving ? "Saving..." : editingId ? "Update Garment" : "Save Garment"}
+              {isSaving ? "Saving..." : "Save Garment"}
             </button>
 
             {editingId ? (
@@ -727,6 +826,12 @@ export default function GarmentLibrary() {
                         onClick={() => {
                           setEditingId(item.id);
                           setForm(buildFormFromGarment(item, brands, categories, garmentModels, sizes));
+                          setModelDraft(
+                            buildModelDraftFromModel(
+                              findLookupById(garmentModels, item.garment_model_lookup_id),
+                              item.brand_lookup_id
+                            )
+                          );
                           editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
                         }}
                         className="products-card-button"
