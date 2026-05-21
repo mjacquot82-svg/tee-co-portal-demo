@@ -16,6 +16,33 @@ let productsLoadStarted = false;
 let productsLoadPromise = null;
 let hasLoadedProductsFromSupabase = false;
 
+const PRODUCTS_SELECT_FIELDS = [
+  "id",
+  "legacy_product_id",
+  "sku",
+  "name",
+  "category",
+  "product_type",
+  "brand_model",
+  "status",
+  "image",
+  "colors",
+  "sizes",
+  "placements",
+  "placement_config",
+  "placement_prices",
+  "production_methods",
+  "decoration_types",
+  "production_method_prices",
+  "cost_price",
+  "markup_percentage",
+  "base_garment_price",
+  "unit_price",
+  "notes",
+  "created_at",
+  "updated_at",
+].join(", ");
+
 function emitProductsUpdated() {
   productListeners.forEach((listener) => {
     listener();
@@ -122,6 +149,12 @@ function normalizeList(value) {
 
 function normalizeStatusValue(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function buildPersistentStatus(value, fallback = "Active") {
+  const normalizedValue = normalizeStatusValue(value);
+  if (!normalizedValue) return fallback;
+  return normalizedValue === "active" ? "Active" : "Inactive";
 }
 
 function normalizePlacementPrices(placements, value) {
@@ -336,15 +369,46 @@ function getLocalProductsSnapshot() {
 }
 
 function buildSupabaseProductRecord(product = {}, options = {}) {
+  const normalizedStatus =
+    product.active !== undefined && !Object.prototype.hasOwnProperty.call(product, "status")
+      ? product.active
+        ? "Active"
+        : "Inactive"
+      : buildPersistentStatus(product.status);
+
   const record = {
+    legacy_product_id: product.legacy_product_id || null,
+    sku: product.sku || "",
     name: product.name || "",
     category: product.category || "Catalog",
+    product_type: product.product_type || product.type || product.name || "",
+    brand_model: product.brand_model || "",
+    status: normalizedStatus,
     image: product.image || "",
-    active:
-      typeof product.active === "boolean"
-        ? product.active
-        : normalizeStatusValue(product.status) === "active",
-    price: resolveProductBasePrice(product) ?? normalizeNumericPrice(product.price) ?? 0,
+    colors: normalizeList(product.colors),
+    sizes: normalizeList(product.sizes),
+    placements: normalizeList(product.placements),
+    placement_config: buildPlacementConfig(
+      Array.isArray(product.placement_config) && product.placement_config.length
+        ? product.placement_config
+        : product.placements,
+      product.placement_prices || {}
+    ),
+    placement_prices: product.placement_prices || {},
+    production_methods: Array.isArray(product.production_methods)
+      ? product.production_methods
+      : [],
+    decoration_types: Array.isArray(product.decoration_types)
+      ? product.decoration_types
+      : Array.isArray(product.production_methods)
+      ? product.production_methods
+      : [],
+    production_method_prices: product.production_method_prices || {},
+    cost_price: normalizeNumericPrice(product.cost_price) ?? 0,
+    markup_percentage: normalizeNumericPrice(product.markup_percentage) ?? 0,
+    base_garment_price: resolveProductBasePrice(product),
+    unit_price: resolveProductBasePrice(product),
+    notes: product.notes || "",
   };
 
   if (options.includeId && product.id) {
@@ -357,12 +421,24 @@ function buildSupabaseProductRecord(product = {}, options = {}) {
 function normalizeSupabaseProduct(product = {}) {
   return normalizeProduct({
     ...product,
-    status: product?.active === false ? "Archived" : "Active",
-    price: normalizeNumericPrice(product?.price),
-    base_price: normalizeNumericPrice(product?.price),
-    unit_price: normalizeNumericPrice(product?.price),
-    base_garment_price: normalizeNumericPrice(product?.price),
-    calculated_base_price: normalizeNumericPrice(product?.price),
+    status: buildPersistentStatus(
+      product?.status ?? (product?.active === false ? "Inactive" : "Active")
+    ),
+    price: normalizeNumericPrice(
+      product?.unit_price ?? product?.base_garment_price ?? product?.price
+    ),
+    base_price: normalizeNumericPrice(
+      product?.unit_price ?? product?.base_garment_price ?? product?.price
+    ),
+    unit_price: normalizeNumericPrice(
+      product?.unit_price ?? product?.base_garment_price ?? product?.price
+    ),
+    base_garment_price: normalizeNumericPrice(
+      product?.base_garment_price ?? product?.unit_price ?? product?.price
+    ),
+    calculated_base_price: normalizeNumericPrice(
+      product?.unit_price ?? product?.base_garment_price ?? product?.price
+    ),
   });
 }
 
@@ -375,7 +451,7 @@ async function fetchProductsFromSupabase() {
 
   const { data, error } = await supabase
     .from("products")
-    .select("id, created_at, name, category, price, image, active")
+    .select(PRODUCTS_SELECT_FIELDS)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -502,7 +578,7 @@ export async function createStoredProduct(productInput) {
   );
   const product = normalizeProduct({
     ...productInput,
-    status: productInput.status || "Active",
+    status: buildPersistentStatus(productInput.status),
     colors: normalizeList(productInput.colors),
     sizes: normalizeList(productInput.sizes),
     placements,
@@ -524,7 +600,7 @@ export async function createStoredProduct(productInput) {
   const { data, error } = await supabase
     .from("products")
     .insert(buildSupabaseProductRecord(product, { includeId: true }))
-    .select("id, created_at, name, category, price, image, active")
+    .select(PRODUCTS_SELECT_FIELDS)
     .single();
 
   if (error) {
@@ -569,6 +645,9 @@ export async function updateStoredProduct(productId, updates) {
     return normalizeProduct({
       ...product,
       ...updates,
+      status: hasOwn("status")
+        ? buildPersistentStatus(updates.status)
+        : buildPersistentStatus(product.status),
       colors: hasOwn("colors") ? normalizeList(updates.colors) : product.colors,
       sizes: hasOwn("sizes") ? normalizeList(updates.sizes) : product.sizes,
       placements,
@@ -592,7 +671,7 @@ export async function updateStoredProduct(productId, updates) {
     .from("products")
     .update(buildSupabaseProductRecord(updatedProduct))
     .eq("id", productId)
-    .select("id, created_at, name, category, price, image, active")
+    .select(PRODUCTS_SELECT_FIELDS)
     .single();
 
   if (error) {

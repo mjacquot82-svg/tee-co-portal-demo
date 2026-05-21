@@ -45,6 +45,7 @@ create table if not exists public.products (
   name text not null,
   category text default '',
   product_type text default '',
+  brand_model text default '',
   status text not null default 'Active',
   image text default '',
   colors jsonb not null default '[]'::jsonb,
@@ -53,6 +54,7 @@ create table if not exists public.products (
   placement_config jsonb not null default '[]'::jsonb,
   placement_prices jsonb not null default '{}'::jsonb,
   production_methods jsonb not null default '[]'::jsonb,
+  decoration_types jsonb not null default '[]'::jsonb,
   production_method_prices jsonb not null default '{}'::jsonb,
   cost_price numeric(10, 2) not null default 0,
   markup_percentage numeric(10, 2) not null default 0,
@@ -194,4 +196,3 @@ create trigger set_activity_logs_updated_at
 before update on public.activity_logs
 for each row
 execute function public.set_updated_at();
-
