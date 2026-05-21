@@ -1,6 +1,10 @@
 import { Link, useParams } from "react-router-dom";
 import { useMemo } from "react";
-import { resolveProductBasePrice, useStoredProducts } from "../lib/productsStore";
+import {
+  areStoredProductsReady,
+  resolveProductBasePrice,
+  useStoredProducts,
+} from "../lib/productsStore";
 import {
   getStorefrontCategoryById,
   getStorefrontProductImage,
@@ -16,6 +20,7 @@ function formatBasePrice(value) {
 export default function CategoryView() {
   const { categoryId } = useParams();
   const storedProducts = useStoredProducts();
+  const productsReady = areStoredProductsReady();
   const category = useMemo(
     () => getStorefrontCategoryById(storedProducts, categoryId),
     [categoryId, storedProducts]
@@ -24,6 +29,20 @@ export default function CategoryView() {
     () => getStorefrontProductsByCategory(storedProducts, categoryId),
     [categoryId, storedProducts]
   );
+
+  if (!productsReady) {
+    return (
+      <div
+        style={{
+          maxWidth: "720px",
+          margin: "0 auto",
+          padding: "12px 14px 24px",
+          fontFamily:
+            'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        }}
+      />
+    );
+  }
 
   if (!category) {
     return (

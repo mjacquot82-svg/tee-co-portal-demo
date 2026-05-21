@@ -15,6 +15,7 @@ let cachedProductsSnapshot = EMPTY_PRODUCTS;
 let cachedDefaultProductsSnapshot = null;
 let productsLoadStarted = false;
 let productsLoadPromise = null;
+let hasLoadedProductsFromSupabase = false;
 
 function emitProductsUpdated() {
   productListeners.forEach((listener) => {
@@ -218,6 +219,10 @@ function normalizeList(value) {
     .filter(Boolean);
 }
 
+function normalizeStatusValue(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
 function normalizePlacementPrices(placements, value) {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return placements.reduce((prices, placement) => {
@@ -412,6 +417,32 @@ function setProductsSnapshot(products) {
   return normalizedProducts;
 }
 
+function getLocalProductsSnapshot() {
+  if (!hasBrowserStorage()) return getDefaultProductsSnapshot();
+
+  try {
+    const rawProducts = getRawStorageItem(STORAGE_KEY);
+    const storageRawProducts = rawProducts || "";
+
+    if (storageRawProducts === cachedProductsStorageRaw) {
+      return cachedProductsSnapshot;
+    }
+
+    const parsedProducts = rawProducts ? JSON.parse(rawProducts) : getDefaultProductsSnapshot();
+    const { normalizedProducts } = cacheProductsSnapshot(parsedProducts);
+
+    cachedProductsStorageRaw = storageRawProducts;
+
+    return normalizedProducts;
+  } catch (error) {
+    console.error("Unable to read Tee & Co products", error);
+    cachedProductsStorageRaw = null;
+    cachedProductsSnapshotRaw = null;
+    cachedProductsSnapshot = getDefaultProductsSnapshot();
+    return cachedProductsSnapshot;
+  }
+}
+
 function buildSupabaseProductRecord(product = {}, options = {}) {
   const record = {
     name: product.name || "",
@@ -420,7 +451,7 @@ function buildSupabaseProductRecord(product = {}, options = {}) {
     active:
       typeof product.active === "boolean"
         ? product.active
-        : normalizeProductStatus(product.status) === "active",
+        : normalizeStatusValue(product.status) === "active",
     price: resolveProductBasePrice(product) ?? normalizeNumericPrice(product.price) ?? 0,
   };
 
@@ -448,6 +479,8 @@ async function fetchProductsFromSupabase() {
     return null;
   }
 
+  console.info("[productsStore] Fetching storefront products from Supabase");
+
   const { data, error } = await supabase
     .from("products")
     .select("id, created_at, name, category, price, image, active")
@@ -458,16 +491,24 @@ async function fetchProductsFromSupabase() {
     throw error;
   }
 
-  return Array.isArray(data) ? data.map(normalizeSupabaseProduct).filter(Boolean) : [];
+  const normalizedProducts = Array.isArray(data)
+    ? data.map(normalizeSupabaseProduct).filter(Boolean)
+    : [];
+  console.info(
+    "[productsStore] Supabase storefront products fetched",
+    normalizedProducts.length
+  );
+  return normalizedProducts;
 }
 
 export async function refreshStoredProducts() {
   const remoteProducts = await fetchProductsFromSupabase();
 
   if (!remoteProducts) {
-    return getStoredProducts();
+    return getLocalProductsSnapshot();
   }
 
+  hasLoadedProductsFromSupabase = true;
   return setProductsSnapshot(remoteProducts);
 }
 
@@ -484,7 +525,7 @@ function ensureStoredProductsLoaded() {
   productsLoadPromise = refreshStoredProducts()
     .catch((error) => {
       console.error("Falling back to cached Tee & Co products", error);
-      return getStoredProducts();
+      return cachedProductsSnapshot;
     })
     .finally(() => {
       productsLoadPromise = null;
@@ -494,29 +535,23 @@ function ensureStoredProductsLoaded() {
 }
 
 export function getStoredProducts() {
-  if (!hasBrowserStorage()) return getDefaultProductsSnapshot();
-
-  try {
-    const rawProducts = getRawStorageItem(STORAGE_KEY);
-    const storageRawProducts = rawProducts || "";
-
-    if (storageRawProducts === cachedProductsStorageRaw) {
+  if (isSupabaseConfigured && supabase) {
+    if (hasLoadedProductsFromSupabase || productsLoadStarted) {
       return cachedProductsSnapshot;
     }
 
-    const parsedProducts = rawProducts ? JSON.parse(rawProducts) : getDefaultProductsSnapshot();
-    const { normalizedProducts } = cacheProductsSnapshot(parsedProducts);
-
-    cachedProductsStorageRaw = storageRawProducts;
-
-    return normalizedProducts;
-  } catch (error) {
-    console.error("Unable to read Tee & Co products", error);
-    cachedProductsStorageRaw = null;
-    cachedProductsSnapshotRaw = null;
-    cachedProductsSnapshot = getDefaultProductsSnapshot();
-    return cachedProductsSnapshot;
+    return EMPTY_PRODUCTS;
   }
+
+  return getLocalProductsSnapshot();
+}
+
+export function areStoredProductsReady() {
+  if (!isSupabaseConfigured || !supabase) {
+    return true;
+  }
+
+  return hasLoadedProductsFromSupabase;
 }
 
 export function saveStoredProducts(products) {

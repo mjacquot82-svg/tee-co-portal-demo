@@ -2,7 +2,11 @@ import { Link, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { garments } from "../data/garments";
 import { findProductForGarment } from "../lib/orderConfiguration";
-import { resolveProductBasePrice, useStoredProducts } from "../lib/productsStore";
+import {
+  areStoredProductsReady,
+  resolveProductBasePrice,
+  useStoredProducts,
+} from "../lib/productsStore";
 import {
   getStorefrontCategoryById,
   getStorefrontProductImage,
@@ -22,6 +26,7 @@ function formatBasePrice(value) {
 export default function GarmentView() {
   const { garmentId } = useParams();
   const catalogProducts = useStoredProducts();
+  const productsReady = areStoredProductsReady();
   const productById = useMemo(
     () => catalogProducts.find((product) => product.id === garmentId) || null,
     [catalogProducts, garmentId]
@@ -85,6 +90,20 @@ export default function GarmentView() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  if (!productsReady && !garment) {
+    return (
+      <div
+        style={{
+          maxWidth: "1100px",
+          margin: "0 auto",
+          padding: "16px 20px 24px",
+          fontFamily:
+            'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        }}
+      />
+    );
+  }
 
   if (!garment && !selectedProduct) {
     return (
