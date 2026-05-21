@@ -25,6 +25,12 @@ function formatBasePrice(value) {
 
 export default function GarmentView() {
   const { garmentId } = useParams();
+  const [selectedColor, setSelectedColor] = useState("");
+  const [selectedSize, setSelectedSize] = useState("");
+  const [quantity, setQuantity] = useState(1);
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth < 900 : false
+  );
   const catalogProducts = useStoredProducts();
   const productsReady = areStoredProductsReady();
   const productById = useMemo(
@@ -77,11 +83,6 @@ export default function GarmentView() {
     ? selectedSize
     : availableSizes[0] || "";
 
-  const [selectedColor, setSelectedColor] = useState("");
-  const [selectedSize, setSelectedSize] = useState("");
-  const [quantity, setQuantity] = useState(1);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
-
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 900);
@@ -90,6 +91,28 @@ export default function GarmentView() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    if (!availableColors.length) {
+      setSelectedColor("");
+      return;
+    }
+
+    if (!availableColors.includes(selectedColor)) {
+      setSelectedColor(availableColors[0]);
+    }
+  }, [availableColors, selectedColor]);
+
+  useEffect(() => {
+    if (!availableSizes.length) {
+      setSelectedSize("");
+      return;
+    }
+
+    if (!availableSizes.includes(selectedSize)) {
+      setSelectedSize(availableSizes[0]);
+    }
+  }, [availableSizes, selectedSize]);
 
   if (!productsReady && !garment) {
     return (
@@ -101,7 +124,11 @@ export default function GarmentView() {
           fontFamily:
             'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         }}
-      />
+      >
+        <p style={{ margin: 0, color: "#57534e", fontSize: "14px" }}>
+          Loading product details...
+        </p>
+      </div>
     );
   }
 
@@ -126,6 +153,10 @@ export default function GarmentView() {
 
   const imageSrc = garment?.image || getStorefrontProductImage(selectedProduct);
   const startingPrice = resolveProductBasePrice(selectedProduct);
+  const availablePlacements =
+    selectedProduct?.placement_config?.length
+      ? selectedProduct.placement_config
+      : (garment?.placements_allowed || []).map((label) => ({ id: label, label }));
 
   const decreaseQuantity = () => {
     setQuantity((prev) => Math.max(1, prev - 1));
@@ -448,7 +479,7 @@ export default function GarmentView() {
                 flexWrap: "wrap",
               }}
             >
-              {(selectedProduct?.placement_config || []).map((placement) => (
+              {availablePlacements.map((placement) => (
                 <span
                   key={placement.id || placement.label}
                   style={{
@@ -463,6 +494,20 @@ export default function GarmentView() {
                   {placement.label}
                 </span>
               ))}
+              {!availablePlacements.length ? (
+                <span
+                  style={{
+                    fontSize: "12px",
+                    padding: "7px 10px",
+                    borderRadius: "999px",
+                    background: "#fafaf9",
+                    border: "1px solid #e7e5e4",
+                    color: "#78716c",
+                  }}
+                >
+                  Placement details available during quote review
+                </span>
+              ) : null}
             </div>
           </div>
 
