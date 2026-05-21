@@ -47,6 +47,210 @@
   gap: 12px;
 }
 
+.products-library-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.products-field-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.products-inline-action,
+.products-inline-save,
+.products-inline-cancel {
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.products-inline-action {
+  border: 1px solid #d6d3d1;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.products-inline-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.products-inline-save {
+  border: 1px solid #171717;
+  background: #171717;
+  color: #ffffff;
+}
+
+.products-inline-cancel {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+}
+
+.products-inline-create-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.products-inline-model-panel {
+  border: 1px solid #dbe4ee;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.products-inline-model-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.products-inline-meta {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  color: #475569;
+  font-size: 13px;
+}
+
+.products-compatibility-card {
+  border: 1px solid #dbe4ee;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.products-compatibility-card span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.products-compatibility-card strong {
+  color: #0f172a;
+}
+
+.products-compatibility-card p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.products-multiselect {
+  border: 1px solid #dbe4ee;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.products-multiselect-header strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.products-multiselect-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.products-selection-chip-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.products-selection-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #0f172a;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.products-selection-chip.is-legacy {
+  border-style: dashed;
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+
+.products-selection-chip strong {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.products-selection-swatch,
+.products-option-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  flex-shrink: 0;
+}
+
+.products-selection-empty {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.products-multiselect-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.products-multiselect-panel {
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.products-option-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.products-legacy-note {
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .products-price-row {
   display: grid;
   gap: 10px;
@@ -354,9 +558,12 @@
 
 @media (max-width: 720px) {
   .products-editor-grid,
+  .products-library-grid,
+  .products-inline-model-grid,
   .products-card-detail-grid,
   .products-toolbar,
-  .products-stat-row {
+  .products-stat-row,
+  .products-multiselect-toolbar {
     grid-template-columns: 1fr;
   }
 
@@ -377,7 +584,10 @@
 
   .products-card-topline,
   .products-card-actions,
-  .products-catalog-header {
+  .products-catalog-header,
+  .products-inline-create-panel,
+  .products-inline-meta,
+  .products-field-footer {
     flex-direction: column;
     align-items: stretch;
   }

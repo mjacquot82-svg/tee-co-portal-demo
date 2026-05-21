@@ -3,6 +3,10 @@ import "./Products.css";
 import ProductPricingFields from "../components/ProductPricingFields";
 import { PRODUCTION_TYPES } from "../constants/productionTypes";
 import {
+  createCatalogLookup,
+  useCatalogLookups,
+} from "../lib/catalogLookupsStore";
+import {
   buildPlacementConfig,
   createStoredProduct,
   deleteStoredProduct,
@@ -49,21 +53,54 @@ function PencilIcon({ color = "#0f172a", size = 18 }) {
 
 const emptyProduct = {
   name: "",
-  category: "T-Shirt",
+  category: "T-Shirts",
   product_type: "",
+  brand_name: "",
   brand_model: "",
+  selectedGarmentModelId: "",
+  garmentModelText: "",
   image: "",
   cost_price: "0",
   markup_percentage: "0",
   status: "Active",
-  colors: "Black, White",
-  sizes: "S, M, L, XL",
+  colors: ["Black", "White"],
+  sizes: ["S", "M", "L", "XL"],
   placementsText: "Left Chest, Full Front, Full Back",
   placementPriceMap: {},
   production_methods: ["Screen Print"],
   production_method_prices: {},
   notes: "",
 };
+
+function normalizeText(value) {
+  return String(value || "").trim();
+}
+
+function normalizeTextKey(value) {
+  return normalizeText(value).toLowerCase();
+}
+
+function normalizeListInput(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeText(item)).filter(Boolean);
+  }
+
+  return String(value || "")
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function uniqueList(values = []) {
+  const seen = new Set();
+
+  return values.filter((value) => {
+    const key = normalizeTextKey(value);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 function formatMoney(value, fallback = "Not set") {
   if (value === null || value === undefined || value === "") return fallback;
@@ -92,13 +129,6 @@ function formatPercent(value, fallback = "Not set") {
   return `${parsedValue.toFixed(0)}%`;
 }
 
-function normalizeListInput(value) {
-  return String(value || "")
-    .split(/[\n,]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
 function buildPlacementPriceMap(placements, existing = {}) {
   return placements.reduce((accumulator, placement) => {
     accumulator[placement] =
@@ -119,7 +149,52 @@ function buildMethodPriceMap(methods, existing = {}) {
   }, {});
 }
 
-function buildFormFromProduct(product) {
+function findLookupByName(options = [], value = "") {
+  const normalizedValue = normalizeTextKey(value);
+  if (!normalizedValue) return null;
+  return options.find((option) => normalizeTextKey(option?.name) === normalizedValue) || null;
+}
+
+function findBrandById(brands = [], brandId = "") {
+  return brands.find((brand) => brand.id === brandId) || null;
+}
+
+function findCategoryById(categories = [], categoryId = "") {
+  return categories.find((category) => category.id === categoryId) || null;
+}
+
+function buildGarmentModelLabel(model, brands = [], categories = []) {
+  if (!model) return "";
+
+  const brand = findBrandById(brands, model.brand_id);
+  const category = findCategoryById(categories, model.category_id);
+  const parts = [
+    brand?.name,
+    model?.model_code,
+    model?.display_name,
+    category?.name,
+  ].filter(Boolean);
+
+  return parts.join(" · ");
+}
+
+function buildLegacyBrandModelValue(brand, model, fallbackValue = "") {
+  if (brand && model?.model_code) {
+    return `${brand.name} ${model.model_code}`;
+  }
+
+  if (brand && model?.display_name) {
+    return `${brand.name} ${model.display_name}`;
+  }
+
+  if (brand) {
+    return brand.name;
+  }
+
+  return fallbackValue;
+}
+
+function buildFormFromProduct(product, brands = [], garmentModels = []) {
   const safeProduct = product && typeof product === "object" ? product : {};
   const placements = getProductPlacementConfig(safeProduct).map(
     (placement) => placement.label
@@ -127,12 +202,29 @@ function buildFormFromProduct(product) {
   const productionMethods = safeProduct?.production_methods?.length
     ? safeProduct.production_methods
     : safeProduct?.decoration_types?.length
-    ? safeProduct.decoration_types
-    : ["Screen Print"];
+      ? safeProduct.decoration_types
+      : ["Screen Print"];
+  const inferredBrand =
+    brands.find((brand) =>
+      normalizeTextKey(safeProduct?.brand_model).startsWith(
+        normalizeTextKey(brand?.name)
+      )
+    ) || null;
+  const inferredModel =
+    garmentModels.find((model) =>
+      safeProduct?.brand_model &&
+      normalizeTextKey(safeProduct.brand_model).includes(
+        normalizeTextKey(model?.model_code)
+      )
+    ) || null;
 
   return {
     ...emptyProduct,
     ...safeProduct,
+    brand_name: inferredBrand?.name || "",
+    brand_model: safeProduct?.brand_model || "",
+    selectedGarmentModelId: inferredModel?.id || "",
+    garmentModelText: "",
     product_type: safeProduct?.product_type || safeProduct?.name || "",
     cost_price:
       safeProduct?.cost_price === null || safeProduct?.cost_price === undefined
@@ -143,8 +235,12 @@ function buildFormFromProduct(product) {
       safeProduct?.markup_percentage === undefined
         ? ""
         : String(safeProduct.markup_percentage),
-    colors: Array.isArray(safeProduct?.colors) ? safeProduct.colors.join(", ") : "",
-    sizes: Array.isArray(safeProduct?.sizes) ? safeProduct.sizes.join(", ") : "",
+    colors: Array.isArray(safeProduct?.colors)
+      ? uniqueList(safeProduct.colors)
+      : normalizeListInput(safeProduct?.colors),
+    sizes: Array.isArray(safeProduct?.sizes)
+      ? uniqueList(safeProduct.sizes)
+      : normalizeListInput(safeProduct?.sizes),
     placementsText: placements.join(", "),
     placementPriceMap: buildPlacementPriceMap(
       placements,
@@ -205,12 +301,182 @@ function buildFilterOptions(products, key) {
   ).sort((left, right) => left.localeCompare(right));
 }
 
+function LookupInputField({
+  label,
+  value,
+  onChange,
+  listId,
+  options,
+  placeholder,
+  helperText,
+  action,
+  renderOptionLabel = (option) => option?.name || "",
+}) {
+  return (
+    <label style={labelStyle}>
+      {label}
+      <input
+        value={value}
+        onChange={onChange}
+        list={listId}
+        placeholder={placeholder}
+        style={fieldStyle}
+      />
+      <datalist id={listId}>
+        {options.map((option) => {
+          const labelValue = renderOptionLabel(option);
+          return <option key={option.id || labelValue} value={labelValue} />;
+        })}
+      </datalist>
+      <div className="products-field-footer">
+        <span>{helperText}</span>
+        {action}
+      </div>
+    </label>
+  );
+}
+
+function MultiSelectLookupField({
+  label,
+  helperText,
+  options,
+  selectedValues,
+  onToggle,
+  onCreate,
+  createLabel,
+  createHelper,
+  showColorSwatch = false,
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const normalizedSearch = normalizeTextKey(searchTerm);
+  const selectedSet = new Set(selectedValues.map((value) => normalizeTextKey(value)));
+
+  const filteredOptions = useMemo(() => {
+    if (!normalizedSearch) return options;
+
+    return options.filter((option) =>
+      normalizeTextKey(option?.name).includes(normalizedSearch)
+    );
+  }, [options, normalizedSearch]);
+
+  const hasExactMatch = options.some(
+    (option) => normalizeTextKey(option?.name) === normalizedSearch
+  );
+  const legacySelections = selectedValues.filter(
+    (value) =>
+      !options.some((option) => normalizeTextKey(option?.name) === normalizeTextKey(value))
+  );
+
+  return (
+    <div className="products-multiselect">
+      <div className="products-multiselect-header">
+        <div>
+          <strong>{label}</strong>
+          <p>{helperText}</p>
+        </div>
+      </div>
+
+      <div className="products-selection-chip-row">
+        {selectedValues.length ? (
+          selectedValues.map((value) => {
+            const matchedOption =
+              options.find(
+                (option) => normalizeTextKey(option?.name) === normalizeTextKey(value)
+              ) || null;
+
+            return (
+              <button
+                key={value}
+                type="button"
+                className={`products-selection-chip ${
+                  matchedOption ? "" : "is-legacy"
+                }`}
+                onClick={() => onToggle(value)}
+              >
+                {showColorSwatch ? (
+                  <span
+                    className="products-selection-swatch"
+                    style={{ background: matchedOption?.hex_code || "#cbd5e1" }}
+                  />
+                ) : null}
+                <span>{value}</span>
+                <strong>×</strong>
+              </button>
+            );
+          })
+        ) : (
+          <div className="products-selection-empty">No selections yet.</div>
+        )}
+      </div>
+
+      <div className="products-multiselect-toolbar">
+        <input
+          type="search"
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder={`Search ${label.toLowerCase()}`}
+          style={fieldStyle}
+        />
+        {onCreate ? (
+          <button
+            type="button"
+            className="products-inline-action"
+            onClick={() => onCreate(searchTerm)}
+            disabled={!normalizeText(searchTerm) || hasExactMatch}
+          >
+            {createLabel}
+          </button>
+        ) : null}
+      </div>
+
+      <div className="products-multiselect-panel">
+        {filteredOptions.length ? (
+          filteredOptions.map((option) => {
+            const isSelected = selectedSet.has(normalizeTextKey(option?.name));
+
+            return (
+              <label key={option.id || option.name} className="products-option-row">
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => onToggle(option.name)}
+                />
+                {showColorSwatch ? (
+                  <span
+                    className="products-option-swatch"
+                    style={{ background: option.hex_code || "#cbd5e1" }}
+                  />
+                ) : null}
+                <span>{option.name}</span>
+              </label>
+            );
+          })
+        ) : (
+          <div className="products-selection-empty">{createHelper}</div>
+        )}
+      </div>
+
+      {legacySelections.length ? (
+        <div className="products-legacy-note">
+          Existing legacy values are preserved until you replace them with library options.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function Products() {
   const pageRef = useRef(null);
   const editorRef = useRef(null);
   const nameInputRef = useRef(null);
   const imageInputRef = useRef(null);
   const products = useStoredProducts();
+  const lookups = useCatalogLookups();
+  const categories = lookups.categories || [];
+  const brands = lookups.brands || [];
+  const colors = lookups.colors || [];
+  const sizes = lookups.sizes || [];
+  const garmentModels = lookups.garment_models || [];
   const [form, setForm] = useState(emptyProduct);
   const [editingProductId, setEditingProductId] = useState(null);
   const [selectedFileName, setSelectedFileName] = useState("");
@@ -221,6 +487,12 @@ export default function Products() {
   const [sortBy, setSortBy] = useState("newest");
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [isCreatingBrand, setIsCreatingBrand] = useState(false);
+  const [isCreatingModel, setIsCreatingModel] = useState(false);
+  const [categoryDraft, setCategoryDraft] = useState("");
+  const [brandDraft, setBrandDraft] = useState("");
+  const [modelDraft, setModelDraft] = useState({ display_name: "", model_code: "" });
 
   const placementOptions = normalizeListInput(form.placementsText);
   const editingProduct = editingProductId
@@ -231,8 +503,24 @@ export default function Products() {
     : "Create Product";
   const editorDescription = editingProduct
     ? "Update garment settings, pricing, and workflow options for this catalog item."
-    : "Configure garment price, allowed placements, and supported production methods.";
+    : "Build apparel products from a reusable garment library instead of retyping the same catalog data.";
 
+  const selectedBrand =
+    findLookupByName(brands, form.brand_name) ||
+    brands.find((brand) => brand.id === form.selectedBrandId) ||
+    null;
+  const selectedCategoryRecord = findLookupByName(categories, form.category) || null;
+  const availableGarmentModels = useMemo(() => {
+    return garmentModels.filter((model) => {
+      if (!selectedBrand?.id) return true;
+      return model.brand_id === selectedBrand.id;
+    });
+  }, [garmentModels, selectedBrand]);
+  const selectedGarmentModel =
+    garmentModels.find((model) => model.id === form.selectedGarmentModelId) || null;
+  const selectedGarmentModelLabel = selectedGarmentModel
+    ? buildGarmentModelLabel(selectedGarmentModel, brands, categories)
+    : form.garmentModelText;
   const categoryOptions = useMemo(
     () => buildFilterOptions(products, "category"),
     [products]
@@ -388,10 +676,55 @@ export default function Products() {
     }));
   }
 
+  function toggleColor(colorName) {
+    setForm((current) => ({
+      ...current,
+      colors: current.colors.some(
+        (color) => normalizeTextKey(color) === normalizeTextKey(colorName)
+      )
+        ? current.colors.filter(
+            (color) => normalizeTextKey(color) !== normalizeTextKey(colorName)
+          )
+        : uniqueList([...current.colors, colorName]),
+    }));
+  }
+
+  function toggleSize(sizeName) {
+    setForm((current) => {
+      const nextSizes = current.sizes.some(
+        (size) => normalizeTextKey(size) === normalizeTextKey(sizeName)
+      )
+        ? current.sizes.filter(
+            (size) => normalizeTextKey(size) !== normalizeTextKey(sizeName)
+          )
+        : uniqueList([...current.sizes, sizeName]);
+      const ordered = [...nextSizes].sort((left, right) => {
+        const leftRecord = findLookupByName(sizes, left);
+        const rightRecord = findLookupByName(sizes, right);
+        return Number(leftRecord?.sort_order || 999) - Number(rightRecord?.sort_order || 999);
+      });
+
+      return {
+        ...current,
+        sizes: ordered,
+      };
+    });
+  }
+
+  function resetCreatePanels() {
+    setIsCreatingCategory(false);
+    setIsCreatingBrand(false);
+    setIsCreatingModel(false);
+    setCategoryDraft("");
+    setBrandDraft("");
+    setModelDraft({ display_name: "", model_code: "" });
+  }
+
   function resetForm() {
     setForm(emptyProduct);
     setEditingProductId(null);
     setSelectedFileName("");
+    resetCreatePanels();
 
     if (imageInputRef.current) {
       imageInputRef.current.value = "";
@@ -401,12 +734,142 @@ export default function Products() {
   function handleEdit(product) {
     setEditingProductId(product.id);
     setSelectedFileName("");
-    setForm(buildFormFromProduct(product));
+    setForm(buildFormFromProduct(product, brands, garmentModels));
+    resetCreatePanels();
     editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     window.requestAnimationFrame(() => {
       nameInputRef.current?.focus();
       nameInputRef.current?.select();
     });
+  }
+
+  function handleBrandInputChange(event) {
+    const nextValue = event.target.value;
+    const matchedBrand = findLookupByName(brands, nextValue);
+
+    setForm((current) => ({
+      ...current,
+      brand_name: nextValue,
+      selectedBrandId: matchedBrand?.id || "",
+      ...(matchedBrand ? {} : { selectedGarmentModelId: "", garmentModelText: "" }),
+    }));
+  }
+
+  function handleGarmentModelInputChange(event) {
+    const nextValue = event.target.value;
+    const matchedModel =
+      availableGarmentModels.find(
+        (model) =>
+          normalizeTextKey(buildGarmentModelLabel(model, brands, categories)) ===
+          normalizeTextKey(nextValue)
+      ) || null;
+
+    if (!matchedModel) {
+      setForm((current) => ({
+        ...current,
+        selectedGarmentModelId: "",
+        garmentModelText: nextValue,
+      }));
+      return;
+    }
+
+    const brand = findBrandById(brands, matchedModel.brand_id);
+    const category = findCategoryById(categories, matchedModel.category_id);
+
+    setForm((current) => ({
+      ...current,
+      selectedBrandId: brand?.id || current.selectedBrandId || "",
+      brand_name: brand?.name || current.brand_name,
+      category: category?.name || current.category,
+      product_type: current.product_type || matchedModel.display_name,
+      brand_model: buildLegacyBrandModelValue(brand, matchedModel, current.brand_model),
+      selectedGarmentModelId: matchedModel.id,
+      garmentModelText: "",
+    }));
+  }
+
+  async function handleCreateCategory() {
+    const nextName = normalizeText(categoryDraft || form.category);
+    if (!nextName) return;
+
+    const created = await createCatalogLookup("categories", { name: nextName, active: true });
+    setForm((current) => ({
+      ...current,
+      category: created.name,
+    }));
+    setCategoryDraft("");
+    setIsCreatingCategory(false);
+  }
+
+  async function handleCreateBrand() {
+    const nextName = normalizeText(brandDraft || form.brand_name);
+    if (!nextName) return;
+
+    const created = await createCatalogLookup("brands", { name: nextName, active: true });
+    setForm((current) => ({
+      ...current,
+      brand_name: created.name,
+      selectedBrandId: created.id,
+    }));
+    setBrandDraft("");
+    setIsCreatingBrand(false);
+  }
+
+  async function handleCreateModel() {
+    const nextDisplayName = normalizeText(modelDraft.display_name);
+    const nextModelCode = normalizeText(modelDraft.model_code);
+    const resolvedBrand = selectedBrand || findLookupByName(brands, form.brand_name);
+    const resolvedCategory = findLookupByName(categories, form.category);
+
+    if (!nextDisplayName || !resolvedBrand?.id || !resolvedCategory?.id) {
+      setSaveError("Select or create a brand and category before adding a garment model.");
+      return;
+    }
+
+    const created = await createCatalogLookup("garment_models", {
+      brand_id: resolvedBrand.id,
+      model_code: nextModelCode,
+      display_name: nextDisplayName,
+      category_id: resolvedCategory.id,
+      active: true,
+    });
+
+    setForm((current) => ({
+      ...current,
+      selectedGarmentModelId: created.id,
+      garmentModelText: "",
+      category: resolvedCategory.name,
+      brand_name: resolvedBrand.name,
+      selectedBrandId: resolvedBrand.id,
+      product_type: current.product_type || created.display_name,
+      brand_model: buildLegacyBrandModelValue(resolvedBrand, created, current.brand_model),
+    }));
+    setModelDraft({ display_name: "", model_code: "" });
+    setIsCreatingModel(false);
+  }
+
+  async function handleCreateColor(searchValue) {
+    const nextName = normalizeText(searchValue);
+    if (!nextName) return;
+
+    const created = await createCatalogLookup("colors", { name: nextName, active: true });
+    toggleColor(created.name);
+  }
+
+  async function handleCreateSize(searchValue) {
+    const nextName = normalizeText(searchValue);
+    if (!nextName) return;
+
+    const highestSortOrder = sizes.reduce(
+      (highest, size) => Math.max(highest, Number(size?.sort_order || 0)),
+      0
+    );
+    const created = await createCatalogLookup("sizes", {
+      name: nextName,
+      sort_order: highestSortOrder + 10,
+      active: true,
+    });
+    toggleSize(created.name);
   }
 
   async function handleSubmit(event) {
@@ -427,17 +890,24 @@ export default function Products() {
       );
       return accumulator;
     }, {});
+    const resolvedBrand = selectedBrand || findLookupByName(brands, form.brand_name);
+    const resolvedModel =
+      garmentModels.find((model) => model.id === form.selectedGarmentModelId) || null;
     const productPayload = {
       name: form.name,
       category: form.category,
       product_type: form.product_type || form.name,
-      brand_model: form.brand_model,
+      brand_model: buildLegacyBrandModelValue(
+        resolvedBrand,
+        resolvedModel,
+        form.brand_model
+      ),
       image: form.image,
       cost_price: Number(form.cost_price || 0),
       markup_percentage: Number(form.markup_percentage || 0),
       status: form.status,
-      colors: normalizeListInput(form.colors),
-      sizes: normalizeListInput(form.sizes),
+      colors: uniqueList(form.colors),
+      sizes: uniqueList(form.sizes),
       placements,
       placement_prices: placementPrices,
       placement_config: buildPlacementConfig(placements, placementPrices),
@@ -558,7 +1028,7 @@ export default function Products() {
                 <span>Editing Existing Product</span>
               </div>
               <p style={{ margin: 0, color: "#475569", fontSize: "13px" }}>
-                Changes will update catalog pricing and order workflows.
+                Legacy product records stay compatible. Structured selections simply write cleaner catalog values back into the current product fields.
               </p>
             </div>
           ) : null}
@@ -587,44 +1057,210 @@ export default function Products() {
                 name="name"
                 value={form.name}
                 onChange={updateField}
-                placeholder="Pullover Hoodie"
+                placeholder="Softstyle Tee"
                 required
                 style={fieldStyle}
               />
             </label>
 
             <label style={labelStyle}>
-              Category
-              <input
-                name="category"
-                value={form.category}
-                onChange={updateField}
-                placeholder="Hoodie / Sweater"
-                style={fieldStyle}
-              />
-            </label>
-
-            <label style={labelStyle}>
-              Product Type
+              Product Type / Display Name
               <input
                 name="product_type"
                 value={form.product_type}
                 onChange={updateField}
-                placeholder="Pullover Hoodie"
+                placeholder="Unisex Jersey Tee"
                 style={fieldStyle}
               />
             </label>
+          </div>
 
-            <label style={labelStyle}>
-              Brand / Model
-              <input
-                name="brand_model"
-                value={form.brand_model}
-                onChange={updateField}
-                placeholder="Independent Trading Co. IND4000"
-                style={fieldStyle}
+          <div className="products-editor-section">
+            <div>
+              <strong style={{ display: "block", marginBottom: "4px" }}>
+                Structured Apparel Library
+              </strong>
+              <span style={{ color: "#64748b", fontSize: "13px" }}>
+                Pick from reusable category, brand, garment model, color, and size data. Existing storefront rendering still uses the same product fields after save.
+              </span>
+            </div>
+
+            <div className="products-editor-grid">
+              <LookupInputField
+                label="Category"
+                value={form.category}
+                onChange={(event) => {
+                  updateField({ target: { name: "category", value: event.target.value } });
+                }}
+                listId="products-category-options"
+                options={categories}
+                placeholder="Select a category"
+                helperText="Dropdown-backed apparel categories."
+                action={
+                  <button
+                    type="button"
+                    className="products-inline-action"
+                    onClick={() => {
+                      setCategoryDraft(form.category);
+                      setIsCreatingCategory((current) => !current);
+                    }}
+                  >
+                    + Create New Category
+                  </button>
+                }
               />
-            </label>
+
+              <LookupInputField
+                label="Brand"
+                value={form.brand_name}
+                onChange={handleBrandInputChange}
+                listId="products-brand-options"
+                options={brands}
+                placeholder="Select a brand"
+                helperText="Use this to narrow the garment model library."
+                action={
+                  <button
+                    type="button"
+                    className="products-inline-action"
+                    onClick={() => {
+                      setBrandDraft(form.brand_name);
+                      setIsCreatingBrand((current) => !current);
+                    }}
+                  >
+                    + Create New Brand
+                  </button>
+                }
+              />
+            </div>
+
+            {isCreatingCategory ? (
+              <div className="products-inline-create-panel">
+                <input
+                  value={categoryDraft}
+                  onChange={(event) => setCategoryDraft(event.target.value)}
+                  placeholder="New category name"
+                  style={fieldStyle}
+                />
+                <button type="button" className="products-inline-save" onClick={handleCreateCategory}>
+                  Save Category
+                </button>
+                <button
+                  type="button"
+                  className="products-inline-cancel"
+                  onClick={() => setIsCreatingCategory(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : null}
+
+            {isCreatingBrand ? (
+              <div className="products-inline-create-panel">
+                <input
+                  value={brandDraft}
+                  onChange={(event) => setBrandDraft(event.target.value)}
+                  placeholder="New brand name"
+                  style={fieldStyle}
+                />
+                <button type="button" className="products-inline-save" onClick={handleCreateBrand}>
+                  Save Brand
+                </button>
+                <button
+                  type="button"
+                  className="products-inline-cancel"
+                  onClick={() => setIsCreatingBrand(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : null}
+
+            <LookupInputField
+              label="Garment Model"
+              value={selectedGarmentModelLabel}
+              onChange={handleGarmentModelInputChange}
+              listId="products-garment-model-options"
+              options={availableGarmentModels}
+              placeholder="Search by brand, code, or garment name"
+              helperText={
+                selectedBrand?.name
+                  ? `Filtered to ${selectedBrand.name} models.`
+                  : "Showing all garment models until a brand is selected."
+              }
+              action={
+                <button
+                  type="button"
+                  className="products-inline-action"
+                  onClick={() => {
+                    setModelDraft({
+                      display_name: form.product_type || form.name,
+                      model_code: "",
+                    });
+                    setIsCreatingModel((current) => !current);
+                  }}
+                >
+                  + Create New Garment Model
+                </button>
+              }
+              renderOptionLabel={(option) => buildGarmentModelLabel(option, brands, categories)}
+            />
+
+            {isCreatingModel ? (
+              <div className="products-inline-model-panel">
+                <div className="products-inline-model-grid">
+                  <input
+                    value={modelDraft.display_name}
+                    onChange={(event) =>
+                      setModelDraft((current) => ({
+                        ...current,
+                        display_name: event.target.value,
+                      }))
+                    }
+                    placeholder="Garment display name"
+                    style={fieldStyle}
+                  />
+                  <input
+                    value={modelDraft.model_code}
+                    onChange={(event) =>
+                      setModelDraft((current) => ({
+                        ...current,
+                        model_code: event.target.value,
+                      }))
+                    }
+                    placeholder="Model code"
+                    style={fieldStyle}
+                  />
+                </div>
+                <div className="products-inline-meta">
+                  <span>
+                    Brand: <strong>{selectedBrand?.name || "Select a brand first"}</strong>
+                  </span>
+                  <span>
+                    Category: <strong>{selectedCategoryRecord?.name || "Select a category first"}</strong>
+                  </span>
+                </div>
+                <div className="products-inline-create-panel">
+                  <button type="button" className="products-inline-save" onClick={handleCreateModel}>
+                    Save Garment Model
+                  </button>
+                  <button
+                    type="button"
+                    className="products-inline-cancel"
+                    onClick={() => setIsCreatingModel(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="products-compatibility-card">
+              <span>Compatibility Mapping</span>
+              <strong>{form.brand_model || "Brand/model value will be generated from the structured selections."}</strong>
+              <p>
+                This preview shows the legacy `brand_model` field that still feeds the current storefront and order flows.
+              </p>
+            </div>
           </div>
 
           <ProductPricingFields
@@ -637,10 +1273,46 @@ export default function Products() {
           <div className="products-editor-section">
             <div>
               <strong style={{ display: "block", marginBottom: "4px" }}>
+                Colors And Sizes
+              </strong>
+              <span style={{ color: "#64748b", fontSize: "13px" }}>
+                Search, select, and remove color and size options without managing giant comma-separated strings.
+              </span>
+            </div>
+
+            <div className="products-library-grid">
+              <MultiSelectLookupField
+                label="Colors"
+                helperText="Large color lists stay manageable and are ready for future swatches and supplier data."
+                options={colors}
+                selectedValues={form.colors}
+                onToggle={toggleColor}
+                onCreate={handleCreateColor}
+                createLabel="+ Create New Color"
+                createHelper="No matching colors yet. Create one from the search box."
+                showColorSwatch
+              />
+
+              <MultiSelectLookupField
+                label="Sizes"
+                helperText="Selected sizes keep lookup ordering for cleaner staff and customer workflows."
+                options={sizes}
+                selectedValues={form.sizes}
+                onToggle={toggleSize}
+                onCreate={handleCreateSize}
+                createLabel="+ Create New Size"
+                createHelper="No matching sizes yet. Create one from the search box."
+              />
+            </div>
+          </div>
+
+          <div className="products-editor-section">
+            <div>
+              <strong style={{ display: "block", marginBottom: "4px" }}>
                 Supported Production Methods
               </strong>
               <span style={{ color: "#64748b", fontSize: "13px" }}>
-                These methods appear on Quotes and can carry per-unit production charges.
+                Tee & Co keeps flat-rate decorated pricing. These methods only control availability and optional per-placement charges.
               </span>
             </div>
 
@@ -684,7 +1356,7 @@ export default function Products() {
                 Placements And Pricing
               </strong>
               <span style={{ color: "#64748b", fontSize: "13px" }}>
-                Enter allowed placements, then set the price for each one.
+                Pricing stays flat-rate. Define valid placements and add optional upcharges where needed.
               </span>
             </div>
 
@@ -721,30 +1393,6 @@ export default function Products() {
                 </label>
               ))}
             </div>
-          </div>
-
-          <div className="products-editor-grid">
-            <label style={labelStyle}>
-              Colors
-              <textarea
-                name="colors"
-                value={form.colors}
-                onChange={updateField}
-                placeholder="Black, White, Navy"
-                style={{ ...fieldStyle, minHeight: "84px", resize: "vertical" }}
-              />
-            </label>
-
-            <label style={labelStyle}>
-              Sizes
-              <textarea
-                name="sizes"
-                value={form.sizes}
-                onChange={updateField}
-                placeholder="S, M, L, XL"
-                style={{ ...fieldStyle, minHeight: "84px", resize: "vertical" }}
-              />
-            </label>
           </div>
 
           <div style={{ display: "grid", gap: "8px" }}>
@@ -956,7 +1604,10 @@ export default function Products() {
               Showing <strong>{filteredProducts.length}</strong> of{" "}
               <strong>{products.length}</strong> products
             </span>
-            {(searchTerm || selectedCategory !== "all" || selectedMethod !== "all" || selectedStatus !== "all") ? (
+            {searchTerm ||
+            selectedCategory !== "all" ||
+            selectedMethod !== "all" ||
+            selectedStatus !== "all" ? (
               <button
                 type="button"
                 onClick={() => {
@@ -1027,10 +1678,8 @@ export default function Products() {
 
                         <div className="products-card-detail-grid">
                           <div className="products-card-detail">
-                            <span>Production</span>
-                            <strong>
-                              {product?.production_methods?.join(", ") || "None"}
-                            </strong>
+                            <span>Brand / Model</span>
+                            <strong>{product?.brand_model || "Not mapped yet"}</strong>
                           </div>
 
                           <div className="products-card-detail">
@@ -1041,6 +1690,20 @@ export default function Products() {
                               )}`}
                             >
                               {getStatusLabel(product?.status)}
+                            </strong>
+                          </div>
+
+                          <div className="products-card-detail">
+                            <span>Production</span>
+                            <strong>
+                              {product?.production_methods?.join(", ") || "None"}
+                            </strong>
+                          </div>
+
+                          <div className="products-card-detail">
+                            <span>Colors / Sizes</span>
+                            <strong>
+                              {(product?.colors?.length || 0)} colors • {(product?.sizes?.length || 0)} sizes
                             </strong>
                           </div>
 
@@ -1100,8 +1763,10 @@ export default function Products() {
                 })
               ) : (
                 <div className="products-empty-state">
-                  <strong>No products match the current filters.</strong>
-                  <span>Adjust search, filters, or status selections to see more catalog items.</span>
+                  <h3 style={{ margin: 0 }}>No products found</h3>
+                  <p style={{ margin: 0, color: "#64748b" }}>
+                    Adjust your filters or create a new garment in the structured catalog editor.
+                  </p>
                 </div>
               )}
             </div>
