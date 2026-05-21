@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import "./Products.css";
 import ProductPricingFields from "../components/ProductPricingFields";
 import { PRODUCTION_TYPES } from "../constants/productionTypes";
+import { garments } from "../data/garments";
 import {
   createCatalogLookup,
   useCatalogLookups,
@@ -55,10 +56,10 @@ const emptyProduct = {
   name: "",
   category: "T-Shirts",
   product_type: "",
-  brand_name: "",
   brand_model: "",
   selectedGarmentModelId: "",
-  garmentModelText: "",
+  selectedBrandId: "",
+  garmentModelSearch: "",
   image: "",
   cost_price: "0",
   markup_percentage: "0",
@@ -71,6 +72,21 @@ const emptyProduct = {
   production_method_prices: {},
   notes: "",
 };
+
+const COMMON_PLACEMENT_OPTIONS = [
+  "Left Chest",
+  "Right Chest",
+  "Full Front",
+  "Center Chest",
+  "Full Back",
+  "Upper Back",
+  "Sleeve",
+  "Left Sleeve",
+  "Right Sleeve",
+  "Front Panel",
+  "Side Panel",
+  "Yoke",
+];
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -194,6 +210,30 @@ function buildLegacyBrandModelValue(brand, model, fallbackValue = "") {
   return fallbackValue;
 }
 
+function resolveStructuredProductType(model, fallbackValue = "", nameFallback = "") {
+  return model?.display_name || fallbackValue || nameFallback || "";
+}
+
+function buildPlacementLibrary(products = []) {
+  const seen = new Set();
+  const placementNames = [];
+
+  [...COMMON_PLACEMENT_OPTIONS,
+    ...garments.flatMap((garment) => garment?.placements_allowed || []),
+    ...products.flatMap((product) => getProductPlacementConfig(product).map((item) => item.label)),
+  ]
+    .map((placement) => normalizeText(placement))
+    .filter(Boolean)
+    .forEach((placement) => {
+      const key = normalizeTextKey(placement);
+      if (seen.has(key)) return;
+      seen.add(key);
+      placementNames.push(placement);
+    });
+
+  return placementNames;
+}
+
 function buildFormFromProduct(product, brands = [], garmentModels = []) {
   const safeProduct = product && typeof product === "object" ? product : {};
   const placements = getProductPlacementConfig(safeProduct).map(
@@ -221,10 +261,12 @@ function buildFormFromProduct(product, brands = [], garmentModels = []) {
   return {
     ...emptyProduct,
     ...safeProduct,
-    brand_name: inferredBrand?.name || "",
     brand_model: safeProduct?.brand_model || "",
+    selectedBrandId: inferredBrand?.id || inferredModel?.brand_id || "",
     selectedGarmentModelId: inferredModel?.id || "",
-    garmentModelText: "",
+    garmentModelSearch: inferredModel
+      ? buildGarmentModelLabel(inferredModel, brands, [])
+      : safeProduct?.brand_model || "",
     product_type: safeProduct?.product_type || safeProduct?.name || "",
     cost_price:
       safeProduct?.cost_price === null || safeProduct?.cost_price === undefined
@@ -301,33 +343,115 @@ function buildFilterOptions(products, key) {
   ).sort((left, right) => left.localeCompare(right));
 }
 
-function LookupInputField({
+function SelectLookupField({
   label,
   value,
   onChange,
-  listId,
+  options,
+  placeholder,
+  helperText,
+  action,
+}) {
+  const hasMatchingOption = options.some(
+    (option) => normalizeTextKey(option?.name) === normalizeTextKey(value)
+  );
+
+  return (
+    <label style={labelStyle}>
+      {label}
+      <select value={value} onChange={onChange} style={fieldStyle}>
+        <option value="">{placeholder}</option>
+        {value && !hasMatchingOption ? (
+          <option value={value}>{value} (Legacy)</option>
+        ) : null}
+        {options.map((option) => (
+          <option key={option.id || option.name} value={option.name}>
+            {option.name}
+          </option>
+        ))}
+      </select>
+      <div className="products-field-footer">
+        <span>{helperText}</span>
+        {action}
+      </div>
+    </label>
+  );
+}
+
+function SearchableLookupField({
+  label,
+  value,
+  onChange,
+  onSelect,
   options,
   placeholder,
   helperText,
   action,
   renderOptionLabel = (option) => option?.name || "",
+  renderOptionMeta,
+  emptyState = "No matches found.",
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const normalizedSearch = normalizeTextKey(value);
+
+  const filteredOptions = useMemo(() => {
+    if (!normalizedSearch) {
+      return options.slice(0, 10);
+    }
+
+    return options.filter((option) => {
+      const labelValue = renderOptionLabel(option);
+      const metaValue = renderOptionMeta ? renderOptionMeta(option) : "";
+      return `${labelValue} ${metaValue}`.toLowerCase().includes(normalizedSearch);
+    });
+  }, [normalizedSearch, options, renderOptionLabel, renderOptionMeta]);
+
   return (
     <label style={labelStyle}>
       {label}
-      <input
-        value={value}
-        onChange={onChange}
-        list={listId}
-        placeholder={placeholder}
-        style={fieldStyle}
-      />
-      <datalist id={listId}>
-        {options.map((option) => {
-          const labelValue = renderOptionLabel(option);
-          return <option key={option.id || labelValue} value={labelValue} />;
-        })}
-      </datalist>
+      <div className="products-searchable-field">
+        <input
+          value={value}
+          onChange={(event) => {
+            onChange(event);
+            setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          onBlur={() => {
+            window.setTimeout(() => setIsOpen(false), 120);
+          }}
+          placeholder={placeholder}
+          style={fieldStyle}
+        />
+
+        {isOpen ? (
+          <div className="products-searchable-panel">
+            {filteredOptions.length ? (
+              filteredOptions.map((option) => {
+                const optionLabel = renderOptionLabel(option);
+                const optionMeta = renderOptionMeta ? renderOptionMeta(option) : "";
+                return (
+                  <button
+                    key={option.id || optionLabel}
+                    type="button"
+                    className="products-searchable-option"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      onSelect(option);
+                      setIsOpen(false);
+                    }}
+                  >
+                    <strong>{optionLabel}</strong>
+                    {optionMeta ? <span>{optionMeta}</span> : null}
+                  </button>
+                );
+              })
+            ) : (
+              <div className="products-selection-empty">{emptyState}</div>
+            )}
+          </div>
+        ) : null}
+      </div>
       <div className="products-field-footer">
         <span>{helperText}</span>
         {action}
@@ -488,12 +612,15 @@ export default function Products() {
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
-  const [isCreatingBrand, setIsCreatingBrand] = useState(false);
   const [isCreatingModel, setIsCreatingModel] = useState(false);
   const [categoryDraft, setCategoryDraft] = useState("");
-  const [brandDraft, setBrandDraft] = useState("");
-  const [modelDraft, setModelDraft] = useState({ display_name: "", model_code: "" });
+  const [modelDraft, setModelDraft] = useState({
+    brand_id: "",
+    display_name: "",
+    model_code: "",
+  });
 
+  const placementLibrary = useMemo(() => buildPlacementLibrary(products), [products]);
   const placementOptions = normalizeListInput(form.placementsText);
   const editingProduct = editingProductId
     ? products.find((product) => product.id === editingProductId) || null
@@ -505,22 +632,26 @@ export default function Products() {
     ? "Update garment settings, pricing, and workflow options for this catalog item."
     : "Build apparel products from a reusable garment library instead of retyping the same catalog data.";
 
-  const selectedBrand =
-    findLookupByName(brands, form.brand_name) ||
-    brands.find((brand) => brand.id === form.selectedBrandId) ||
-    null;
   const selectedCategoryRecord = findLookupByName(categories, form.category) || null;
   const availableGarmentModels = useMemo(() => {
     return garmentModels.filter((model) => {
-      if (!selectedBrand?.id) return true;
-      return model.brand_id === selectedBrand.id;
+      if (selectedCategoryRecord?.id && model.category_id !== selectedCategoryRecord.id) {
+        return false;
+      }
+
+      return true;
     });
-  }, [garmentModels, selectedBrand]);
+  }, [garmentModels, selectedCategoryRecord]);
   const selectedGarmentModel =
     garmentModels.find((model) => model.id === form.selectedGarmentModelId) || null;
-  const selectedGarmentModelLabel = selectedGarmentModel
-    ? buildGarmentModelLabel(selectedGarmentModel, brands, categories)
-    : form.garmentModelText;
+  const selectedBrand = findBrandById(
+    brands,
+    selectedGarmentModel?.brand_id || form.selectedBrandId
+  );
+  const selectedGarmentModelLabel =
+    selectedGarmentModel
+      ? buildGarmentModelLabel(selectedGarmentModel, brands, categories)
+      : form.garmentModelSearch;
   const categoryOptions = useMemo(
     () => buildFilterOptions(products, "category"),
     [products]
@@ -610,18 +741,30 @@ export default function Products() {
     }));
   }
 
-  function updatePlacementsText(event) {
-    const nextText = event.target.value;
-    const placements = normalizeListInput(nextText);
+  function handleCategoryChange(event) {
+    const nextCategory = event.target.value;
 
-    setForm((current) => ({
-      ...current,
-      placementsText: nextText,
-      placementPriceMap: buildPlacementPriceMap(
-        placements,
-        current.placementPriceMap
-      ),
-    }));
+    setForm((current) => {
+      const currentModel =
+        garmentModels.find((model) => model.id === current.selectedGarmentModelId) || null;
+      const categoryRecord = findLookupByName(categories, nextCategory);
+      const shouldClearModel =
+        currentModel &&
+        categoryRecord?.id &&
+        currentModel.category_id !== categoryRecord.id;
+
+      return {
+        ...current,
+        category: nextCategory,
+        ...(shouldClearModel
+          ? {
+              selectedGarmentModelId: "",
+              selectedBrandId: "",
+              garmentModelSearch: "",
+            }
+          : {}),
+      };
+    });
   }
 
   function toggleProductionMethod(method) {
@@ -713,11 +856,9 @@ export default function Products() {
 
   function resetCreatePanels() {
     setIsCreatingCategory(false);
-    setIsCreatingBrand(false);
     setIsCreatingModel(false);
     setCategoryDraft("");
-    setBrandDraft("");
-    setModelDraft({ display_name: "", model_code: "" });
+    setModelDraft({ brand_id: "", display_name: "", model_code: "" });
   }
 
   function resetForm() {
@@ -743,48 +884,27 @@ export default function Products() {
     });
   }
 
-  function handleBrandInputChange(event) {
+  function handleGarmentModelSearchChange(event) {
     const nextValue = event.target.value;
-    const matchedBrand = findLookupByName(brands, nextValue);
-
     setForm((current) => ({
       ...current,
-      brand_name: nextValue,
-      selectedBrandId: matchedBrand?.id || "",
-      ...(matchedBrand ? {} : { selectedGarmentModelId: "", garmentModelText: "" }),
+      selectedGarmentModelId: "",
+      garmentModelSearch: nextValue,
     }));
   }
 
-  function handleGarmentModelInputChange(event) {
-    const nextValue = event.target.value;
-    const matchedModel =
-      availableGarmentModels.find(
-        (model) =>
-          normalizeTextKey(buildGarmentModelLabel(model, brands, categories)) ===
-          normalizeTextKey(nextValue)
-      ) || null;
-
-    if (!matchedModel) {
-      setForm((current) => ({
-        ...current,
-        selectedGarmentModelId: "",
-        garmentModelText: nextValue,
-      }));
-      return;
-    }
-
-    const brand = findBrandById(brands, matchedModel.brand_id);
-    const category = findCategoryById(categories, matchedModel.category_id);
+  function handleGarmentModelSelect(model) {
+    const brand = findBrandById(brands, model.brand_id);
+    const category = findCategoryById(categories, model.category_id);
 
     setForm((current) => ({
       ...current,
-      selectedBrandId: brand?.id || current.selectedBrandId || "",
-      brand_name: brand?.name || current.brand_name,
+      selectedBrandId: brand?.id || "",
       category: category?.name || current.category,
-      product_type: current.product_type || matchedModel.display_name,
-      brand_model: buildLegacyBrandModelValue(brand, matchedModel, current.brand_model),
-      selectedGarmentModelId: matchedModel.id,
-      garmentModelText: "",
+      product_type: resolveStructuredProductType(model, current.product_type, current.name),
+      brand_model: buildLegacyBrandModelValue(brand, model, current.brand_model),
+      selectedGarmentModelId: model.id,
+      garmentModelSearch: buildGarmentModelLabel(model, brands, categories),
     }));
   }
 
@@ -801,24 +921,10 @@ export default function Products() {
     setIsCreatingCategory(false);
   }
 
-  async function handleCreateBrand() {
-    const nextName = normalizeText(brandDraft || form.brand_name);
-    if (!nextName) return;
-
-    const created = await createCatalogLookup("brands", { name: nextName, active: true });
-    setForm((current) => ({
-      ...current,
-      brand_name: created.name,
-      selectedBrandId: created.id,
-    }));
-    setBrandDraft("");
-    setIsCreatingBrand(false);
-  }
-
   async function handleCreateModel() {
     const nextDisplayName = normalizeText(modelDraft.display_name);
     const nextModelCode = normalizeText(modelDraft.model_code);
-    const resolvedBrand = selectedBrand || findLookupByName(brands, form.brand_name);
+    const resolvedBrand = findBrandById(brands, modelDraft.brand_id || form.selectedBrandId);
     const resolvedCategory = findLookupByName(categories, form.category);
 
     if (!nextDisplayName || !resolvedBrand?.id || !resolvedCategory?.id) {
@@ -837,14 +943,13 @@ export default function Products() {
     setForm((current) => ({
       ...current,
       selectedGarmentModelId: created.id,
-      garmentModelText: "",
+      garmentModelSearch: buildGarmentModelLabel(created, brands, categories),
       category: resolvedCategory.name,
-      brand_name: resolvedBrand.name,
       selectedBrandId: resolvedBrand.id,
-      product_type: current.product_type || created.display_name,
+      product_type: resolveStructuredProductType(created, current.product_type, current.name),
       brand_model: buildLegacyBrandModelValue(resolvedBrand, created, current.brand_model),
     }));
-    setModelDraft({ display_name: "", model_code: "" });
+    setModelDraft({ brand_id: resolvedBrand.id, display_name: "", model_code: "" });
     setIsCreatingModel(false);
   }
 
@@ -872,6 +977,29 @@ export default function Products() {
     toggleSize(created.name);
   }
 
+  function togglePlacement(placementName) {
+    setForm((current) => {
+      const nextPlacements = current.placementsText
+        ? normalizeListInput(current.placementsText)
+        : [];
+      const exists = nextPlacements.some(
+        (placement) => normalizeTextKey(placement) === normalizeTextKey(placementName)
+      );
+      const placements = exists
+        ? nextPlacements.filter(
+            (placement) => normalizeTextKey(placement) !== normalizeTextKey(placementName)
+          )
+        : [...nextPlacements, placementName];
+      const placementsText = placements.join(", ");
+
+      return {
+        ...current,
+        placementsText,
+        placementPriceMap: buildPlacementPriceMap(placements, current.placementPriceMap),
+      };
+    });
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setSaveError("");
@@ -890,13 +1018,20 @@ export default function Products() {
       );
       return accumulator;
     }, {});
-    const resolvedBrand = selectedBrand || findLookupByName(brands, form.brand_name);
     const resolvedModel =
       garmentModels.find((model) => model.id === form.selectedGarmentModelId) || null;
+    const resolvedBrand = findBrandById(
+      brands,
+      resolvedModel?.brand_id || form.selectedBrandId
+    );
     const productPayload = {
       name: form.name,
       category: form.category,
-      product_type: form.product_type || form.name,
+      product_type: resolveStructuredProductType(
+        resolvedModel,
+        form.product_type,
+        form.name
+      ),
       brand_model: buildLegacyBrandModelValue(
         resolvedBrand,
         resolvedModel,
@@ -1063,16 +1198,16 @@ export default function Products() {
               />
             </label>
 
-            <label style={labelStyle}>
-              Product Type / Display Name
-              <input
-                name="product_type"
-                value={form.product_type}
-                onChange={updateField}
-                placeholder="Unisex Jersey Tee"
-                style={fieldStyle}
-              />
-            </label>
+            <div className="products-derived-field">
+              <span>Derived Product Type</span>
+              <strong>
+                {resolveStructuredProductType(selectedGarmentModel, form.product_type, form.name) ||
+                  "Select a garment model to derive the display type."}
+              </strong>
+              <p>
+                `product_type` is now derived from the structured garment model to avoid redundant manual entry.
+              </p>
+            </div>
           </div>
 
           <div className="products-editor-section">
@@ -1086,16 +1221,13 @@ export default function Products() {
             </div>
 
             <div className="products-editor-grid">
-              <LookupInputField
+              <SelectLookupField
                 label="Category"
                 value={form.category}
-                onChange={(event) => {
-                  updateField({ target: { name: "category", value: event.target.value } });
-                }}
-                listId="products-category-options"
+                onChange={handleCategoryChange}
                 options={categories}
-                placeholder="Select a category"
-                helperText="Dropdown-backed apparel categories."
+                placeholder="Select category"
+                helperText="Structured apparel categories from the normalized lookup table."
                 action={
                   <button
                     type="button"
@@ -1106,28 +1238,6 @@ export default function Products() {
                     }}
                   >
                     + Create New Category
-                  </button>
-                }
-              />
-
-              <LookupInputField
-                label="Brand"
-                value={form.brand_name}
-                onChange={handleBrandInputChange}
-                listId="products-brand-options"
-                options={brands}
-                placeholder="Select a brand"
-                helperText="Use this to narrow the garment model library."
-                action={
-                  <button
-                    type="button"
-                    className="products-inline-action"
-                    onClick={() => {
-                      setBrandDraft(form.brand_name);
-                      setIsCreatingBrand((current) => !current);
-                    }}
-                  >
-                    + Create New Brand
                   </button>
                 }
               />
@@ -1154,38 +1264,17 @@ export default function Products() {
               </div>
             ) : null}
 
-            {isCreatingBrand ? (
-              <div className="products-inline-create-panel">
-                <input
-                  value={brandDraft}
-                  onChange={(event) => setBrandDraft(event.target.value)}
-                  placeholder="New brand name"
-                  style={fieldStyle}
-                />
-                <button type="button" className="products-inline-save" onClick={handleCreateBrand}>
-                  Save Brand
-                </button>
-                <button
-                  type="button"
-                  className="products-inline-cancel"
-                  onClick={() => setIsCreatingBrand(false)}
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : null}
-
-            <LookupInputField
-              label="Garment Model"
+            <SearchableLookupField
+              label="Brand / Model"
               value={selectedGarmentModelLabel}
-              onChange={handleGarmentModelInputChange}
-              listId="products-garment-model-options"
+              onChange={handleGarmentModelSearchChange}
+              onSelect={handleGarmentModelSelect}
               options={availableGarmentModels}
-              placeholder="Search by brand, code, or garment name"
+              placeholder="Search brand, model code, or garment name"
               helperText={
-                selectedBrand?.name
-                  ? `Filtered to ${selectedBrand.name} models.`
-                  : "Showing all garment models until a brand is selected."
+                selectedCategoryRecord?.name
+                  ? `Showing ${selectedCategoryRecord.name} models from the normalized garment library.`
+                  : "Search across the normalized garment model library."
               }
               action={
                 <button
@@ -1193,7 +1282,12 @@ export default function Products() {
                   className="products-inline-action"
                   onClick={() => {
                     setModelDraft({
-                      display_name: form.product_type || form.name,
+                      brand_id: selectedBrand?.id || form.selectedBrandId || "",
+                      display_name: resolveStructuredProductType(
+                        selectedGarmentModel,
+                        form.product_type,
+                        form.name
+                      ),
                       model_code: "",
                     });
                     setIsCreatingModel((current) => !current);
@@ -1203,11 +1297,33 @@ export default function Products() {
                 </button>
               }
               renderOptionLabel={(option) => buildGarmentModelLabel(option, brands, categories)}
+              renderOptionMeta={(option) => {
+                const brand = findBrandById(brands, option.brand_id);
+                return [brand?.name, option.model_code].filter(Boolean).join(" • ");
+              }}
+              emptyState="No garment models match this search."
             />
 
             {isCreatingModel ? (
               <div className="products-inline-model-panel">
                 <div className="products-inline-model-grid">
+                  <select
+                    value={modelDraft.brand_id}
+                    onChange={(event) =>
+                      setModelDraft((current) => ({
+                        ...current,
+                        brand_id: event.target.value,
+                      }))
+                    }
+                    style={fieldStyle}
+                  >
+                    <option value="">Select brand</option>
+                    {brands.map((brand) => (
+                      <option key={brand.id} value={brand.id}>
+                        {brand.name}
+                      </option>
+                    ))}
+                  </select>
                   <input
                     value={modelDraft.display_name}
                     onChange={(event) =>
@@ -1233,7 +1349,10 @@ export default function Products() {
                 </div>
                 <div className="products-inline-meta">
                   <span>
-                    Brand: <strong>{selectedBrand?.name || "Select a brand first"}</strong>
+                    Brand:{" "}
+                    <strong>
+                      {findBrandById(brands, modelDraft.brand_id)?.name || "Select a brand first"}
+                    </strong>
                   </span>
                   <span>
                     Category: <strong>{selectedCategoryRecord?.name || "Select a category first"}</strong>
@@ -1306,15 +1425,15 @@ export default function Products() {
             </div>
           </div>
 
-          <div className="products-editor-section">
-            <div>
-              <strong style={{ display: "block", marginBottom: "4px" }}>
-                Supported Production Methods
-              </strong>
-              <span style={{ color: "#64748b", fontSize: "13px" }}>
-                Tee & Co keeps flat-rate decorated pricing. These methods only control availability and optional per-placement charges.
-              </span>
-            </div>
+          <details className="products-editor-section products-advanced-section">
+            <summary className="products-advanced-summary">
+              <div>
+                <strong>Advanced Production Settings</strong>
+                <span>
+                  Keep compatibility with existing production method and surcharge data without giving it primary form emphasis.
+                </span>
+              </div>
+            </summary>
 
             <div style={{ display: "grid", gap: "10px" }}>
               {PRODUCTION_TYPES.map((method) => {
@@ -1348,7 +1467,7 @@ export default function Products() {
                 );
               })}
             </div>
-          </div>
+          </details>
 
           <div className="products-editor-section">
             <div>
@@ -1356,20 +1475,64 @@ export default function Products() {
                 Placements And Pricing
               </strong>
               <span style={{ color: "#64748b", fontSize: "13px" }}>
-                Pricing stays flat-rate. Define valid placements and add optional upcharges where needed.
+                Select structured decoration zones instead of typing comma-separated placement lists.
               </span>
             </div>
 
-            <label style={labelStyle}>
-              Allowed Placements
-              <textarea
-                name="placementsText"
-                value={form.placementsText}
-                onChange={updatePlacementsText}
-                placeholder="Left Chest, Full Front, Full Back, Sleeve"
-                style={{ ...fieldStyle, minHeight: "88px", resize: "vertical" }}
-              />
-            </label>
+            <div className="products-selection-chip-row">
+              {placementLibrary.map((placement) => {
+                const active = placementOptions.some(
+                  (selectedPlacement) =>
+                    normalizeTextKey(selectedPlacement) === normalizeTextKey(placement)
+                );
+
+                return (
+                  <button
+                    key={placement}
+                    type="button"
+                    className={`products-placement-chip ${active ? "is-active" : ""}`}
+                    onClick={() => togglePlacement(placement)}
+                  >
+                    {placement}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="products-selection-chip-row">
+              {placementOptions.length ? (
+                placementOptions.map((placement) => {
+                  const isLegacy = !placementLibrary.some(
+                    (option) => normalizeTextKey(option) === normalizeTextKey(placement)
+                  );
+
+                  return (
+                    <button
+                      key={placement}
+                      type="button"
+                      className={`products-selection-chip ${isLegacy ? "is-legacy" : ""}`}
+                      onClick={() => togglePlacement(placement)}
+                    >
+                      <span>{placement}</span>
+                      <strong>×</strong>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="products-selection-empty">No placements selected yet.</div>
+              )}
+            </div>
+
+            {placementOptions.some(
+              (placement) =>
+                !placementLibrary.some(
+                  (option) => normalizeTextKey(option) === normalizeTextKey(placement)
+                )
+            ) ? (
+              <div className="products-legacy-note">
+                Legacy placement values are preserved on existing products until you remove them.
+              </div>
+            ) : null}
 
             <div style={{ display: "grid", gap: "10px" }}>
               {placementOptions.map((placement) => (
