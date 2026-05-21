@@ -17,7 +17,9 @@ alter table public.products
   add column if not exists markup_percentage numeric(10, 2) not null default 0,
   add column if not exists base_garment_price numeric(10, 2),
   add column if not exists unit_price numeric(10, 2),
-  add column if not exists notes text default '';
+  add column if not exists notes text default '',
+  add column if not exists created_at timestamptz not null default timezone('utc', now()),
+  add column if not exists updated_at timestamptz not null default timezone('utc', now());
 
 do $$
 begin
@@ -83,3 +85,21 @@ set product_type = coalesce(nullif(product_type, ''), name),
     end,
     production_method_prices = coalesce(production_method_prices, '{}'::jsonb),
     notes = coalesce(notes, '');
+
+create extension if not exists "pgcrypto";
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = timezone('utc', now());
+  return new;
+end;
+$$;
+
+drop trigger if exists set_products_updated_at on public.products;
+create trigger set_products_updated_at
+before update on public.products
+for each row
+execute function public.set_updated_at();

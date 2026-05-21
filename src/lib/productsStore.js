@@ -39,9 +39,32 @@ const PRODUCTS_SELECT_FIELDS = [
   "base_garment_price",
   "unit_price",
   "notes",
-  "created_at",
-  "updated_at",
 ].join(", ");
+
+function buildSupabaseProductErrorDetails(error, extra = {}) {
+  if (!error || typeof error !== "object") {
+    return {
+      ...extra,
+      error,
+    };
+  }
+
+  return {
+    ...extra,
+    name: error.name,
+    message: error.message,
+    code: error.code,
+    details: error.details,
+    hint: error.hint,
+    status: error.status,
+    statusCode: error.statusCode,
+    error,
+  };
+}
+
+function logSupabaseProductError(message, error, extra = {}) {
+  console.error(message, buildSupabaseProductErrorDetails(error, extra));
+}
 
 function emitProductsUpdated() {
   productListeners.forEach((listener) => {
@@ -449,19 +472,30 @@ async function fetchProductsFromSupabase() {
 
   console.info("[productsStore] Fetching storefront products from Supabase");
 
-  const { data, error } = await supabase
-    .from("products")
-    .select(PRODUCTS_SELECT_FIELDS)
-    .order("created_at", { ascending: false });
+  const { data, error } = await supabase.from("products").select(PRODUCTS_SELECT_FIELDS);
 
   if (error) {
-    console.error("Unable to fetch Tee & Co products from Supabase", error);
+    logSupabaseProductError("Unable to fetch Tee & Co products from Supabase", error, {
+      table: "products",
+      action: "select",
+      select: PRODUCTS_SELECT_FIELDS,
+    });
     throw error;
   }
 
   const normalizedProducts = Array.isArray(data)
     ? data.map(normalizeSupabaseProduct).filter(Boolean)
     : [];
+  normalizedProducts.sort((left, right) => {
+    const leftTimestamp = Date.parse(left?.created_at || "") || 0;
+    const rightTimestamp = Date.parse(right?.created_at || "") || 0;
+
+    if (leftTimestamp !== rightTimestamp) {
+      return rightTimestamp - leftTimestamp;
+    }
+
+    return String(right?.id || "").localeCompare(String(left?.id || ""));
+  });
   console.info(
     "[productsStore] Supabase storefront products fetched",
     normalizedProducts.length
@@ -604,7 +638,12 @@ export async function createStoredProduct(productInput) {
     .single();
 
   if (error) {
-    console.error("Unable to create Tee & Co product in Supabase", error);
+    logSupabaseProductError("Unable to create Tee & Co product in Supabase", error, {
+      table: "products",
+      action: "insert",
+      select: PRODUCTS_SELECT_FIELDS,
+      payload: buildSupabaseProductRecord(product, { includeId: true }),
+    });
     throw error;
   }
 
@@ -675,7 +714,13 @@ export async function updateStoredProduct(productId, updates) {
     .single();
 
   if (error) {
-    console.error("Unable to update Tee & Co product in Supabase", error);
+    logSupabaseProductError("Unable to update Tee & Co product in Supabase", error, {
+      table: "products",
+      action: "update",
+      productId,
+      select: PRODUCTS_SELECT_FIELDS,
+      payload: buildSupabaseProductRecord(updatedProduct),
+    });
     throw error;
   }
 
