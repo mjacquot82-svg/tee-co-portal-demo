@@ -67,6 +67,10 @@ const emptyProduct = {
   markup_percentage: "",
 };
 
+function isOneSizeOnly(values = []) {
+  return values.length === 1 && normalizeTextKey(values[0]) === "one size";
+}
+
 function getVariantOptions(item) {
   return (item?.variants || [])
     .filter((variant) => variant.active !== false)
@@ -169,14 +173,24 @@ export default function Products() {
   const selectedGarmentItem =
     libraryItems.find((item) => item.id === form.selectedGarmentLibraryId) || null;
   const garmentVariants = getVariantOptions(selectedGarmentItem);
+  const garmentSizes = useMemo(
+    () => sortSizesByLookup(selectedGarmentItem?.sizes || [], sizes),
+    [selectedGarmentItem, sizes]
+  );
   const garmentSizeOptions = useMemo(
     () =>
-      sortSizesByLookup(selectedGarmentItem?.sizes || [], sizes).map((size) => ({
+      garmentSizes.map((size) => ({
         id: size,
         name: size,
       })),
-    [selectedGarmentItem, sizes]
+    [garmentSizes]
   );
+  const garmentBrand = findLookupById(brands, selectedGarmentItem?.brand_lookup_id);
+  const garmentCategory = findLookupById(categories, selectedGarmentItem?.category_lookup_id);
+  const selectedGarmentVariantCount = garmentVariants.length;
+  const showVariantSelection = Boolean(selectedGarmentItem) && selectedGarmentVariantCount > 0;
+  const showSizeSelection = Boolean(selectedGarmentItem) && garmentSizeOptions.length > 0;
+  const isSelectedGarmentOneSize = isOneSizeOnly(garmentSizes);
   const placementLibrary = useMemo(
     () => buildPlacementLibrary(products, libraryItems),
     [products, libraryItems]
@@ -223,10 +237,8 @@ export default function Products() {
       garmentSearch: buildGarmentLibraryLabel(item, brands, categories, garmentModels),
       name: current.name || item.title,
       image: current.image || item.image || "",
-      visibleVariants: current.visibleVariants.length
-        ? current.visibleVariants
-        : getVariantOptions(item).map((variant) => variant.name),
-      sizes: current.sizes.length ? current.sizes : sortSizesByLookup(item.sizes || [], sizes),
+      visibleVariants: getVariantOptions(item).map((variant) => variant.name),
+      sizes: sortSizesByLookup(item.sizes || [], sizes),
       placementsText: current.placementsText || (item.default_placements || []).join(", "),
       placementPriceMap: buildPlacementPriceMap(
         current.placementsText ? normalizeListInput(current.placementsText) : item.default_placements || [],
@@ -391,6 +403,10 @@ export default function Products() {
       selectedGarmentItem?.category_lookup_id || form.category_lookup_id
     );
     const flatPrice = Number(form.flat_price || 0);
+    const selectedSizes =
+      selectedGarmentItem && isOneSizeOnly(selectedGarmentItem.sizes || [])
+        ? sortSizesByLookup(selectedGarmentItem.sizes || [], sizes)
+        : sortSizesByLookup(form.sizes, sizes);
 
     const productPayload = {
       name: normalizeText(form.name),
@@ -403,7 +419,7 @@ export default function Products() {
       image: form.image,
       status: form.status,
       colors: uniqueList(form.visibleVariants),
-      sizes: sortSizesByLookup(form.sizes, sizes),
+      sizes: selectedSizes,
       placements,
       placement_prices: placementPrices,
       placement_config: buildPlacementConfig(placements, placementPrices),
@@ -526,12 +542,20 @@ export default function Products() {
 
             {selectedGarmentItem ? (
               <div className="products-summary-card">
+                <span className="products-summary-label">Selected Garment</span>
                 <strong>{selectedGarmentItem.title}</strong>
-                <span>
-                  {(selectedGarmentItem.variants || []).filter((variant) => variant.active !== false).length} variants
-                  {" • "}
-                  {(selectedGarmentItem.sizes || []).length} sizes
-                </span>
+                <div className="products-summary-meta">
+                  <span>{garmentBrand?.name || "No brand"}</span>
+                  <span>{garmentCategory?.name || "No category"}</span>
+                </div>
+                <div className="products-summary-details">
+                  <span>{selectedGarmentVariantCount} variants</span>
+                  <span>
+                    {isSelectedGarmentOneSize
+                      ? "One size available"
+                      : garmentSizes.join(", ") || "No sizes configured"}
+                  </span>
+                </div>
               </div>
             ) : editingProduct ? (
               <div className="products-legacy-note">
@@ -540,44 +564,46 @@ export default function Products() {
             ) : null}
           </div>
 
-          <div className="products-library-grid">
-            <MultiSelectLookupField
-              label="Visible Variants"
-              helperText="Search and enable only the garment colorways customers should see."
-              options={garmentVariants}
-              selectedValues={form.visibleVariants}
-              onToggle={toggleVariant}
-              createHelper="Select a garment to load its available variants."
-              searchPlaceholder="Search variants or supplier SKU"
-            />
+          {selectedGarmentItem ? (
+            <div className="products-library-grid">
+              {showVariantSelection ? (
+                <MultiSelectLookupField
+                  label="Visible Variants"
+                  helperText="Choose which garment colorways customers can buy."
+                  options={garmentVariants}
+                  selectedValues={form.visibleVariants}
+                  onToggle={toggleVariant}
+                  createHelper="No garment variants available."
+                  searchPlaceholder="Search variants or supplier SKU"
+                />
+              ) : null}
 
-            <MultiSelectLookupField
-              label="Available Sizes"
-              helperText="Sizes come from the garment library and can be narrowed per product."
-              options={garmentSizeOptions}
-              selectedValues={form.sizes}
-              onToggle={toggleSize}
-              createHelper="Select a garment to load its size run."
-            />
-          </div>
+              {showSizeSelection ? (
+                isSelectedGarmentOneSize ? (
+                  <div className="products-summary-card products-one-size-card">
+                    <span className="products-summary-label">Available Sizes</span>
+                    <strong>One size available</strong>
+                  </div>
+                ) : (
+                  <MultiSelectLookupField
+                    label="Available Sizes"
+                    helperText="Sizes load from the garment library and can be narrowed per product."
+                    options={garmentSizeOptions}
+                    selectedValues={form.sizes}
+                    onToggle={toggleSize}
+                    createHelper="No garment sizes available."
+                  />
+                )
+              ) : null}
+            </div>
+          ) : null}
 
           <ProductImageUploader
             image={form.image}
             onImageChange={(image) => setForm((current) => ({ ...current, image }))}
           />
 
-          <label style={labelStyle}>
-            Notes
-            <textarea
-              name="notes"
-              value={form.notes}
-              onChange={updateField}
-              placeholder="Optional internal notes."
-              style={{ ...fieldStyle, minHeight: "96px", resize: "vertical" }}
-            />
-          </label>
-
-          <div className="products-editor-grid">
+          <div className="products-editor-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
             <label style={labelStyle}>
               Status
               <select name="status" value={form.status} onChange={updateField} style={fieldStyle}>
@@ -585,12 +611,6 @@ export default function Products() {
                 <option>Inactive</option>
               </select>
             </label>
-
-            <div className="products-derived-field">
-              <span>Storefront Price</span>
-              <strong>{formatMoney(form.flat_price, "$0.00")}</strong>
-              <p>Flat garment pricing stays separate from production add-ons.</p>
-            </div>
           </div>
 
           <details className="products-editor-section products-advanced-section">
@@ -671,6 +691,17 @@ export default function Products() {
                   })}
                 </div>
               </div>
+
+              <label style={labelStyle}>
+                Notes
+                <textarea
+                  name="notes"
+                  value={form.notes}
+                  onChange={updateField}
+                  placeholder="Optional internal notes."
+                  style={{ ...fieldStyle, minHeight: "96px", resize: "vertical" }}
+                />
+              </label>
 
               <div className="products-editor-grid">
                 <label style={labelStyle}>

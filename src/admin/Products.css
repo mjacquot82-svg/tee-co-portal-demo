@@ -719,12 +719,31 @@
   border: 1px solid #dbe4ee;
   background: #ffffff;
   display: grid;
-  gap: 4px;
+  gap: 8px;
+}
+
+.products-summary-label {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.products-summary-meta,
+.products-summary-details {
+  display: flex;
+  gap: 8px 12px;
+  flex-wrap: wrap;
 }
 
 .products-summary-card span {
   color: #64748b;
   font-size: 13px;
+}
+
+.products-one-size-card {
+  align-content: start;
 }
 
 .products-error-banner {
