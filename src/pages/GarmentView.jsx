@@ -19,7 +19,7 @@ function money(value) {
 
 function formatBasePrice(value) {
   return Number.isFinite(value) && Number(value) > 0
-    ? `From ${money(value)} each`
+    ? `${money(value)} each`
     : "Price unavailable";
 }
 
@@ -167,6 +167,7 @@ export default function GarmentView() {
   };
 
   const categorySlug = storefrontCategory?.id || normalizeCategorySlug(detailCategory) || "catalog";
+  const orderTotal = Number.isFinite(startingPrice) && startingPrice > 0 ? startingPrice * quantity : null;
 
   return (
     <div
@@ -219,36 +220,36 @@ export default function GarmentView() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "340px minmax(0, 1fr)",
-          gap: isMobile ? "14px" : "18px",
+          gridTemplateColumns: isMobile ? "1fr" : "420px minmax(0, 1fr)",
+          gap: isMobile ? "18px" : "28px",
           alignItems: "start",
         }}
       >
         <div
           style={{
             background: "#ffffff",
-            borderRadius: "18px",
-            padding: isMobile ? "14px" : "16px",
-            border: "1px solid #e7e5e4",
-            boxShadow: "0 8px 18px rgba(0,0,0,0.05)",
+            borderRadius: "26px",
+            padding: isMobile ? "18px" : "24px",
+            border: "1px solid #ece7e1",
+            boxShadow: "0 18px 40px rgba(28, 25, 23, 0.06)",
             display: "flex",
             flexDirection: "column",
-            alignItems: "center",
             position: isMobile ? "static" : "sticky",
             top: isMobile ? "auto" : "16px",
+            gap: "18px",
           }}
         >
           <div
             style={{
               width: "100%",
-              maxWidth: isMobile ? "100%" : "280px",
               aspectRatio: "1 / 1",
-              borderRadius: "16px",
+              borderRadius: "24px",
               overflow: "hidden",
-              background: "#fafaf9",
+              background: "linear-gradient(180deg, #fbf7f2 0%, #f5efe7 100%)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              border: "1px solid #f0e7dd",
             }}
           >
             <img
@@ -266,11 +267,10 @@ export default function GarmentView() {
           <div
             style={{
               width: "100%",
-              marginTop: "12px",
-              padding: "12px",
-              borderRadius: "14px",
-              background: "#fafaf9",
-              border: "1px solid #e7e5e4",
+              padding: "18px",
+              borderRadius: "20px",
+              background: "#fcfaf7",
+              border: "1px solid #eee7df",
             }}
           >
             <p
@@ -281,27 +281,50 @@ export default function GarmentView() {
                 color: "#171717",
               }}
             >
-              Current Selection
+              Order Summary
             </p>
-            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
+            <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
               Color: {currentSelectedColor}
             </p>
-            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
+            <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
               Size: {currentSelectedSize}
             </p>
-            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
+            <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
               Quantity: {quantity}
             </p>
+            <p style={{ margin: 0, color: "#57534e", fontSize: "14px" }}>
+              Custom decoration included
+            </p>
+          </div>
+
+          <div
+            style={{
+              width: "100%",
+              borderRadius: "22px",
+              background: "#171717",
+              color: "#ffffff",
+              padding: "20px",
+              display: "grid",
+              gap: "8px",
+            }}
+          >
+            <span style={{ fontSize: "13px", opacity: 0.76 }}>Order Total</span>
+            <strong style={{ fontSize: isMobile ? "30px" : "36px", lineHeight: 1 }}>
+              {orderTotal !== null ? money(orderTotal) : "Price unavailable"}
+            </strong>
+            <span style={{ fontSize: "13px", opacity: 0.76 }}>
+              Final decorated catalog pricing
+            </span>
           </div>
         </div>
 
         <div
           style={{
             background: "#ffffff",
-            borderRadius: "18px",
-            padding: isMobile ? "16px" : "20px",
-            border: "1px solid #e7e5e4",
-            boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
+            borderRadius: "26px",
+            padding: isMobile ? "20px" : "28px",
+            border: "1px solid #ece7e1",
+            boxShadow: "0 18px 40px rgba(28, 25, 23, 0.06)",
           }}
         >
           <p
@@ -341,22 +364,40 @@ export default function GarmentView() {
 
           <div
             style={{
-              marginTop: "10px",
-              padding: "12px 14px",
-              borderRadius: "14px",
-              background: "#fafaf9",
-              border: "1px solid #e7e5e4",
+              marginTop: "18px",
+              padding: "18px 20px",
+              borderRadius: "20px",
+              background: "#fcfaf7",
+              border: "1px solid #eee7df",
+              display: "grid",
+              gap: "4px",
             }}
           >
             <p
               style={{
                 margin: 0,
-                fontSize: isMobile ? "16px" : "18px",
+                fontSize: "12px",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                fontWeight: 700,
+                color: "#78716c",
+              }}
+            >
+              Decorated Price
+            </p>
+            <p
+              style={{
+                margin: 0,
+                fontSize: isMobile ? "24px" : "28px",
                 fontWeight: 800,
                 color: "#171717",
+                letterSpacing: "-0.03em",
               }}
             >
               {formatBasePrice(startingPrice)}
+            </p>
+            <p style={{ margin: 0, color: "#78716c", fontSize: "13px" }}>
+              Final customer pricing with custom decoration included.
             </p>
           </div>
 
@@ -458,7 +499,7 @@ export default function GarmentView() {
                 fontSize: "15px",
               }}
             >
-              Available Print Locations
+              Decoration Options
             </p>
 
             <p
@@ -469,7 +510,7 @@ export default function GarmentView() {
               lineHeight: 1.4,
             }}
           >
-              These placements follow the garment's catalog configuration.
+              Decoration details are handled with your order. Pricing does not change by location.
             </p>
 
             <div
@@ -505,7 +546,7 @@ export default function GarmentView() {
                     color: "#78716c",
                   }}
                 >
-                  Placement details available during quote review
+                  Decoration details available during order review
                 </span>
               ) : null}
             </div>

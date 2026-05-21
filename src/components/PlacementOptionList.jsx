@@ -51,6 +51,7 @@ export default function PlacementOptionList({
   selectedPlacements = [],
   onToggle,
   variant = "card",
+  showPricing = true,
 }) {
   if (!options.length) return null;
 
@@ -70,14 +71,18 @@ export default function PlacementOptionList({
             {variant === "card" ? (
               <>
                 <span style={{ fontWeight: 700 }}>{option.label}</span>
-                <small style={{ color: "#64748b", fontSize: "12px" }}>{priceLabel}</small>
+                {showPricing ? (
+                  <small style={{ color: "#64748b", fontSize: "12px" }}>{priceLabel}</small>
+                ) : null}
               </>
             ) : (
               <>
                 <span>{option.label}</span>
-                <span style={{ fontSize: "13px", opacity: active ? 0.88 : 0.7 }}>
-                  ({priceLabel})
-                </span>
+                {showPricing ? (
+                  <span style={{ fontSize: "13px", opacity: active ? 0.88 : 0.7 }}>
+                    ({priceLabel})
+                  </span>
+                ) : null}
               </>
             )}
           </button>

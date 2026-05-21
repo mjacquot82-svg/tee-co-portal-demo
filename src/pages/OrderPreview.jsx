@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import PlacementOptionList from "../components/PlacementOptionList";
-import PricingSummary from "../components/PricingSummary";
 import {
   buildPlacementPricingOptions,
   getDefaultDecorationType,
@@ -52,7 +51,7 @@ export default function OrderPreview() {
   const description =
     passedState.description ||
     selectedProduct?.notes ||
-    "Review your garment details, artwork, and print placement before submitting.";
+    "Review your garment details, artwork, and decoration preferences before submitting.";
   const imageSrc = passedState.imageSrc || selectedProduct?.image || fallbackImage;
   const selectedColor = passedState.selectedColor || "Black";
   const selectedSize = passedState.selectedSize || "M";
@@ -105,6 +104,9 @@ export default function OrderPreview() {
     selectedPlacements,
     selectedProduct,
   ]);
+  const customerTotal = liveQuote.garment_pricing_available
+    ? liveQuote.garment_subtotal
+    : liveQuote.total;
 
   function togglePlacement(placement) {
     if (!allowedPlacements.includes(placement)) return;
@@ -193,37 +195,36 @@ export default function OrderPreview() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "340px minmax(0, 1fr)",
-          gap: isMobile ? "14px" : "18px",
+          gridTemplateColumns: isMobile ? "1fr" : "420px minmax(0, 1fr)",
+          gap: isMobile ? "18px" : "28px",
           alignItems: "start",
         }}
       >
         <div
           style={{
             background: "#ffffff",
-            borderRadius: "18px",
-            padding: isMobile ? "14px" : "16px",
-            border: "1px solid #e7e5e4",
-            boxShadow: "0 8px 18px rgba(0,0,0,0.05)",
+            borderRadius: "26px",
+            padding: isMobile ? "18px" : "24px",
+            border: "1px solid #ece7e1",
+            boxShadow: "0 18px 40px rgba(28, 25, 23, 0.06)",
             display: "flex",
             flexDirection: "column",
-            alignItems: "center",
             position: isMobile ? "static" : "sticky",
             top: isMobile ? "auto" : "16px",
+            gap: "18px",
           }}
         >
           <div
             style={{
               width: "100%",
-              maxWidth: isMobile ? "100%" : "280px",
               aspectRatio: "1 / 1",
-              borderRadius: "16px",
+              borderRadius: "24px",
               overflow: "hidden",
-              background: "#fafaf9",
+              background: "linear-gradient(180deg, #fbf7f2 0%, #f5efe7 100%)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              border: "1px solid #e7e5e4",
+              border: "1px solid #f0e7dd",
             }}
           >
             <img
@@ -241,11 +242,10 @@ export default function OrderPreview() {
           <div
             style={{
               width: "100%",
-              marginTop: "12px",
-              padding: "12px",
-              borderRadius: "14px",
-              background: "#fafaf9",
-              border: "1px solid #e7e5e4",
+              padding: "18px",
+              borderRadius: "20px",
+              background: "#fcfaf7",
+              border: "1px solid #eee7df",
             }}
           >
             <p
@@ -259,26 +259,23 @@ export default function OrderPreview() {
               Order Summary
             </p>
 
-            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
+            <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
+              Product: {garmentName}
+            </p>
+            <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
               Color: {selectedColor}
             </p>
-            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
+            <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
               Size: {selectedSize}
             </p>
-            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
+            <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
               Quantity: {quantity}
             </p>
-            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
-              Garment base price: {selectedProduct ? formatPrice(liveQuote.garment_unit_price, liveQuote.garment_pricing_available) : "—"}
-            </p>
-            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
-              Method: {defaultDecorationType}
-            </p>
-            <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
-              Placements: {selectedPlacements.join(", ") || "None selected"}
+            <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
+              Custom decoration included
             </p>
             {artwork?.name ? (
-              <p style={{ margin: "3px 0", color: "#57534e", fontSize: "14px" }}>
+              <p style={{ margin: 0, color: "#57534e", fontSize: "14px" }}>
                 Artwork: {artwork.name}
               </p>
             ) : null}
@@ -287,18 +284,20 @@ export default function OrderPreview() {
           <div
             style={{
               width: "100%",
-              marginTop: "12px",
-              padding: "12px",
-              borderRadius: "14px",
+              padding: "20px",
+              borderRadius: "22px",
               background: "#171717",
               color: "#ffffff",
+              display: "grid",
+              gap: "8px",
             }}
           >
-            <p style={{ margin: "0 0 4px 0", fontSize: "12px", opacity: 0.72 }}>
-              Estimated Total
+            <p style={{ margin: 0, fontSize: "13px", opacity: 0.76 }}>Order Total</p>
+            <p style={{ margin: 0, fontWeight: 800, fontSize: isMobile ? "30px" : "36px" }}>
+              {formatPrice(customerTotal, liveQuote.garment_pricing_available)}
             </p>
-            <p style={{ margin: 0, fontWeight: 800, fontSize: "24px" }}>
-              {formatPrice(liveQuote.total, liveQuote.garment_pricing_available)}
+            <p style={{ margin: 0, fontSize: "13px", opacity: 0.76 }}>
+              Final decorated catalog pricing
             </p>
           </div>
 
@@ -306,11 +305,10 @@ export default function OrderPreview() {
             <div
               style={{
                 width: "100%",
-                marginTop: "12px",
-                padding: "12px",
-                borderRadius: "14px",
-                background: "#fafaf9",
-                border: "1px solid #e7e5e4",
+                padding: "18px",
+                borderRadius: "20px",
+                background: "#fcfaf7",
+                border: "1px solid #eee7df",
               }}
             >
               <p
@@ -343,10 +341,10 @@ export default function OrderPreview() {
         <div
           style={{
             background: "#ffffff",
-            borderRadius: "18px",
-            padding: isMobile ? "16px" : "20px",
-            border: "1px solid #e7e5e4",
-            boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
+            borderRadius: "26px",
+            padding: isMobile ? "20px" : "28px",
+            border: "1px solid #ece7e1",
+            boxShadow: "0 18px 40px rgba(28, 25, 23, 0.06)",
           }}
         >
           <p
@@ -387,11 +385,11 @@ export default function OrderPreview() {
 
           <div
             style={{
-              marginTop: "10px",
-              padding: "12px 14px",
-              borderRadius: "14px",
-              background: "#fafaf9",
-              border: "1px solid #e7e5e4",
+              marginTop: "18px",
+              padding: "18px 20px",
+              borderRadius: "20px",
+              background: "#fcfaf7",
+              border: "1px solid #eee7df",
             }}
           >
             <p
@@ -402,7 +400,7 @@ export default function OrderPreview() {
                 color: "#171717",
               }}
             >
-              Garment Details
+              Selected Options
             </p>
 
             <div
@@ -435,25 +433,16 @@ export default function OrderPreview() {
 
               <div>
                 <p style={{ margin: "0 0 2px 0", fontSize: "12px", color: "#78716c" }}>
-                  Garment Base Price
+                  Decoration
                 </p>
-                <p style={{ margin: 0, fontWeight: 600 }}>
-                  {selectedProduct ? formatPrice(liveQuote.garment_unit_price, liveQuote.garment_pricing_available) : "—"}
-                </p>
-              </div>
-
-              <div>
-                <p style={{ margin: "0 0 2px 0", fontSize: "12px", color: "#78716c" }}>
-                  Production Method
-                </p>
-                <p style={{ margin: 0, fontWeight: 600 }}>{defaultDecorationType}</p>
+                <p style={{ margin: 0, fontWeight: 600 }}>Custom decoration included</p>
               </div>
             </div>
           </div>
 
           <div style={{ marginTop: "18px" }}>
             <p style={{ fontWeight: "700", margin: "0 0 8px 0", fontSize: "15px" }}>
-              Print Placement
+              Decoration Preference
             </p>
             <p
               style={{
@@ -463,7 +452,7 @@ export default function OrderPreview() {
                 lineHeight: 1.5,
               }}
             >
-              Placement options and pricing are pulled from the same product catalog and quote rules used by staff.
+              Choose where you want your artwork placed. Final pricing already includes decoration.
             </p>
 
             {placementOptions.length ? (
@@ -472,27 +461,13 @@ export default function OrderPreview() {
                 selectedPlacements={selectedPlacements}
                 onToggle={togglePlacement}
                 variant="pill"
+                showPricing={false}
               />
             ) : (
               <p style={{ margin: 0, color: "#78716c", fontSize: "14px" }}>
-                No configured placements are available for this garment.
+                Decoration placement can be confirmed after submission.
               </p>
             )}
-          </div>
-
-          <div
-            style={{
-              marginTop: "18px",
-              padding: "14px",
-              borderRadius: "14px",
-              background: "#fafaf9",
-              border: "1px solid #e7e5e4",
-            }}
-          >
-            <p style={{ margin: "0 0 8px 0", fontWeight: 700, fontSize: "14px" }}>
-              Pricing Breakdown
-            </p>
-            <PricingSummary quote={liveQuote} quantity={quantity} compact />
           </div>
 
           <div style={{ marginTop: "18px" }}>
@@ -571,7 +546,7 @@ export default function OrderPreview() {
             <textarea
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
-              placeholder="Optional notes about placement, sizing, timing, or design preferences..."
+              placeholder="Optional notes about decoration, sizing, timing, or design preferences..."
               style={{
                 width: "100%",
                 minHeight: isMobile ? "110px" : "120px",

@@ -12,22 +12,8 @@ export default function OrderSubmitted() {
   const selectedColor = state.selectedColor || "Black";
   const selectedSize = state.selectedSize || "M";
   const quantity = state.quantity || 1;
-  const placements = Array.isArray(state.placements)
-    ? state.placements
-    : state.placement
-    ? [state.placement]
-    : [];
   const artworkName = state.artworkName || "No artwork uploaded";
   const notes = state.notes || "";
-
-  function money(value) {
-    return `$${Number(value || 0).toFixed(2)}`;
-  }
-
-  function formatPrice(value, isAvailable = true) {
-    if (!isAvailable) return "Price unavailable";
-    return money(value);
-  }
 
   return (
     <div
@@ -110,7 +96,7 @@ export default function OrderSubmitted() {
             maxWidth: "720px",
           }}
         >
-          Your garment selection, artwork details, and placement request have
+          Your garment selection, artwork details, and decoration request have
           been sent to Tee &amp; Co. The shop can now review the order before
           approval and production.
         </p>
@@ -226,10 +212,10 @@ export default function OrderSubmitted() {
                     color: "#78716c",
                   }}
                 >
-                  Placements
+                  Decoration
                 </p>
                 <p style={{ margin: 0, fontWeight: 600, color: "#171717" }}>
-                  {placements.join(", ") || "None selected"}
+                  Custom decoration included
                 </p>
               </div>
 
@@ -255,39 +241,6 @@ export default function OrderSubmitted() {
                 </p>
               </div>
 
-              {quote ? (
-                <>
-                  <div>
-                    <p
-                      style={{
-                        margin: "0 0 2px 0",
-                        fontSize: "12px",
-                        color: "#78716c",
-                      }}
-                    >
-                      Garment Base Price
-                    </p>
-                    <p style={{ margin: 0, fontWeight: 600, color: "#171717" }}>
-                      {formatPrice(quote.garment_unit_price, quote.garment_pricing_available)}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p
-                      style={{
-                        margin: "0 0 2px 0",
-                        fontSize: "12px",
-                        color: "#78716c",
-                      }}
-                    >
-                      Garment Subtotal
-                    </p>
-                    <p style={{ margin: 0, fontWeight: 600, color: "#171717" }}>
-                      {formatPrice(quote.garment_subtotal, quote.garment_pricing_available)}
-                    </p>
-                  </div>
-                </>
-              ) : null}
             </div>
           </div>
 
@@ -319,7 +272,7 @@ export default function OrderSubmitted() {
                 fontSize: "14px",
               }}
             >
-              <li>The shop reviews your garment, artwork, and placement</li>
+              <li>The shop reviews your garment details, artwork, and order notes</li>
               <li>You may receive approval feedback or a proof preview</li>
               <li>A deposit request may be sent before production begins</li>
               <li>Production starts after approval and payment confirmation</li>
@@ -376,9 +329,9 @@ export default function OrderSubmitted() {
                 color: "#171717",
               }}
             >
-              Pricing Summary
+              Order Total
             </p>
-            <PricingSummary quote={quote} quantity={quantity} compact />
+            <PricingSummary quote={quote} quantity={quantity} compact mode="customer" />
           </div>
         ) : null}
 

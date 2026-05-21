@@ -33,6 +33,7 @@ export default function PricingSummary({
   quote,
   quantity = 0,
   compact = false,
+  mode = "detailed",
 }) {
   if (!quote) return null;
 
@@ -44,6 +45,31 @@ export default function PricingSummary({
   const additionalFees =
     quote.additional_fees_subtotal ?? quote.setup_subtotal ?? 0;
   const resolvedQuantity = quantity || quote.quantity || 0;
+  const customerTotal = quote.garment_pricing_available
+    ? quote.garment_subtotal
+    : quote.total;
+
+  if (mode === "customer") {
+    return (
+      <div
+        style={{
+          display: "grid",
+          gap: compact ? "10px" : "12px",
+          borderRadius: "20px",
+          background: "#171717",
+          color: "#ffffff",
+          padding: compact ? "18px" : "22px",
+        }}
+      >
+        <span style={{ fontSize: compact ? "13px" : "14px", opacity: 0.78 }}>
+          Order Total
+        </span>
+        <strong style={{ fontSize: compact ? "28px" : "32px", lineHeight: 1 }}>
+          {formatPrice(customerTotal, quote.garment_pricing_available)}
+        </strong>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "grid", gap: compact ? "12px" : "14px" }}>
