@@ -17,6 +17,7 @@ import Orders from "./admin/Orders";
 import NewOrder from "./admin/NewOrder";
 import OrderDetail from "./admin/OrderDetail";
 import Products from "./admin/Products";
+import GarmentLibrary from "./admin/GarmentLibrary";
 import Assignments from "./admin/Assignments";
 import Customers from "./admin/Customers";
 import CustomerDetail from "./admin/CustomerDetail";
@@ -61,6 +62,7 @@ export default function App() {
             <Route path="admin/orders/:orderNumber" element={<OrderDetail />} />
 
             <Route path="admin/products" element={<Products />} />
+            <Route path="admin/garments" element={<GarmentLibrary />} />
             <Route path="admin/assignments" element={<Assignments />} />
             <Route path="admin/financial" element={<InvoicesPayments />} />
 

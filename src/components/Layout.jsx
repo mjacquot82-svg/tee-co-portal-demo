@@ -143,7 +143,10 @@ function getAdminSections(staffUser) {
         { to: "/admin/customers", label: "Customer Lookup", navKey: "customers" },
         { to: "/admin/sales", label: "Sales History", navKey: "counterSales" },
         ...(canManageCatalog
-          ? [{ to: "/admin/products", label: "Products", navKey: "products" }]
+          ? [
+              { to: "/admin/garments", label: "Garment Library", navKey: "garments" },
+              { to: "/admin/products", label: "Customer Catalog", navKey: "products" },
+            ]
           : []),
         {
           to: "/admin/quotes/archived",
@@ -162,6 +165,7 @@ function getAdminSections(staffUser) {
 
 function getActiveSidebarLink(pathname, staffUser) {
   if (pathname.startsWith("/admin/assignments")) return "assignments";
+  if (pathname.startsWith("/admin/garments")) return "garments";
   if (pathname.startsWith("/admin/products")) return "products";
   if (pathname.startsWith("/admin/customers")) return "customers";
   if (pathname.startsWith("/admin/staff-users")) return "staffUsers";

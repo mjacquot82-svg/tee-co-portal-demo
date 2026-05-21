@@ -38,6 +38,23 @@ create table if not exists public.garment_models (
   created_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.garment_library_items (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  category_lookup_id uuid references public.categories(id) on delete set null,
+  brand_lookup_id uuid references public.brands(id) on delete set null,
+  garment_model_lookup_id uuid references public.garment_models(id) on delete set null,
+  image text default '',
+  variants jsonb not null default '[]'::jsonb,
+  sizes jsonb not null default '[]'::jsonb,
+  default_placements jsonb not null default '[]'::jsonb,
+  default_production_methods jsonb not null default '[]'::jsonb,
+  notes text default '',
+  active boolean not null default true,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
 alter table public.products
   add column if not exists legacy_product_id text,
   add column if not exists sku text,
@@ -135,6 +152,9 @@ create index if not exists colors_active_idx on public.colors (active);
 create index if not exists sizes_sort_order_idx on public.sizes (sort_order);
 create index if not exists garment_models_brand_id_idx on public.garment_models (brand_id);
 create index if not exists garment_models_category_id_idx on public.garment_models (category_id);
+create index if not exists garment_library_items_active_idx on public.garment_library_items (active);
+create index if not exists garment_library_items_model_idx
+  on public.garment_library_items (garment_model_lookup_id);
 create index if not exists products_category_lookup_id_idx on public.products (category_lookup_id);
 create index if not exists products_brand_lookup_id_idx on public.products (brand_lookup_id);
 create index if not exists products_garment_model_lookup_id_idx
@@ -190,7 +210,8 @@ values
   ('2XL', 60),
   ('3XL', 70),
   ('4XL', 80),
-  ('5XL', 90)
+  ('5XL', 90),
+  ('One Size', 100)
 on conflict (name) do update
 set sort_order = excluded.sort_order;
 

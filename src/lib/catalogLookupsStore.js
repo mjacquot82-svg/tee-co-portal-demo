@@ -50,6 +50,7 @@ const DEFAULT_LOOKUPS = {
     { id: "size-3xl", name: "3XL", sort_order: 70, active: true },
     { id: "size-4xl", name: "4XL", sort_order: 80, active: true },
     { id: "size-5xl", name: "5XL", sort_order: 90, active: true },
+    { id: "size-one-size", name: "One Size", sort_order: 100, active: true },
   ],
   garment_models: [
     {
