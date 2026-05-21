@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { useMemo } from "react";
 import {
-  buildStorefrontCategories,
   getStorefrontProductImage,
   getStorefrontProducts,
 } from "../lib/storefrontCatalog";
@@ -12,10 +11,6 @@ export default function Home() {
   const storefrontProducts = useMemo(
     () => getStorefrontProducts(storedProducts),
     [storedProducts]
-  );
-  const categories = useMemo(
-    () => buildStorefrontCategories(storefrontProducts),
-    [storefrontProducts]
   );
   const previewCardStyle = {
     textDecoration: "none",
@@ -55,9 +50,10 @@ export default function Home() {
     display: "block",
   };
 
-  const popularGarments = useMemo(
+  const storefrontCards = useMemo(
     () =>
-      storefrontProducts.slice(0, 3).map((product) => ({
+      storefrontProducts.map((product) => ({
+        id: product?.id || product?.name || product?.product_type || "catalog-product",
         title: product?.name || product?.product_type || "Catalog Product",
         subtitle:
           product?.notes || product?.category || "Available for custom orders.",
@@ -67,8 +63,8 @@ export default function Home() {
     [storefrontProducts]
   );
 
-  const primaryCategoryLink = categories[0]
-    ? `/category/${categories[0].id}`
+  const primaryProductLink = storefrontProducts[0]
+    ? `/garment/${storefrontProducts[0].id}`
     : "/";
 
   function renderPreviewCard({ key, to, image, title, description }) {
@@ -89,27 +85,14 @@ export default function Home() {
         <p style={{ margin: "0 0 6px", fontSize: "12px", fontWeight: 700, letterSpacing: "0.08em", color: "#78716c", textTransform: "uppercase" }}>Custom Apparel Made Simple</p>
         <h2 style={{ margin: "0 0 6px", fontSize: "24px" }}>Start Your Custom Order</h2>
         <p style={{ margin: "0 0 14px", fontSize: "14px", color: "#78716c" }}>Upload artwork, choose garments, and request a quote in minutes.</p>
-        <Link to={primaryCategoryLink} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minHeight: "42px", padding: "0 16px", borderRadius: "12px", background: "#171717", color: "#ffffff", textDecoration: "none", fontSize: "14px", fontWeight: 700 }}>Start Order</Link>
+        <Link to={primaryProductLink} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minHeight: "42px", padding: "0 16px", borderRadius: "12px", background: "#171717", color: "#ffffff", textDecoration: "none", fontSize: "14px", fontWeight: 700 }}>Start Order</Link>
       </div>
 
       <div style={{ marginBottom: "24px" }}>
-        <h2 style={{ marginBottom: "12px" }}>Shop by Category</h2>
+        <h2 style={{ marginBottom: "12px" }}>Shop Products</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "14px" }}>
-          {categories.map((category) => renderPreviewCard({
-            key: category.id,
-            to: `/category/${category.id}`,
-            image: category.image,
-            title: category.name,
-            description: category.description,
-          }))}
-        </div>
-      </div>
-
-      <div style={{ marginBottom: "24px" }}>
-        <h2 style={{ marginBottom: "12px" }}>Popular Garments</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "14px" }}>
-          {popularGarments.map((item) => renderPreviewCard({
-            key: item.title,
+          {storefrontCards.map((item) => renderPreviewCard({
+            key: item.id,
             to: item.to,
             image: item.image,
             title: item.title,

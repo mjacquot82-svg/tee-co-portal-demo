@@ -12,7 +12,6 @@ const productListeners = new Set();
 let cachedProductsStorageRaw = null;
 let cachedProductsSnapshotRaw = null;
 let cachedProductsSnapshot = EMPTY_PRODUCTS;
-let cachedDefaultProductsSnapshot = null;
 let productsLoadStarted = false;
 let productsLoadPromise = null;
 let hasLoadedProductsFromSupabase = false;
@@ -107,104 +106,6 @@ function buildPlacementPricesFromConfig(placementConfig, placementPrices = {}) {
     return prices;
   }, {});
 }
-
-export const defaultProducts = [
-  {
-    id: "product-hoodie",
-    name: "Pullover Hoodie",
-    category: "Hoodie / Sweater",
-    product_type: "Pullover Hoodie",
-    status: "Active",
-    image: "",
-    cost_price: 18,
-    markup_percentage: 50,
-    calculated_base_price: 28,
-    colors: ["Black", "Navy", "Gray", "White"],
-    sizes: ["S", "M", "L", "XL", "2XL", "3XL"],
-    placements: ["Left Chest", "Full Front", "Full Back", "Sleeve"],
-    placement_prices: {
-      "Left Chest": 8,
-      "Full Front": 12,
-      "Full Back": 18,
-      Sleeve: 6,
-    },
-    placement_config: [
-      { id: "left-chest", label: "Left Chest", price: 8 },
-      { id: "full-front", label: "Full Front", price: 12 },
-      { id: "full-back", label: "Full Back", price: 18 },
-      { id: "sleeve", label: "Sleeve", price: 6 },
-    ],
-    decoration_types: ["Embroidery", "Screen Print", "DTF"],
-    production_method_prices: {
-      "Screen Print": 0,
-      DTF: 1.5,
-      Embroidery: 4.5,
-    },
-    notes: "General hoodie option. Add specific brands later when known.",
-  },
-  {
-    id: "product-hat",
-    name: "Hat",
-    category: "Hat",
-    product_type: "Cap / Hat",
-    status: "Active",
-    image: "",
-    cost_price: 8,
-    markup_percentage: 75,
-    calculated_base_price: 14,
-    colors: ["Black", "Navy", "Gray", "White"],
-    sizes: ["OSFA"],
-    placements: ["Front", "Side", "Back"],
-    placement_prices: {
-      Front: 10,
-      Side: 6,
-      Back: 5,
-    },
-    placement_config: [
-      { id: "front", label: "Front", price: 10 },
-      { id: "side", label: "Side", price: 6 },
-      { id: "back", label: "Back", price: 5 },
-    ],
-    decoration_types: ["Embroidery"],
-    production_method_prices: {
-      Embroidery: 3,
-    },
-    notes: "Use for caps, snapbacks, and similar headwear.",
-  },
-  {
-    id: "product-tee",
-    name: "T-Shirt",
-    category: "Shirt",
-    product_type: "T-Shirt",
-    status: "Active",
-    image: "",
-    cost_price: 5.5,
-    markup_percentage: 80,
-    calculated_base_price: 18,
-    colors: ["Black", "White", "Gray", "Navy"],
-    sizes: ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"],
-    placements: ["Left Chest", "Full Front", "Full Back", "Sleeve"],
-    placement_prices: {
-      "Left Chest": 4,
-      "Full Front": 12,
-      "Full Back": 12,
-      Sleeve: 5,
-    },
-    placement_config: [
-      { id: "left-chest", label: "Left Chest", price: 4 },
-      { id: "full-front", label: "Full Front", price: 12 },
-      { id: "full-back", label: "Full Back", price: 12 },
-      { id: "sleeve", label: "Sleeve", price: 5 },
-    ],
-    decoration_types: ["Screen Print", "DTF", "Embroidery"],
-    production_method_prices: {
-      "Screen Print": 0,
-      DTF: 1.25,
-      Embroidery: 3.5,
-    },
-    notes: "Generic shirt category until exact brand catalog is added.",
-  },
-];
 
 function normalizeList(value) {
   if (Array.isArray(value)) {
@@ -372,17 +273,8 @@ function normalizeProduct(product) {
 }
 
 function normalizeStoredProductsCollection(products) {
-  const sourceProducts = Array.isArray(products) ? products : defaultProducts;
+  const sourceProducts = Array.isArray(products) ? products : EMPTY_PRODUCTS;
   return sourceProducts.map(normalizeProduct).filter(Boolean);
-}
-
-function getDefaultProductsSnapshot() {
-  if (cachedDefaultProductsSnapshot) {
-    return cachedDefaultProductsSnapshot;
-  }
-
-  cachedDefaultProductsSnapshot = normalizeStoredProductsCollection(defaultProducts);
-  return cachedDefaultProductsSnapshot;
 }
 
 function cacheProductsSnapshot(products) {
@@ -418,7 +310,7 @@ function setProductsSnapshot(products) {
 }
 
 function getLocalProductsSnapshot() {
-  if (!hasBrowserStorage()) return getDefaultProductsSnapshot();
+  if (!hasBrowserStorage()) return EMPTY_PRODUCTS;
 
   try {
     const rawProducts = getRawStorageItem(STORAGE_KEY);
@@ -428,7 +320,7 @@ function getLocalProductsSnapshot() {
       return cachedProductsSnapshot;
     }
 
-    const parsedProducts = rawProducts ? JSON.parse(rawProducts) : getDefaultProductsSnapshot();
+    const parsedProducts = rawProducts ? JSON.parse(rawProducts) : EMPTY_PRODUCTS;
     const { normalizedProducts } = cacheProductsSnapshot(parsedProducts);
 
     cachedProductsStorageRaw = storageRawProducts;
@@ -438,7 +330,7 @@ function getLocalProductsSnapshot() {
     console.error("Unable to read Tee & Co products", error);
     cachedProductsStorageRaw = null;
     cachedProductsSnapshotRaw = null;
-    cachedProductsSnapshot = getDefaultProductsSnapshot();
+    cachedProductsSnapshot = EMPTY_PRODUCTS;
     return cachedProductsSnapshot;
   }
 }
