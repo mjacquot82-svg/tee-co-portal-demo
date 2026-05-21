@@ -10,10 +10,12 @@ import {
   useGarmentLibraryItems,
 } from "../lib/garmentLibraryStore";
 import { useStoredProducts } from "../lib/productsStore";
+import { parseTeeCoGarmentSpreadsheet } from "../lib/teeCoGarmentSpreadsheet";
 import {
   buildGarmentLibraryLabel,
   buildGarmentModelLabel,
   fieldStyle,
+  findLookupByName,
   findLookupById,
   labelStyle,
   MultiSelectLookupField,
@@ -38,6 +40,8 @@ const COMMON_PLACEMENT_OPTIONS = [
   "Side Panel",
   "Yoke",
 ];
+
+const EMPTY_LIST = [];
 
 const emptyLibraryForm = {
   title: "",
@@ -82,15 +86,55 @@ function buildModelDraftFromModel(model, fallbackBrandId = "") {
   };
 }
 
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error(`Unable to read file: ${file?.name || "spreadsheet"}`));
+    reader.readAsText(file);
+  });
+}
+
+function buildLookupNameMap(options = []) {
+  return options.reduce((accumulator, option) => {
+    const key = normalizeTextKey(option?.name);
+    if (key) {
+      accumulator.set(key, option);
+    }
+    return accumulator;
+  }, new Map());
+}
+
+function buildGarmentModelMap(options = []) {
+  return options.reduce((accumulator, option) => {
+    const key = [
+      option?.brand_id || "",
+      option?.category_id || "",
+      normalizeTextKey(option?.display_name),
+      normalizeTextKey(option?.model_code),
+    ].join("::");
+    accumulator.set(key, option);
+    return accumulator;
+  }, new Map());
+}
+
+function buildGarmentMap(items = []) {
+  return items.reduce((accumulator, item) => {
+    const key = [item?.brand_lookup_id || "", normalizeTextKey(item?.title)].join("::");
+    accumulator.set(key, item);
+    return accumulator;
+  }, new Map());
+}
+
 export default function GarmentLibrary() {
   const editorRef = useRef(null);
   const garments = useGarmentLibraryItems();
   const products = useStoredProducts();
   const lookups = useCatalogLookups();
-  const categories = lookups.categories || [];
-  const brands = lookups.brands || [];
-  const sizes = lookups.sizes || [];
-  const garmentModels = lookups.garment_models || [];
+  const categories = lookups.categories ?? EMPTY_LIST;
+  const brands = lookups.brands ?? EMPTY_LIST;
+  const sizes = lookups.sizes ?? EMPTY_LIST;
+  const garmentModels = lookups.garment_models ?? EMPTY_LIST;
   const [form, setForm] = useState(emptyLibraryForm);
   const [editingId, setEditingId] = useState(null);
   const [saveError, setSaveError] = useState("");
@@ -101,6 +145,11 @@ export default function GarmentLibrary() {
   const [brandDraft, setBrandDraft] = useState("");
   const [sizeDraft, setSizeDraft] = useState("");
   const [modelDraft, setModelDraft] = useState(buildModelDraftFromModel());
+  const [importError, setImportError] = useState("");
+  const [importNotice, setImportNotice] = useState("");
+  const [isPreparingImport, setIsPreparingImport] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importPreview, setImportPreview] = useState(null);
 
   const filteredModels = useMemo(
     () =>
@@ -135,6 +184,31 @@ export default function GarmentLibrary() {
         .some((value) => String(value).toLowerCase().includes(normalizedSearch));
     });
   }, [form.variants, variantSearch]);
+  const garmentPreviewMap = useMemo(() => buildGarmentMap(garments), [garments]);
+  const previewGarments = useMemo(() => {
+    if (!importPreview) return [];
+
+    return importPreview.garments.map((group) => {
+      const brandLookup = findLookupByName(brands, group.brand);
+      const existingGarment =
+        brandLookup &&
+        garmentPreviewMap.get([brandLookup.id, normalizeTextKey(group.title)].join("::"));
+      const existingVariantNames = new Set(
+        (existingGarment?.variants || []).map((variant) => normalizeTextKey(variant?.name))
+      );
+      const missingVariants = group.variants.filter(
+        (variant) => !existingVariantNames.has(normalizeTextKey(variant.name))
+      );
+
+      return {
+        ...group,
+        existingGarment,
+        existingVariantCount: group.variants.length - missingVariants.length,
+        missingVariants,
+      };
+    });
+  }, [brands, garmentPreviewMap, importPreview]);
+  const importablePreviewCount = previewGarments.filter((group) => group.skip !== true).length;
 
   function resetForm() {
     setForm(emptyLibraryForm);
@@ -145,6 +219,12 @@ export default function GarmentLibrary() {
     setSizeDraft("");
     setModelDraft(buildModelDraftFromModel());
     setVariantSearch("");
+  }
+
+  function clearImportPreview() {
+    setImportPreview(null);
+    setImportError("");
+    setImportNotice("");
   }
 
   function updateField(event) {
@@ -397,6 +477,179 @@ export default function GarmentLibrary() {
     }
   }
 
+  async function handleImportFileChange(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setImportError("");
+    setImportNotice("");
+    setIsPreparingImport(true);
+
+    try {
+      if (!String(file.name || "").toLowerCase().endsWith(".csv")) {
+        throw new Error("Only the Tee & Co CSV spreadsheet format is supported.");
+      }
+
+      const fileContents = await readFileAsText(file);
+      const parsed = parseTeeCoGarmentSpreadsheet(fileContents);
+
+      setImportPreview({
+        fileName: file.name,
+        garments: parsed.garments.map((group) => ({ ...group, skip: false })),
+        garmentCount: parsed.garmentCount,
+        rowCount: parsed.rowCount,
+      });
+    } catch (error) {
+      setImportPreview(null);
+      setImportError(error?.message || "Unable to prepare this spreadsheet.");
+    } finally {
+      setIsPreparingImport(false);
+    }
+  }
+
+  function toggleImportSkip(groupId) {
+    setImportPreview((current) => {
+      if (!current) return current;
+
+      return {
+        ...current,
+        garments: current.garments.map((group) =>
+          group.id === groupId ? { ...group, skip: !group.skip } : group
+        ),
+      };
+    });
+  }
+
+  async function handleConfirmImport() {
+    if (!importPreview) return;
+
+    setImportError("");
+    setImportNotice("");
+    setIsImporting(true);
+
+    try {
+      const categoryMap = buildLookupNameMap(categories);
+      const brandMap = buildLookupNameMap(brands);
+      const garmentModelMap = buildGarmentModelMap(garmentModels);
+      const garmentMap = buildGarmentMap(garments);
+
+      let createdGarments = 0;
+      let updatedGarments = 0;
+      let addedVariants = 0;
+      let skippedVariants = 0;
+
+      for (const previewGroup of importPreview.garments) {
+        if (previewGroup.skip) continue;
+
+        let category = categoryMap.get(normalizeTextKey(previewGroup.category));
+        if (!category) {
+          category = await createCatalogLookup("categories", {
+            name: previewGroup.category,
+            active: true,
+          });
+          categoryMap.set(normalizeTextKey(category.name), category);
+        }
+
+        let brand = brandMap.get(normalizeTextKey(previewGroup.brand));
+        if (!brand) {
+          brand = await createCatalogLookup("brands", {
+            name: previewGroup.brand,
+            active: true,
+          });
+          brandMap.set(normalizeTextKey(brand.name), brand);
+        }
+
+        const garmentKey = [brand.id, normalizeTextKey(previewGroup.title)].join("::");
+        const existingGarment = garmentMap.get(garmentKey) || null;
+        let garmentModelId = existingGarment?.garment_model_lookup_id || "";
+
+        if (!garmentModelId) {
+          const modelKey = [brand.id, category.id, normalizeTextKey(previewGroup.productName), ""].join("::");
+          let garmentModel = garmentModelMap.get(modelKey);
+
+          if (!garmentModel) {
+            garmentModel = await createCatalogLookup("garment_models", {
+              brand_id: brand.id,
+              model_code: "",
+              display_name: previewGroup.productName,
+              category_id: category.id,
+              active: true,
+            });
+            garmentModelMap.set(modelKey, garmentModel);
+          }
+
+          garmentModelId = garmentModel.id;
+        }
+
+        const existingVariantNames = new Set(
+          (existingGarment?.variants || []).map((variant) => normalizeTextKey(variant?.name))
+        );
+        const nextVariants = [...(existingGarment?.variants || [])];
+
+        previewGroup.variants.forEach((variant) => {
+          const variantKey = normalizeTextKey(variant.name);
+          if (existingVariantNames.has(variantKey)) {
+            skippedVariants += 1;
+            return;
+          }
+
+          existingVariantNames.add(variantKey);
+          nextVariants.push({
+            id: `variant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            name: variant.name,
+            supplier_sku: variant.supplierSku,
+            active: true,
+          });
+          addedVariants += 1;
+        });
+
+        if (existingGarment) {
+          const shouldUpdate =
+            nextVariants.length !== (existingGarment.variants || []).length ||
+            !existingGarment.category_lookup_id ||
+            !existingGarment.brand_lookup_id ||
+            existingGarment.garment_model_lookup_id !== garmentModelId;
+
+          if (shouldUpdate) {
+            await updateGarmentLibraryItem(existingGarment.id, {
+              category_lookup_id: existingGarment.category_lookup_id || category.id,
+              brand_lookup_id: existingGarment.brand_lookup_id || brand.id,
+              garment_model_lookup_id: garmentModelId,
+              variants: nextVariants,
+            });
+            updatedGarments += 1;
+          }
+          continue;
+        }
+
+        await createGarmentLibraryItem({
+          title: previewGroup.title,
+          category_lookup_id: category.id,
+          brand_lookup_id: brand.id,
+          garment_model_lookup_id: garmentModelId,
+          image: "",
+          variants: nextVariants,
+          sizes: [],
+          default_placements: [],
+          default_production_methods: [],
+          notes: "",
+          active: true,
+        });
+        createdGarments += 1;
+      }
+
+      setImportNotice(
+        `Import complete. ${createdGarments} garments created, ${updatedGarments} garments updated, ${addedVariants} variants added, ${skippedVariants} duplicate variants skipped.`
+      );
+      setImportPreview(null);
+    } catch (error) {
+      setImportError(error?.message || "Import failed before completion.");
+    } finally {
+      setIsImporting(false);
+    }
+  }
+
   return (
     <div className="products-page">
       <div className="products-workspace">
@@ -410,6 +663,117 @@ export default function GarmentLibrary() {
           </div>
 
           {saveError ? <div className="products-error-banner">{saveError}</div> : null}
+          {importError ? <div className="products-error-banner">{importError}</div> : null}
+          {importNotice ? <div className="products-callout">{importNotice}</div> : null}
+
+          <section className="products-editor-section">
+            <div className="products-section-header">
+              <div>
+                <p className="products-section-step">Import</p>
+                <h2>Tee &amp; Co Spreadsheet Importer</h2>
+              </div>
+              <p>
+                Upload the current Tee &amp; Co supplier CSV, review garments grouped by brand and product name,
+                then confirm what should import into the Garment Library.
+              </p>
+            </div>
+
+            <div className="products-import-shell">
+              <label style={labelStyle}>
+                Upload Tee &amp; Co CSV
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleImportFileChange}
+                  style={fieldStyle}
+                  disabled={isPreparingImport || isImporting}
+                />
+              </label>
+
+              <p className="products-selection-empty">
+                Exact required columns: Category, Brand, Supplier SKU, Product Name, Variant/Color.
+              </p>
+
+              {isPreparingImport ? <div className="products-summary-card">Preparing import preview...</div> : null}
+
+              {importPreview ? (
+                <div className="products-import-preview">
+                  <div className="products-status-row">
+                    <span>
+                      {importPreview.fileName} • {importPreview.garmentCount} garments • {importPreview.rowCount} rows
+                    </span>
+                    <span>{importablePreviewCount} garments selected</span>
+                  </div>
+
+                  <div className="products-import-group-list">
+                    {previewGarments.map((group) => (
+                      <article
+                        key={group.id}
+                        className={`products-import-group-card ${group.skip ? "is-skipped" : ""}`}
+                      >
+                        <div className="products-import-group-header">
+                          <div style={{ minWidth: 0 }}>
+                            <h3 style={{ margin: 0 }}>{group.title}</h3>
+                            <p className="products-card-subtitle">
+                              {group.category} • {group.variantCount} variants detected
+                              {group.duplicateRowCount ? ` • ${group.duplicateRowCount} duplicate rows ignored` : ""}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            className="products-inline-cancel"
+                            onClick={() => toggleImportSkip(group.id)}
+                          >
+                            {group.skip ? "Import Garment" : "Skip Garment"}
+                          </button>
+                        </div>
+
+                        <div className="products-summary-meta">
+                          <span>
+                            {group.existingGarment
+                              ? `Existing garment found • ${group.existingVariantCount} duplicate variants • ${group.missingVariants.length} variants to add`
+                              : "New garment will be created"}
+                          </span>
+                        </div>
+
+                        <div className="products-import-variant-list">
+                          {group.variants.map((variant) => {
+                            const isExistingVariant =
+                              !!group.existingGarment &&
+                              !group.missingVariants.some(
+                                (item) => normalizeTextKey(item.name) === normalizeTextKey(variant.name)
+                              );
+
+                            return (
+                              <div key={`${group.id}-${variant.name}`} className="products-import-variant-row">
+                                <strong>{variant.name}</strong>
+                                <span>{variant.supplierSku}</span>
+                                <span>{isExistingVariant ? "Duplicate variant" : "New variant"}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+
+                  <div className="products-import-actions">
+                    <button
+                      type="button"
+                      className="products-primary-button"
+                      onClick={handleConfirmImport}
+                      disabled={isImporting || !importablePreviewCount}
+                    >
+                      {isImporting ? "Importing..." : "Confirm Import"}
+                    </button>
+                    <button type="button" className="products-secondary-button" onClick={clearImportPreview}>
+                      Cancel Import
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </section>
 
           <section className="products-editor-section">
             <div className="products-section-header">
