@@ -47,12 +47,11 @@ const GARMENT_SORT_OPTIONS = [
   { value: "alphabetical", label: "Alphabetical" },
   { value: "most-variants", label: "Most Variants" },
   { value: "least-variants", label: "Least Variants" },
-  { value: "most-published", label: "Most Published" },
+  { value: "most-storefront", label: "Most Used In Storefront" },
 ];
 
 const EMPTY_GARMENT_USAGE = Object.freeze({
   linkedProductCount: 0,
-  publishedProductCount: 0,
 });
 
 const emptyLibraryForm = {
@@ -218,26 +217,16 @@ function buildGarmentUsageMap(products = []) {
     if (!garmentModelId) return accumulator;
 
     const currentUsage = accumulator.get(garmentModelId) || EMPTY_GARMENT_USAGE;
-    const isPublished = normalizeTextKey(product?.status || "Active") === "active";
 
     accumulator.set(garmentModelId, {
       linkedProductCount: currentUsage.linkedProductCount + 1,
-      publishedProductCount: currentUsage.publishedProductCount + (isPublished ? 1 : 0),
     });
 
     return accumulator;
   }, new Map());
 }
 
-function getGarmentPublishStateMatch(filterValue, usage) {
-  if (filterValue === "published") {
-    return usage.publishedProductCount > 0;
-  }
-
-  if (filterValue === "unpublished") {
-    return usage.publishedProductCount === 0;
-  }
-
+function getGarmentStorefrontUsageMatch(filterValue, usage) {
   if (filterValue === "used") {
     return usage.linkedProductCount > 0;
   }
@@ -289,10 +278,8 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
             <strong>{(item.default_production_methods || []).join(", ") || "None"}</strong>
           </div>
           <div className="products-card-detail">
-            <span>Published</span>
-            <strong>
-              {usage.publishedProductCount} active / {usage.linkedProductCount} linked
-            </strong>
+            <span>Storefront Usage</span>
+            <strong>{usage.linkedProductCount} linked product{usage.linkedProductCount === 1 ? "" : "s"}</strong>
           </div>
         </div>
       </div>
@@ -345,7 +332,7 @@ export default function GarmentLibrary() {
   const [importPreviewStatusFilter, setImportPreviewStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [brandFilter, setBrandFilter] = useState("all");
-  const [publishStateFilter, setPublishStateFilter] = useState("all");
+  const [storefrontUsageFilter, setStorefrontUsageFilter] = useState("all");
   const [sortOption, setSortOption] = useState("newest");
   const deferredSearchTerm = useDeferredValue(searchTerm);
 
@@ -426,7 +413,7 @@ export default function GarmentLibrary() {
         return false;
       }
 
-      if (!getGarmentPublishStateMatch(publishStateFilter, entry.usage)) {
+      if (!getGarmentStorefrontUsageMatch(storefrontUsageFilter, entry.usage)) {
         return false;
       }
 
@@ -447,9 +434,8 @@ export default function GarmentLibrary() {
         return left.variantCount - right.variantCount || left.sortTitle.localeCompare(right.sortTitle);
       }
 
-      if (sortOption === "most-published") {
+      if (sortOption === "most-storefront") {
         return (
-          right.usage.publishedProductCount - left.usage.publishedProductCount ||
           right.usage.linkedProductCount - left.usage.linkedProductCount ||
           left.sortTitle.localeCompare(right.sortTitle)
         );
@@ -459,9 +445,9 @@ export default function GarmentLibrary() {
     });
 
     return nextItems;
-  }, [brandFilter, categoryFilter, deferredSearchTerm, garmentBrowseItems, publishStateFilter, sortOption]);
+  }, [brandFilter, categoryFilter, deferredSearchTerm, garmentBrowseItems, storefrontUsageFilter, sortOption]);
   const hasActiveGarmentFilters = Boolean(
-    searchTerm.trim() || categoryFilter !== "all" || brandFilter !== "all" || publishStateFilter !== "all"
+    searchTerm.trim() || categoryFilter !== "all" || brandFilter !== "all" || storefrontUsageFilter !== "all"
   );
   const filteredGarmentCount = filteredGarments.length;
   const visibleVariants = useMemo(() => {
@@ -1726,7 +1712,7 @@ export default function GarmentLibrary() {
                 <strong>{garments.length}</strong>
               </div>
               <div className="products-stat-card">
-                <span>Published Products</span>
+                <span>Storefront Products</span>
                 <strong>{products.length}</strong>
               </div>
             </div>
@@ -1769,17 +1755,15 @@ export default function GarmentLibrary() {
             </label>
 
             <label className="products-toolbar-field">
-              <span>Publish State</span>
+              <span>Storefront Usage</span>
               <select
-                value={publishStateFilter}
-                onChange={(event) => setPublishStateFilter(event.target.value)}
+                value={storefrontUsageFilter}
+                onChange={(event) => setStorefrontUsageFilter(event.target.value)}
                 style={fieldStyle}
               >
-                <option value="all">All Publish States</option>
-                <option value="published">Published</option>
-                <option value="unpublished">Unpublished</option>
-                <option value="used">Used in Storefront</option>
-                <option value="unused">Unused</option>
+                <option value="all">All Garments</option>
+                <option value="used">Used In Storefront</option>
+                <option value="unused">Not Used In Storefront</option>
               </select>
             </label>
 
@@ -1808,7 +1792,7 @@ export default function GarmentLibrary() {
                 setSearchTerm("");
                 setCategoryFilter("all");
                 setBrandFilter("all");
-                setPublishStateFilter("all");
+                setStorefrontUsageFilter("all");
                 setSortOption("newest");
               }}
               disabled={!hasActiveGarmentFilters && sortOption === "newest"}
