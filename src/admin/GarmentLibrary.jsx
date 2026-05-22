@@ -126,6 +126,71 @@ function buildGarmentMap(items = []) {
   }, new Map());
 }
 
+function buildImportWarningSummary(warnings = []) {
+  const summary = {
+    total: warnings.length,
+    missingCategory: 0,
+    missingBrand: 0,
+    missingSupplierSku: 0,
+    missingProductName: 0,
+    missingVariant: 0,
+    categoryMismatch: 0,
+    conflictingSku: 0,
+    other: 0,
+  };
+
+  warnings.forEach((warning) => {
+    if (warning.includes("Category is required")) {
+      summary.missingCategory += 1;
+      return;
+    }
+    if (warning.includes("Brand is required")) {
+      summary.missingBrand += 1;
+      return;
+    }
+    if (warning.includes("Supplier SKU is required")) {
+      summary.missingSupplierSku += 1;
+      return;
+    }
+    if (warning.includes("Product Name is required")) {
+      summary.missingProductName += 1;
+      return;
+    }
+    if (warning.includes("Variant/Color is required")) {
+      summary.missingVariant += 1;
+      return;
+    }
+    if (warning.includes("Category does not match other rows")) {
+      summary.categoryMismatch += 1;
+      return;
+    }
+    if (warning.includes("conflicting Supplier SKU values")) {
+      summary.conflictingSku += 1;
+      return;
+    }
+    summary.other += 1;
+  });
+
+  return Object.entries(summary)
+    .filter(([key, value]) => key === "total" || value > 0)
+    .map(([key, value]) => ({
+      key,
+      value,
+      label:
+        {
+          total: "total warnings",
+          missingCategory: "missing Category",
+          missingBrand: "missing Brand",
+          missingSupplierSku: "missing Supplier SKU",
+          missingProductName: "missing Product Name",
+          missingVariant: "missing Variant/Color",
+          categoryMismatch: "category mismatches",
+          conflictingSku: "conflicting SKU rows",
+          other: "other issues",
+        }[key] || key,
+    }));
+}
+
 export default function GarmentLibrary() {
   const editorRef = useRef(null);
   const garments = useGarmentLibraryItems();
@@ -151,6 +216,8 @@ export default function GarmentLibrary() {
   const [isPreparingImport, setIsPreparingImport] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
+  const [expandedImportGroups, setExpandedImportGroups] = useState({});
+  const [showImportWarningDetails, setShowImportWarningDetails] = useState(false);
 
   const filteredModels = useMemo(
     () =>
@@ -206,10 +273,49 @@ export default function GarmentLibrary() {
         existingGarment,
         existingVariantCount: group.variants.length - missingVariants.length,
         missingVariants,
+        garmentWarnings: [
+          group.duplicateRowCount
+            ? `${group.duplicateRowCount} duplicate supplier row${
+                group.duplicateRowCount === 1 ? "" : "s"
+              } merged into this garment preview.`
+            : null,
+          existingGarment && group.existingVariantCount
+            ? `${group.existingVariantCount} variant${
+                group.existingVariantCount === 1 ? "" : "s"
+              } already exist and will be skipped during import.`
+            : null,
+        ].filter(Boolean),
       };
     });
   }, [brands, garmentPreviewMap, importPreview]);
   const importablePreviewCount = previewGarments.filter((group) => group.skip !== true).length;
+  const importPreviewSummary = useMemo(() => {
+    if (!importPreview) return null;
+
+    const selectedGarments = previewGarments.filter((group) => group.skip !== true);
+    const skippedGarments = previewGarments.length - selectedGarments.length;
+    const totalVariantsDetected = previewGarments.reduce(
+      (total, group) => total + group.variantCount,
+      0
+    );
+    const selectedVariants = selectedGarments.reduce(
+      (total, group) => total + group.missingVariants.length,
+      0
+    );
+
+    return {
+      garmentsDetected: importPreview.garmentCount,
+      garmentsSkipped: skippedGarments,
+      totalVariantsDetected,
+      variantsSelectedForImport: selectedVariants,
+      malformedRowsSkipped: importPreview.skippedMalformedRowCount,
+      emptyRowsSkipped: importPreview.skippedEmptyRowCount,
+    };
+  }, [importPreview, previewGarments]);
+  const importWarningSummary = useMemo(
+    () => buildImportWarningSummary(importWarnings),
+    [importWarnings]
+  );
 
   function resetForm() {
     setForm(emptyLibraryForm);
@@ -227,6 +333,15 @@ export default function GarmentLibrary() {
     setImportError("");
     setImportNotice("");
     setImportWarnings([]);
+    setExpandedImportGroups({});
+    setShowImportWarningDetails(false);
+  }
+
+  function toggleImportGroupExpanded(groupId) {
+    setExpandedImportGroups((current) => ({
+      ...current,
+      [groupId]: !current[groupId],
+    }));
   }
 
   function updateField(event) {
@@ -489,6 +604,8 @@ export default function GarmentLibrary() {
     setImportNotice("");
     setImportWarnings([]);
     setIsPreparingImport(true);
+    setExpandedImportGroups({});
+    setShowImportWarningDetails(false);
 
     try {
       if (!String(file.name || "").toLowerCase().endsWith(".csv")) {
@@ -717,16 +834,34 @@ export default function GarmentLibrary() {
 
               {importWarnings.length ? (
                 <div className="products-import-warning-panel" role="status" aria-live="polite">
-                  <strong>
-                    {importWarnings.length} row{importWarnings.length === 1 ? "" : "s"} skipped during parsing
-                  </strong>
-                  <div className="products-import-warning-list">
-                    {importWarnings.map((warning) => (
-                      <div key={warning} className="products-import-warning-item">
-                        {warning}
-                      </div>
+                  <div className="products-import-warning-header">
+                    <strong>
+                      {importWarnings.length} parsing warning{importWarnings.length === 1 ? "" : "s"}
+                    </strong>
+                    <button
+                      type="button"
+                      className="products-inline-cancel"
+                      onClick={() => setShowImportWarningDetails((current) => !current)}
+                    >
+                      {showImportWarningDetails ? "Hide Details" : "Show Details"}
+                    </button>
+                  </div>
+                  <div className="products-import-warning-summary">
+                    {importWarningSummary.map((item) => (
+                      <span key={item.key} className="products-import-warning-chip">
+                        {item.value} {item.label}
+                      </span>
                     ))}
                   </div>
+                  {showImportWarningDetails ? (
+                    <div className="products-import-warning-list">
+                      {importWarnings.map((warning) => (
+                        <div key={warning} className="products-import-warning-item">
+                          {warning}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -740,10 +875,37 @@ export default function GarmentLibrary() {
                     <span>{importablePreviewCount} garments selected</span>
                   </div>
 
+                  {importPreviewSummary ? (
+                    <div className="products-import-summary-bar">
+                      <div className="products-import-summary-stat">
+                        <strong>{importPreviewSummary.garmentsDetected}</strong>
+                        <span>garments detected</span>
+                      </div>
+                      <div className="products-import-summary-stat">
+                        <strong>{importPreviewSummary.totalVariantsDetected}</strong>
+                        <span>variants detected</span>
+                      </div>
+                      <div className="products-import-summary-stat">
+                        <strong>{importPreviewSummary.malformedRowsSkipped}</strong>
+                        <span>malformed rows skipped</span>
+                      </div>
+                      <div className="products-import-summary-stat">
+                        <strong>{importPreviewSummary.emptyRowsSkipped}</strong>
+                        <span>empty rows skipped</span>
+                      </div>
+                      <div className="products-import-summary-stat">
+                        <strong>{importPreviewSummary.garmentsSkipped}</strong>
+                        <span>garments skipped</span>
+                      </div>
+                      <div className="products-import-summary-stat">
+                        <strong>{importPreviewSummary.variantsSelectedForImport}</strong>
+                        <span>new variants selected</span>
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="products-summary-meta">
                     <span>{importPreview.rowCount} grouped row references included in preview</span>
-                    <span>{importPreview.skippedEmptyRowCount} empty rows skipped</span>
-                    <span>{importPreview.skippedMalformedRowCount} malformed rows skipped</span>
                   </div>
 
                   <div className="products-import-group-list">
@@ -757,43 +919,82 @@ export default function GarmentLibrary() {
                             <h3 style={{ margin: 0 }}>{group.title}</h3>
                             <p className="products-card-subtitle">
                               {group.category} • {group.variantCount} variants detected
-                              {group.duplicateRowCount ? ` • ${group.duplicateRowCount} duplicate rows ignored` : ""}
                             </p>
                           </div>
-                          <button
-                            type="button"
-                            className="products-inline-cancel"
-                            onClick={() => toggleImportSkip(group.id)}
-                          >
-                            {group.skip ? "Import Garment" : "Skip Garment"}
-                          </button>
+                          <div className="products-import-group-actions">
+                            <button
+                              type="button"
+                              className="products-secondary-button"
+                              onClick={() => toggleImportGroupExpanded(group.id)}
+                            >
+                              {expandedImportGroups[group.id] ? "Collapse" : "Expand"}
+                            </button>
+                            <button
+                              type="button"
+                              className="products-inline-cancel"
+                              onClick={() => toggleImportSkip(group.id)}
+                            >
+                              {group.skip ? "Import Garment" : "Skip Garment"}
+                            </button>
+                          </div>
                         </div>
 
-                        <div className="products-summary-meta">
-                          <span>
-                            {group.existingGarment
-                              ? `Existing garment found • ${group.existingVariantCount} duplicate variants • ${group.missingVariants.length} variants to add`
-                              : "New garment will be created"}
+                        <div className="products-import-group-meta">
+                          <span className="products-import-status-badge">
+                            {group.existingGarment ? "Existing garment" : "New garment"}
                           </span>
+                          <span className="products-import-meta-pill">
+                            {group.missingVariants.length} new variant
+                            {group.missingVariants.length === 1 ? "" : "s"}
+                          </span>
+                          {group.existingGarment ? (
+                            <span className="products-import-meta-pill">
+                              {group.existingVariantCount} duplicate variant
+                              {group.existingVariantCount === 1 ? "" : "s"}
+                            </span>
+                          ) : null}
+                          {group.garmentWarnings.length ? (
+                            <span className="products-import-warning-pill">
+                              {group.garmentWarnings.length} warning
+                              {group.garmentWarnings.length === 1 ? "" : "s"}
+                            </span>
+                          ) : null}
                         </div>
 
-                        <div className="products-import-variant-list">
-                          {group.variants.map((variant) => {
-                            const isExistingVariant =
-                              !!group.existingGarment &&
-                              !group.missingVariants.some(
-                                (item) => normalizeTextKey(item.name) === normalizeTextKey(variant.name)
-                              );
-
-                            return (
-                              <div key={`${group.id}-${variant.name}`} className="products-import-variant-row">
-                                <strong>{variant.name}</strong>
-                                <span>{variant.supplierSku}</span>
-                                <span>{isExistingVariant ? "Duplicate variant" : "New variant"}</span>
+                        {expandedImportGroups[group.id] ? (
+                          <div className="products-import-group-body">
+                            {group.garmentWarnings.length ? (
+                              <div className="products-import-garment-warning-box">
+                                <strong>Warnings for this garment</strong>
+                                <div className="products-import-garment-warning-list">
+                                  {group.garmentWarnings.map((warning) => (
+                                    <div key={`${group.id}-${warning}`} className="products-import-warning-item">
+                                      {warning}
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
-                            );
-                          })}
-                        </div>
+                            ) : null}
+
+                            <div className="products-import-variant-list">
+                              {group.variants.map((variant) => {
+                                const isExistingVariant =
+                                  !!group.existingGarment &&
+                                  !group.missingVariants.some(
+                                    (item) => normalizeTextKey(item.name) === normalizeTextKey(variant.name)
+                                  );
+
+                                return (
+                                  <div key={`${group.id}-${variant.name}`} className="products-import-variant-row">
+                                    <strong>{variant.name}</strong>
+                                    <span>{variant.supplierSku}</span>
+                                    <span>{isExistingVariant ? "Duplicate variant" : "New variant"}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
                       </article>
                     ))}
                   </div>

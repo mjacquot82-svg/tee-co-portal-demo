@@ -863,6 +863,16 @@
   gap: 12px;
 }
 
+.products-import-group-actions,
+.products-import-warning-header,
+.products-import-group-meta,
+.products-import-warning-summary,
+.products-import-garment-warning-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .products-import-warning-panel {
   display: grid;
   gap: 10px;
@@ -871,6 +881,85 @@
   border-radius: 16px;
   background: #fffbeb;
   color: #92400e;
+}
+
+.products-import-summary-bar {
+  position: sticky;
+  top: 16px;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #dbe4ee;
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.96);
+  backdrop-filter: blur(10px);
+}
+
+.products-import-summary-stat {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+
+.products-import-summary-stat strong {
+  font-size: 1.2rem;
+  color: #0f172a;
+}
+
+.products-import-summary-stat span {
+  font-size: 0.88rem;
+  color: #475569;
+}
+
+.products-import-warning-chip,
+.products-import-meta-pill,
+.products-import-warning-pill,
+.products-import-status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.products-import-warning-chip,
+.products-import-warning-pill {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+}
+
+.products-import-meta-pill {
+  background: #f8fafc;
+  border: 1px solid #dbe4ee;
+  color: #334155;
+}
+
+.products-import-status-badge {
+  background: #e0f2fe;
+  border: 1px solid #7dd3fc;
+  color: #075985;
+}
+
+.products-import-group-body,
+.products-import-garment-warning-box {
+  display: grid;
+  gap: 10px;
+}
+
+.products-import-garment-warning-box {
+  padding: 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 14px;
+  background: #fff7ed;
+  color: #9a3412;
 }
 
 .products-import-warning-list {
@@ -975,9 +1064,17 @@
   .products-catalog-header,
   .products-inline-create-panel,
   .products-inline-meta,
+  .products-import-group-actions,
+  .products-import-group-meta,
+  .products-import-warning-header,
   .products-import-group-header,
   .products-field-footer {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .products-import-summary-bar {
+    position: static;
+    grid-template-columns: 1fr;
   }
 }
