@@ -70,6 +70,19 @@ const emptyLibraryForm = {
   active: true,
 };
 
+const GARMENT_MODEL_WORKFLOW_OPTIONS = [
+  {
+    value: "create",
+    label: "Create New Garment Model",
+    description: "Add a new reusable garment model with manual model details.",
+  },
+  {
+    value: "existing",
+    label: "Use Existing Garment Model",
+    description: "Reuse a saved garment model and lock its shared model details.",
+  },
+];
+
 function getGarmentModeLabel(itemTitle) {
   return normalizeText(itemTitle) || "Selected Garment";
 }
@@ -100,6 +113,21 @@ function buildModelDraftFromModel(model, fallbackBrandId = "") {
     display_name: model?.display_name || "",
     model_code: model?.model_code || "",
   };
+}
+
+function buildGarmentDisplayName(model, brand) {
+  if (!model) return "";
+
+  const brandName = normalizeText(brand?.name);
+  const modelName = normalizeText(model?.display_name);
+  const modelCode = normalizeText(model?.model_code);
+  const baseLabel = [brandName, modelName].filter(Boolean).join(" ");
+
+  return modelCode ? `${baseLabel} - ${modelCode}` : baseLabel;
+}
+
+function getGarmentModelWorkflowMode(item) {
+  return item?.garment_model_lookup_id ? "existing" : "create";
 }
 
 function readFileAsText(file) {
@@ -335,6 +363,7 @@ export default function GarmentLibrary() {
   const [brandDraft, setBrandDraft] = useState("");
   const [sizeDraft, setSizeDraft] = useState("");
   const [modelDraft, setModelDraft] = useState(buildModelDraftFromModel());
+  const [garmentModelWorkflow, setGarmentModelWorkflow] = useState("create");
   const [importError, setImportError] = useState("");
   const [importNotice, setImportNotice] = useState("");
   const [importWarnings, setImportWarnings] = useState([]);
@@ -600,6 +629,20 @@ export default function GarmentLibrary() {
     [editingId, garments]
   );
   const selectedGarmentLabel = getGarmentModeLabel(form.title || selectedGarment?.title);
+  const selectedGarmentModel = useMemo(
+    () => findLookupById(garmentModels, form.garment_model_lookup_id),
+    [garmentModels, form.garment_model_lookup_id]
+  );
+  const selectedGarmentBrand = useMemo(
+    () => findLookupById(brands, form.brand_lookup_id || selectedGarmentModel?.brand_id),
+    [brands, form.brand_lookup_id, selectedGarmentModel]
+  );
+  const selectedGarmentCategory = useMemo(
+    () => findLookupById(categories, form.category_lookup_id || selectedGarmentModel?.category_id),
+    [categories, form.category_lookup_id, selectedGarmentModel]
+  );
+  const isUsingExistingGarmentModel = garmentModelWorkflow === "existing";
+  const hasSelectedExistingGarmentModel = Boolean(selectedGarmentModel);
   const storefrontLinkedGarments = useMemo(
     () => garmentBrowseItems.filter((entry) => entry.usage.linkedProductCount > 0).length,
     [garmentBrowseItems]
@@ -617,6 +660,7 @@ export default function GarmentLibrary() {
     setBrandDraft("");
     setSizeDraft("");
     setModelDraft(buildModelDraftFromModel());
+    setGarmentModelWorkflow("create");
     setVariantSearch("");
   }
 
@@ -642,6 +686,7 @@ export default function GarmentLibrary() {
         item.brand_lookup_id
       )
     );
+    setGarmentModelWorkflow(getGarmentModelWorkflowMode(item));
     setSaveError("");
     setImportError("");
     setVariantSearch("");
@@ -708,6 +753,30 @@ export default function GarmentLibrary() {
     }
   }
 
+  function handleGarmentModelWorkflowChange(nextWorkflow) {
+    setGarmentModelWorkflow(nextWorkflow);
+    setSaveError("");
+
+    if (nextWorkflow === "create") {
+      setForm((current) => ({
+        ...current,
+        garment_model_lookup_id: "",
+        garmentSearch: "",
+      }));
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      garment_model_lookup_id: "",
+      garmentSearch: "",
+      title: "",
+      category_lookup_id: "",
+      brand_lookup_id: "",
+    }));
+    setModelDraft(buildModelDraftFromModel());
+  }
+
   function handleGarmentModelSearchChange(event) {
     const nextValue = event.target.value;
     setForm((current) => ({
@@ -720,12 +789,11 @@ export default function GarmentLibrary() {
   function handleGarmentModelSelect(model) {
     const brand = findLookupById(brands, model.brand_id);
     const category = findLookupById(categories, model.category_id);
+    const displayName = buildGarmentDisplayName(model, brand);
 
     setForm((current) => ({
       ...current,
-      title:
-        current.title ||
-        [brand?.name, model.model_code, model.display_name].filter(Boolean).join(" "),
+      title: displayName || current.title,
       brand_lookup_id: brand?.id || current.brand_lookup_id,
       category_lookup_id: category?.id || current.category_lookup_id,
       garment_model_lookup_id: model.id,
@@ -839,25 +907,23 @@ export default function GarmentLibrary() {
   }
 
   async function resolveGarmentModelForSave() {
+    if (garmentModelWorkflow === "existing") {
+      const selectedModel = garmentModels.find((model) => model.id === form.garment_model_lookup_id);
+
+      if (!selectedModel) {
+        throw new Error("Select an existing garment model before saving this garment.");
+      }
+
+      return selectedModel;
+    }
+
     const displayName = normalizeText(modelDraft.display_name);
     const modelCode = normalizeText(modelDraft.model_code);
     const brandId = form.brand_lookup_id || modelDraft.brand_id;
     const categoryId = form.category_lookup_id;
-    const selectedModel = garmentModels.find((model) => model.id === form.garment_model_lookup_id);
 
     if (!displayName || !brandId || !categoryId) {
       throw new Error("Choose a category, brand, and garment model details before saving.");
-    }
-
-    const selectedStillMatches =
-      selectedModel &&
-      selectedModel.brand_id === brandId &&
-      selectedModel.category_id === categoryId &&
-      normalizeTextKey(selectedModel.display_name) === normalizeTextKey(displayName) &&
-      normalizeTextKey(selectedModel.model_code) === normalizeTextKey(modelCode);
-
-    if (selectedStillMatches) {
-      return selectedModel;
     }
 
     const matchingModel = garmentModels.find(
@@ -889,9 +955,7 @@ export default function GarmentLibrary() {
       setIsSaving(true);
       const garmentModel = await resolveGarmentModelForSave();
       const brand = findLookupById(brands, garmentModel.brand_id);
-      const fallbackTitle = [brand?.name, garmentModel.model_code, garmentModel.display_name]
-        .filter(Boolean)
-        .join(" ");
+      const fallbackTitle = buildGarmentDisplayName(garmentModel, brand);
       const payload = {
         title: normalizeText(form.title) || fallbackTitle,
         category_lookup_id: form.category_lookup_id,
@@ -1625,121 +1689,226 @@ export default function GarmentLibrary() {
                 {saveError ? <div className="products-error-banner">{saveError}</div> : null}
 
                 <section className="products-editor-section">
-            <div className="products-section-header">
-              <div>
-                <p className="products-section-step">Section 1</p>
-                <h2>Basic Garment Info</h2>
-              </div>
-              <p>Set the core garment details first, then finish the rest of the setup before saving.</p>
-            </div>
+                  <div className="products-section-header">
+                    <div>
+                      <p className="products-section-step">Section 1</p>
+                      <h2>Basic Garment Info</h2>
+                    </div>
+                    <p>Choose one model workflow first so this garment is either creating or reusing a model, never both.</p>
+                  </div>
 
-            <div className="products-editor-grid">
-              <label style={labelStyle}>
-                Category
-                <select
-                  name="category_lookup_id"
-                  value={form.category_lookup_id}
-                  onChange={updateField}
-                  style={fieldStyle}
-                >
-                  <option value="">Select category</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <div className="garment-model-workflow-panel">
+                    <div className="garment-model-workflow-header">
+                      <strong>Garment Model Workflow</strong>
+                      <p>Select the source of truth for the garment model details.</p>
+                    </div>
+                    <div className="garment-model-workflow-options" role="radiogroup" aria-label="Garment model workflow">
+                      {GARMENT_MODEL_WORKFLOW_OPTIONS.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`garment-model-workflow-option ${
+                            garmentModelWorkflow === option.value ? "is-active" : ""
+                          }`}
+                          aria-pressed={garmentModelWorkflow === option.value}
+                          onClick={() => handleGarmentModelWorkflowChange(option.value)}
+                        >
+                          <span className="garment-model-workflow-radio" aria-hidden="true" />
+                          <div>
+                            <strong>{option.label}</strong>
+                            <p>{option.description}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-              <label style={labelStyle}>
-                Brand
-                <select
-                  name="brand_lookup_id"
-                  value={form.brand_lookup_id}
-                  onChange={updateField}
-                  style={fieldStyle}
-                >
-                  <option value="">Select brand</option>
-                  {brands.map((brand) => (
-                    <option key={brand.id} value={brand.id}>
-                      {brand.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+                  {isUsingExistingGarmentModel ? (
+                    <>
+                      <SearchableLookupField
+                        label="Search Garment Models"
+                        value={form.garmentSearch}
+                        onChange={handleGarmentModelSearchChange}
+                        onSelect={handleGarmentModelSelect}
+                        options={filteredModels}
+                        placeholder="Search garment models..."
+                        helperText="Selecting a saved model will populate and lock the shared garment details below."
+                        renderOptionLabel={(model) => buildGarmentModelLabel(model, brands, categories)}
+                        renderOptionMeta={(model) => {
+                          const brand = findLookupById(brands, model.brand_id);
+                          return [brand?.name, model.model_code].filter(Boolean).join(" • ");
+                        }}
+                      />
 
-            <details className="products-helper-details">
-              <summary className="products-helper-summary">Add a new brand</summary>
-              <div className="products-inline-create-panel">
-                <input
-                  value={brandDraft}
-                  onChange={(event) => setBrandDraft(event.target.value)}
-                  placeholder="Create new brand"
-                  style={{ ...fieldStyle, flex: 1 }}
-                />
-                <button type="button" className="products-inline-save" onClick={handleCreateBrand}>
-                  Save Brand
-                </button>
-              </div>
-            </details>
+                      {hasSelectedExistingGarmentModel ? (
+                        <div className="garment-model-locked-panel">
+                          <div className="garment-model-locked-header">
+                            <strong>Using Existing Garment Model</strong>
+                            <span>This garment is reusing a saved model. Shared model fields are locked.</span>
+                          </div>
 
-            <div className="products-inline-model-grid">
-              <label style={labelStyle}>
-                Garment Model Name
-                <input
-                  value={modelDraft.display_name}
-                  onChange={(event) =>
-                    setModelDraft((current) => ({ ...current, display_name: event.target.value }))
-                  }
-                  placeholder="Unisex Jersey Tee"
-                  style={fieldStyle}
-                />
-              </label>
-              <label style={labelStyle}>
-                Garment Model Code
-                <input
-                  value={modelDraft.model_code}
-                  onChange={(event) =>
-                    setModelDraft((current) => ({ ...current, model_code: event.target.value }))
-                  }
-                  placeholder="3001"
-                  style={fieldStyle}
-                />
-              </label>
-            </div>
+                          <div className="products-editor-grid">
+                            <label style={labelStyle}>
+                              Category
+                              <input
+                                value={selectedGarmentCategory?.name || ""}
+                                readOnly
+                                aria-readonly="true"
+                                style={fieldStyle}
+                                className="products-readonly-field"
+                              />
+                            </label>
 
-            <label style={labelStyle}>
-              Garment Display Name
-              <input
-                name="title"
-                value={form.title}
-                onChange={updateField}
-                placeholder="Richardson 112 Trucker"
-                style={fieldStyle}
-              />
-            </label>
+                            <label style={labelStyle}>
+                              Brand
+                              <input
+                                value={selectedGarmentBrand?.name || ""}
+                                readOnly
+                                aria-readonly="true"
+                                style={fieldStyle}
+                                className="products-readonly-field"
+                              />
+                            </label>
+                          </div>
 
-            <SearchableLookupField
-              label="Use Existing Garment Model (Optional)"
-              value={form.garmentSearch}
-              onChange={handleGarmentModelSearchChange}
-              onSelect={handleGarmentModelSelect}
-              options={filteredModels}
-              placeholder="Search existing garment models"
-              helperText="If you pick an existing model, this garment will reuse it. If not, the model name and code above will be saved as a new garment model."
-              renderOptionLabel={(model) => buildGarmentModelLabel(model, brands, categories)}
-              renderOptionMeta={(model) => {
-                const brand = findLookupById(brands, model.brand_id);
-                return [brand?.name, model.model_code].filter(Boolean).join(" • ");
-              }}
-            />
+                          <div className="products-inline-model-grid">
+                            <label style={labelStyle}>
+                              Garment Model Name
+                              <input
+                                value={selectedGarmentModel?.display_name || ""}
+                                readOnly
+                                aria-readonly="true"
+                                style={fieldStyle}
+                                className="products-readonly-field"
+                              />
+                            </label>
 
-            <ProductImageUploader
-              image={form.image}
-              onImageChange={(image) => setForm((current) => ({ ...current, image }))}
-            />
-          </section>
+                            <label style={labelStyle}>
+                              Garment Model Code
+                              <input
+                                value={selectedGarmentModel?.model_code || ""}
+                                readOnly
+                                aria-readonly="true"
+                                style={fieldStyle}
+                                className="products-readonly-field"
+                              />
+                            </label>
+                          </div>
+
+                          <label style={labelStyle}>
+                            Garment Display Name
+                            <input
+                              value={form.title}
+                              readOnly
+                              aria-readonly="true"
+                              style={fieldStyle}
+                              className="products-readonly-field"
+                            />
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="garment-model-empty-state">
+                          Select a garment model to populate the locked model details for this garment.
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="products-editor-grid">
+                        <label style={labelStyle}>
+                          Category
+                          <select
+                            name="category_lookup_id"
+                            value={form.category_lookup_id}
+                            onChange={updateField}
+                            style={fieldStyle}
+                          >
+                            <option value="">Select category</option>
+                            {categories.map((category) => (
+                              <option key={category.id} value={category.id}>
+                                {category.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label style={labelStyle}>
+                          Brand
+                          <select
+                            name="brand_lookup_id"
+                            value={form.brand_lookup_id}
+                            onChange={updateField}
+                            style={fieldStyle}
+                          >
+                            <option value="">Select brand</option>
+                            {brands.map((brand) => (
+                              <option key={brand.id} value={brand.id}>
+                                {brand.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+
+                      <details className="products-helper-details">
+                        <summary className="products-helper-summary">Add a new brand</summary>
+                        <div className="products-inline-create-panel">
+                          <input
+                            value={brandDraft}
+                            onChange={(event) => setBrandDraft(event.target.value)}
+                            placeholder="Create new brand"
+                            style={{ ...fieldStyle, flex: 1 }}
+                          />
+                          <button type="button" className="products-inline-save" onClick={handleCreateBrand}>
+                            Save Brand
+                          </button>
+                        </div>
+                      </details>
+
+                      <div className="products-inline-model-grid">
+                        <label style={labelStyle}>
+                          Garment Model Name
+                          <input
+                            value={modelDraft.display_name}
+                            onChange={(event) =>
+                              setModelDraft((current) => ({ ...current, display_name: event.target.value }))
+                            }
+                            placeholder="Women's Heavy Cotton T-Shirt"
+                            style={fieldStyle}
+                          />
+                        </label>
+
+                        <label style={labelStyle}>
+                          Garment Model Code
+                          <input
+                            value={modelDraft.model_code}
+                            onChange={(event) =>
+                              setModelDraft((current) => ({ ...current, model_code: event.target.value }))
+                            }
+                            placeholder="5000L"
+                            style={fieldStyle}
+                          />
+                        </label>
+                      </div>
+
+                      <label style={labelStyle}>
+                        Garment Display Name
+                        <input
+                          name="title"
+                          value={form.title}
+                          onChange={updateField}
+                          placeholder="Gildan Women's Heavy Cotton T-Shirt - 5000L"
+                          style={fieldStyle}
+                        />
+                      </label>
+                    </>
+                  )}
+
+                  <ProductImageUploader
+                    image={form.image}
+                    onImageChange={(image) => setForm((current) => ({ ...current, image }))}
+                  />
+                </section>
 
           <section className="products-editor-section">
             <div className="products-section-header">
