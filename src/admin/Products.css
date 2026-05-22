@@ -118,6 +118,13 @@
   font-weight: 600;
 }
 
+.products-field-hint {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .products-inline-action,
 .products-inline-save,
 .products-inline-cancel {

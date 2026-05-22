@@ -1,8 +1,13 @@
-import { memo, useDeferredValue, useMemo, useState } from "react";
+import { memo, useDeferredValue, useEffect, useMemo, useState } from "react";
 import "./Products.css";
 import ProductImageUploader from "../components/ProductImageUploader";
 import { PRODUCTION_TYPES } from "../constants/productionTypes";
 import { createCatalogLookup, useCatalogLookups } from "../lib/catalogLookupsStore";
+import {
+  arePlacementListsEqual,
+  getPlacementOptionsForGarment,
+  getSuggestedGarmentPlacements,
+} from "../lib/garmentPlacementDefaults";
 import {
   createGarmentLibraryItem,
   deleteGarmentLibraryItem,
@@ -24,21 +29,6 @@ import {
   sortSizesByLookup,
   uniqueList,
 } from "./catalogShared";
-
-const COMMON_PLACEMENT_OPTIONS = [
-  "Left Chest",
-  "Right Chest",
-  "Full Front",
-  "Center Chest",
-  "Full Back",
-  "Upper Back",
-  "Sleeve",
-  "Left Sleeve",
-  "Right Sleeve",
-  "Front Panel",
-  "Side Panel",
-  "Yoke",
-];
 
 const EMPTY_LIST = [];
 const GARMENT_SORT_OPTIONS = [
@@ -365,6 +355,7 @@ export default function GarmentLibrary() {
   const [importPreviewSearch, setImportPreviewSearch] = useState("");
   const [importPreviewCategoryFilter, setImportPreviewCategoryFilter] = useState("all");
   const [importPreviewStatusFilter, setImportPreviewStatusFilter] = useState("all");
+  const [hasCustomizedPlacements, setHasCustomizedPlacements] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [brandFilter, setBrandFilter] = useState("all");
   const [storefrontUsageFilter, setStorefrontUsageFilter] = useState("all");
@@ -647,6 +638,23 @@ export default function GarmentLibrary() {
       (hasCategoryAndBrandSelected && matchingImportedGarments.length === 0)
   );
   const selectedGarmentLabel = getGarmentModeLabel(form.title || selectedGarment?.title);
+  const placementSuggestionContext = useMemo(() => {
+    const selectedCategory = categoryMap.get(form.category_lookup_id);
+
+    return {
+      categoryName: selectedCategory?.name || "",
+      garmentType: modelDraft.display_name || "",
+      displayName: form.title || modelDraft.model_code || "",
+    };
+  }, [categoryMap, form.category_lookup_id, form.title, modelDraft.display_name, modelDraft.model_code]);
+  const suggestedPlacements = useMemo(
+    () => getSuggestedGarmentPlacements(placementSuggestionContext),
+    [placementSuggestionContext]
+  );
+  const placementOptions = useMemo(
+    () => getPlacementOptionsForGarment(placementSuggestionContext),
+    [placementSuggestionContext]
+  );
   const storefrontLinkedGarments = useMemo(
     () => garmentBrowseItems.filter((entry) => entry.usage.linkedProductCount > 0).length,
     [garmentBrowseItems]
@@ -659,6 +667,7 @@ export default function GarmentLibrary() {
   function resetForm() {
     setForm(emptyLibraryForm);
     setEditingId(null);
+    setHasCustomizedPlacements(false);
     setSaveError("");
     setVariantDraft(buildVariantDraft());
     setBrandDraft("");
@@ -683,10 +692,23 @@ export default function GarmentLibrary() {
   }
 
   function startEditingGarment(item) {
+    const category = findLookupById(categories, item.category_lookup_id);
+    const model = findLookupById(garmentModels, item.garment_model_lookup_id);
+    const nextSuggestedPlacements = getSuggestedGarmentPlacements({
+      categoryName: category?.name || "",
+      garmentType: model?.display_name || "",
+      displayName: item.title || model?.model_code || "",
+    });
+
     setCreateMode("custom");
     setSelectedReusableGarmentId("");
     setEditingId(item.id);
     setForm(buildFormFromGarment(item, brands, categories, garmentModels, sizes));
+    setHasCustomizedPlacements(
+      Array.isArray(item?.default_placements) &&
+        item.default_placements.length > 0 &&
+        !arePlacementListsEqual(item.default_placements, nextSuggestedPlacements)
+    );
     setModelDraft(
       buildModelDraftFromModel(
         findLookupById(garmentModels, item.garment_model_lookup_id),
@@ -707,11 +729,21 @@ export default function GarmentLibrary() {
 
     const matchedEntry = matchingImportedGarments.find((entry) => entry.item.id === garmentId);
     if (!matchedEntry) return;
+    const nextSuggestedPlacements = getSuggestedGarmentPlacements({
+      categoryName: categoryMap.get(matchedEntry.item.category_lookup_id)?.name || "",
+      garmentType: matchedEntry.model?.display_name || "",
+      displayName: matchedEntry.item.title || matchedEntry.model?.model_code || "",
+    });
 
     setCreateMode("imported");
     setSelectedReusableGarmentId(matchedEntry.item.id);
     setEditingId(matchedEntry.item.id);
     setForm(buildFormFromGarment(matchedEntry.item, brands, categories, garmentModels, sizes));
+    setHasCustomizedPlacements(
+      Array.isArray(matchedEntry.item?.default_placements) &&
+        matchedEntry.item.default_placements.length > 0 &&
+        !arePlacementListsEqual(matchedEntry.item.default_placements, nextSuggestedPlacements)
+    );
     setModelDraft(
       buildModelDraftFromModel(
         findLookupById(garmentModels, matchedEntry.item.garment_model_lookup_id),
@@ -734,6 +766,7 @@ export default function GarmentLibrary() {
       brand_lookup_id: preservedBrandId,
     });
     setEditingId(null);
+    setHasCustomizedPlacements(false);
     setSaveError("");
     setVariantDraft(buildVariantDraft());
     setBrandDraft("");
@@ -813,6 +846,7 @@ export default function GarmentLibrary() {
   }
 
   function togglePlacement(placementName) {
+    setHasCustomizedPlacements(true);
     setForm((current) => ({
       ...current,
       default_placements: current.default_placements.some(
@@ -1152,7 +1186,11 @@ export default function GarmentLibrary() {
           image: "",
           variants: nextVariants,
           sizes: [],
-          default_placements: [],
+          default_placements: getSuggestedGarmentPlacements({
+            categoryName: category.name,
+            garmentType: previewGroup.productName,
+            displayName: previewGroup.title,
+          }),
           default_production_methods: [],
           notes: "",
           active: true,
@@ -1171,6 +1209,21 @@ export default function GarmentLibrary() {
       setIsImporting(false);
     }
   }
+
+  useEffect(() => {
+    if (!isEditorOpen || hasCustomizedPlacements) return;
+
+    setForm((current) => {
+      if (arePlacementListsEqual(current.default_placements, suggestedPlacements)) {
+        return current;
+      }
+
+      return {
+        ...current,
+        default_placements: suggestedPlacements,
+      };
+    });
+  }, [hasCustomizedPlacements, isEditorOpen, suggestedPlacements]);
 
   return (
     <div className="products-page garment-library-page">
@@ -2001,8 +2054,11 @@ export default function GarmentLibrary() {
             <div className="products-advanced-stack">
               <div className="products-advanced-subsection">
                 <strong>Default Placements</strong>
+                <p className="products-field-hint">
+                  Suggestions adapt to the selected garment category and model until you customize them.
+                </p>
                 <div className="products-selection-chip-row">
-                  {COMMON_PLACEMENT_OPTIONS.map((placement) => {
+                  {placementOptions.map((placement) => {
                     const active = form.default_placements.some(
                       (selected) => normalizeTextKey(selected) === normalizeTextKey(placement)
                     );
