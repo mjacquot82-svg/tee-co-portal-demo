@@ -4,6 +4,7 @@ import { isSupabaseConfigured, supabase } from "./supabaseClient";
 
 const STORAGE_KEY = "teeCoGarmentLibrary";
 const EMPTY_ITEMS = [];
+const GARMENT_LIBRARY_TABLE = "garment_library_items";
 const listeners = new Set();
 let cachedStorageRaw = null;
 let cachedSnapshotRaw = null;
@@ -32,6 +33,10 @@ const GARMENT_LIBRARY_SELECT_FIELDS = [
 ].join(", ");
 
 function emitUpdated() {
+  console.log("[garmentLibraryStore] emitUpdated publishing garment library snapshot", {
+    listenerCount: listeners.size,
+    cachedSnapshotCount: Array.isArray(cachedSnapshot) ? cachedSnapshot.length : 0,
+  });
   listeners.forEach((listener) => listener());
 }
 
@@ -129,7 +134,7 @@ function saveSnapshot(items) {
   const normalized = cacheSnapshot(items);
   cachedStorageRaw = JSON.stringify(normalized);
 
-  console.debug("[garmentLibraryStore] saveSnapshot", {
+  console.log("[garmentLibraryStore] saveSnapshot", {
     inputCount: Array.isArray(items) ? items.length : 0,
     normalizedCount: normalized.length,
     normalizedItems: normalized,
@@ -183,71 +188,160 @@ function getActiveSnapshot() {
 
 async function fetchLibraryFromSupabase() {
   if (!isSupabaseConfigured || !supabase) {
-    console.debug("[garmentLibraryStore] Supabase unavailable for garment library fetch", {
+    console.log("[garmentLibraryStore] Supabase unavailable for garment library fetch", {
       isSupabaseConfigured,
       hasSupabaseClient: Boolean(supabase),
     });
     return null;
   }
 
-  const { data, error } = await supabase
-    .from("garment_library_items")
-    .select(GARMENT_LIBRARY_SELECT_FIELDS)
-    .order("title", { ascending: true });
-
-  console.debug("[garmentLibraryStore] raw Supabase garment query response", {
-    table: "garment_library_items",
+  console.log("[garmentLibraryStore] remote garment fetch start", {
+    table: GARMENT_LIBRARY_TABLE,
     select: GARMENT_LIBRARY_SELECT_FIELDS,
-    data,
+    hasLoadedRemote,
+    loadStarted,
+  });
+
+  let data = null;
+  let error = null;
+
+  try {
+    ({ data, error } = await supabase
+      .from(GARMENT_LIBRARY_TABLE)
+      .select(GARMENT_LIBRARY_SELECT_FIELDS)
+      .order("title", { ascending: true }));
+  } catch (queryError) {
+    console.error("[garmentLibraryStore] remote garment fetch threw before response", {
+      table: GARMENT_LIBRARY_TABLE,
+      message: queryError?.message,
+      stack: queryError?.stack,
+      queryError,
+    });
+    return null;
+  }
+
+  console.log("[garmentLibraryStore] raw Supabase garment query response", {
+    table: GARMENT_LIBRARY_TABLE,
+    select: GARMENT_LIBRARY_SELECT_FIELDS,
+    rowCount: Array.isArray(data) ? data.length : 0,
+    rows: data,
     error,
   });
-  console.debug("[garmentLibraryStore] total rows returned from Supabase", Array.isArray(data) ? data.length : 0);
 
   if (error) {
-    console.warn("[garmentLibraryStore] Falling back to local library", error);
+    console.error("[garmentLibraryStore] remote garment fetch failed; falling back to local library", {
+      table: GARMENT_LIBRARY_TABLE,
+      error,
+    });
     return null;
+  }
+
+  if (!Array.isArray(data)) {
+    console.warn("[garmentLibraryStore] remote garment fetch returned non-array rows", {
+      table: GARMENT_LIBRARY_TABLE,
+      dataType: typeof data,
+      data,
+    });
   }
 
   const mappedItems = Array.isArray(data)
     ? data.map((item) => normalizeGarmentLibraryItem(item)).filter(Boolean)
     : EMPTY_ITEMS;
 
-  console.debug("[garmentLibraryStore] mapped garment records after transformation", {
+  console.log("[garmentLibraryStore] mapped garment rows", {
+    table: GARMENT_LIBRARY_TABLE,
+    sourceRowCount: Array.isArray(data) ? data.length : 0,
     mappedCount: mappedItems.length,
+    discardedCount: Array.isArray(data) ? data.length - mappedItems.length : 0,
     mappedItems,
+  });
+
+  console.log("[garmentLibraryStore] remote garment fetch success", {
+    table: GARMENT_LIBRARY_TABLE,
+    rowCount: Array.isArray(data) ? data.length : 0,
+    mappedCount: mappedItems.length,
   });
 
   return mappedItems;
 }
 
 export async function refreshGarmentLibrary() {
+  console.log("[garmentLibraryStore] refreshGarmentLibrary start", {
+    hasLoadedRemote,
+    loadStarted,
+    cachedSnapshotCount: Array.isArray(cachedSnapshot) ? cachedSnapshot.length : 0,
+  });
   const remote = await fetchLibraryFromSupabase();
 
   if (!remote) {
-    console.debug("[garmentLibraryStore] refreshGarmentLibrary using local snapshot fallback");
+    console.warn("[garmentLibraryStore] refreshGarmentLibrary using local snapshot fallback", {
+      hasLoadedRemote,
+      loadStarted,
+      cachedSnapshotCount: Array.isArray(cachedSnapshot) ? cachedSnapshot.length : 0,
+    });
     return getActiveSnapshot();
   }
 
   hasLoadedRemote = true;
-  console.debug("[garmentLibraryStore] refreshGarmentLibrary using remote snapshot", {
+  console.log("[garmentLibraryStore] refreshGarmentLibrary received remote rows", {
     remoteCount: remote.length,
     remote,
   });
-  return saveSnapshot(remote);
+  console.log("[garmentLibraryStore] refreshGarmentLibrary saving remote snapshot", {
+    remoteCount: remote.length,
+  });
+  const savedSnapshot = saveSnapshot(remote);
+  console.log("[garmentLibraryStore] refreshGarmentLibrary saved remote snapshot", {
+    savedCount: Array.isArray(savedSnapshot) ? savedSnapshot.length : 0,
+    hasLoadedRemote,
+  });
+  return savedSnapshot;
 }
 
 function ensureLoaded() {
-  if (loadPromise) return loadPromise;
-  if (loadStarted) return Promise.resolve(getActiveSnapshot());
+  console.log("[garmentLibraryStore] ensureLoaded invoked", {
+    hasLoadedRemote,
+    loadStarted,
+    hasLoadPromise: Boolean(loadPromise),
+    cachedSnapshotCount: Array.isArray(cachedSnapshot) ? cachedSnapshot.length : 0,
+  });
+
+  if (loadPromise) {
+    console.log("[garmentLibraryStore] ensureLoaded reusing in-flight loadPromise");
+    return loadPromise;
+  }
+  if (loadStarted) {
+    console.log("[garmentLibraryStore] ensureLoaded short-circuiting because load already started", {
+      cachedSnapshotCount: getActiveSnapshot().length,
+      hasLoadedRemote,
+    });
+    return Promise.resolve(getActiveSnapshot());
+  }
 
   getActiveSnapshot();
   loadStarted = true;
+  console.log("[garmentLibraryStore] ensureLoaded starting refreshGarmentLibrary", {
+    hasLoadedRemote,
+    loadStarted,
+    cachedSnapshotCount: Array.isArray(cachedSnapshot) ? cachedSnapshot.length : 0,
+  });
   loadPromise = refreshGarmentLibrary()
     .catch((error) => {
       console.error("Unable to refresh Tee & Co garment library", error);
       return getActiveSnapshot();
     })
+    .then((result) => {
+      console.log("[garmentLibraryStore] ensureLoaded refresh resolved", {
+        resultCount: Array.isArray(result) ? result.length : 0,
+        hasLoadedRemote,
+      });
+      return result;
+    })
     .finally(() => {
+      console.log("[garmentLibraryStore] ensureLoaded refresh finished", {
+        hasLoadedRemote,
+        cachedSnapshotCount: Array.isArray(cachedSnapshot) ? cachedSnapshot.length : 0,
+      });
       loadPromise = null;
     });
 
@@ -304,9 +398,17 @@ export function subscribeToGarmentLibrary(listener) {
   }
 
   listeners.add(listener);
+  console.log("[garmentLibraryStore] subscribeToGarmentLibrary listener added", {
+    listenerCount: listeners.size,
+  });
 
   if (typeof window === "undefined") {
-    return () => listeners.delete(listener);
+    return () => {
+      listeners.delete(listener);
+      console.log("[garmentLibraryStore] subscribeToGarmentLibrary listener removed", {
+        listenerCount: listeners.size,
+      });
+    };
   }
 
   const handleStorage = (event) => {
@@ -320,6 +422,9 @@ export function subscribeToGarmentLibrary(listener) {
   return () => {
     listeners.delete(listener);
     window.removeEventListener("storage", handleStorage);
+    console.log("[garmentLibraryStore] subscribeToGarmentLibrary listener removed", {
+      listenerCount: listeners.size,
+    });
   };
 }
 
