@@ -147,24 +147,23 @@ set product_type = coalesce(nullif(product_type, ''), name),
     production_method_prices = coalesce(production_method_prices, '{}'::jsonb),
     notes = coalesce(notes, '');
 
-with uniquely_matched_garments as (
-  select
+with deterministically_matched_garments as (
+  select distinct on (gli.garment_model_lookup_id)
     gli.garment_model_lookup_id,
     gli.id as garment_library_item_id
   from public.garment_library_items gli
   where gli.garment_model_lookup_id is not null
-    and not exists (
-      select 1
-      from public.garment_library_items other_gli
-      where other_gli.garment_model_lookup_id = gli.garment_model_lookup_id
-        and other_gli.id <> gli.id
-    )
+  order by
+    gli.garment_model_lookup_id,
+    coalesce(gli.active, true) desc,
+    gli.created_at asc,
+    gli.id asc
 )
 update public.products
-set garment_library_item_id = uniquely_matched_garments.garment_library_item_id
-from uniquely_matched_garments
+set garment_library_item_id = deterministically_matched_garments.garment_library_item_id
+from deterministically_matched_garments
 where public.products.garment_library_item_id is null
-  and public.products.garment_model_lookup_id = uniquely_matched_garments.garment_model_lookup_id;
+  and public.products.garment_model_lookup_id = deterministically_matched_garments.garment_model_lookup_id;
 
 create index if not exists categories_active_idx on public.categories (active);
 create index if not exists brands_active_idx on public.brands (active);
