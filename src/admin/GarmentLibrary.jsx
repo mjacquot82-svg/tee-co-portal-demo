@@ -167,24 +167,11 @@ function buildGarmentMap(items = []) {
   }, new Map());
 }
 
-function buildSupplierDrivenBrandIds(garments = [], garmentModels = []) {
-  const garmentModelMap = garmentModels.reduce((accumulator, model) => {
-    if (model?.id) {
-      accumulator.set(model.id, model);
-    }
-    return accumulator;
-  }, new Map());
+function buildActiveLibraryBrandIds(garments = []) {
   const brandIds = new Set();
 
   garments.forEach((garment) => {
     if (garment?.active === false) return;
-
-    const garmentModel = garmentModelMap.get(garment?.garment_model_lookup_id);
-    const modelBrandId = normalizeText(garmentModel?.brand_id);
-    if (modelBrandId) {
-      brandIds.add(modelBrandId);
-      return;
-    }
 
     const directBrandId = normalizeText(garment?.brand_lookup_id);
     if (directBrandId) {
@@ -195,8 +182,8 @@ function buildSupplierDrivenBrandIds(garments = [], garmentModels = []) {
   return brandIds;
 }
 
-function buildVisibleBrandOptions(brands = [], supplierDrivenBrandIds = new Set(), selectedBrandId = "") {
-  const visibleBrands = brands.filter((brand) => supplierDrivenBrandIds.has(brand?.id));
+function buildVisibleBrandOptions(brands = [], activeLibraryBrandIds = new Set(), selectedBrandId = "") {
+  const visibleBrands = brands.filter((brand) => activeLibraryBrandIds.has(brand?.id));
 
   if (selectedBrandId && !visibleBrands.some((brand) => brand.id === selectedBrandId)) {
     const selectedBrand = brands.find((brand) => brand.id === selectedBrandId);
@@ -447,13 +434,13 @@ export default function GarmentLibrary() {
   const categoryMap = useMemo(() => buildLookupOptionMap(categories), [categories]);
   const brandMap = useMemo(() => buildLookupOptionMap(brands), [brands]);
   const garmentModelMap = useMemo(() => buildLookupOptionMap(garmentModels), [garmentModels]);
-  const supplierDrivenBrandIds = useMemo(
-    () => buildSupplierDrivenBrandIds(garments, garmentModels),
-    [garmentModels, garments]
+  const activeLibraryBrandIds = useMemo(
+    () => buildActiveLibraryBrandIds(garments),
+    [garments]
   );
   const visibleBrands = useMemo(
-    () => buildVisibleBrandOptions(brands, supplierDrivenBrandIds, form.brand_lookup_id),
-    [brands, form.brand_lookup_id, supplierDrivenBrandIds]
+    () => buildVisibleBrandOptions(brands, activeLibraryBrandIds, form.brand_lookup_id),
+    [activeLibraryBrandIds, brands, form.brand_lookup_id]
   );
   const garmentUsageMap = useMemo(() => buildGarmentUsageMap(products, garments), [garments, products]);
   const garmentBrowseItems = useMemo(
