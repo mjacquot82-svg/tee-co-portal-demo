@@ -14,6 +14,7 @@ let loadPromise = null;
 let hasLoadedRemote = false;
 
 const DEFAULT_LIBRARY_ITEMS = [];
+const SNAPSHOT_VERSION = 1;
 
 const GARMENT_LIBRARY_SELECT_FIELDS = [
   "id",
@@ -130,18 +131,75 @@ function cacheSnapshot(items) {
   return cachedSnapshot;
 }
 
+function buildStoredSnapshot(items) {
+  return {
+    version: SNAPSHOT_VERSION,
+    garments: Array.isArray(items) ? items : EMPTY_ITEMS,
+    savedAt: new Date().toISOString(),
+  };
+}
+
+function extractStoredSnapshotItems(parsed) {
+  if (Array.isArray(parsed)) {
+    return parsed;
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    return EMPTY_ITEMS;
+  }
+
+  if (Array.isArray(parsed.garments)) {
+    return parsed.garments;
+  }
+
+  if (Array.isArray(parsed.items)) {
+    return parsed.items;
+  }
+
+  if (Array.isArray(parsed.snapshot)) {
+    return parsed.snapshot;
+  }
+
+  if (Array.isArray(parsed.data)) {
+    return parsed.data;
+  }
+
+  return EMPTY_ITEMS;
+}
+
 function saveSnapshot(items) {
   const normalized = cacheSnapshot(items);
-  cachedStorageRaw = JSON.stringify(normalized);
+  const storagePayload = buildStoredSnapshot(normalized);
+  const serializedPayload = JSON.stringify(storagePayload);
 
-  console.log("[garmentLibraryStore] saveSnapshot", {
+  console.log("[garmentLibraryStore] saveSnapshot payload before save", {
+    storageKey: STORAGE_KEY,
     inputCount: Array.isArray(items) ? items.length : 0,
     normalizedCount: normalized.length,
+    storageGarmentCount: storagePayload.garments.length,
+    storagePayload,
     normalizedItems: normalized,
   });
 
   if (hasBrowserStorage()) {
-    setRawStorageItem(STORAGE_KEY, cachedStorageRaw);
+    const writeSucceeded = setRawStorageItem(STORAGE_KEY, serializedPayload);
+    const rawAfterSave = getRawStorageItem(STORAGE_KEY) || "";
+    const readbackParsed = rawAfterSave ? JSON.parse(rawAfterSave) : null;
+    const readbackItems = extractStoredSnapshotItems(readbackParsed);
+
+    console.log("[garmentLibraryStore] saveSnapshot payload after retrieval", {
+      storageKey: STORAGE_KEY,
+      writeSucceeded,
+      rawAfterSaveLength: rawAfterSave.length,
+      savedGarmentCount: storagePayload.garments.length,
+      parsedGarmentCount: Array.isArray(readbackItems) ? readbackItems.length : 0,
+      readbackParsed,
+      readbackItems,
+    });
+
+    cachedStorageRaw = writeSucceeded ? rawAfterSave : serializedPayload;
+  } else {
+    cachedStorageRaw = serializedPayload;
   }
 
   emitUpdated();
@@ -161,14 +219,29 @@ function getLocalSnapshot() {
     const raw = getRawStorageItem(STORAGE_KEY) || "";
     if (raw === cachedStorageRaw) return cachedSnapshot;
 
-    const parsed = raw ? JSON.parse(raw) : EMPTY_ITEMS;
+    const parsed = raw ? JSON.parse(raw) : null;
+    const parsedItems = extractStoredSnapshotItems(parsed);
+
+    if (!raw) {
+      console.warn("[garmentLibraryStore] getLocalSnapshot found empty storage payload", {
+        storageKey: STORAGE_KEY,
+        cachedSnapshotCount: cachedSnapshot.length,
+      });
+
+      if (cachedSnapshot.length > 0) {
+        return cachedSnapshot;
+      }
+    }
+
     cachedStorageRaw = raw;
-    const snapshot = cacheSnapshot(parsed);
+    const snapshot = cacheSnapshot(parsedItems);
     console.debug("[garmentLibraryStore] hydrated local snapshot", {
       storageKey: STORAGE_KEY,
       rawStorageLength: raw.length,
-      parsedCount: Array.isArray(parsed) ? parsed.length : 0,
-      parsedItems: parsed,
+      parsedType: Array.isArray(parsed) ? "array" : typeof parsed,
+      parsedCount: Array.isArray(parsedItems) ? parsedItems.length : 0,
+      parsedItems,
+      parsedPayload: parsed,
       snapshotCount: snapshot.length,
       snapshot,
     });
