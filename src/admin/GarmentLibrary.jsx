@@ -42,6 +42,12 @@ const GARMENT_SORT_OPTIONS = [
 const EMPTY_GARMENT_USAGE = Object.freeze({
   linkedProductCount: 0,
 });
+const DEFAULT_GARMENT_PLACEHOLDER_IMAGE = "/garments/gildan-softstyle-tee.jpg";
+const GARMENT_PLACEHOLDER_IMAGE_BY_CATEGORY_KEY = {
+  "t-shirts": "/garments/gildan-softstyle-tee.jpg",
+  hoodies: "/garments/hoodies.PNG",
+  hats: "/garments/hat.PNG",
+};
 
 const emptyLibraryForm = {
   title: "",
@@ -167,6 +173,85 @@ function buildGarmentMap(items = []) {
   }, new Map());
 }
 
+function buildSupplierDrivenBrandIds(garments = [], garmentModels = []) {
+  const garmentModelMap = garmentModels.reduce((accumulator, model) => {
+    if (model?.id) {
+      accumulator.set(model.id, model);
+    }
+    return accumulator;
+  }, new Map());
+  const brandIds = new Set();
+
+  garments.forEach((garment) => {
+    if (garment?.active === false) return;
+
+    const garmentModel = garmentModelMap.get(garment?.garment_model_lookup_id);
+    const modelBrandId = normalizeText(garmentModel?.brand_id);
+    if (modelBrandId) {
+      brandIds.add(modelBrandId);
+      return;
+    }
+
+    const directBrandId = normalizeText(garment?.brand_lookup_id);
+    if (directBrandId) {
+      brandIds.add(directBrandId);
+    }
+  });
+
+  return brandIds;
+}
+
+function buildVisibleBrandOptions(brands = [], supplierDrivenBrandIds = new Set(), selectedBrandId = "") {
+  const visibleBrands = brands.filter((brand) => supplierDrivenBrandIds.has(brand?.id));
+
+  if (selectedBrandId && !visibleBrands.some((brand) => brand.id === selectedBrandId)) {
+    const selectedBrand = brands.find((brand) => brand.id === selectedBrandId);
+    if (selectedBrand) {
+      visibleBrands.push(selectedBrand);
+    }
+  }
+
+  return visibleBrands.sort((left, right) =>
+    String(left?.name || "").localeCompare(String(right?.name || ""))
+  );
+}
+
+function resolveGarmentCardImage(item, category, model) {
+  const uploadedImage = normalizeText(item?.image);
+  if (uploadedImage) {
+    return uploadedImage;
+  }
+
+  const normalizedCategory = normalizeTextKey(category?.name);
+  if (normalizedCategory && GARMENT_PLACEHOLDER_IMAGE_BY_CATEGORY_KEY[normalizedCategory]) {
+    return GARMENT_PLACEHOLDER_IMAGE_BY_CATEGORY_KEY[normalizedCategory];
+  }
+
+  const garmentDescriptor = [
+    item?.title,
+    model?.display_name,
+    model?.model_code,
+    category?.name,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (garmentDescriptor.includes("hat") || garmentDescriptor.includes("cap") || garmentDescriptor.includes("beanie")) {
+    return GARMENT_PLACEHOLDER_IMAGE_BY_CATEGORY_KEY.hats;
+  }
+
+  if (
+    garmentDescriptor.includes("hoodie") ||
+    garmentDescriptor.includes("fleece") ||
+    garmentDescriptor.includes("sweatshirt")
+  ) {
+    return GARMENT_PLACEHOLDER_IMAGE_BY_CATEGORY_KEY.hoodies;
+  }
+
+  return DEFAULT_GARMENT_PLACEHOLDER_IMAGE;
+}
+
 function buildImportWarningSummary(warnings = []) {
   const summary = {
     total: warnings.length,
@@ -261,6 +346,8 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
   onSelect,
   onRemove,
 }) {
+  const fallbackImage = item.imageSrc || DEFAULT_GARMENT_PLACEHOLDER_IMAGE;
+
   function handleKeyDown(event) {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -278,11 +365,20 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
       aria-pressed={isSelected}
     >
       <div className="products-card-media">
-        {item.image ? (
-          <img src={item.image} alt={item.title} className="products-card-image" />
-        ) : (
-          <div className="products-card-image-placeholder">No Image</div>
-        )}
+        <img
+          key={`${item.id || item.title}-${fallbackImage}`}
+          src={fallbackImage}
+          alt={item.title}
+          className="products-card-image"
+          onError={(event) => {
+            if (event.currentTarget.dataset.fallbackApplied === "true") {
+              return;
+            }
+
+            event.currentTarget.dataset.fallbackApplied = "true";
+            event.currentTarget.src = DEFAULT_GARMENT_PLACEHOLDER_IMAGE;
+          }}
+        />
       </div>
 
       <div className="products-card-body">
@@ -388,6 +484,14 @@ export default function GarmentLibrary() {
   const categoryMap = useMemo(() => buildLookupOptionMap(categories), [categories]);
   const brandMap = useMemo(() => buildLookupOptionMap(brands), [brands]);
   const garmentModelMap = useMemo(() => buildLookupOptionMap(garmentModels), [garmentModels]);
+  const supplierDrivenBrandIds = useMemo(
+    () => buildSupplierDrivenBrandIds(garments, garmentModels),
+    [garmentModels, garments]
+  );
+  const visibleBrands = useMemo(
+    () => buildVisibleBrandOptions(brands, supplierDrivenBrandIds, form.brand_lookup_id),
+    [brands, form.brand_lookup_id, supplierDrivenBrandIds]
+  );
   const garmentUsageMap = useMemo(() => buildGarmentUsageMap(products, garments), [garments, products]);
   const garmentBrowseItems = useMemo(
     () =>
@@ -407,6 +511,7 @@ export default function GarmentLibrary() {
           categoryName: normalizeText(category?.name),
           modelLabel: normalizeText(model?.display_name),
           modelCode: normalizeText(model?.model_code),
+          imageSrc: resolveGarmentCardImage(item, category, model),
           subtitle: buildGarmentLibraryLabel(item, brands, categories, garmentModels),
           searchIndex: [
             item.title,
@@ -1181,14 +1286,14 @@ export default function GarmentLibrary() {
         if (existingGarment) {
           const shouldUpdate =
             nextVariants.length !== (existingGarment.variants || []).length ||
-            !existingGarment.category_lookup_id ||
-            !existingGarment.brand_lookup_id ||
+            existingGarment.category_lookup_id !== category.id ||
+            existingGarment.brand_lookup_id !== brand.id ||
             existingGarment.garment_model_lookup_id !== garmentModelId;
 
           if (shouldUpdate) {
             await updateGarmentLibraryItem(existingGarment.id, {
-              category_lookup_id: existingGarment.category_lookup_id || category.id,
-              brand_lookup_id: existingGarment.brand_lookup_id || brand.id,
+              category_lookup_id: category.id,
+              brand_lookup_id: brand.id,
               garment_model_lookup_id: garmentModelId,
               variants: nextVariants,
             });
@@ -1253,31 +1358,41 @@ export default function GarmentLibrary() {
           continue;
         }
 
-        if (findLookupById(brands, garment.brand_lookup_id)) {
-          continue;
-        }
-
         const garmentModel = findLookupById(garmentModels, garment.garment_model_lookup_id);
-        const inferredBrandName = inferImportedGarmentBrandName(garment, garmentModel);
-        if (!inferredBrandName) {
+        const resolvedModelBrandId = normalizeText(garmentModel?.brand_id);
+        const currentBrand = findLookupById(brands, garment.brand_lookup_id);
+        const currentBrandId = normalizeText(garment.brand_lookup_id);
+
+        if (currentBrand && (!resolvedModelBrandId || currentBrandId === resolvedModelBrandId)) {
           continue;
         }
 
         repairingBrandIdsRef.current.add(garment.id);
 
         try {
-          const brand = await createCatalogLookup("brands", {
-            name: inferredBrandName,
-            active: true,
-          });
+          let resolvedBrandId = resolvedModelBrandId;
+
+          if (!resolvedBrandId) {
+            const inferredBrandName = inferImportedGarmentBrandName(garment, garmentModel);
+            if (!inferredBrandName) {
+              continue;
+            }
+
+            const brand = await createCatalogLookup("brands", {
+              name: inferredBrandName,
+              active: true,
+            });
+
+            resolvedBrandId = brand.id;
+          }
 
           if (isCancelled) {
             return;
           }
 
-          if (!garment.brand_lookup_id || garment.brand_lookup_id !== brand.id) {
+          if (resolvedBrandId && garment.brand_lookup_id !== resolvedBrandId) {
             await updateGarmentLibraryItem(garment.id, {
-              brand_lookup_id: brand.id,
+              brand_lookup_id: resolvedBrandId,
             });
           }
         } catch (error) {
@@ -1841,7 +1956,7 @@ export default function GarmentLibrary() {
                         disabled={isImportedSelectionLocked}
                       >
                         <option value="">Select brand</option>
-                        {brands.map((brand) => (
+                        {visibleBrands.map((brand) => (
                           <option key={brand.id} value={brand.id}>
                             {brand.name}
                           </option>
