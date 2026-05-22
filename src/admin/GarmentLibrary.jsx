@@ -192,59 +192,47 @@ function buildActiveLibraryBrandIds(garments = [], garmentModelMap = new Map()) 
   return brandIds;
 }
 
-function buildVisibleBrandOptions(brands = [], garmentBrowseItems = [], selectedBrandId = "") {
-  const activeBrowseBrandIds = new Set(
-    garmentBrowseItems
-      .filter((entry) => entry?.item?.active !== false)
-      .map((entry) => normalizeText(entry?.brandId))
-      .filter(Boolean)
-  );
-  const visibleBrands = brands.filter((brand) => activeBrowseBrandIds.has(normalizeText(brand?.id)));
+function buildBrandSelectOptionsFromVisibleGarments(
+  visibleGarmentEntries = [],
+  garmentBrowseItems = [],
+  brands = [],
+  selectedBrandId = ""
+) {
+  const optionsByBrandName = new Map();
 
-  if (selectedBrandId && !visibleBrands.some((brand) => brand.id === selectedBrandId)) {
+  visibleGarmentEntries.forEach((entry) => {
+    if (entry?.item?.active === false) return;
+
+    const label = normalizeText(entry?.brandName);
+    if (!label) return;
+
+    const labelKey = normalizeTextKey(label);
+    if (optionsByBrandName.has(labelKey)) return;
+
+    optionsByBrandName.set(labelKey, {
+      value: normalizeText(entry?.brandId) || label,
+      label,
+    });
+  });
+
+  if (selectedBrandId) {
     const selectedBrand = brands.find((brand) => brand.id === selectedBrandId);
-    if (selectedBrand) {
-      visibleBrands.push(selectedBrand);
+    const selectedLabel =
+      normalizeText(selectedBrand?.name) ||
+      normalizeText(
+        garmentBrowseItems.find((entry) => normalizeText(entry?.brandId) === selectedBrandId)?.brandName
+      );
+    const selectedKey = normalizeTextKey(selectedLabel);
+
+    if (selectedLabel && selectedKey && !optionsByBrandName.has(selectedKey)) {
+      optionsByBrandName.set(selectedKey, {
+        value: selectedBrandId,
+        label: selectedLabel,
+      });
     }
   }
 
-  return visibleBrands.sort((left, right) =>
-    String(left?.name || "").localeCompare(String(right?.name || ""))
-  );
-}
-
-function buildBrandSelectOptions(visibleBrands = [], garmentBrowseItems = [], selectedBrandId = "") {
-  const fallbackNamesByBrandId = garmentBrowseItems.reduce((accumulator, entry) => {
-    const brandId = normalizeText(entry?.brandId);
-    const brandName = normalizeText(entry?.brandName);
-
-    if (brandId && brandName && !accumulator.has(brandId)) {
-      accumulator.set(brandId, brandName);
-    }
-
-    return accumulator;
-  }, new Map());
-
-  const options = visibleBrands.reduce((accumulator, brand) => {
-    const value = normalizeText(brand?.id);
-    const label = normalizeText(brand?.name) || fallbackNamesByBrandId.get(value) || "";
-
-    if (!value || !label || accumulator.some((option) => option.value === value)) {
-      return accumulator;
-    }
-
-    accumulator.push({ value, label });
-    return accumulator;
-  }, []);
-
-  if (selectedBrandId && !options.some((option) => option.value === selectedBrandId)) {
-    const fallbackLabel = fallbackNamesByBrandId.get(selectedBrandId);
-    if (fallbackLabel) {
-      options.push({ value: selectedBrandId, label: fallbackLabel });
-    }
-  }
-
-  return options.sort((left, right) => left.label.localeCompare(right.label));
+  return Array.from(optionsByBrandName.values()).sort((left, right) => left.label.localeCompare(right.label));
 }
 
 function buildImportWarningSummary(warnings = []) {
@@ -525,14 +513,6 @@ export default function GarmentLibrary() {
       }),
     [brandMap, brands, categories, categoryMap, garmentModelMap, garmentModels, garmentUsageMap, garments]
   );
-  const visibleBrands = useMemo(
-    () => buildVisibleBrandOptions(brands, garmentBrowseItems, form.brand_lookup_id),
-    [brands, form.brand_lookup_id, garmentBrowseItems]
-  );
-  const brandSelectOptions = useMemo(
-    () => buildBrandSelectOptions(visibleBrands, garmentBrowseItems, form.brand_lookup_id),
-    [form.brand_lookup_id, garmentBrowseItems, visibleBrands]
-  );
   const categoryFilterOptions = useMemo(
     () =>
       Array.from(new Set(garmentBrowseItems.map((entry) => entry.categoryName).filter(Boolean))).sort((left, right) =>
@@ -547,39 +527,6 @@ export default function GarmentLibrary() {
       ),
     [garmentBrowseItems]
   );
-  useEffect(() => {
-    console.debug("[GarmentLibrary] create brand dropdown debug", {
-      brandOptionsPassedToDropdown: visibleBrands.map((brand) => ({
-        id: brand.id,
-        name: brand.name,
-      })),
-      normalizedBrandSelectOptions: brandSelectOptions,
-      isBrandOptionsArrayEmpty: visibleBrands.length === 0,
-      brandsLookupCount: brands.length,
-      garmentCount: garments.length,
-      activeGarmentCount: garments.filter((garment) => garment?.active !== false).length,
-      activeLibraryBrandIds: Array.from(activeLibraryBrandIds),
-      garmentBrowseBrandIds: Array.from(
-        new Set(
-          garmentBrowseItems
-            .filter((entry) => entry?.item?.active !== false)
-            .map((entry) => entry?.brandId)
-            .filter(Boolean)
-        )
-      ),
-      garmentBrowseBrandNames: brandFilterOptions,
-      selectedBrandId: form.brand_lookup_id,
-    });
-  }, [
-    activeLibraryBrandIds,
-    brandFilterOptions,
-    brandSelectOptions,
-    brands,
-    form.brand_lookup_id,
-    garmentBrowseItems,
-    garments,
-    visibleBrands,
-  ]);
   useEffect(() => {
     if (!brandSelectRef.current) return;
 
@@ -639,6 +586,47 @@ export default function GarmentLibrary() {
     searchTerm.trim() || categoryFilter !== "all" || brandFilter !== "all" || storefrontUsageFilter !== "all"
   );
   const filteredGarmentCount = filteredGarments.length;
+  const brandSelectOptions = useMemo(
+    () => buildBrandSelectOptionsFromVisibleGarments(filteredGarments, garmentBrowseItems, brands, form.brand_lookup_id),
+    [brands, filteredGarments, form.brand_lookup_id, garmentBrowseItems]
+  );
+  useEffect(() => {
+    console.debug("[GarmentLibrary] create brand dropdown debug", {
+      normalizedBrandSelectOptions: brandSelectOptions,
+      isBrandOptionsArrayEmpty: brandSelectOptions.length === 0,
+      brandsLookupCount: brands.length,
+      garmentCount: garments.length,
+      activeGarmentCount: garments.filter((garment) => garment?.active !== false).length,
+      activeLibraryBrandIds: Array.from(activeLibraryBrandIds),
+      visibleActiveGarmentBrands: Array.from(
+        new Set(
+          filteredGarments
+            .filter((entry) => entry?.item?.active !== false)
+            .map((entry) => normalizeText(entry?.brandName))
+            .filter(Boolean)
+        )
+      ),
+      garmentBrowseBrandIds: Array.from(
+        new Set(
+          garmentBrowseItems
+            .filter((entry) => entry?.item?.active !== false)
+            .map((entry) => entry?.brandId)
+            .filter(Boolean)
+        )
+      ),
+      garmentBrowseBrandNames: brandFilterOptions,
+      selectedBrandId: form.brand_lookup_id,
+    });
+  }, [
+    activeLibraryBrandIds,
+    brandFilterOptions,
+    brandSelectOptions,
+    brands,
+    filteredGarments,
+    form.brand_lookup_id,
+    garmentBrowseItems,
+    garments,
+  ]);
   const visibleVariants = useMemo(() => {
     const normalizedSearch = variantSearch.trim().toLowerCase();
     return form.variants.filter((variant) => {
