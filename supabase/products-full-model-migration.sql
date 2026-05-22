@@ -149,12 +149,16 @@ set product_type = coalesce(nullif(product_type, ''), name),
 
 with uniquely_matched_garments as (
   select
-    garment_model_lookup_id,
-    min(id) as garment_library_item_id
-  from public.garment_library_items
-  where garment_model_lookup_id is not null
-  group by garment_model_lookup_id
-  having count(*) = 1
+    gli.garment_model_lookup_id,
+    gli.id as garment_library_item_id
+  from public.garment_library_items gli
+  where gli.garment_model_lookup_id is not null
+    and not exists (
+      select 1
+      from public.garment_library_items other_gli
+      where other_gli.garment_model_lookup_id = gli.garment_model_lookup_id
+        and other_gli.id <> gli.id
+    )
 )
 update public.products
 set garment_library_item_id = uniquely_matched_garments.garment_library_item_id
