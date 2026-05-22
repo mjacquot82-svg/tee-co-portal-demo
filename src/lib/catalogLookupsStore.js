@@ -448,6 +448,78 @@ function appendLookupRecord(lookups, table, record) {
   };
 }
 
+function replaceLookupRecord(lookups, table, record) {
+  const dedupKey = getLookupDedupKey(table, record);
+  const nextRecords = (lookups?.[table] || []).filter(
+    (item) => getLookupDedupKey(table, item) !== dedupKey && item?.id !== record.id
+  );
+
+  return {
+    ...lookups,
+    [table]: sortLookupItems(table, [...nextRecords, record]),
+  };
+}
+
+function findExistingLookupRecord(table, values, options = []) {
+  const normalizedRecord = normalizeLookupItem(table, values);
+  if (!normalizedRecord) return null;
+
+  const dedupKey = getLookupDedupKey(table, normalizedRecord);
+  return options.find((option) => getLookupDedupKey(table, option) === dedupKey) || null;
+}
+
+async function fetchExistingLookupRecordFromSupabase(table, values) {
+  if (!isSupabaseConfigured || !supabase) {
+    return null;
+  }
+
+  const normalizedRecord = normalizeLookupItem(table, values);
+  if (!normalizedRecord) {
+    return null;
+  }
+
+  let query = supabase.from(table).select("*");
+
+  if (table === "garment_models") {
+    query = query
+      .eq("brand_id", normalizedRecord.brand_id || null)
+      .eq("category_id", normalizedRecord.category_id || null)
+      .eq("display_name", normalizedRecord.display_name)
+      .eq("model_code", normalizedRecord.model_code || "")
+      .limit(1);
+  } else {
+    query = query.eq("name", normalizedRecord.name).limit(1);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  const existingRecord = Array.isArray(data) ? data[0] : null;
+  return existingRecord ? normalizeLookupItem(table, existingRecord) : null;
+}
+
+async function reactivateLookupRecord(table, record) {
+  if (!isSupabaseConfigured || !supabase || !record?.id || record.active !== false) {
+    return record;
+  }
+
+  const { data, error } = await supabase
+    .from(table)
+    .update({ active: true })
+    .eq("id", record.id)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return normalizeLookupItem(table, data);
+}
+
 export async function createCatalogLookup(table, values) {
   if (!LOOKUP_TABLES.includes(table)) {
     throw new Error(`Unsupported catalog lookup table: ${table}`);
@@ -456,6 +528,15 @@ export async function createCatalogLookup(table, values) {
   const normalizedRecord = normalizeLookupItem(table, values);
   if (!normalizedRecord) {
     throw new Error(`Invalid ${table} lookup values`);
+  }
+
+  const existingLocalRecord = findExistingLookupRecord(
+    table,
+    normalizedRecord,
+    getCatalogLookups()?.[table] || []
+  );
+  if (existingLocalRecord) {
+    return existingLocalRecord;
   }
 
   if (!isSupabaseConfigured || !supabase) {
@@ -481,6 +562,21 @@ export async function createCatalogLookup(table, values) {
     saveLocalLookupsSnapshot(nextLookups);
     return remoteRecord;
   } catch (error) {
+    try {
+      const existingRemoteRecord = await fetchExistingLookupRecordFromSupabase(table, normalizedRecord);
+      if (existingRemoteRecord) {
+        const activeRecord = await reactivateLookupRecord(table, existingRemoteRecord);
+        const nextLookups = replaceLookupRecord(getCatalogLookups(), table, activeRecord);
+        saveLocalLookupsSnapshot(nextLookups);
+        return activeRecord;
+      }
+    } catch (recoveryError) {
+      console.warn(
+        `[catalogLookupsStore] Failed to recover existing ${table} lookup after create error`,
+        recoveryError
+      );
+    }
+
     console.warn(`[catalogLookupsStore] Creating ${table} remotely failed, using local fallback`, error);
     const nextLookups = appendLookupRecord(getCatalogLookups(), table, normalizedRecord);
     saveLocalLookupsSnapshot(nextLookups);

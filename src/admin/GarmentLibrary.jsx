@@ -1,4 +1,4 @@
-import { memo, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import "./Products.css";
 import ProductImageUploader from "../components/ProductImageUploader";
 import { PRODUCTION_TYPES } from "../constants/productionTypes";
@@ -107,6 +107,24 @@ function buildImportedGarmentOptionLabel(item, model) {
   }
 
   return modelCode || modelName || garmentTitle || "Untitled Garment";
+}
+
+function inferImportedGarmentBrandName(item, model) {
+  const title = normalizeText(item?.title);
+  const modelName = normalizeText(model?.display_name);
+
+  if (!title || !modelName) {
+    return "";
+  }
+
+  const normalizedTitle = normalizeTextKey(title);
+  const normalizedModelName = normalizeTextKey(modelName);
+
+  if (!normalizedTitle.endsWith(normalizedModelName)) {
+    return "";
+  }
+
+  return normalizeText(title.slice(0, title.length - modelName.length));
 }
 
 function readFileAsText(file) {
@@ -361,6 +379,7 @@ export default function GarmentLibrary() {
   const [storefrontUsageFilter, setStorefrontUsageFilter] = useState("all");
   const [sortOption, setSortOption] = useState("newest");
   const [activeWorkspace, setActiveWorkspace] = useState(null);
+  const repairingBrandIdsRef = useRef(new Set());
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const isEditMode = Boolean(editingId);
   const isEditorOpen = activeWorkspace === "create" || activeWorkspace === "edit";
@@ -1224,6 +1243,61 @@ export default function GarmentLibrary() {
       };
     });
   }, [hasCustomizedPlacements, isEditorOpen, suggestedPlacements]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function repairImportedBrandLookups() {
+      for (const garment of garments) {
+        if (!garment?.id || repairingBrandIdsRef.current.has(garment.id)) {
+          continue;
+        }
+
+        if (findLookupById(brands, garment.brand_lookup_id)) {
+          continue;
+        }
+
+        const garmentModel = findLookupById(garmentModels, garment.garment_model_lookup_id);
+        const inferredBrandName = inferImportedGarmentBrandName(garment, garmentModel);
+        if (!inferredBrandName) {
+          continue;
+        }
+
+        repairingBrandIdsRef.current.add(garment.id);
+
+        try {
+          const brand = await createCatalogLookup("brands", {
+            name: inferredBrandName,
+            active: true,
+          });
+
+          if (isCancelled) {
+            return;
+          }
+
+          if (!garment.brand_lookup_id || garment.brand_lookup_id !== brand.id) {
+            await updateGarmentLibraryItem(garment.id, {
+              brand_lookup_id: brand.id,
+            });
+          }
+        } catch (error) {
+          console.error("Unable to repair garment brand lookup", {
+            garmentId: garment.id,
+            title: garment.title,
+            error,
+          });
+        } finally {
+          repairingBrandIdsRef.current.delete(garment.id);
+        }
+      }
+    }
+
+    repairImportedBrandLookups();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [brands, garmentModels, garments]);
 
   return (
     <div className="products-page garment-library-page">
