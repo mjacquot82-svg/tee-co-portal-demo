@@ -250,26 +250,32 @@ function ensureLoaded() {
 }
 
 export function getGarmentLibraryItems() {
-  if (isSupabaseConfigured && supabase) {
-    if (hasLoadedRemote || loadStarted) {
-      console.debug("[garmentLibraryStore] getGarmentLibraryItems returning cached snapshot", {
+  try {
+    if (isSupabaseConfigured && supabase) {
+      if (hasLoadedRemote || loadStarted) {
+        console.debug("[garmentLibraryStore] getGarmentLibraryItems returning cached snapshot", {
+          hasLoadedRemote,
+          loadStarted,
+          cachedSnapshotCount: cachedSnapshot.length,
+          cachedSnapshot,
+        });
+        return cachedSnapshot;
+      }
+
+      console.debug("[garmentLibraryStore] getGarmentLibraryItems returning EMPTY_ITEMS pending remote load", {
         hasLoadedRemote,
         loadStarted,
-        cachedSnapshotCount: cachedSnapshot.length,
-        cachedSnapshot,
       });
-      return cachedSnapshot;
+      return EMPTY_ITEMS;
     }
 
-    console.debug("[garmentLibraryStore] getGarmentLibraryItems returning EMPTY_ITEMS pending remote load", {
-      hasLoadedRemote,
-      loadStarted,
-    });
-    return EMPTY_ITEMS;
+    console.debug("[garmentLibraryStore] getGarmentLibraryItems using local snapshot because Supabase is unavailable");
+    return getLocalSnapshot();
+  } catch (error) {
+    console.error("[garmentLibraryStore] getGarmentLibraryItems threw before returning", error);
+    console.error("[garmentLibraryStore] getGarmentLibraryItems stack", error?.stack);
+    return cachedSnapshot || EMPTY_ITEMS;
   }
-
-  console.debug("[garmentLibraryStore] getGarmentLibraryItems using local snapshot because Supabase is unavailable");
-  return getLocalSnapshot();
 }
 
 export function subscribeToGarmentLibrary(listener) {

@@ -321,6 +321,12 @@ function getGarmentStorefrontUsageMatch(filterValue, usage) {
   return true;
 }
 
+function logGarmentDerivationError(stage, error, context = {}) {
+  console.error(`[GarmentLibrary] ${stage} failed`, error);
+  console.error(`[GarmentLibrary] ${stage} stack`, error?.stack);
+  console.error(`[GarmentLibrary] ${stage} context`, context);
+}
+
 const GarmentLibraryCard = memo(function GarmentLibraryCard({
   item,
   isSelected,
@@ -470,125 +476,249 @@ export default function GarmentLibrary() {
   const isEditorOpen = activeWorkspace === "create" || activeWorkspace === "edit";
   const isImportOpen = activeWorkspace === "import";
 
-  const categoryMap = useMemo(() => buildLookupOptionMap(categories), [categories]);
-  const brandMap = useMemo(() => buildLookupOptionMap(brands), [brands]);
-  const garmentModelMap = useMemo(() => buildLookupOptionMap(garmentModels), [garmentModels]);
+  const categoryMap = useMemo(() => {
+    try {
+      return buildLookupOptionMap(categories);
+    } catch (error) {
+      logGarmentDerivationError("categoryMap useMemo", error, { categories });
+      return new Map();
+    }
+  }, [categories]);
+  const brandMap = useMemo(() => {
+    try {
+      return buildLookupOptionMap(brands);
+    } catch (error) {
+      logGarmentDerivationError("brandMap useMemo", error, { brands });
+      return new Map();
+    }
+  }, [brands]);
+  const garmentModelMap = useMemo(() => {
+    try {
+      return buildLookupOptionMap(garmentModels);
+    } catch (error) {
+      logGarmentDerivationError("garmentModelMap useMemo", error, { garmentModels });
+      return new Map();
+    }
+  }, [garmentModels]);
   const activeLibraryBrandIds = useMemo(
-    () => buildActiveLibraryBrandIds(garments, garmentModelMap),
+    () => {
+      try {
+        return buildActiveLibraryBrandIds(garments, garmentModelMap);
+      } catch (error) {
+        logGarmentDerivationError("active brand derivation useMemo", error, {
+          garments,
+          garmentModelMapSize: garmentModelMap.size,
+        });
+        return new Set();
+      }
+    },
     [garmentModelMap, garments]
   );
-  const garmentUsageMap = useMemo(() => buildGarmentUsageMap(products, garments), [garments, products]);
+  const garmentUsageMap = useMemo(() => {
+    try {
+      return buildGarmentUsageMap(products, garments);
+    } catch (error) {
+      logGarmentDerivationError("garment usage map useMemo", error, { products, garments });
+      return new Map();
+    }
+  }, [garments, products]);
   const garmentBrowseItems = useMemo(
-    () =>
-      garments.map((item) => {
-        const resolvedBrandId = resolveGarmentBrandId(item, garmentModelMap);
-        const brand = brandMap.get(resolvedBrandId);
-        const model = garmentModelMap.get(item.garment_model_lookup_id);
-        const usage = garmentUsageMap.get(item.id) || EMPTY_GARMENT_USAGE;
+    () => {
+      try {
+        return garments.map((item, index) => {
+          try {
+            const resolvedBrandId = resolveGarmentBrandId(item, garmentModelMap);
+            const brand = brandMap.get(resolvedBrandId);
+            const model = garmentModelMap.get(item.garment_model_lookup_id);
+            const usage = garmentUsageMap.get(item.id) || EMPTY_GARMENT_USAGE;
 
-        return {
-          item,
-          usage,
-          brandId: resolvedBrandId,
-          sortTitle: normalizeTextKey(item.title),
-          createdAt: Date.parse(item.created_at || item.updated_at || 0) || 0,
-          variantCount: Array.isArray(item.variants) ? item.variants.length : 0,
-          brandName: normalizeText(brand?.name),
-          categoryName: normalizeText(categoryMap.get(item.category_lookup_id)?.name),
-          modelLabel: normalizeText(model?.display_name),
-          modelCode: normalizeText(model?.model_code),
-          imageSrc: normalizeText(item?.image),
-          subtitle: buildGarmentLibraryLabel(item, brands, categories, garmentModels),
-          searchIndex: [
-            item.title,
-            brand?.name,
-            model?.display_name,
-            model?.model_code,
-            ...((item.variants || []).map((variant) => variant?.name) || []),
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase(),
-        };
-      }),
+            return {
+              item,
+              usage,
+              brandId: resolvedBrandId,
+              sortTitle: normalizeTextKey(item.title),
+              createdAt: Date.parse(item.created_at || item.updated_at || 0) || 0,
+              variantCount: Array.isArray(item.variants) ? item.variants.length : 0,
+              brandName: normalizeText(brand?.name),
+              categoryName: normalizeText(categoryMap.get(item.category_lookup_id)?.name),
+              modelLabel: normalizeText(model?.display_name),
+              modelCode: normalizeText(model?.model_code),
+              imageSrc: normalizeText(item?.image),
+              subtitle: buildGarmentLibraryLabel(item, brands, categories, garmentModels),
+              searchIndex: [
+                item.title,
+                brand?.name,
+                model?.display_name,
+                model?.model_code,
+                ...((item.variants || []).map((variant) => variant?.name) || []),
+              ]
+                .filter(Boolean)
+                .join(" ")
+                .toLowerCase(),
+            };
+          } catch (error) {
+            logGarmentDerivationError("garmentBrowseItems normalized mapping", error, {
+              index,
+              garmentId: item?.id,
+              garmentTitle: item?.title,
+              item,
+            });
+            return null;
+          }
+        }).filter(Boolean);
+      } catch (error) {
+        logGarmentDerivationError("garmentBrowseItems useMemo", error, {
+          garments,
+          garmentCount: garments.length,
+        });
+        return EMPTY_LIST;
+      }
+    },
     [brandMap, brands, categories, categoryMap, garmentModelMap, garmentModels, garmentUsageMap, garments]
   );
   const categoryFilterOptions = useMemo(
-    () =>
-      Array.from(new Set(garmentBrowseItems.map((entry) => entry.categoryName).filter(Boolean))).sort((left, right) =>
-        left.localeCompare(right)
-      ),
+    () => {
+      try {
+        return Array.from(new Set(garmentBrowseItems.map((entry) => entry.categoryName).filter(Boolean))).sort(
+          (left, right) => left.localeCompare(right)
+        );
+      } catch (error) {
+        logGarmentDerivationError("category filter options useMemo", error, { garmentBrowseItems });
+        return EMPTY_LIST;
+      }
+    },
     [garmentBrowseItems]
   );
   const brandFilterOptions = useMemo(
-    () =>
-      Array.from(new Set(garmentBrowseItems.map((entry) => entry.brandName).filter(Boolean))).sort((left, right) =>
-        left.localeCompare(right)
-      ),
+    () => {
+      try {
+        return Array.from(new Set(garmentBrowseItems.map((entry) => entry.brandName).filter(Boolean))).sort(
+          (left, right) => left.localeCompare(right)
+        );
+      } catch (error) {
+        logGarmentDerivationError("brand filter options useMemo", error, { garmentBrowseItems });
+        return EMPTY_LIST;
+      }
+    },
     [garmentBrowseItems]
   );
   const filteredGarments = useMemo(() => {
-    const normalizedSearch = deferredSearchTerm.trim().toLowerCase();
-    const nextItems = garmentBrowseItems.filter((entry) => {
-      if (categoryFilter !== "all" && normalizeTextKey(entry.categoryName) !== normalizeTextKey(categoryFilter)) {
-        return false;
+    try {
+      const normalizedSearch = deferredSearchTerm.trim().toLowerCase();
+      const nextItems = garmentBrowseItems.filter((entry, index) => {
+        try {
+          if (categoryFilter !== "all" && normalizeTextKey(entry.categoryName) !== normalizeTextKey(categoryFilter)) {
+            return false;
+          }
+
+          if (brandFilter !== "all" && normalizeTextKey(entry.brandName) !== normalizeTextKey(brandFilter)) {
+            return false;
+          }
+
+          if (!getGarmentStorefrontUsageMatch(storefrontUsageFilter, entry.usage)) {
+            return false;
+          }
+
+          if (!normalizedSearch) return true;
+          return entry.searchIndex.includes(normalizedSearch);
+        } catch (error) {
+          logGarmentDerivationError("visible garment filtering", error, {
+            index,
+            categoryFilter,
+            brandFilter,
+            storefrontUsageFilter,
+            normalizedSearch,
+            entry,
+          });
+          return false;
+        }
+      });
+
+      try {
+        nextItems.sort((left, right) => {
+          if (sortOption === "alphabetical") {
+            return left.sortTitle.localeCompare(right.sortTitle);
+          }
+
+          if (sortOption === "most-variants") {
+            return right.variantCount - left.variantCount || left.sortTitle.localeCompare(right.sortTitle);
+          }
+
+          if (sortOption === "least-variants") {
+            return left.variantCount - right.variantCount || left.sortTitle.localeCompare(right.sortTitle);
+          }
+
+          if (sortOption === "most-storefront") {
+            return (
+              right.usage.linkedProductCount - left.usage.linkedProductCount ||
+              left.sortTitle.localeCompare(right.sortTitle)
+            );
+          }
+
+          return right.createdAt - left.createdAt || left.sortTitle.localeCompare(right.sortTitle);
+        });
+      } catch (error) {
+        logGarmentDerivationError("filtered garments sorting", error, {
+          sortOption,
+          nextItems,
+        });
       }
 
-      if (brandFilter !== "all" && normalizeTextKey(entry.brandName) !== normalizeTextKey(brandFilter)) {
-        return false;
-      }
-
-      if (!getGarmentStorefrontUsageMatch(storefrontUsageFilter, entry.usage)) {
-        return false;
-      }
-
-      if (!normalizedSearch) return true;
-      return entry.searchIndex.includes(normalizedSearch);
-    });
-
-    nextItems.sort((left, right) => {
-      if (sortOption === "alphabetical") {
-        return left.sortTitle.localeCompare(right.sortTitle);
-      }
-
-      if (sortOption === "most-variants") {
-        return right.variantCount - left.variantCount || left.sortTitle.localeCompare(right.sortTitle);
-      }
-
-      if (sortOption === "least-variants") {
-        return left.variantCount - right.variantCount || left.sortTitle.localeCompare(right.sortTitle);
-      }
-
-      if (sortOption === "most-storefront") {
-        return (
-          right.usage.linkedProductCount - left.usage.linkedProductCount ||
-          left.sortTitle.localeCompare(right.sortTitle)
-        );
-      }
-
-      return right.createdAt - left.createdAt || left.sortTitle.localeCompare(right.sortTitle);
-    });
-
-    return nextItems;
+      return nextItems;
+    } catch (error) {
+      logGarmentDerivationError("filtered garments useMemo", error, {
+        brandFilter,
+        categoryFilter,
+        deferredSearchTerm,
+        garmentBrowseItems,
+        storefrontUsageFilter,
+        sortOption,
+      });
+      return EMPTY_LIST;
+    }
   }, [brandFilter, categoryFilter, deferredSearchTerm, garmentBrowseItems, storefrontUsageFilter, sortOption]);
   const hasActiveGarmentFilters = Boolean(
     searchTerm.trim() || categoryFilter !== "all" || brandFilter !== "all" || storefrontUsageFilter !== "all"
   );
   const filteredGarmentCount = filteredGarments.length;
   const brandSelectOptions = useMemo(
-    () => buildBrandSelectOptionsFromVisibleGarments(filteredGarments, garmentBrowseItems, brands, form.brand_lookup_id),
+    () => {
+      try {
+        return buildBrandSelectOptionsFromVisibleGarments(
+          filteredGarments,
+          garmentBrowseItems,
+          brands,
+          form.brand_lookup_id
+        );
+      } catch (error) {
+        logGarmentDerivationError("brand select options useMemo", error, {
+          filteredGarments,
+          garmentBrowseItems,
+          brands,
+          selectedBrandId: form.brand_lookup_id,
+        });
+        return EMPTY_LIST;
+      }
+    },
     [brands, filteredGarments, form.brand_lookup_id, garmentBrowseItems]
   );
   useEffect(() => {
-    const activeGarments = garments.filter((garment) => garment?.active !== false);
+    try {
+      const activeGarments = garments.filter((garment) => garment?.active !== false);
 
-    console.debug("[GarmentLibrary] active garment filtering results", {
-      totalGarments: garments.length,
-      activeGarmentCount: activeGarments.length,
-      inactiveGarmentCount: garments.length - activeGarments.length,
-      activeGarments,
-      activeLibraryBrandIds: Array.from(activeLibraryBrandIds),
-    });
+      console.debug("[GarmentLibrary] active garment filtering results", {
+        totalGarments: garments.length,
+        activeGarmentCount: activeGarments.length,
+        inactiveGarmentCount: garments.length - activeGarments.length,
+        activeGarments,
+        activeLibraryBrandIds: Array.from(activeLibraryBrandIds),
+      });
+    } catch (error) {
+      logGarmentDerivationError("active filtering effect", error, {
+        garments,
+        activeLibraryBrandIds,
+      });
+    }
   }, [activeLibraryBrandIds, garments]);
   useEffect(() => {
     console.debug("[GarmentLibrary] final garmentBrowseItems array", {
@@ -675,6 +805,51 @@ export default function GarmentLibrary() {
         .some((value) => String(value).toLowerCase().includes(normalizedSearch));
     });
   }, [form.variants, variantSearch]);
+  const garmentCardNodes = useMemo(() => {
+    try {
+      return filteredGarments.map(({ item, subtitle, usage }, index) => {
+        try {
+          return (
+            <GarmentLibraryCard
+              key={item.id}
+              item={item}
+              isSelected={editingId === item.id && activeWorkspace === "edit"}
+              subtitle={subtitle}
+              usage={usage}
+              onSelect={() => {
+                startEditingGarment(item);
+              }}
+              onRemove={() => {
+                if (editingId === item.id) {
+                  resetForm();
+                  if (activeWorkspace === "edit") {
+                    closeWorkspace();
+                  }
+                }
+                deleteGarmentLibraryItem(item.id);
+              }}
+            />
+          );
+        } catch (error) {
+          logGarmentDerivationError("garment card mapping", error, {
+            index,
+            garmentId: item?.id,
+            garmentTitle: item?.title,
+            item,
+            usage,
+          });
+          return null;
+        }
+      });
+    } catch (error) {
+      logGarmentDerivationError("garment card mapping useMemo", error, {
+        filteredGarments,
+        editingId,
+        activeWorkspace,
+      });
+      return EMPTY_LIST;
+    }
+  }, [activeWorkspace, editingId, filteredGarments]);
   const garmentPreviewMap = useMemo(() => buildGarmentMap(garments), [garments]);
   const previewGarments = useMemo(() => {
     if (!importPreview) return [];
@@ -1635,27 +1810,7 @@ export default function GarmentLibrary() {
           <div className="products-list-scroll garment-library-list-scroll">
             <div className="products-list-grid">
               {filteredGarments.length ? (
-                filteredGarments.map(({ item, subtitle, usage }) => (
-                  <GarmentLibraryCard
-                    key={item.id}
-                    item={item}
-                    isSelected={editingId === item.id && activeWorkspace === "edit"}
-                    subtitle={subtitle}
-                    usage={usage}
-                    onSelect={() => {
-                      startEditingGarment(item);
-                    }}
-                    onRemove={() => {
-                      if (editingId === item.id) {
-                        resetForm();
-                        if (activeWorkspace === "edit") {
-                          closeWorkspace();
-                        }
-                      }
-                      deleteGarmentLibraryItem(item.id);
-                    }}
-                  />
-                ))
+                garmentCardNodes
               ) : (
                 <div className="products-empty-state">
                   <strong>No garments match current filters.</strong>
