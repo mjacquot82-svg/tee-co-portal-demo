@@ -192,8 +192,14 @@ function buildActiveLibraryBrandIds(garments = [], garmentModelMap = new Map()) 
   return brandIds;
 }
 
-function buildVisibleBrandOptions(brands = [], activeLibraryBrandIds = new Set(), selectedBrandId = "") {
-  const visibleBrands = brands.filter((brand) => activeLibraryBrandIds.has(normalizeText(brand?.id)));
+function buildVisibleBrandOptions(brands = [], garmentBrowseItems = [], selectedBrandId = "") {
+  const activeBrowseBrandIds = new Set(
+    garmentBrowseItems
+      .filter((entry) => entry?.item?.active !== false)
+      .map((entry) => normalizeText(entry?.brandId))
+      .filter(Boolean)
+  );
+  const visibleBrands = brands.filter((brand) => activeBrowseBrandIds.has(normalizeText(brand?.id)));
 
   if (selectedBrandId && !visibleBrands.some((brand) => brand.id === selectedBrandId)) {
     const selectedBrand = brands.find((brand) => brand.id === selectedBrandId);
@@ -448,10 +454,6 @@ export default function GarmentLibrary() {
     () => buildActiveLibraryBrandIds(garments, garmentModelMap),
     [garmentModelMap, garments]
   );
-  const visibleBrands = useMemo(
-    () => buildVisibleBrandOptions(brands, activeLibraryBrandIds, form.brand_lookup_id),
-    [activeLibraryBrandIds, brands, form.brand_lookup_id]
-  );
   const garmentUsageMap = useMemo(() => buildGarmentUsageMap(products, garments), [garments, products]);
   const garmentBrowseItems = useMemo(
     () =>
@@ -464,6 +466,7 @@ export default function GarmentLibrary() {
         return {
           item,
           usage,
+          brandId: resolvedBrandId,
           sortTitle: normalizeTextKey(item.title),
           createdAt: Date.parse(item.created_at || item.updated_at || 0) || 0,
           variantCount: Array.isArray(item.variants) ? item.variants.length : 0,
@@ -487,6 +490,10 @@ export default function GarmentLibrary() {
       }),
     [brandMap, brands, categories, categoryMap, garmentModelMap, garmentModels, garmentUsageMap, garments]
   );
+  const visibleBrands = useMemo(
+    () => buildVisibleBrandOptions(brands, garmentBrowseItems, form.brand_lookup_id),
+    [brands, form.brand_lookup_id, garmentBrowseItems]
+  );
   const categoryFilterOptions = useMemo(
     () =>
       Array.from(new Set(garmentBrowseItems.map((entry) => entry.categoryName).filter(Boolean))).sort((left, right) =>
@@ -501,6 +508,29 @@ export default function GarmentLibrary() {
       ),
     [garmentBrowseItems]
   );
+  useEffect(() => {
+    console.debug("[GarmentLibrary] create brand dropdown debug", {
+      brandOptionsPassedToDropdown: visibleBrands.map((brand) => ({
+        id: brand.id,
+        name: brand.name,
+      })),
+      isBrandOptionsArrayEmpty: visibleBrands.length === 0,
+      brandsLookupCount: brands.length,
+      garmentCount: garments.length,
+      activeGarmentCount: garments.filter((garment) => garment?.active !== false).length,
+      activeLibraryBrandIds: Array.from(activeLibraryBrandIds),
+      garmentBrowseBrandIds: Array.from(
+        new Set(
+          garmentBrowseItems
+            .filter((entry) => entry?.item?.active !== false)
+            .map((entry) => entry?.brandId)
+            .filter(Boolean)
+        )
+      ),
+      garmentBrowseBrandNames: brandFilterOptions,
+      selectedBrandId: form.brand_lookup_id,
+    });
+  }, [activeLibraryBrandIds, brandFilterOptions, brands, form.brand_lookup_id, garmentBrowseItems, garments, visibleBrands]);
   const filteredGarments = useMemo(() => {
     const normalizedSearch = deferredSearchTerm.trim().toLowerCase();
     const nextItems = garmentBrowseItems.filter((entry) => {
