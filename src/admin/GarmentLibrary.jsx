@@ -70,6 +70,10 @@ const emptyLibraryForm = {
   active: true,
 };
 
+function getGarmentModeLabel(itemTitle) {
+  return normalizeText(itemTitle) || "Selected Garment";
+}
+
 function buildFormFromGarment(item, brands, categories, garmentModels, sizeLookups) {
   const garmentModel = findLookupById(garmentModels, item?.garment_model_lookup_id);
 
@@ -226,14 +230,28 @@ function getGarmentStorefrontUsageMatch(filterValue, usage) {
 
 const GarmentLibraryCard = memo(function GarmentLibraryCard({
   item,
-  isEditing,
+  isSelected,
   subtitle,
   usage,
-  onEdit,
+  onSelect,
   onRemove,
 }) {
+  function handleKeyDown(event) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onSelect();
+    }
+  }
+
   return (
-    <article className={`products-card ${isEditing ? "is-active" : ""}`}>
+    <article
+      className={`products-card ${isSelected ? "is-active" : ""}`}
+      onClick={onSelect}
+      onKeyDown={handleKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSelected}
+    >
       <div className="products-card-media">
         {item.image ? (
           <img src={item.image} alt={item.title} className="products-card-image" />
@@ -245,7 +263,10 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
       <div className="products-card-body">
         <div className="products-card-topline">
           <div style={{ minWidth: 0 }}>
-            <h3 style={{ margin: 0 }}>{item.title}</h3>
+            <div className="products-card-title-row">
+              <h3 style={{ margin: 0 }}>{item.title}</h3>
+              {isSelected ? <span className="products-card-editing-pill">Selected</span> : null}
+            </div>
             <p className="products-card-subtitle">{subtitle}</p>
           </div>
         </div>
@@ -271,12 +292,22 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
       </div>
 
       <div className="products-card-actions">
-        <button type="button" onClick={onEdit} className="products-card-button">
-          Edit
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelect();
+          }}
+          className="products-card-button"
+        >
+          {isSelected ? "Editing" : "Edit"}
         </button>
         <button
           type="button"
-          onClick={onRemove}
+          onClick={(event) => {
+            event.stopPropagation();
+            onRemove();
+          }}
           className="products-card-button products-card-button-danger"
         >
           Remove
@@ -321,6 +352,7 @@ export default function GarmentLibrary() {
   const [storefrontUsageFilter, setStorefrontUsageFilter] = useState("all");
   const [sortOption, setSortOption] = useState("newest");
   const deferredSearchTerm = useDeferredValue(searchTerm);
+  const isEditMode = Boolean(editingId);
 
   const filteredModels = useMemo(
     () =>
@@ -561,6 +593,11 @@ export default function GarmentLibrary() {
     () => buildImportWarningSummary(importWarnings),
     [importWarnings]
   );
+  const selectedGarment = useMemo(
+    () => garments.find((item) => item.id === editingId) || null,
+    [editingId, garments]
+  );
+  const selectedGarmentLabel = getGarmentModeLabel(form.title || selectedGarment?.title);
 
   function resetForm() {
     setForm(emptyLibraryForm);
@@ -570,6 +607,19 @@ export default function GarmentLibrary() {
     setBrandDraft("");
     setSizeDraft("");
     setModelDraft(buildModelDraftFromModel());
+    setVariantSearch("");
+  }
+
+  function startEditingGarment(item) {
+    setEditingId(item.id);
+    setForm(buildFormFromGarment(item, brands, categories, garmentModels, sizes));
+    setModelDraft(
+      buildModelDraftFromModel(
+        findLookupById(garmentModels, item.garment_model_lookup_id),
+        item.brand_lookup_id
+      )
+    );
+    setSaveError("");
     setVariantSearch("");
   }
 
@@ -838,12 +888,18 @@ export default function GarmentLibrary() {
       };
 
       if (editingId) {
-        await updateGarmentLibraryItem(editingId, payload);
+        const updated = await updateGarmentLibraryItem(editingId, payload);
+        if (updated) {
+          startEditingGarment(updated);
+        }
       } else {
-        await createGarmentLibraryItem(payload);
+        const created = await createGarmentLibraryItem(payload);
+        if (created) {
+          startEditingGarment(created);
+        } else {
+          resetForm();
+        }
       }
-
-      resetForm();
     } catch (error) {
       console.error("Unable to save garment library item", error);
       setSaveError(error?.message || "Unable to save this garment right now. Please try again.");
@@ -1048,10 +1104,21 @@ export default function GarmentLibrary() {
         <form ref={editorRef} onSubmit={handleSubmit} className={`products-editor ${editingId ? "is-editing" : ""}`}>
           <div style={{ display: "grid", gap: "10px" }}>
             <p className="products-eyebrow">Garment Library</p>
-            <h1 style={{ margin: 0 }}>{editingId ? "Edit Garment" : "Manage Supplier Garments"}</h1>
+            <h1 style={{ margin: 0 }}>{isEditMode ? "Editing Garment" : "Create New Garment"}</h1>
+            {isEditMode ? (
+              <p style={{ margin: 0, color: "#0f172a", fontSize: "1.05rem", fontWeight: 700 }}>
+                {selectedGarmentLabel}
+              </p>
+            ) : null}
             <p style={{ margin: 0, color: "#64748b" }}>
               Build reusable supplier garments here, then publish simplified customer products from them.
             </p>
+          </div>
+
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <button type="button" onClick={resetForm} className="products-secondary-button">
+              + New Garment
+            </button>
           </div>
 
           {saveError ? <div className="products-error-banner">{saveError}</div> : null}
@@ -1458,7 +1525,7 @@ export default function GarmentLibrary() {
               onSelect={handleGarmentModelSelect}
               options={filteredModels}
               placeholder="Search existing garment models"
-              helperText="If you pick an existing model, Save Garment will reuse it. If not, the model name and code above will be saved as a new garment model."
+              helperText="If you pick an existing model, this garment will reuse it. If not, the model name and code above will be saved as a new garment model."
               renderOptionLabel={(model) => buildGarmentModelLabel(model, brands, categories)}
               renderOptionMeta={(model) => {
                 const brand = findLookupById(brands, model.brand_id);
@@ -1674,7 +1741,7 @@ export default function GarmentLibrary() {
 
           <div style={{ display: "grid", gridTemplateColumns: editingId ? "1fr 1fr" : "1fr", gap: "10px" }}>
             <button type="submit" disabled={isSaving} className="products-primary-button">
-              {isSaving ? "Saving..." : "Save Garment"}
+              {isSaving ? "Saving..." : isEditMode ? "Save Changes" : "Create Garment"}
             </button>
 
             {editingId ? (
@@ -1701,6 +1768,9 @@ export default function GarmentLibrary() {
                 <span>Storefront Products</span>
                 <strong>{products.length}</strong>
               </div>
+              <button type="button" className="products-secondary-button" onClick={resetForm}>
+                + New Garment
+              </button>
             </div>
           </div>
 
@@ -1794,21 +1864,19 @@ export default function GarmentLibrary() {
                   <GarmentLibraryCard
                     key={item.id}
                     item={item}
-                    isEditing={editingId === item.id}
+                    isSelected={editingId === item.id}
                     subtitle={subtitle}
                     usage={usage}
-                    onEdit={() => {
-                      setEditingId(item.id);
-                      setForm(buildFormFromGarment(item, brands, categories, garmentModels, sizes));
-                      setModelDraft(
-                        buildModelDraftFromModel(
-                          findLookupById(garmentModels, item.garment_model_lookup_id),
-                          item.brand_lookup_id
-                        )
-                      );
+                    onSelect={() => {
+                      startEditingGarment(item);
                       editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
                     }}
-                    onRemove={() => deleteGarmentLibraryItem(item.id)}
+                    onRemove={() => {
+                      if (editingId === item.id) {
+                        resetForm();
+                      }
+                      deleteGarmentLibraryItem(item.id);
+                    }}
                   />
                 ))
               ) : (
