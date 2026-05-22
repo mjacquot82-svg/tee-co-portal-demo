@@ -26,6 +26,7 @@ const PRODUCTS_SELECT_FIELDS = [
   "product_type",
   "brand_model",
   "brand_lookup_id",
+  "garment_library_item_id",
   "garment_model_lookup_id",
   "status",
   "image",
@@ -43,6 +44,11 @@ const PRODUCTS_SELECT_FIELDS = [
   "unit_price",
   "notes",
 ].join(", ");
+
+const LEGACY_PRODUCTS_SELECT_FIELDS = PRODUCTS_SELECT_FIELDS.replace(
+  "garment_library_item_id, ",
+  ""
+);
 
 function buildSupabaseProductErrorDetails(error, extra = {}) {
   if (!error || typeof error !== "object") {
@@ -67,6 +73,13 @@ function buildSupabaseProductErrorDetails(error, extra = {}) {
 
 function logSupabaseProductError(message, error, extra = {}) {
   console.error(message, buildSupabaseProductErrorDetails(error, extra));
+}
+
+function isMissingGarmentLibraryColumnError(error) {
+  const message = String(error?.message || "");
+  const details = String(error?.details || "");
+  const hint = String(error?.hint || "");
+  return [message, details, hint].some((value) => value.includes("garment_library_item_id"));
 }
 
 function emitProductsUpdated() {
@@ -315,6 +328,8 @@ function normalizeProduct(product) {
 
   return {
     ...product,
+    garment_library_item_id:
+      product.garment_library_item_id || product.garment_library_id || null,
     product_type: product.product_type || product.type || product.name || "General",
     cost_price: costPrice,
     markup_percentage: markupPercentage,
@@ -411,6 +426,8 @@ function buildSupabaseProductRecord(product = {}, options = {}) {
     product_type: product.product_type || product.type || product.name || "",
     brand_model: product.brand_model || "",
     brand_lookup_id: product.brand_lookup_id || null,
+    garment_library_item_id:
+      product.garment_library_item_id || product.garment_library_id || null,
     garment_model_lookup_id: product.garment_model_lookup_id || null,
     status: normalizedStatus,
     image: product.image || "",
@@ -471,6 +488,11 @@ function normalizeSupabaseProduct(product = {}) {
   });
 }
 
+function omitGarmentLibraryItemId(record = {}) {
+  const { garment_library_item_id: _GARMENT_LIBRARY_ITEM_ID, ...legacyRecord } = record;
+  return legacyRecord;
+}
+
 async function fetchProductsFromSupabase() {
   if (!isSupabaseConfigured || !supabase) {
     return null;
@@ -478,7 +500,16 @@ async function fetchProductsFromSupabase() {
 
   console.info("[productsStore] Fetching storefront products from Supabase");
 
-  const { data, error } = await supabase.from("products").select(PRODUCTS_SELECT_FIELDS);
+  let query = supabase.from("products").select(PRODUCTS_SELECT_FIELDS);
+  let { data, error } = await query;
+
+  if (error && isMissingGarmentLibraryColumnError(error)) {
+    console.warn(
+      "[productsStore] products.garment_library_item_id is unavailable; falling back to legacy product schema"
+    );
+    query = supabase.from("products").select(LEGACY_PRODUCTS_SELECT_FIELDS);
+    ({ data, error } = await query);
+  }
 
   if (error) {
     logSupabaseProductError("Unable to fetch Tee & Co products from Supabase", error, {
@@ -637,23 +668,34 @@ export async function createStoredProduct(productInput) {
     return localProduct;
   }
 
-  const { data, error } = await supabase
-    .from("products")
-    .insert(buildSupabaseProductRecord(product, { includeId: true }))
-    .select(PRODUCTS_SELECT_FIELDS)
-    .single();
+  const payload = buildSupabaseProductRecord(product, { includeId: true });
+  let query = supabase.from("products").insert(payload).select(PRODUCTS_SELECT_FIELDS).single();
+  let { data, error } = await query;
+
+  if (error && isMissingGarmentLibraryColumnError(error)) {
+    query = supabase
+      .from("products")
+      .insert(omitGarmentLibraryItemId(payload))
+      .select(LEGACY_PRODUCTS_SELECT_FIELDS)
+      .single();
+    ({ data, error } = await query);
+  }
 
   if (error) {
     logSupabaseProductError("Unable to create Tee & Co product in Supabase", error, {
       table: "products",
       action: "insert",
       select: PRODUCTS_SELECT_FIELDS,
-      payload: buildSupabaseProductRecord(product, { includeId: true }),
+      payload,
     });
     throw error;
   }
 
-  const createdProduct = normalizeSupabaseProduct(data);
+  const createdProduct = normalizeProduct({
+    ...normalizeSupabaseProduct(data),
+    garment_library_item_id:
+      data?.garment_library_item_id ?? product.garment_library_item_id ?? null,
+  });
   const nextProducts = [
     createdProduct,
     ...getStoredProducts().filter(
@@ -712,12 +754,24 @@ export async function updateStoredProduct(productId, updates) {
     return updatedProduct;
   }
 
-  const { data, error } = await supabase
+  const payload = buildSupabaseProductRecord(updatedProduct);
+  let query = supabase
     .from("products")
-    .update(buildSupabaseProductRecord(updatedProduct))
+    .update(payload)
     .eq("id", productId)
     .select(PRODUCTS_SELECT_FIELDS)
     .single();
+  let { data, error } = await query;
+
+  if (error && isMissingGarmentLibraryColumnError(error)) {
+    query = supabase
+      .from("products")
+      .update(omitGarmentLibraryItemId(payload))
+      .eq("id", productId)
+      .select(LEGACY_PRODUCTS_SELECT_FIELDS)
+      .single();
+    ({ data, error } = await query);
+  }
 
   if (error) {
     logSupabaseProductError("Unable to update Tee & Co product in Supabase", error, {
@@ -725,12 +779,16 @@ export async function updateStoredProduct(productId, updates) {
       action: "update",
       productId,
       select: PRODUCTS_SELECT_FIELDS,
-      payload: buildSupabaseProductRecord(updatedProduct),
+      payload,
     });
     throw error;
   }
 
-  const normalizedUpdatedProduct = normalizeSupabaseProduct(data);
+  const normalizedUpdatedProduct = normalizeProduct({
+    ...normalizeSupabaseProduct(data),
+    garment_library_item_id:
+      data?.garment_library_item_id ?? updatedProduct.garment_library_item_id ?? null,
+  });
   saveStoredProducts(
     nextProducts.map((product) =>
       product.id === productId ? normalizedUpdatedProduct : product

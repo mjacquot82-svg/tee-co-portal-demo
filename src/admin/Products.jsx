@@ -5,6 +5,7 @@ import ProductImageUploader from "../components/ProductImageUploader";
 import { PRODUCTION_TYPES } from "../constants/productionTypes";
 import { useCatalogLookups } from "../lib/catalogLookupsStore";
 import { useGarmentLibraryItems } from "../lib/garmentLibraryStore";
+import { findLinkedGarmentLibraryItem } from "../lib/productGarmentLinks";
 import {
   buildPlacementConfig,
   createStoredProduct,
@@ -15,7 +16,6 @@ import {
 } from "../lib/productsStore";
 import {
   buildGarmentLibraryLabel,
-  buildGarmentModelLabel,
   buildLegacyBrandModelValue,
   buildMethodPriceMap,
   buildPlacementPriceMap,
@@ -100,14 +100,7 @@ function buildPlacementLibrary(products = [], libraryItems = []) {
 }
 
 function buildFormFromProduct(product, libraryItems, sizeLookups, brands, categories, garmentModels) {
-  const matchedItem =
-    libraryItems.find((item) => item.id === product?.garment_library_item_id) ||
-    libraryItems.find(
-      (item) =>
-        item.garment_model_lookup_id &&
-        item.garment_model_lookup_id === product?.garment_model_lookup_id
-    ) ||
-    null;
+  const matchedItem = findLinkedGarmentLibraryItem(product, libraryItems);
   const placements = getProductPlacementConfig(product).map((placement) => placement.label);
   const productionMethods = Array.isArray(product?.production_methods) && product.production_methods.length
     ? product.production_methods
@@ -156,10 +149,10 @@ export default function Products() {
   const products = useStoredProducts();
   const libraryItems = useGarmentLibraryItems();
   const lookups = useCatalogLookups();
-  const categories = lookups.categories || [];
-  const brands = lookups.brands || [];
-  const sizes = lookups.sizes || [];
-  const garmentModels = lookups.garment_models || [];
+  const categories = useMemo(() => lookups.categories || [], [lookups.categories]);
+  const brands = useMemo(() => lookups.brands || [], [lookups.brands]);
+  const sizes = useMemo(() => lookups.sizes || [], [lookups.sizes]);
+  const garmentModels = useMemo(() => lookups.garment_models || [], [lookups.garment_models]);
   const [form, setForm] = useState(emptyProduct);
   const [editingProductId, setEditingProductId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -410,6 +403,7 @@ export default function Products() {
 
     const productPayload = {
       name: normalizeText(form.name),
+      garment_library_item_id: selectedGarmentItem?.id || form.selectedGarmentLibraryId || null,
       category: category?.name || form.category || "Catalog",
       category_lookup_id: category?.id || form.category_lookup_id || null,
       product_type: resolveStructuredProductType(garmentModel, form.product_type, form.name),
@@ -803,10 +797,7 @@ export default function Products() {
             <div className="products-list-grid">
               {filteredProducts.length ? (
                 filteredProducts.map((product) => {
-                  const linkedGarment =
-                    libraryItems.find(
-                      (item) => item.garment_model_lookup_id === product.garment_model_lookup_id
-                    ) || null;
+                  const linkedGarment = findLinkedGarmentLibraryItem(product, libraryItems);
 
                   return (
                     <article key={product.id} className={`products-card ${product.id === editingProductId ? "is-active" : ""}`}>

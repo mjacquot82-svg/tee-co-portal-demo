@@ -88,6 +88,7 @@ create table if not exists public.products (
   product_type text default '',
   brand_model text default '',
   brand_lookup_id uuid references public.brands(id) on delete set null,
+  garment_library_item_id uuid references public.garment_library_items(id) on delete set null,
   garment_model_lookup_id uuid references public.garment_models(id) on delete set null,
   status text not null default 'Active',
   image text default '',
@@ -221,6 +222,8 @@ create index if not exists garment_models_category_id_idx on public.garment_mode
 create index if not exists products_status_idx on public.products (status);
 create index if not exists products_category_lookup_id_idx on public.products (category_lookup_id);
 create index if not exists products_brand_lookup_id_idx on public.products (brand_lookup_id);
+create index if not exists products_garment_library_item_id_idx
+  on public.products (garment_library_item_id);
 create index if not exists products_garment_model_lookup_id_idx
   on public.products (garment_model_lookup_id);
 create index if not exists garment_library_items_active_idx on public.garment_library_items (active);

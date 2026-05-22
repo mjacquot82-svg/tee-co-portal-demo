@@ -9,6 +9,7 @@ import {
   updateGarmentLibraryItem,
   useGarmentLibraryItems,
 } from "../lib/garmentLibraryStore";
+import { buildGarmentUsageMap } from "../lib/productGarmentLinks";
 import { useStoredProducts } from "../lib/productsStore";
 import { parseTeeCoGarmentSpreadsheet } from "../lib/teeCoGarmentSpreadsheet";
 import {
@@ -211,21 +212,6 @@ function buildLookupOptionMap(options = []) {
   }, new Map());
 }
 
-function buildGarmentUsageMap(products = []) {
-  return products.reduce((accumulator, product) => {
-    const garmentModelId = String(product?.garment_model_lookup_id || "").trim();
-    if (!garmentModelId) return accumulator;
-
-    const currentUsage = accumulator.get(garmentModelId) || EMPTY_GARMENT_USAGE;
-
-    accumulator.set(garmentModelId, {
-      linkedProductCount: currentUsage.linkedProductCount + 1,
-    });
-
-    return accumulator;
-  }, new Map());
-}
-
 function getGarmentStorefrontUsageMatch(filterValue, usage) {
   if (filterValue === "used") {
     return usage.linkedProductCount > 0;
@@ -354,14 +340,14 @@ export default function GarmentLibrary() {
   const categoryMap = useMemo(() => buildLookupOptionMap(categories), [categories]);
   const brandMap = useMemo(() => buildLookupOptionMap(brands), [brands]);
   const garmentModelMap = useMemo(() => buildLookupOptionMap(garmentModels), [garmentModels]);
-  const garmentUsageMap = useMemo(() => buildGarmentUsageMap(products), [products]);
+  const garmentUsageMap = useMemo(() => buildGarmentUsageMap(products, garments), [garments, products]);
   const garmentBrowseItems = useMemo(
     () =>
       garments.map((item) => {
         const category = categoryMap.get(item.category_lookup_id);
         const brand = brandMap.get(item.brand_lookup_id);
         const model = garmentModelMap.get(item.garment_model_lookup_id);
-        const usage = garmentUsageMap.get(item.garment_model_lookup_id) || EMPTY_GARMENT_USAGE;
+        const usage = garmentUsageMap.get(item.id) || EMPTY_GARMENT_USAGE;
 
         return {
           item,

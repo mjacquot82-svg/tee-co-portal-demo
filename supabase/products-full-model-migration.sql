@@ -62,6 +62,7 @@ alter table public.products
   add column if not exists brand_model text default '',
   add column if not exists category_lookup_id uuid references public.categories(id) on delete set null,
   add column if not exists brand_lookup_id uuid references public.brands(id) on delete set null,
+  add column if not exists garment_library_item_id uuid references public.garment_library_items(id) on delete set null,
   add column if not exists garment_model_lookup_id uuid references public.garment_models(id) on delete set null,
   add column if not exists status text not null default 'Active',
   add column if not exists image text default '',
@@ -146,6 +147,21 @@ set product_type = coalesce(nullif(product_type, ''), name),
     production_method_prices = coalesce(production_method_prices, '{}'::jsonb),
     notes = coalesce(notes, '');
 
+with uniquely_matched_garments as (
+  select
+    garment_model_lookup_id,
+    min(id) as garment_library_item_id
+  from public.garment_library_items
+  where garment_model_lookup_id is not null
+  group by garment_model_lookup_id
+  having count(*) = 1
+)
+update public.products
+set garment_library_item_id = uniquely_matched_garments.garment_library_item_id
+from uniquely_matched_garments
+where public.products.garment_library_item_id is null
+  and public.products.garment_model_lookup_id = uniquely_matched_garments.garment_model_lookup_id;
+
 create index if not exists categories_active_idx on public.categories (active);
 create index if not exists brands_active_idx on public.brands (active);
 create index if not exists colors_active_idx on public.colors (active);
@@ -157,6 +173,8 @@ create index if not exists garment_library_items_model_idx
   on public.garment_library_items (garment_model_lookup_id);
 create index if not exists products_category_lookup_id_idx on public.products (category_lookup_id);
 create index if not exists products_brand_lookup_id_idx on public.products (brand_lookup_id);
+create index if not exists products_garment_library_item_id_idx
+  on public.products (garment_library_item_id);
 create index if not exists products_garment_model_lookup_id_idx
   on public.products (garment_model_lookup_id);
 
