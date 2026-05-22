@@ -107,6 +107,18 @@ function buildGarmentDisplayName(model, brand) {
   return modelCode ? `${baseLabel} - ${modelCode}` : baseLabel;
 }
 
+function buildImportedGarmentOptionLabel(item, model) {
+  const modelCode = normalizeText(model?.model_code);
+  const modelName = normalizeText(model?.display_name);
+  const garmentTitle = normalizeText(item?.title);
+
+  if (modelCode && modelName) {
+    return `${modelCode} - ${modelName}`;
+  }
+
+  return modelCode || modelName || garmentTitle || "Untitled Garment";
+}
+
 function readFileAsText(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -340,6 +352,8 @@ export default function GarmentLibrary() {
   const [brandDraft, setBrandDraft] = useState("");
   const [sizeDraft, setSizeDraft] = useState("");
   const [modelDraft, setModelDraft] = useState(buildModelDraftFromModel());
+  const [createMode, setCreateMode] = useState("imported");
+  const [selectedReusableGarmentId, setSelectedReusableGarmentId] = useState("");
   const [importError, setImportError] = useState("");
   const [importNotice, setImportNotice] = useState("");
   const [importWarnings, setImportWarnings] = useState([]);
@@ -589,6 +603,49 @@ export default function GarmentLibrary() {
     () => garments.find((item) => item.id === editingId) || null,
     [editingId, garments]
   );
+  const matchingImportedGarments = useMemo(() => {
+    if (!form.category_lookup_id || !form.brand_lookup_id) return [];
+
+    return garments
+      .filter(
+        (item) =>
+          item.category_lookup_id === form.category_lookup_id &&
+          item.brand_lookup_id === form.brand_lookup_id
+      )
+      .map((item) => {
+        const model = garmentModelMap.get(item.garment_model_lookup_id);
+        return {
+          item,
+          model,
+          optionLabel: buildImportedGarmentOptionLabel(item, model),
+          sortKey: [
+            normalizeTextKey(model?.model_code),
+            normalizeTextKey(model?.display_name),
+            normalizeTextKey(item?.title),
+          ].join("::"),
+        };
+      })
+      .sort((left, right) => left.sortKey.localeCompare(right.sortKey));
+  }, [form.brand_lookup_id, form.category_lookup_id, garmentModelMap, garments]);
+  const isImportedSelectionLocked = Boolean(
+    selectedReusableGarmentId && editingId === selectedReusableGarmentId
+  );
+  const hasCategoryAndBrandSelected = Boolean(form.category_lookup_id && form.brand_lookup_id);
+  const showReusableSelector = Boolean(
+    hasCategoryAndBrandSelected && (activeWorkspace === "create" || isImportedSelectionLocked)
+  );
+  const shouldPromptForReusableSelection = Boolean(
+    activeWorkspace === "create" &&
+      !editingId &&
+      createMode !== "custom" &&
+      hasCategoryAndBrandSelected &&
+      matchingImportedGarments.length
+  );
+  const canEditGarmentDetails = Boolean(
+    isEditMode ||
+      createMode === "custom" ||
+      (hasCategoryAndBrandSelected && matchingImportedGarments.length === 0)
+  );
   const selectedGarmentLabel = getGarmentModeLabel(form.title || selectedGarment?.title);
   const storefrontLinkedGarments = useMemo(
     () => garmentBrowseItems.filter((entry) => entry.usage.linkedProductCount > 0).length,
@@ -607,6 +664,8 @@ export default function GarmentLibrary() {
     setBrandDraft("");
     setSizeDraft("");
     setModelDraft(buildModelDraftFromModel());
+    setCreateMode("imported");
+    setSelectedReusableGarmentId("");
     setVariantSearch("");
   }
 
@@ -624,6 +683,8 @@ export default function GarmentLibrary() {
   }
 
   function startEditingGarment(item) {
+    setCreateMode("custom");
+    setSelectedReusableGarmentId("");
     setEditingId(item.id);
     setForm(buildFormFromGarment(item, brands, categories, garmentModels, sizes));
     setModelDraft(
@@ -636,6 +697,52 @@ export default function GarmentLibrary() {
     setImportError("");
     setVariantSearch("");
     setActiveWorkspace("edit");
+  }
+
+  function handleReusableGarmentSelect(garmentId) {
+    if (!garmentId) {
+      setSelectedReusableGarmentId("");
+      return;
+    }
+
+    const matchedEntry = matchingImportedGarments.find((entry) => entry.item.id === garmentId);
+    if (!matchedEntry) return;
+
+    setCreateMode("imported");
+    setSelectedReusableGarmentId(matchedEntry.item.id);
+    setEditingId(matchedEntry.item.id);
+    setForm(buildFormFromGarment(matchedEntry.item, brands, categories, garmentModels, sizes));
+    setModelDraft(
+      buildModelDraftFromModel(
+        findLookupById(garmentModels, matchedEntry.item.garment_model_lookup_id),
+        matchedEntry.item.brand_lookup_id
+      )
+    );
+    setSaveError("");
+    setImportError("");
+    setVariantSearch("");
+    setActiveWorkspace("edit");
+  }
+
+  function switchToCustomGarmentFlow() {
+    const preservedCategoryId = form.category_lookup_id;
+    const preservedBrandId = form.brand_lookup_id;
+
+    setForm({
+      ...emptyLibraryForm,
+      category_lookup_id: preservedCategoryId,
+      brand_lookup_id: preservedBrandId,
+    });
+    setEditingId(null);
+    setSaveError("");
+    setVariantDraft(buildVariantDraft());
+    setBrandDraft("");
+    setSizeDraft("");
+    setModelDraft(buildModelDraftFromModel(null, preservedBrandId));
+    setCreateMode("custom");
+    setSelectedReusableGarmentId("");
+    setVariantSearch("");
+    setActiveWorkspace("create");
   }
 
   function clearImportPreview() {
@@ -679,6 +786,14 @@ export default function GarmentLibrary() {
 
     if (name === "brand_lookup_id") {
       setModelDraft((current) => ({ ...current, brand_id: value }));
+    }
+
+    if (
+      !editingId &&
+      (name === "category_lookup_id" || name === "brand_lookup_id") &&
+      selectedReusableGarmentId
+    ) {
+      setSelectedReusableGarmentId("");
     }
   }
 
@@ -1564,7 +1679,10 @@ export default function GarmentLibrary() {
                       <p className="products-section-step">Section 1</p>
                       <h2>Basic Garment Info</h2>
                     </div>
-                    <p>Set up the reusable garment details here. Saving will create or update the linked master garment model automatically.</p>
+                    <p>
+                      Select an imported supplier garment first when one already exists. Use custom
+                      creation only when you need a garment that is not already in the library.
+                    </p>
                   </div>
 
                   <div className="products-editor-grid">
@@ -1575,6 +1693,7 @@ export default function GarmentLibrary() {
                         value={form.category_lookup_id}
                         onChange={updateField}
                         style={fieldStyle}
+                        disabled={isImportedSelectionLocked}
                       >
                         <option value="">Select category</option>
                         {categories.map((category) => (
@@ -1592,6 +1711,7 @@ export default function GarmentLibrary() {
                         value={form.brand_lookup_id}
                         onChange={updateField}
                         style={fieldStyle}
+                        disabled={isImportedSelectionLocked}
                       >
                         <option value="">Select brand</option>
                         {brands.map((brand) => (
@@ -1602,6 +1722,71 @@ export default function GarmentLibrary() {
                       </select>
                     </label>
                   </div>
+
+                  {showReusableSelector ? (
+                    <div className="products-summary-card">
+                      {matchingImportedGarments.length ? (
+                        <div style={{ display: "grid", gap: "12px" }}>
+                          <label style={labelStyle}>
+                            Available Imported Garments
+                            <select
+                              value={selectedReusableGarmentId}
+                              onChange={(event) => handleReusableGarmentSelect(event.target.value)}
+                              style={fieldStyle}
+                              disabled={isImportedSelectionLocked}
+                            >
+                              <option value="">
+                                Select an imported garment for this brand and category
+                              </option>
+                              {matchingImportedGarments.map(({ item, optionLabel }) => (
+                                <option key={item.id} value={item.id}>
+                                  {optionLabel}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <div className="products-field-footer">
+                            <span>
+                              {matchingImportedGarments.length} imported garment
+                              {matchingImportedGarments.length === 1 ? "" : "s"} found for this
+                              selection.
+                            </span>
+                            <button
+                              type="button"
+                              className="products-inline-cancel"
+                              onClick={switchToCustomGarmentFlow}
+                            >
+                              Create Custom Garment Instead
+                            </button>
+                          </div>
+
+                          {isImportedSelectionLocked ? (
+                            <div className="products-callout">
+                              This garment is being reused from the import library. Category, brand,
+                              model, and display name are derived from that supplier record.
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="products-field-footer">
+                          <span>
+                            No imported garments match this category and brand yet. Continue with a
+                            custom garment.
+                          </span>
+                          {createMode !== "custom" ? (
+                            <button
+                              type="button"
+                              className="products-inline-cancel"
+                              onClick={switchToCustomGarmentFlow}
+                            >
+                              Create Custom Garment
+                            </button>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
 
                   <details className="products-helper-details">
                     <summary className="products-helper-summary">Add a new brand</summary>
@@ -1618,49 +1803,72 @@ export default function GarmentLibrary() {
                     </div>
                   </details>
 
-                  <div className="products-inline-model-grid">
-                    <label style={labelStyle}>
-                      Garment Model Name
-                      <input
-                        value={modelDraft.display_name}
-                        onChange={(event) =>
-                          setModelDraft((current) => ({ ...current, display_name: event.target.value }))
-                        }
-                        placeholder="Women's Heavy Cotton T-Shirt"
-                        style={fieldStyle}
+                  {canEditGarmentDetails ? (
+                    <>
+                      <div className="products-inline-model-grid">
+                        <label style={labelStyle}>
+                          Garment Model Name
+                          <input
+                            value={modelDraft.display_name}
+                            onChange={(event) =>
+                              setModelDraft((current) => ({ ...current, display_name: event.target.value }))
+                            }
+                            placeholder="Women's Heavy Cotton T-Shirt"
+                            style={{
+                              ...fieldStyle,
+                              background: isImportedSelectionLocked ? "#f8fafc" : fieldStyle.background,
+                            }}
+                            readOnly={isImportedSelectionLocked}
+                          />
+                        </label>
+
+                        <label style={labelStyle}>
+                          Garment Model Code
+                          <input
+                            value={modelDraft.model_code}
+                            onChange={(event) =>
+                              setModelDraft((current) => ({ ...current, model_code: event.target.value }))
+                            }
+                            placeholder="5000L"
+                            style={{
+                              ...fieldStyle,
+                              background: isImportedSelectionLocked ? "#f8fafc" : fieldStyle.background,
+                            }}
+                            readOnly={isImportedSelectionLocked}
+                          />
+                        </label>
+                      </div>
+
+                      <label style={labelStyle}>
+                        Garment Display Name
+                        <input
+                          name="title"
+                          value={form.title}
+                          onChange={updateField}
+                          placeholder="Gildan Women's Heavy Cotton T-Shirt - 5000L"
+                          style={{
+                            ...fieldStyle,
+                            background: isImportedSelectionLocked ? "#f8fafc" : fieldStyle.background,
+                          }}
+                          readOnly={isImportedSelectionLocked}
+                        />
+                      </label>
+
+                      <ProductImageUploader
+                        image={form.image}
+                        onImageChange={(image) => setForm((current) => ({ ...current, image }))}
                       />
-                    </label>
-
-                    <label style={labelStyle}>
-                      Garment Model Code
-                      <input
-                        value={modelDraft.model_code}
-                        onChange={(event) =>
-                          setModelDraft((current) => ({ ...current, model_code: event.target.value }))
-                        }
-                        placeholder="5000L"
-                        style={fieldStyle}
-                      />
-                    </label>
-                  </div>
-
-                  <label style={labelStyle}>
-                    Garment Display Name
-                    <input
-                      name="title"
-                      value={form.title}
-                      onChange={updateField}
-                      placeholder="Gildan Women's Heavy Cotton T-Shirt - 5000L"
-                      style={fieldStyle}
-                    />
-                  </label>
-
-                  <ProductImageUploader
-                    image={form.image}
-                    onImageChange={(image) => setForm((current) => ({ ...current, image }))}
-                  />
+                    </>
+                  ) : shouldPromptForReusableSelection ? (
+                    <div className="products-selection-empty">
+                      Select an imported garment above to reuse its supplier data, or switch to a
+                      custom garment.
+                    </div>
+                  ) : null}
                 </section>
 
+          {canEditGarmentDetails ? (
+          <>
           <section className="products-editor-section">
             <div className="products-section-header">
               <div>
@@ -1860,9 +2068,11 @@ export default function GarmentLibrary() {
               <input type="checkbox" name="active" checked={form.active} onChange={updateField} />
             </label>
           </section>
+          </>
+          ) : null}
 
           <div style={{ display: "grid", gridTemplateColumns: editingId ? "1fr 1fr" : "1fr", gap: "10px" }}>
-            <button type="submit" disabled={isSaving} className="products-primary-button">
+            <button type="submit" disabled={isSaving || !canEditGarmentDetails} className="products-primary-button">
               {isSaving ? "Saving..." : isEditMode ? "Save Changes" : "Create Garment"}
             </button>
 
