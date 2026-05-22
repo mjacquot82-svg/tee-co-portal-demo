@@ -527,17 +527,6 @@ export default function GarmentLibrary() {
       ),
     [garmentBrowseItems]
   );
-  useEffect(() => {
-    if (!brandSelectRef.current) return;
-
-    const renderedOptions = Array.from(brandSelectRef.current.options).map((option) => ({
-      value: option.value,
-      label: option.textContent,
-      disabled: option.disabled,
-    }));
-
-    console.debug("[GarmentLibrary] rendered brand select options", renderedOptions);
-  }, [brandSelectOptions]);
   const filteredGarments = useMemo(() => {
     const normalizedSearch = deferredSearchTerm.trim().toLowerCase();
     const nextItems = garmentBrowseItems.filter((entry) => {
@@ -590,6 +579,17 @@ export default function GarmentLibrary() {
     () => buildBrandSelectOptionsFromVisibleGarments(filteredGarments, garmentBrowseItems, brands, form.brand_lookup_id),
     [brands, filteredGarments, form.brand_lookup_id, garmentBrowseItems]
   );
+  useEffect(() => {
+    if (!brandSelectRef.current) return;
+
+    const renderedOptions = Array.from(brandSelectRef.current.options).map((option) => ({
+      value: option.value,
+      label: option.textContent,
+      disabled: option.disabled,
+    }));
+
+    console.debug("[GarmentLibrary] rendered brand select options", renderedOptions);
+  }, [brandSelectOptions]);
   useEffect(() => {
     console.debug("[GarmentLibrary] create brand dropdown debug", {
       normalizedBrandSelectOptions: brandSelectOptions,
