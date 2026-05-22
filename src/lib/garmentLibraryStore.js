@@ -9,6 +9,11 @@ const listeners = new Set();
 let cachedStorageRaw = null;
 let cachedSnapshotRaw = null;
 let cachedSnapshot = EMPTY_ITEMS;
+let snapshotVersion = 0;
+let cachedExternalSnapshot = Object.freeze({
+  version: snapshotVersion,
+  items: cachedSnapshot,
+});
 let loadStarted = false;
 let loadPromise = null;
 let hasLoadedRemote = false;
@@ -36,9 +41,18 @@ const GARMENT_LIBRARY_SELECT_FIELDS = [
 function emitUpdated() {
   console.log("[garmentLibraryStore] emitUpdated publishing garment library snapshot", {
     listenerCount: listeners.size,
+    snapshotVersion,
     cachedSnapshotCount: Array.isArray(cachedSnapshot) ? cachedSnapshot.length : 0,
   });
   listeners.forEach((listener) => listener());
+}
+
+function updateExternalSnapshot(items) {
+  snapshotVersion += 1;
+  cachedExternalSnapshot = Object.freeze({
+    version: snapshotVersion,
+    items,
+  });
 }
 
 function normalizeText(value) {
@@ -128,6 +142,7 @@ function cacheSnapshot(items) {
 
   cachedSnapshotRaw = serialized;
   cachedSnapshot = normalized;
+  updateExternalSnapshot(cachedSnapshot);
   return cachedSnapshot;
 }
 
@@ -195,6 +210,27 @@ function getLocalSnapshot() {
 
 function getActiveSnapshot() {
   return cachedSnapshot;
+}
+
+function getGarmentLibrarySnapshot() {
+  try {
+    const items = getGarmentLibraryItems();
+
+    if (items !== cachedExternalSnapshot.items) {
+      updateExternalSnapshot(items);
+    }
+
+    console.debug("[garmentLibraryStore] getGarmentLibrarySnapshot returning external snapshot", {
+      snapshotVersion: cachedExternalSnapshot.version,
+      itemCount: Array.isArray(cachedExternalSnapshot.items) ? cachedExternalSnapshot.items.length : 0,
+    });
+
+    return cachedExternalSnapshot;
+  } catch (error) {
+    console.error("[garmentLibraryStore] getGarmentLibrarySnapshot threw before returning", error);
+    console.error("[garmentLibraryStore] getGarmentLibrarySnapshot stack", error?.stack);
+    return cachedExternalSnapshot;
+  }
 }
 
 async function fetchLibraryFromSupabase() {
@@ -408,14 +444,46 @@ export function subscribeToGarmentLibrary(listener) {
     return () => {};
   }
 
-  listeners.add(listener);
+  const subscribedVersion = cachedExternalSnapshot.version;
+  const notifyListener = () => {
+    console.debug("[garmentLibraryStore] subscribeToGarmentLibrary callback firing", {
+      snapshotVersion: cachedExternalSnapshot.version,
+      itemCount: Array.isArray(cachedExternalSnapshot.items) ? cachedExternalSnapshot.items.length : 0,
+    });
+    listener();
+  };
+
+  listeners.add(notifyListener);
   console.log("[garmentLibraryStore] subscribeToGarmentLibrary listener added", {
     listenerCount: listeners.size,
+    snapshotVersion: cachedExternalSnapshot.version,
+  });
+
+  queueMicrotask(() => {
+    if (!listeners.has(notifyListener)) {
+      return;
+    }
+
+    if (!hasLoadedRemote && !loadStarted) {
+      console.debug("[garmentLibraryStore] subscribeToGarmentLibrary starting ensureLoaded from active subscriber", {
+        listenerCount: listeners.size,
+        snapshotVersion: cachedExternalSnapshot.version,
+      });
+      ensureLoaded();
+    }
+
+    if (cachedExternalSnapshot.version !== subscribedVersion) {
+      console.debug("[garmentLibraryStore] subscribeToGarmentLibrary replaying missed snapshot for new listener", {
+        subscribedVersion,
+        currentVersion: cachedExternalSnapshot.version,
+      });
+      notifyListener();
+    }
   });
 
   if (typeof window === "undefined") {
     return () => {
-      listeners.delete(listener);
+      listeners.delete(notifyListener);
       console.log("[garmentLibraryStore] subscribeToGarmentLibrary listener removed", {
         listenerCount: listeners.size,
       });
@@ -424,14 +492,14 @@ export function subscribeToGarmentLibrary(listener) {
 
   const handleStorage = (event) => {
     if (!event.key || event.key === STORAGE_KEY) {
-      listener();
+      notifyListener();
     }
   };
 
   window.addEventListener("storage", handleStorage);
 
   return () => {
-    listeners.delete(listener);
+    listeners.delete(notifyListener);
     window.removeEventListener("storage", handleStorage);
     console.log("[garmentLibraryStore] subscribeToGarmentLibrary listener removed", {
       listenerCount: listeners.size,
@@ -440,10 +508,10 @@ export function subscribeToGarmentLibrary(listener) {
 }
 
 export function useGarmentLibraryItems() {
-  const items = useSyncExternalStore(
+  const snapshot = useSyncExternalStore(
     subscribeToGarmentLibrary,
-    getGarmentLibraryItems,
-    () => EMPTY_ITEMS
+    getGarmentLibrarySnapshot,
+    () => cachedExternalSnapshot
   );
 
   useEffect(() => {
@@ -455,7 +523,12 @@ export function useGarmentLibraryItems() {
     ensureLoaded();
   }, []);
 
-  return items;
+  console.debug("[garmentLibraryStore] useGarmentLibraryItems observed snapshot", {
+    snapshotVersion: snapshot?.version,
+    itemCount: Array.isArray(snapshot?.items) ? snapshot.items.length : 0,
+  });
+
+  return Array.isArray(snapshot?.items) ? snapshot.items : EMPTY_ITEMS;
 }
 
 export async function createGarmentLibraryItem(values) {
