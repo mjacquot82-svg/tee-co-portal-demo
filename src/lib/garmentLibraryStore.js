@@ -177,6 +177,10 @@ function getLocalSnapshot() {
   }
 }
 
+function getActiveSnapshot() {
+  return hasBrowserStorage() ? getLocalSnapshot() : cachedSnapshot;
+}
+
 async function fetchLibraryFromSupabase() {
   if (!isSupabaseConfigured || !supabase) {
     console.debug("[garmentLibraryStore] Supabase unavailable for garment library fetch", {
@@ -221,7 +225,7 @@ export async function refreshGarmentLibrary() {
 
   if (!remote) {
     console.debug("[garmentLibraryStore] refreshGarmentLibrary using local snapshot fallback");
-    return getLocalSnapshot();
+    return getActiveSnapshot();
   }
 
   hasLoadedRemote = true;
@@ -234,13 +238,14 @@ export async function refreshGarmentLibrary() {
 
 function ensureLoaded() {
   if (loadPromise) return loadPromise;
-  if (loadStarted) return Promise.resolve(cachedSnapshot);
+  if (loadStarted) return Promise.resolve(getActiveSnapshot());
 
+  getActiveSnapshot();
   loadStarted = true;
   loadPromise = refreshGarmentLibrary()
     .catch((error) => {
       console.error("Unable to refresh Tee & Co garment library", error);
-      return getLocalSnapshot();
+      return getActiveSnapshot();
     })
     .finally(() => {
       loadPromise = null;
@@ -253,18 +258,19 @@ export function getGarmentLibraryItems() {
   try {
     if (isSupabaseConfigured && supabase) {
       if (hasLoadedRemote || loadStarted) {
+        const snapshot = getActiveSnapshot();
         console.log("[garmentLibraryStore] getGarmentLibraryItems using cached snapshot branch", {
           hasLoadedRemote,
           loadStarted,
-          cachedSnapshotCount: cachedSnapshot.length,
+          cachedSnapshotCount: snapshot.length,
         });
         console.debug("[garmentLibraryStore] getGarmentLibraryItems returning cached snapshot", {
           hasLoadedRemote,
           loadStarted,
-          cachedSnapshotCount: cachedSnapshot.length,
-          cachedSnapshot,
+          cachedSnapshotCount: snapshot.length,
+          cachedSnapshot: snapshot,
         });
-        return cachedSnapshot;
+        return snapshot;
       }
 
       console.warn("[garmentLibraryStore] getGarmentLibraryItems returning EMPTY_ITEMS before remote load completes", {
@@ -284,7 +290,7 @@ export function getGarmentLibraryItems() {
       cachedSnapshotCount: cachedSnapshot.length,
     });
     console.debug("[garmentLibraryStore] getGarmentLibraryItems using local snapshot because Supabase is unavailable");
-    return getLocalSnapshot();
+    return getActiveSnapshot();
   } catch (error) {
     console.error("[garmentLibraryStore] getGarmentLibraryItems threw before returning", error);
     console.error("[garmentLibraryStore] getGarmentLibraryItems stack", error?.stack);
