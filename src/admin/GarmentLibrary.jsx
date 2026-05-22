@@ -1,5 +1,6 @@
 import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import "./Products.css";
+import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import ProductImageUploader from "../components/ProductImageUploader";
 import { PRODUCTION_TYPES } from "../constants/productionTypes";
 import { createCatalogLookup, useCatalogLookups } from "../lib/catalogLookupsStore";
@@ -42,13 +43,6 @@ const GARMENT_SORT_OPTIONS = [
 const EMPTY_GARMENT_USAGE = Object.freeze({
   linkedProductCount: 0,
 });
-const DEFAULT_GARMENT_PLACEHOLDER_IMAGE = "/garments/gildan-softstyle-tee.jpg";
-const GARMENT_PLACEHOLDER_IMAGE_BY_CATEGORY_KEY = {
-  "t-shirts": "/garments/gildan-softstyle-tee.jpg",
-  hoodies: "/garments/hoodies.PNG",
-  hats: "/garments/hat.PNG",
-};
-
 const emptyLibraryForm = {
   title: "",
   category_lookup_id: "",
@@ -216,42 +210,6 @@ function buildVisibleBrandOptions(brands = [], supplierDrivenBrandIds = new Set(
   );
 }
 
-function resolveGarmentCardImage(item, category, model) {
-  const uploadedImage = normalizeText(item?.image);
-  if (uploadedImage) {
-    return uploadedImage;
-  }
-
-  const normalizedCategory = normalizeTextKey(category?.name);
-  if (normalizedCategory && GARMENT_PLACEHOLDER_IMAGE_BY_CATEGORY_KEY[normalizedCategory]) {
-    return GARMENT_PLACEHOLDER_IMAGE_BY_CATEGORY_KEY[normalizedCategory];
-  }
-
-  const garmentDescriptor = [
-    item?.title,
-    model?.display_name,
-    model?.model_code,
-    category?.name,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  if (garmentDescriptor.includes("hat") || garmentDescriptor.includes("cap") || garmentDescriptor.includes("beanie")) {
-    return GARMENT_PLACEHOLDER_IMAGE_BY_CATEGORY_KEY.hats;
-  }
-
-  if (
-    garmentDescriptor.includes("hoodie") ||
-    garmentDescriptor.includes("fleece") ||
-    garmentDescriptor.includes("sweatshirt")
-  ) {
-    return GARMENT_PLACEHOLDER_IMAGE_BY_CATEGORY_KEY.hoodies;
-  }
-
-  return DEFAULT_GARMENT_PLACEHOLDER_IMAGE;
-}
-
 function buildImportWarningSummary(warnings = []) {
   const summary = {
     total: warnings.length,
@@ -346,7 +304,13 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
   onSelect,
   onRemove,
 }) {
-  const fallbackImage = item.imageSrc || DEFAULT_GARMENT_PLACEHOLDER_IMAGE;
+  const [hasImageError, setHasImageError] = useState(false);
+  const imageSrc = normalizeText(item.imageSrc);
+  const showUploadedImage = Boolean(imageSrc) && !hasImageError;
+
+  useEffect(() => {
+    setHasImageError(false);
+  }, [imageSrc, item.id, item.title]);
 
   function handleKeyDown(event) {
     if (event.key === "Enter" || event.key === " ") {
@@ -364,21 +328,20 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
       tabIndex={0}
       aria-pressed={isSelected}
     >
-      <div className="products-card-media">
-        <img
-          key={`${item.id || item.title}-${fallbackImage}`}
-          src={fallbackImage}
-          alt={item.title}
-          className="products-card-image"
-          onError={(event) => {
-            if (event.currentTarget.dataset.fallbackApplied === "true") {
-              return;
-            }
-
-            event.currentTarget.dataset.fallbackApplied = "true";
-            event.currentTarget.src = DEFAULT_GARMENT_PLACEHOLDER_IMAGE;
-          }}
-        />
+      <div className="products-card-media garment-library-card-media">
+        {showUploadedImage ? (
+          <img
+            key={`${item.id || item.title}-${imageSrc}`}
+            src={imageSrc}
+            alt={item.title}
+            className="products-card-image"
+            onError={() => {
+              setHasImageError(true);
+            }}
+          />
+        ) : (
+          <NoImagePlaceholder className="products-card-image-placeholder garment-library-card-image-placeholder" />
+        )}
       </div>
 
       <div className="products-card-body">
@@ -496,7 +459,6 @@ export default function GarmentLibrary() {
   const garmentBrowseItems = useMemo(
     () =>
       garments.map((item) => {
-        const category = categoryMap.get(item.category_lookup_id);
         const brand = brandMap.get(item.brand_lookup_id);
         const model = garmentModelMap.get(item.garment_model_lookup_id);
         const usage = garmentUsageMap.get(item.id) || EMPTY_GARMENT_USAGE;
@@ -508,10 +470,10 @@ export default function GarmentLibrary() {
           createdAt: Date.parse(item.created_at || item.updated_at || 0) || 0,
           variantCount: Array.isArray(item.variants) ? item.variants.length : 0,
           brandName: normalizeText(brand?.name),
-          categoryName: normalizeText(category?.name),
+          categoryName: normalizeText(categoryMap.get(item.category_lookup_id)?.name),
           modelLabel: normalizeText(model?.display_name),
           modelCode: normalizeText(model?.model_code),
-          imageSrc: resolveGarmentCardImage(item, category, model),
+          imageSrc: normalizeText(item?.image),
           subtitle: buildGarmentLibraryLabel(item, brands, categories, garmentModels),
           searchIndex: [
             item.title,

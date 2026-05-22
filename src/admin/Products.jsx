@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import "./Products.css";
+import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import ProductImageUploader from "../components/ProductImageUploader";
 import { PRODUCTION_TYPES } from "../constants/productionTypes";
 import { useCatalogLookups } from "../lib/catalogLookupsStore";
@@ -805,7 +806,7 @@ export default function Products() {
                         {product.image ? (
                           <img src={product.image} alt={product.name} className="products-card-image" />
                         ) : (
-                          <div className="products-card-image-placeholder">No Image</div>
+                          <NoImagePlaceholder className="products-card-image-placeholder" />
                         )}
                       </div>
 

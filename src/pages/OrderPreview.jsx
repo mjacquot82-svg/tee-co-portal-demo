@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import PlacementOptionList from "../components/PlacementOptionList";
 import {
   buildPlacementPricingOptions,
@@ -8,8 +9,6 @@ import {
 } from "../lib/orderConfiguration";
 import { generateQuoteSnapshot } from "../lib/quoteEngine";
 import { useStoredProducts } from "../lib/productsStore";
-
-const fallbackImage = "/garments/gildan-softstyle-tee.jpg";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -52,7 +51,7 @@ export default function OrderPreview() {
     passedState.description ||
     selectedProduct?.notes ||
     "Review your garment details, artwork, and decoration preferences before submitting.";
-  const imageSrc = passedState.imageSrc || selectedProduct?.image || fallbackImage;
+  const imageSrc = passedState.imageSrc || selectedProduct?.image || "";
   const selectedColor = passedState.selectedColor || "Black";
   const selectedSize = passedState.selectedSize || "M";
 
@@ -227,16 +226,24 @@ export default function OrderPreview() {
               border: "1px solid #f0e7dd",
             }}
           >
-            <img
-              src={imageSrc}
-              alt={garmentName}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "contain",
-                display: "block",
-              }}
-            />
+            {imageSrc ? (
+              <img
+                src={imageSrc}
+                alt={garmentName}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  display: "block",
+                }}
+              />
+            ) : (
+              <NoImagePlaceholder
+                style={{ borderRadius: "24px" }}
+                titleStyle={{ fontSize: isMobile ? "16px" : "18px" }}
+                subtitleStyle={{ fontSize: isMobile ? "12px" : "13px" }}
+              />
+            )}
           </div>
 
           <div

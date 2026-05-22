@@ -1,5 +1,6 @@
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
+import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import { garments } from "../data/garments";
 import { findProductForGarment } from "../lib/orderConfiguration";
 import {
@@ -252,16 +253,24 @@ export default function GarmentView() {
               border: "1px solid #f0e7dd",
             }}
           >
-            <img
-              src={imageSrc}
-              alt={detailTitle}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "contain",
-                display: "block",
-              }}
-            />
+            {imageSrc ? (
+              <img
+                src={imageSrc}
+                alt={detailTitle}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  display: "block",
+                }}
+              />
+            ) : (
+              <NoImagePlaceholder
+                style={{ borderRadius: "24px" }}
+                titleStyle={{ fontSize: isMobile ? "16px" : "18px" }}
+                subtitleStyle={{ fontSize: isMobile ? "12px" : "13px" }}
+              />
+            )}
           </div>
 
           <div

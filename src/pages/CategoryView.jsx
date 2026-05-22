@@ -1,5 +1,6 @@
 import { Link, useParams } from "react-router-dom";
 import { useMemo } from "react";
+import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import {
   areStoredProductsReady,
   resolveProductBasePrice,
@@ -118,6 +119,7 @@ export default function CategoryView() {
         }}
       >
         {categoryProducts.map((item) => {
+          const imageSrc = getStorefrontProductImage(item);
           return (
             <Link
               key={item.id}
@@ -147,15 +149,23 @@ export default function CategoryView() {
                   overflow: "hidden",
                 }}
                 >
-                  <img
-                    src={getStorefrontProductImage(item)}
-                    alt={item.name}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "contain",
-                    }}
-                  />
+                  {imageSrc ? (
+                    <img
+                      src={imageSrc}
+                      alt={item.name}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "contain",
+                      }}
+                    />
+                  ) : (
+                    <NoImagePlaceholder
+                      style={{ borderRadius: "12px" }}
+                      titleStyle={{ fontSize: "13px" }}
+                      subtitleStyle={{ fontSize: "11px" }}
+                    />
+                  )}
                 </div>
 
               <h3

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useMemo } from "react";
+import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import {
   getStorefrontProductImage,
   getStorefrontProducts,
@@ -71,7 +72,15 @@ export default function Home() {
     return (
       <Link key={key} to={to} style={previewCardStyle}>
         <div style={previewBoxStyle}>
-          <img src={image} alt={title} width="220" height="220" loading="eager" decoding="async" style={previewImageStyle} />
+          {image ? (
+            <img src={image} alt={title} width="220" height="220" loading="eager" decoding="async" style={previewImageStyle} />
+          ) : (
+            <NoImagePlaceholder
+              style={{ borderRadius: "12px" }}
+              titleStyle={{ fontSize: "13px" }}
+              subtitleStyle={{ fontSize: "11px" }}
+            />
+          )}
         </div>
         <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700 }}>{title}</h3>
         <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#78716c" }}>{description}</p>

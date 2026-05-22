@@ -1,5 +1,3 @@
-const fallbackImage = "/garments/gildan-softstyle-tee.jpg";
-
 function normalizeText(value) {
   return String(value || "").trim();
 }
@@ -22,7 +20,7 @@ export function getStorefrontProducts(products = []) {
 }
 
 export function getStorefrontProductImage(product) {
-  return normalizeText(product?.image) || fallbackImage;
+  return normalizeText(product?.image);
 }
 
 function buildCategoryDescription(categoryName, productCount) {
@@ -59,7 +57,7 @@ export function buildStorefrontCategories(products = []) {
     .map((category) => ({
       id: category.id,
       name: category.name,
-      image: category.image || fallbackImage,
+      image: normalizeText(category.image),
       description: buildCategoryDescription(
         category.name,
         category.products.length
