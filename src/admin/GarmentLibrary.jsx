@@ -1,4 +1,4 @@
-import { memo, useDeferredValue, useMemo, useRef, useState } from "react";
+import { memo, useDeferredValue, useMemo, useState } from "react";
 import "./Products.css";
 import ProductImageUploader from "../components/ProductImageUploader";
 import { PRODUCTION_TYPES } from "../constants/productionTypes";
@@ -318,7 +318,6 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
 });
 
 export default function GarmentLibrary() {
-  const editorRef = useRef(null);
   const garments = useGarmentLibraryItems();
   const products = useStoredProducts();
   const lookups = useCatalogLookups();
@@ -351,8 +350,11 @@ export default function GarmentLibrary() {
   const [brandFilter, setBrandFilter] = useState("all");
   const [storefrontUsageFilter, setStorefrontUsageFilter] = useState("all");
   const [sortOption, setSortOption] = useState("newest");
+  const [activeWorkspace, setActiveWorkspace] = useState(null);
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const isEditMode = Boolean(editingId);
+  const isEditorOpen = activeWorkspace === "create" || activeWorkspace === "edit";
+  const isImportOpen = activeWorkspace === "import";
 
   const filteredModels = useMemo(
     () =>
@@ -598,6 +600,14 @@ export default function GarmentLibrary() {
     [editingId, garments]
   );
   const selectedGarmentLabel = getGarmentModeLabel(form.title || selectedGarment?.title);
+  const storefrontLinkedGarments = useMemo(
+    () => garmentBrowseItems.filter((entry) => entry.usage.linkedProductCount > 0).length,
+    [garmentBrowseItems]
+  );
+  const totalVariantCount = useMemo(
+    () => garments.reduce((total, garment) => total + (Array.isArray(garment.variants) ? garment.variants.length : 0), 0),
+    [garments]
+  );
 
   function resetForm() {
     setForm(emptyLibraryForm);
@@ -610,6 +620,19 @@ export default function GarmentLibrary() {
     setVariantSearch("");
   }
 
+  function closeWorkspace() {
+    setActiveWorkspace(null);
+    setSaveError("");
+    setImportError("");
+  }
+
+  function startCreatingGarment() {
+    resetForm();
+    setImportError("");
+    setSaveError("");
+    setActiveWorkspace("create");
+  }
+
   function startEditingGarment(item) {
     setEditingId(item.id);
     setForm(buildFormFromGarment(item, brands, categories, garmentModels, sizes));
@@ -620,7 +643,9 @@ export default function GarmentLibrary() {
       )
     );
     setSaveError("");
+    setImportError("");
     setVariantSearch("");
+    setActiveWorkspace("edit");
   }
 
   function clearImportPreview() {
@@ -1099,330 +1124,507 @@ export default function GarmentLibrary() {
   }
 
   return (
-    <div className="products-page">
-      <div className="products-workspace">
-        <form ref={editorRef} onSubmit={handleSubmit} className={`products-editor ${editingId ? "is-editing" : ""}`}>
-          <div style={{ display: "grid", gap: "10px" }}>
-            <p className="products-eyebrow">Garment Library</p>
-            <h1 style={{ margin: 0 }}>{isEditMode ? "Editing Garment" : "Create New Garment"}</h1>
-            {isEditMode ? (
-              <p style={{ margin: 0, color: "#0f172a", fontSize: "1.05rem", fontWeight: 700 }}>
-                {selectedGarmentLabel}
+    <div className="products-page garment-library-page">
+      <div className="garment-library-shell">
+        <section className="products-catalog-panel garment-library-browser">
+          <div className="garment-library-hero">
+            <div className="garment-library-hero-copy">
+              <p className="products-eyebrow">Garment Library</p>
+              <h1 className="garment-library-title">Browse and manage reusable garments</h1>
+              <p className="garment-library-description">
+                Search the supplier library, filter the list, then open a garment only when you need to edit it.
               </p>
-            ) : null}
-            <p style={{ margin: 0, color: "#64748b" }}>
-              Build reusable supplier garments here, then publish simplified customer products from them.
-            </p>
+            </div>
+
+            <div className="garment-library-hero-actions">
+              <button type="button" className="products-primary-button" onClick={startCreatingGarment}>
+                + New Garment
+              </button>
+              <button
+                type="button"
+                className="products-secondary-button"
+                onClick={() => setActiveWorkspace("import")}
+              >
+                Import Spreadsheet
+              </button>
+            </div>
           </div>
 
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-            <button type="button" onClick={resetForm} className="products-secondary-button">
-              + New Garment
+          {importNotice ? <div className="products-callout">{importNotice}</div> : null}
+          {saveError && !isEditorOpen ? <div className="products-error-banner">{saveError}</div> : null}
+          {importError && !isImportOpen ? (
+            <div className="products-error-banner" role="alert">
+              {importError}
+            </div>
+          ) : null}
+
+          <div className="garment-library-summary-grid">
+            <div className="products-stat-card garment-library-summary-card">
+              <span>Total Garments</span>
+              <strong>{garments.length}</strong>
+              <p>Reusable supplier garments in the library.</p>
+            </div>
+            <div className="products-stat-card garment-library-summary-card">
+              <span>Used In Storefront</span>
+              <strong>{storefrontLinkedGarments}</strong>
+              <p>Garments currently linked to customer-facing products.</p>
+            </div>
+            <div className="products-stat-card garment-library-summary-card">
+              <span>Total Variants</span>
+              <strong>{totalVariantCount}</strong>
+              <p>Supplier colorways and SKUs tracked across the library.</p>
+            </div>
+            <div className="products-stat-card garment-library-summary-card">
+              <span>Current View</span>
+              <strong>{filteredGarmentCount}</strong>
+              <p>{hasActiveGarmentFilters ? "Garments matching current filters." : "Garments visible right now."}</p>
+            </div>
+          </div>
+
+          <div className="products-toolbar garment-library-toolbar">
+            <label className="products-toolbar-field">
+              <span>Search Garments</span>
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search title, brand, model, or variant"
+                style={fieldStyle}
+              />
+            </label>
+
+            <label className="products-toolbar-field">
+              <span>Category</span>
+              <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} style={fieldStyle}>
+                <option value="all">All Categories</option>
+                {categoryFilterOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="products-toolbar-field">
+              <span>Brand</span>
+              <select value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)} style={fieldStyle}>
+                <option value="all">All Brands</option>
+                {brandFilterOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="products-toolbar-field">
+              <span>Storefront Usage</span>
+              <select
+                value={storefrontUsageFilter}
+                onChange={(event) => setStorefrontUsageFilter(event.target.value)}
+                style={fieldStyle}
+              >
+                <option value="all">All Garments</option>
+                <option value="used">Used In Storefront</option>
+                <option value="unused">Not Used In Storefront</option>
+              </select>
+            </label>
+
+            <label className="products-toolbar-field">
+              <span>Sort</span>
+              <select value={sortOption} onChange={(event) => setSortOption(event.target.value)} style={fieldStyle}>
+                {GARMENT_SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="products-results-meta">
+            <span>
+              {hasActiveGarmentFilters
+                ? `Showing ${filteredGarmentCount} of ${garments.length} garments`
+                : `Showing ${garments.length} garments`}
+            </span>
+            <button
+              type="button"
+              className="products-clear-filters"
+              onClick={() => {
+                setSearchTerm("");
+                setCategoryFilter("all");
+                setBrandFilter("all");
+                setStorefrontUsageFilter("all");
+                setSortOption("newest");
+              }}
+              disabled={!hasActiveGarmentFilters && sortOption === "newest"}
+            >
+              Clear Filters
             </button>
           </div>
 
-          {saveError ? <div className="products-error-banner">{saveError}</div> : null}
-          {importError ? <div className="products-error-banner" role="alert">{importError}</div> : null}
-          {importNotice ? <div className="products-callout">{importNotice}</div> : null}
-
-          <section className="products-editor-section">
-            <div className="products-section-header">
-              <div>
-                <p className="products-section-step">Import</p>
-                <h2>Tee &amp; Co Spreadsheet Importer</h2>
-              </div>
-              <p>
-                Upload the current Tee &amp; Co supplier CSV, review garments grouped by brand and product name,
-                then confirm what should import into the Garment Library.
-              </p>
+          <div className="products-list-scroll garment-library-list-scroll">
+            <div className="products-list-grid">
+              {filteredGarments.length ? (
+                filteredGarments.map(({ item, subtitle, usage }) => (
+                  <GarmentLibraryCard
+                    key={item.id}
+                    item={item}
+                    isSelected={editingId === item.id && activeWorkspace === "edit"}
+                    subtitle={subtitle}
+                    usage={usage}
+                    onSelect={() => {
+                      startEditingGarment(item);
+                    }}
+                    onRemove={() => {
+                      if (editingId === item.id) {
+                        resetForm();
+                        if (activeWorkspace === "edit") {
+                          closeWorkspace();
+                        }
+                      }
+                      deleteGarmentLibraryItem(item.id);
+                    }}
+                  />
+                ))
+              ) : (
+                <div className="products-empty-state">
+                  <strong>No garments match current filters.</strong>
+                  <span>Adjust search, category, brand, or storefront usage filters to broaden the library view.</span>
+                </div>
+              )}
             </div>
+          </div>
+        </section>
 
-            <div className="products-import-shell">
-              <label style={labelStyle}>
-                Upload Tee &amp; Co CSV
-                <input
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={handleImportFileChange}
-                  style={fieldStyle}
-                  disabled={isPreparingImport || isImporting}
-                />
-              </label>
-
-              <p className="products-selection-empty">
-                Required columns: Category, Brand, Supplier SKU, Product Name, Variant/Color. Extra
-                columns after these are ignored.
-              </p>
-
-              {isPreparingImport ? (
-                <div className="products-summary-card" role="status" aria-live="polite">
-                  Preparing import preview...
+        {(isEditorOpen || isImportOpen) ? (
+          <aside className="garment-library-panel" aria-live="polite">
+            {isImportOpen ? (
+              <div className="garment-library-panel-card">
+                <div className="garment-library-panel-header">
+                  <div>
+                    <p className="products-eyebrow">Import Workflow</p>
+                    <h2 style={{ margin: "6px 0 0" }}>Import garments from spreadsheet</h2>
+                    <p className="garment-library-panel-copy">
+                      Upload the Tee &amp; Co supplier CSV, review the grouped garments, then confirm the import.
+                    </p>
+                  </div>
+                  <button type="button" className="products-secondary-button" onClick={closeWorkspace}>
+                    Close
+                  </button>
                 </div>
-              ) : null}
 
-              {importWarnings.length ? (
-                <div className="products-import-warning-panel" role="status" aria-live="polite">
-                  <div className="products-import-warning-header">
-                    <strong>
-                      {importWarnings.length} parsing warning{importWarnings.length === 1 ? "" : "s"}
-                    </strong>
-                    <button
-                      type="button"
-                      className="products-inline-cancel"
-                      onClick={() => setShowImportWarningDetails((current) => !current)}
-                    >
-                      {showImportWarningDetails ? "Hide Details" : "Show Details"}
-                    </button>
+                {importError ? (
+                  <div className="products-error-banner" role="alert">
+                    {importError}
                   </div>
-                  <div className="products-import-warning-summary">
-                    {importWarningSummary.map((item) => (
-                      <span key={item.key} className="products-import-warning-chip">
-                        {item.value} {item.label}
-                      </span>
-                    ))}
-                  </div>
-                  {showImportWarningDetails ? (
-                    <div className="products-import-warning-list">
-                      {importWarnings.map((warning) => (
-                        <div key={warning} className="products-import-warning-item">
-                          {warning}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
+                ) : null}
 
-              {importPreview ? (
-                <div className="products-import-preview" role="region" aria-label="Garment import preview">
-                  <div className="products-status-row">
-                    <span>
-                      {importPreview.fileName} • {importPreview.garmentCount} garments detected •{" "}
-                      {importPreview.validRowCount} valid rows
-                    </span>
-                    <span>{importablePreviewCount} garments selected</span>
-                  </div>
-
-                  {importPreviewSummary ? (
-                    <div className="products-import-summary-bar">
-                      <div className="products-import-summary-stat">
-                        <strong>{importPreviewSummary.garmentsDetected}</strong>
-                        <span>garments detected</span>
-                      </div>
-                      <div className="products-import-summary-stat">
-                        <strong>{importPreviewSummary.totalVariantsDetected}</strong>
-                        <span>variants detected</span>
-                      </div>
-                      <div className="products-import-summary-stat">
-                        <strong>{importPreviewSummary.malformedRowsSkipped}</strong>
-                        <span>malformed rows skipped</span>
-                      </div>
-                      <div className="products-import-summary-stat">
-                        <strong>{importPreviewSummary.emptyRowsSkipped}</strong>
-                        <span>empty rows skipped</span>
-                      </div>
-                      <div className="products-import-summary-stat">
-                        <strong>{importPreviewSummary.garmentsSkipped}</strong>
-                        <span>garments skipped</span>
-                      </div>
-                      <div className="products-import-summary-stat">
-                        <strong>{importPreviewSummary.variantsSelectedForImport}</strong>
-                        <span>new variants selected</span>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div className="products-summary-meta">
-                    <span>{importPreview.rowCount} grouped row references included in preview</span>
-                  </div>
-
-                  <div className="products-import-toolbar">
+                <section className="products-editor-section">
+                  <div className="products-import-shell">
                     <label style={labelStyle}>
-                      Search garments
+                      Upload Tee &amp; Co CSV
                       <input
-                        type="search"
-                        value={importPreviewSearch}
-                        onChange={(event) => setImportPreviewSearch(event.target.value)}
-                        placeholder="Search garments..."
+                        type="file"
+                        accept=".csv,text/csv"
+                        onChange={handleImportFileChange}
                         style={fieldStyle}
+                        disabled={isPreparingImport || isImporting}
                       />
                     </label>
 
-                    <label style={labelStyle}>
-                      Category
-                      <select
-                        value={importPreviewCategoryFilter}
-                        onChange={(event) => setImportPreviewCategoryFilter(event.target.value)}
-                        style={fieldStyle}
-                      >
-                        <option value="all">All Categories</option>
-                        {importPreviewCategoryOptions.map((category) => (
-                          <option key={category} value={category}>
-                            {category}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    <p className="products-selection-empty">
+                      Required columns: Category, Brand, Supplier SKU, Product Name, Variant/Color. Extra columns after these are ignored.
+                    </p>
 
-                    <label style={labelStyle}>
-                      Import status
-                      <select
-                        value={importPreviewStatusFilter}
-                        onChange={(event) => setImportPreviewStatusFilter(event.target.value)}
-                        style={fieldStyle}
-                      >
-                        <option value="all">All Import Status</option>
-                        <option value="new">New Garments</option>
-                        <option value="existing">Existing Garments</option>
-                        <option value="warnings">Contains Warnings</option>
-                        <option value="skipped">Skipped</option>
-                      </select>
-                    </label>
+                    {isPreparingImport ? (
+                      <div className="products-summary-card" role="status" aria-live="polite">
+                        Preparing import preview...
+                      </div>
+                    ) : null}
 
-                    <div className="products-import-toolbar-actions">
-                      <button
-                        type="button"
-                        className="products-secondary-button"
-                        onClick={() => setImportGroupExpansionForVisibleGroups(true)}
-                        disabled={!filteredPreviewGarments.length}
-                      >
-                        Expand All
-                      </button>
-                      <button
-                        type="button"
-                        className="products-secondary-button"
-                        onClick={() => setImportGroupExpansionForVisibleGroups(false)}
-                        disabled={!filteredPreviewGarments.length}
-                      >
-                        Collapse All
-                      </button>
-                    </div>
-                  </div>
+                    {importWarnings.length ? (
+                      <div className="products-import-warning-panel" role="status" aria-live="polite">
+                        <div className="products-import-warning-header">
+                          <strong>
+                            {importWarnings.length} parsing warning{importWarnings.length === 1 ? "" : "s"}
+                          </strong>
+                          <button
+                            type="button"
+                            className="products-inline-cancel"
+                            onClick={() => setShowImportWarningDetails((current) => !current)}
+                          >
+                            {showImportWarningDetails ? "Hide Details" : "Show Details"}
+                          </button>
+                        </div>
+                        <div className="products-import-warning-summary">
+                          {importWarningSummary.map((item) => (
+                            <span key={item.key} className="products-import-warning-chip">
+                              {item.value} {item.label}
+                            </span>
+                          ))}
+                        </div>
+                        {showImportWarningDetails ? (
+                          <div className="products-import-warning-list">
+                            {importWarnings.map((warning) => (
+                              <div key={warning} className="products-import-warning-item">
+                                {warning}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
 
-                  <div className="products-summary-meta">
-                    <span>
-                      Showing {filteredPreviewGarments.length} of {previewGarments.length} garments
-                    </span>
-                  </div>
+                    {importPreview ? (
+                      <div className="products-import-preview" role="region" aria-label="Garment import preview">
+                        <div className="products-status-row">
+                          <span>
+                            {importPreview.fileName} • {importPreview.garmentCount} garments detected • {importPreview.validRowCount} valid rows
+                          </span>
+                          <span>{importablePreviewCount} garments selected</span>
+                        </div>
 
-                  <div className="products-import-group-list">
-                    {filteredPreviewGarments.length ? (
-                      filteredPreviewGarments.map((group) => (
-                        <article
-                          key={group.id}
-                          className={`products-import-group-card ${group.skip ? "is-skipped" : ""}`}
-                        >
-                          <div className="products-import-group-header">
-                            <div style={{ minWidth: 0 }}>
-                              <h3 style={{ margin: 0 }}>{group.title}</h3>
-                              <p className="products-card-subtitle">
-                                {group.category} • {group.variantCount} variants detected
-                              </p>
+                        {importPreviewSummary ? (
+                          <div className="products-import-summary-bar">
+                            <div className="products-import-summary-stat">
+                              <strong>{importPreviewSummary.garmentsDetected}</strong>
+                              <span>garments detected</span>
                             </div>
-                            <div className="products-import-group-actions">
-                              <button
-                                type="button"
-                                className="products-secondary-button"
-                                onClick={() => toggleImportGroupExpanded(group.id)}
-                              >
-                                {expandedImportGroups[group.id] ? "Collapse" : "Expand"}
-                              </button>
-                              <button
-                                type="button"
-                                className="products-inline-cancel"
-                                onClick={() => toggleImportSkip(group.id)}
-                              >
-                                {group.skip ? "Import Garment" : "Skip Garment"}
-                              </button>
+                            <div className="products-import-summary-stat">
+                              <strong>{importPreviewSummary.totalVariantsDetected}</strong>
+                              <span>variants detected</span>
+                            </div>
+                            <div className="products-import-summary-stat">
+                              <strong>{importPreviewSummary.malformedRowsSkipped}</strong>
+                              <span>malformed rows skipped</span>
+                            </div>
+                            <div className="products-import-summary-stat">
+                              <strong>{importPreviewSummary.emptyRowsSkipped}</strong>
+                              <span>empty rows skipped</span>
+                            </div>
+                            <div className="products-import-summary-stat">
+                              <strong>{importPreviewSummary.garmentsSkipped}</strong>
+                              <span>garments skipped</span>
+                            </div>
+                            <div className="products-import-summary-stat">
+                              <strong>{importPreviewSummary.variantsSelectedForImport}</strong>
+                              <span>new variants selected</span>
                             </div>
                           </div>
+                        ) : null}
 
-                          <div className="products-import-group-meta">
-                            <span className="products-import-status-badge">
-                              {group.skip
-                                ? "Skipped"
-                                : group.existingGarment
-                                  ? "Existing garment"
-                                  : "New garment"}
-                            </span>
-                            <span className="products-import-meta-pill">
-                              {group.missingVariants.length} new variant
-                              {group.missingVariants.length === 1 ? "" : "s"}
-                            </span>
-                            {group.existingGarment ? (
-                              <span className="products-import-meta-pill">
-                                {group.existingVariantCount} duplicate variant
-                                {group.existingVariantCount === 1 ? "" : "s"}
-                              </span>
-                            ) : null}
-                            {group.garmentWarnings.length ? (
-                              <span className="products-import-warning-pill">
-                                {group.garmentWarnings.length} warning
-                                {group.garmentWarnings.length === 1 ? "" : "s"}
-                              </span>
-                            ) : null}
+                        <div className="products-summary-meta">
+                          <span>{importPreview.rowCount} grouped row references included in preview</span>
+                        </div>
+
+                        <div className="products-import-toolbar">
+                          <label style={labelStyle}>
+                            Search garments
+                            <input
+                              type="search"
+                              value={importPreviewSearch}
+                              onChange={(event) => setImportPreviewSearch(event.target.value)}
+                              placeholder="Search garments..."
+                              style={fieldStyle}
+                            />
+                          </label>
+
+                          <label style={labelStyle}>
+                            Category
+                            <select
+                              value={importPreviewCategoryFilter}
+                              onChange={(event) => setImportPreviewCategoryFilter(event.target.value)}
+                              style={fieldStyle}
+                            >
+                              <option value="all">All Categories</option>
+                              {importPreviewCategoryOptions.map((category) => (
+                                <option key={category} value={category}>
+                                  {category}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label style={labelStyle}>
+                            Import status
+                            <select
+                              value={importPreviewStatusFilter}
+                              onChange={(event) => setImportPreviewStatusFilter(event.target.value)}
+                              style={fieldStyle}
+                            >
+                              <option value="all">All Import Status</option>
+                              <option value="new">New Garments</option>
+                              <option value="existing">Existing Garments</option>
+                              <option value="warnings">Contains Warnings</option>
+                              <option value="skipped">Skipped</option>
+                            </select>
+                          </label>
+
+                          <div className="products-import-toolbar-actions">
+                            <button
+                              type="button"
+                              className="products-secondary-button"
+                              onClick={() => setImportGroupExpansionForVisibleGroups(true)}
+                              disabled={!filteredPreviewGarments.length}
+                            >
+                              Expand All
+                            </button>
+                            <button
+                              type="button"
+                              className="products-secondary-button"
+                              onClick={() => setImportGroupExpansionForVisibleGroups(false)}
+                              disabled={!filteredPreviewGarments.length}
+                            >
+                              Collapse All
+                            </button>
                           </div>
+                        </div>
 
-                          {expandedImportGroups[group.id] ? (
-                            <div className="products-import-group-body">
-                              {group.garmentWarnings.length ? (
-                                <div className="products-import-garment-warning-box">
-                                  <strong>Warnings for this garment</strong>
-                                  <div className="products-import-garment-warning-list">
-                                    {group.garmentWarnings.map((warning) => (
-                                      <div key={`${group.id}-${warning}`} className="products-import-warning-item">
-                                        {warning}
-                                      </div>
-                                    ))}
+                        <div className="products-summary-meta">
+                          <span>
+                            Showing {filteredPreviewGarments.length} of {previewGarments.length} garments
+                          </span>
+                        </div>
+
+                        <div className="products-import-group-list">
+                          {filteredPreviewGarments.length ? (
+                            filteredPreviewGarments.map((group) => (
+                              <article
+                                key={group.id}
+                                className={`products-import-group-card ${group.skip ? "is-skipped" : ""}`}
+                              >
+                                <div className="products-import-group-header">
+                                  <div style={{ minWidth: 0 }}>
+                                    <h3 style={{ margin: 0 }}>{group.title}</h3>
+                                    <p className="products-card-subtitle">
+                                      {group.category} • {group.variantCount} variants detected
+                                    </p>
+                                  </div>
+                                  <div className="products-import-group-actions">
+                                    <button
+                                      type="button"
+                                      className="products-secondary-button"
+                                      onClick={() => toggleImportGroupExpanded(group.id)}
+                                    >
+                                      {expandedImportGroups[group.id] ? "Collapse" : "Expand"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="products-inline-cancel"
+                                      onClick={() => toggleImportSkip(group.id)}
+                                    >
+                                      {group.skip ? "Import Garment" : "Skip Garment"}
+                                    </button>
                                   </div>
                                 </div>
-                              ) : null}
 
-                              <div className="products-import-variant-list">
-                                {group.variants.map((variant) => {
-                                  const isExistingVariant =
-                                    !!group.existingGarment &&
-                                    !group.missingVariants.some(
-                                      (item) => normalizeTextKey(item.name) === normalizeTextKey(variant.name)
-                                    );
+                                <div className="products-import-group-meta">
+                                  <span className="products-import-status-badge">
+                                    {group.skip
+                                      ? "Skipped"
+                                      : group.existingGarment
+                                        ? "Existing garment"
+                                        : "New garment"}
+                                  </span>
+                                  <span className="products-import-meta-pill">
+                                    {group.missingVariants.length} new variant
+                                    {group.missingVariants.length === 1 ? "" : "s"}
+                                  </span>
+                                  {group.existingGarment ? (
+                                    <span className="products-import-meta-pill">
+                                      {group.existingVariantCount} duplicate variant
+                                      {group.existingVariantCount === 1 ? "" : "s"}
+                                    </span>
+                                  ) : null}
+                                  {group.garmentWarnings.length ? (
+                                    <span className="products-import-warning-pill">
+                                      {group.garmentWarnings.length} warning
+                                      {group.garmentWarnings.length === 1 ? "" : "s"}
+                                    </span>
+                                  ) : null}
+                                </div>
 
-                                  return (
-                                    <div key={`${group.id}-${variant.name}`} className="products-import-variant-row">
-                                      <strong>{variant.name}</strong>
-                                      <span>{variant.supplierSku}</span>
-                                      <span>{isExistingVariant ? "Duplicate variant" : "New variant"}</span>
+                                {expandedImportGroups[group.id] ? (
+                                  <div className="products-import-group-body">
+                                    {group.garmentWarnings.length ? (
+                                      <div className="products-import-garment-warning-box">
+                                        <strong>Warnings for this garment</strong>
+                                        <div className="products-import-garment-warning-list">
+                                          {group.garmentWarnings.map((warning) => (
+                                            <div key={`${group.id}-${warning}`} className="products-import-warning-item">
+                                              {warning}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ) : null}
+
+                                    <div className="products-import-variant-list">
+                                      {group.variants.map((variant) => {
+                                        const isExistingVariant =
+                                          !!group.existingGarment &&
+                                          !group.missingVariants.some(
+                                            (item) => normalizeTextKey(item.name) === normalizeTextKey(variant.name)
+                                          );
+
+                                        return (
+                                          <div key={`${group.id}-${variant.name}`} className="products-import-variant-row">
+                                            <strong>{variant.name}</strong>
+                                            <span>{variant.supplierSku}</span>
+                                            <span>{isExistingVariant ? "Duplicate variant" : "New variant"}</span>
+                                          </div>
+                                        );
+                                      })}
                                     </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ) : null}
-                        </article>
-                      ))
-                    ) : (
-                      <div className="products-import-empty-state">No garments match current filters.</div>
-                    )}
-                  </div>
+                                  </div>
+                                ) : null}
+                              </article>
+                            ))
+                          ) : (
+                            <div className="products-import-empty-state">No garments match current filters.</div>
+                          )}
+                        </div>
 
-                  <div className="products-import-actions">
-                    <button
-                      type="button"
-                      className="products-primary-button"
-                      onClick={handleConfirmImport}
-                      disabled={isImporting || !importablePreviewCount}
-                    >
-                      {isImporting ? "Importing..." : "Confirm Import"}
-                    </button>
-                    <button type="button" className="products-secondary-button" onClick={clearImportPreview}>
-                      Cancel Import
-                    </button>
+                        <div className="products-import-actions">
+                          <button
+                            type="button"
+                            className="products-primary-button"
+                            onClick={handleConfirmImport}
+                            disabled={isImporting || !importablePreviewCount}
+                          >
+                            {isImporting ? "Importing..." : "Confirm Import"}
+                          </button>
+                          <button type="button" className="products-secondary-button" onClick={clearImportPreview}>
+                            Cancel Import
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
+                </section>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className={`products-editor garment-library-panel-card ${editingId ? "is-editing" : ""}`}>
+                <div className="garment-library-panel-header">
+                  <div>
+                    <p className="products-eyebrow">{isEditMode ? "Edit Garment" : "Create Garment"}</p>
+                    <h2 style={{ margin: "6px 0 0" }}>{isEditMode ? selectedGarmentLabel : "New Garment"}</h2>
+                    <p className="garment-library-panel-copy">
+                      {isEditMode
+                        ? "You are editing an existing garment. Update the details below, then save your changes."
+                        : "You are creating a new reusable garment. Complete the setup, then save it to the library."}
+                    </p>
+                  </div>
+                  <button type="button" className="products-secondary-button" onClick={closeWorkspace}>
+                    Close
+                  </button>
                 </div>
-              ) : null}
-            </div>
-          </section>
 
-          <section className="products-editor-section">
+                {saveError ? <div className="products-error-banner">{saveError}</div> : null}
+
+                <section className="products-editor-section">
             <div className="products-section-header">
               <div>
                 <p className="products-section-step">Section 1</p>
@@ -1745,149 +1947,22 @@ export default function GarmentLibrary() {
             </button>
 
             {editingId ? (
-              <button type="button" onClick={resetForm} className="products-secondary-button">
+              <button
+                type="button"
+                onClick={() => {
+                  resetForm();
+                  closeWorkspace();
+                }}
+                className="products-secondary-button"
+              >
                 Cancel Editing
               </button>
             ) : null}
           </div>
-        </form>
-
-        <section className="products-catalog-panel">
-          <div className="products-catalog-header">
-            <div>
-              <p className="products-eyebrow">Supplier Library</p>
-              <h2 style={{ margin: "6px 0 0" }}>Reusable garments</h2>
-            </div>
-
-            <div className="products-stat-row">
-              <div className="products-stat-card">
-                <span>Total Garments</span>
-                <strong>{garments.length}</strong>
-              </div>
-              <div className="products-stat-card">
-                <span>Storefront Products</span>
-                <strong>{products.length}</strong>
-              </div>
-              <button type="button" className="products-secondary-button" onClick={resetForm}>
-                + New Garment
-              </button>
-            </div>
-          </div>
-
-          <div className="products-toolbar">
-            <label className="products-toolbar-field">
-              <span>Search Garments</span>
-              <input
-                type="search"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search title, brand, model, or variant"
-                style={fieldStyle}
-              />
-            </label>
-
-            <label className="products-toolbar-field">
-              <span>Category</span>
-              <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} style={fieldStyle}>
-                <option value="all">All Categories</option>
-                {categoryFilterOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="products-toolbar-field">
-              <span>Brand</span>
-              <select value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)} style={fieldStyle}>
-                <option value="all">All Brands</option>
-                {brandFilterOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="products-toolbar-field">
-              <span>Storefront Usage</span>
-              <select
-                value={storefrontUsageFilter}
-                onChange={(event) => setStorefrontUsageFilter(event.target.value)}
-                style={fieldStyle}
-              >
-                <option value="all">All Garments</option>
-                <option value="used">Used In Storefront</option>
-                <option value="unused">Not Used In Storefront</option>
-              </select>
-            </label>
-
-            <label className="products-toolbar-field">
-              <span>Sort</span>
-              <select value={sortOption} onChange={(event) => setSortOption(event.target.value)} style={fieldStyle}>
-                {GARMENT_SORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="products-results-meta">
-            <span>
-              {hasActiveGarmentFilters
-                ? `Showing ${filteredGarmentCount} of ${garments.length} garments`
-                : `Showing ${garments.length} garments`}
-            </span>
-            <button
-              type="button"
-              className="products-clear-filters"
-              onClick={() => {
-                setSearchTerm("");
-                setCategoryFilter("all");
-                setBrandFilter("all");
-                setStorefrontUsageFilter("all");
-                setSortOption("newest");
-              }}
-              disabled={!hasActiveGarmentFilters && sortOption === "newest"}
-            >
-              Clear Filters
-            </button>
-          </div>
-
-          <div className="products-list-scroll">
-            <div className="products-list-grid">
-              {filteredGarments.length ? (
-                filteredGarments.map(({ item, subtitle, usage }) => (
-                  <GarmentLibraryCard
-                    key={item.id}
-                    item={item}
-                    isSelected={editingId === item.id}
-                    subtitle={subtitle}
-                    usage={usage}
-                    onSelect={() => {
-                      startEditingGarment(item);
-                      editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }}
-                    onRemove={() => {
-                      if (editingId === item.id) {
-                        resetForm();
-                      }
-                      deleteGarmentLibraryItem(item.id);
-                    }}
-                  />
-                ))
-              ) : (
-                <div className="products-empty-state">
-                  <strong>No garments match current filters.</strong>
-                  <span>Adjust search, category, brand, or publish state to broaden the library view.</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
+              </form>
+            )}
+          </aside>
+        ) : null}
       </div>
     </div>
   );

@@ -1025,12 +1025,133 @@
   font-weight: 600;
 }
 
+.garment-library-page {
+  background:
+    radial-gradient(circle at top left, rgba(226, 232, 240, 0.72), transparent 30%),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.garment-library-shell {
+  width: 100%;
+  max-width: 1680px;
+  margin: 0 auto;
+  display: grid;
+  gap: 24px;
+}
+
+.garment-library-browser {
+  gap: 20px;
+}
+
+.garment-library-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.garment-library-hero-copy {
+  display: grid;
+  gap: 8px;
+  max-width: 720px;
+}
+
+.garment-library-title {
+  margin: 0;
+  color: #0f172a;
+  font-size: clamp(1.9rem, 3vw, 2.5rem);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+}
+
+.garment-library-description,
+.garment-library-panel-copy {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.garment-library-hero-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.garment-library-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.garment-library-summary-card {
+  align-content: start;
+  gap: 8px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.garment-library-summary-card p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.garment-library-toolbar {
+  grid-template-columns: minmax(260px, 2fr) repeat(4, minmax(150px, 1fr));
+}
+
+.garment-library-list-scroll {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.garment-library-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  width: min(720px, 100vw);
+  padding: 18px;
+  box-sizing: border-box;
+  background: rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.garment-library-panel-card {
+  width: 100%;
+  max-width: 680px;
+  max-height: 100%;
+  overflow: auto;
+  border: 1px solid #dbe4ee;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+}
+
+.garment-library-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
 @media (max-width: 1280px) {
   .products-workspace {
     grid-template-columns: minmax(360px, 460px) minmax(0, 1fr);
   }
 
   .products-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .garment-library-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1062,6 +1183,10 @@
     max-height: none;
     overflow: visible;
     padding-right: 0;
+  }
+
+  .garment-library-panel {
+    padding: 12px;
   }
 }
 
@@ -1120,5 +1245,29 @@
     max-height: none;
     overflow: visible;
     padding-right: 0;
+  }
+
+  .garment-library-summary-grid,
+  .garment-library-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .garment-library-hero,
+  .garment-library-panel-header,
+  .garment-library-hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .garment-library-panel {
+    width: 100vw;
+    padding: 0;
+    background: rgba(15, 23, 42, 0.3);
+  }
+
+  .garment-library-panel-card {
+    max-width: none;
+    height: 100%;
+    border-radius: 0;
   }
 }
