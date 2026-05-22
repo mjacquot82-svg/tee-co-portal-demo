@@ -691,7 +691,8 @@ export default function GarmentLibrary() {
               </label>
 
               <p className="products-selection-empty">
-                Exact required columns: Category, Brand, Supplier SKU, Product Name, Variant/Color.
+                Required columns: Category, Brand, Supplier SKU, Product Name, Variant/Color. Extra
+                columns after these are ignored.
               </p>
 
               {isPreparingImport ? <div className="products-summary-card">Preparing import preview...</div> : null}

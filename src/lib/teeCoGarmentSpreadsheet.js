@@ -75,27 +75,28 @@ function validateHeader(headerRow) {
     index === 0 ? normalizeText(value).replace(/^\uFEFF/, "") : normalizeText(value)
   );
 
-  EXPECTED_TEE_CO_COLUMNS.forEach((columnName) => {
-    if (!sanitizedHeader.includes(columnName)) {
+  if (sanitizedHeader.length < EXPECTED_TEE_CO_COLUMNS.length) {
+    const missingColumn = EXPECTED_TEE_CO_COLUMNS[sanitizedHeader.length];
+    throw new Error(`Missing required column: ${missingColumn}`);
+  }
+
+  const requiredColumnIndexes = new Map();
+
+  EXPECTED_TEE_CO_COLUMNS.forEach((columnName, index) => {
+    const headerValue = sanitizedHeader[index];
+
+    if (headerValue !== columnName) {
+      if (!headerValue) {
+        throw new Error(`Missing required column: ${columnName}`);
+      }
+
       throw new Error(`Missing required column: ${columnName}`);
     }
+
+    requiredColumnIndexes.set(columnName, index);
   });
 
-  if (sanitizedHeader.length !== EXPECTED_TEE_CO_COLUMNS.length) {
-    throw new Error(
-      `Unexpected spreadsheet structure. Expected columns: ${EXPECTED_TEE_CO_COLUMNS.join(", ")}`
-    );
-  }
-
-  const exactMatch = EXPECTED_TEE_CO_COLUMNS.every(
-    (columnName, index) => sanitizedHeader[index] === columnName
-  );
-
-  if (!exactMatch) {
-    throw new Error(
-      `Unexpected spreadsheet structure. Expected columns: ${EXPECTED_TEE_CO_COLUMNS.join(", ")}`
-    );
-  }
+  return requiredColumnIndexes;
 }
 
 export function parseTeeCoGarmentSpreadsheet(text) {
@@ -109,14 +110,14 @@ export function parseTeeCoGarmentSpreadsheet(text) {
     throw new Error("Spreadsheet is empty.");
   }
 
-  validateHeader(rows[0]);
+  const requiredColumnIndexes = validateHeader(rows[0]);
 
   const groupedGarments = new Map();
 
   rows.slice(1).forEach((row, index) => {
     const rowNumber = index + 2;
-    const normalizedRow = Array.from({ length: EXPECTED_TEE_CO_COLUMNS.length }, (_, cellIndex) =>
-      normalizeText(row[cellIndex])
+    const normalizedRow = EXPECTED_TEE_CO_COLUMNS.map((columnName) =>
+      normalizeText(row[requiredColumnIndexes.get(columnName)])
     );
 
     if (!normalizedRow.some(Boolean)) {
@@ -227,4 +228,3 @@ export function parseTeeCoGarmentSpreadsheet(text) {
     rowCount: garments.reduce((total, garment) => total + garment.rowNumbers.length, 0),
   };
 }
-
