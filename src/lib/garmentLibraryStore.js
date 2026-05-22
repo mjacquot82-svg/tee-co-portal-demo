@@ -131,6 +131,12 @@ function cacheSnapshot(items) {
   return cachedSnapshot;
 }
 
+function setInMemorySnapshot(items) {
+  const normalized = cacheSnapshot(items);
+  emitUpdated();
+  return normalized;
+}
+
 function buildStoredSnapshot(items) {
   return {
     version: SNAPSHOT_VERSION,
@@ -169,94 +175,26 @@ function extractStoredSnapshotItems(parsed) {
 
 function saveSnapshot(items) {
   const normalized = cacheSnapshot(items);
-  const storagePayload = buildStoredSnapshot(normalized);
-  const serializedPayload = JSON.stringify(storagePayload);
-
-  console.log("[garmentLibraryStore] saveSnapshot payload before save", {
+  console.log("[garmentLibraryStore] saveSnapshot bypassed; keeping garment library in memory only", {
     storageKey: STORAGE_KEY,
     inputCount: Array.isArray(items) ? items.length : 0,
     normalizedCount: normalized.length,
-    storageGarmentCount: storagePayload.garments.length,
-    storagePayload,
-    normalizedItems: normalized,
+    hasBrowserStorage: hasBrowserStorage(),
   });
-
-  if (hasBrowserStorage()) {
-    const writeSucceeded = setRawStorageItem(STORAGE_KEY, serializedPayload);
-    const rawAfterSave = getRawStorageItem(STORAGE_KEY) || "";
-    const readbackParsed = rawAfterSave ? JSON.parse(rawAfterSave) : null;
-    const readbackItems = extractStoredSnapshotItems(readbackParsed);
-
-    console.log("[garmentLibraryStore] saveSnapshot payload after retrieval", {
-      storageKey: STORAGE_KEY,
-      writeSucceeded,
-      rawAfterSaveLength: rawAfterSave.length,
-      savedGarmentCount: storagePayload.garments.length,
-      parsedGarmentCount: Array.isArray(readbackItems) ? readbackItems.length : 0,
-      readbackParsed,
-      readbackItems,
-    });
-
-    cachedStorageRaw = writeSucceeded ? rawAfterSave : serializedPayload;
-  } else {
-    cachedStorageRaw = serializedPayload;
-  }
-
   emitUpdated();
   return normalized;
 }
 
 function getLocalSnapshot() {
-  if (!hasBrowserStorage()) {
-    console.debug("[garmentLibraryStore] getLocalSnapshot without browser storage", {
-      cachedSnapshotCount: cachedSnapshot.length,
-      cachedSnapshot,
-    });
-    return cachedSnapshot;
-  }
-
-  try {
-    const raw = getRawStorageItem(STORAGE_KEY) || "";
-    if (raw === cachedStorageRaw) return cachedSnapshot;
-
-    const parsed = raw ? JSON.parse(raw) : null;
-    const parsedItems = extractStoredSnapshotItems(parsed);
-
-    if (!raw) {
-      console.warn("[garmentLibraryStore] getLocalSnapshot found empty storage payload", {
-        storageKey: STORAGE_KEY,
-        cachedSnapshotCount: cachedSnapshot.length,
-      });
-
-      if (cachedSnapshot.length > 0) {
-        return cachedSnapshot;
-      }
-    }
-
-    cachedStorageRaw = raw;
-    const snapshot = cacheSnapshot(parsedItems);
-    console.debug("[garmentLibraryStore] hydrated local snapshot", {
-      storageKey: STORAGE_KEY,
-      rawStorageLength: raw.length,
-      parsedType: Array.isArray(parsed) ? "array" : typeof parsed,
-      parsedCount: Array.isArray(parsedItems) ? parsedItems.length : 0,
-      parsedItems,
-      parsedPayload: parsed,
-      snapshotCount: snapshot.length,
-      snapshot,
-    });
-    return snapshot;
-  } catch (error) {
-    console.error("Unable to read Tee & Co garment library", error);
-    cachedStorageRaw = null;
-    cachedSnapshotRaw = null;
-    cachedSnapshot = mergeLibraryItems([], DEFAULT_LIBRARY_ITEMS);
-    return cachedSnapshot;
-  }
+  console.debug("[garmentLibraryStore] getLocalSnapshot bypassed; returning in-memory garment library only", {
+    storageKey: STORAGE_KEY,
+    cachedSnapshotCount: cachedSnapshot.length,
+  });
+  return cachedSnapshot;
 }
 
 function getActiveSnapshot() {
-  return hasBrowserStorage() ? getLocalSnapshot() : cachedSnapshot;
+  return cachedSnapshot;
 }
 
 async function fetchLibraryFromSupabase() {
@@ -360,15 +298,15 @@ export async function refreshGarmentLibrary() {
     remoteCount: remote.length,
     remote,
   });
-  console.log("[garmentLibraryStore] refreshGarmentLibrary saving remote snapshot", {
+  console.log("[garmentLibraryStore] refreshGarmentLibrary publishing remote rows to in-memory store", {
     remoteCount: remote.length,
   });
-  const savedSnapshot = saveSnapshot(remote);
-  console.log("[garmentLibraryStore] refreshGarmentLibrary saved remote snapshot", {
-    savedCount: Array.isArray(savedSnapshot) ? savedSnapshot.length : 0,
+  const publishedSnapshot = setInMemorySnapshot(remote);
+  console.log("[garmentLibraryStore] refreshGarmentLibrary published remote rows", {
+    publishedCount: Array.isArray(publishedSnapshot) ? publishedSnapshot.length : 0,
     hasLoadedRemote,
   });
-  return savedSnapshot;
+  return publishedSnapshot;
 }
 
 function ensureLoaded() {
