@@ -167,15 +167,25 @@ function buildGarmentMap(items = []) {
   }, new Map());
 }
 
-function buildActiveLibraryBrandIds(garments = []) {
+function resolveGarmentBrandId(garment, garmentModelMap) {
+  const directBrandId = normalizeText(garment?.brand_lookup_id);
+  if (directBrandId) {
+    return directBrandId;
+  }
+
+  const garmentModel = garmentModelMap.get(garment?.garment_model_lookup_id);
+  return normalizeText(garmentModel?.brand_id);
+}
+
+function buildActiveLibraryBrandIds(garments = [], garmentModelMap = new Map()) {
   const brandIds = new Set();
 
   garments.forEach((garment) => {
     if (garment?.active === false) return;
 
-    const directBrandId = normalizeText(garment?.brand_lookup_id);
-    if (directBrandId) {
-      brandIds.add(directBrandId);
+    const resolvedBrandId = resolveGarmentBrandId(garment, garmentModelMap);
+    if (resolvedBrandId) {
+      brandIds.add(resolvedBrandId);
     }
   });
 
@@ -183,7 +193,7 @@ function buildActiveLibraryBrandIds(garments = []) {
 }
 
 function buildVisibleBrandOptions(brands = [], activeLibraryBrandIds = new Set(), selectedBrandId = "") {
-  const visibleBrands = brands.filter((brand) => activeLibraryBrandIds.has(brand?.id));
+  const visibleBrands = brands.filter((brand) => activeLibraryBrandIds.has(normalizeText(brand?.id)));
 
   if (selectedBrandId && !visibleBrands.some((brand) => brand.id === selectedBrandId)) {
     const selectedBrand = brands.find((brand) => brand.id === selectedBrandId);
@@ -435,8 +445,8 @@ export default function GarmentLibrary() {
   const brandMap = useMemo(() => buildLookupOptionMap(brands), [brands]);
   const garmentModelMap = useMemo(() => buildLookupOptionMap(garmentModels), [garmentModels]);
   const activeLibraryBrandIds = useMemo(
-    () => buildActiveLibraryBrandIds(garments),
-    [garments]
+    () => buildActiveLibraryBrandIds(garments, garmentModelMap),
+    [garmentModelMap, garments]
   );
   const visibleBrands = useMemo(
     () => buildVisibleBrandOptions(brands, activeLibraryBrandIds, form.brand_lookup_id),
@@ -446,7 +456,8 @@ export default function GarmentLibrary() {
   const garmentBrowseItems = useMemo(
     () =>
       garments.map((item) => {
-        const brand = brandMap.get(item.brand_lookup_id);
+        const resolvedBrandId = resolveGarmentBrandId(item, garmentModelMap);
+        const brand = brandMap.get(resolvedBrandId);
         const model = garmentModelMap.get(item.garment_model_lookup_id);
         const usage = garmentUsageMap.get(item.id) || EMPTY_GARMENT_USAGE;
 
@@ -674,7 +685,7 @@ export default function GarmentLibrary() {
       .filter(
         (item) =>
           item.category_lookup_id === form.category_lookup_id &&
-          item.brand_lookup_id === form.brand_lookup_id
+          resolveGarmentBrandId(item, garmentModelMap) === form.brand_lookup_id
       )
       .map((item) => {
         const model = garmentModelMap.get(item.garment_model_lookup_id);

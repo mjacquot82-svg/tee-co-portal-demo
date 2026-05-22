@@ -135,9 +135,9 @@ export function sortSizesByLookup(values = [], sizeLookups = []) {
 export function buildGarmentLibraryLabel(item, brands = [], categories = [], garmentModels = []) {
   if (!item) return "";
 
-  const brand = findLookupById(brands, item.brand_lookup_id);
-  const category = findLookupById(categories, item.category_lookup_id);
   const model = findLookupById(garmentModels, item.garment_model_lookup_id);
+  const brand = findLookupById(brands, item.brand_lookup_id || model?.brand_id);
+  const category = findLookupById(categories, item.category_lookup_id);
 
   return [
     item.title,
