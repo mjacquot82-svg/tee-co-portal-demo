@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { memo, useDeferredValue, useMemo, useRef, useState } from "react";
 import "./Products.css";
 import ProductImageUploader from "../components/ProductImageUploader";
 import { PRODUCTION_TYPES } from "../constants/productionTypes";
@@ -42,6 +42,18 @@ const COMMON_PLACEMENT_OPTIONS = [
 ];
 
 const EMPTY_LIST = [];
+const GARMENT_SORT_OPTIONS = [
+  { value: "newest", label: "Newest" },
+  { value: "alphabetical", label: "Alphabetical" },
+  { value: "most-variants", label: "Most Variants" },
+  { value: "least-variants", label: "Least Variants" },
+  { value: "most-published", label: "Most Published" },
+];
+
+const EMPTY_GARMENT_USAGE = Object.freeze({
+  linkedProductCount: 0,
+  publishedProductCount: 0,
+});
 
 const emptyLibraryForm = {
   title: "",
@@ -191,6 +203,116 @@ function buildImportWarningSummary(warnings = []) {
     }));
 }
 
+function buildLookupOptionMap(options = []) {
+  return options.reduce((accumulator, option) => {
+    if (option?.id) {
+      accumulator.set(option.id, option);
+    }
+    return accumulator;
+  }, new Map());
+}
+
+function buildGarmentUsageMap(products = []) {
+  return products.reduce((accumulator, product) => {
+    const garmentModelId = String(product?.garment_model_lookup_id || "").trim();
+    if (!garmentModelId) return accumulator;
+
+    const currentUsage = accumulator.get(garmentModelId) || EMPTY_GARMENT_USAGE;
+    const isPublished = normalizeTextKey(product?.status || "Active") === "active";
+
+    accumulator.set(garmentModelId, {
+      linkedProductCount: currentUsage.linkedProductCount + 1,
+      publishedProductCount: currentUsage.publishedProductCount + (isPublished ? 1 : 0),
+    });
+
+    return accumulator;
+  }, new Map());
+}
+
+function getGarmentPublishStateMatch(filterValue, usage) {
+  if (filterValue === "published") {
+    return usage.publishedProductCount > 0;
+  }
+
+  if (filterValue === "unpublished") {
+    return usage.publishedProductCount === 0;
+  }
+
+  if (filterValue === "used") {
+    return usage.linkedProductCount > 0;
+  }
+
+  if (filterValue === "unused") {
+    return usage.linkedProductCount === 0;
+  }
+
+  return true;
+}
+
+const GarmentLibraryCard = memo(function GarmentLibraryCard({
+  item,
+  isEditing,
+  subtitle,
+  usage,
+  onEdit,
+  onRemove,
+}) {
+  return (
+    <article className={`products-card ${isEditing ? "is-active" : ""}`}>
+      <div className="products-card-media">
+        {item.image ? (
+          <img src={item.image} alt={item.title} className="products-card-image" />
+        ) : (
+          <div className="products-card-image-placeholder">No Image</div>
+        )}
+      </div>
+
+      <div className="products-card-body">
+        <div className="products-card-topline">
+          <div style={{ minWidth: 0 }}>
+            <h3 style={{ margin: 0 }}>{item.title}</h3>
+            <p className="products-card-subtitle">{subtitle}</p>
+          </div>
+        </div>
+
+        <div className="products-card-detail-grid">
+          <div className="products-card-detail">
+            <span>Variants</span>
+            <strong>{(item.variants || []).length}</strong>
+          </div>
+          <div className="products-card-detail">
+            <span>Sizes</span>
+            <strong>{(item.sizes || []).join(", ") || "None"}</strong>
+          </div>
+          <div className="products-card-detail">
+            <span>Defaults</span>
+            <strong>{(item.default_production_methods || []).join(", ") || "None"}</strong>
+          </div>
+          <div className="products-card-detail">
+            <span>Published</span>
+            <strong>
+              {usage.publishedProductCount} active / {usage.linkedProductCount} linked
+            </strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="products-card-actions">
+        <button type="button" onClick={onEdit} className="products-card-button">
+          Edit
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="products-card-button products-card-button-danger"
+        >
+          Remove
+        </button>
+      </div>
+    </article>
+  );
+});
+
 export default function GarmentLibrary() {
   const editorRef = useRef(null);
   const garments = useGarmentLibraryItems();
@@ -221,6 +343,11 @@ export default function GarmentLibrary() {
   const [importPreviewSearch, setImportPreviewSearch] = useState("");
   const [importPreviewCategoryFilter, setImportPreviewCategoryFilter] = useState("all");
   const [importPreviewStatusFilter, setImportPreviewStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [brandFilter, setBrandFilter] = useState("all");
+  const [publishStateFilter, setPublishStateFilter] = useState("all");
+  const [sortOption, setSortOption] = useState("newest");
+  const deferredSearchTerm = useDeferredValue(searchTerm);
 
   const filteredModels = useMemo(
     () =>
@@ -237,15 +364,106 @@ export default function GarmentLibrary() {
       }),
     [garmentModels, form.category_lookup_id, form.brand_lookup_id]
   );
+  const categoryMap = useMemo(() => buildLookupOptionMap(categories), [categories]);
+  const brandMap = useMemo(() => buildLookupOptionMap(brands), [brands]);
+  const garmentModelMap = useMemo(() => buildLookupOptionMap(garmentModels), [garmentModels]);
+  const garmentUsageMap = useMemo(() => buildGarmentUsageMap(products), [products]);
+  const garmentBrowseItems = useMemo(
+    () =>
+      garments.map((item) => {
+        const category = categoryMap.get(item.category_lookup_id);
+        const brand = brandMap.get(item.brand_lookup_id);
+        const model = garmentModelMap.get(item.garment_model_lookup_id);
+        const usage = garmentUsageMap.get(item.garment_model_lookup_id) || EMPTY_GARMENT_USAGE;
+
+        return {
+          item,
+          usage,
+          sortTitle: normalizeTextKey(item.title),
+          createdAt: Date.parse(item.created_at || item.updated_at || 0) || 0,
+          variantCount: Array.isArray(item.variants) ? item.variants.length : 0,
+          brandName: normalizeText(brand?.name),
+          categoryName: normalizeText(category?.name),
+          modelLabel: normalizeText(model?.display_name),
+          modelCode: normalizeText(model?.model_code),
+          subtitle: buildGarmentLibraryLabel(item, brands, categories, garmentModels),
+          searchIndex: [
+            item.title,
+            brand?.name,
+            model?.display_name,
+            model?.model_code,
+            ...((item.variants || []).map((variant) => variant?.name) || []),
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase(),
+        };
+      }),
+    [brandMap, brands, categories, categoryMap, garmentModelMap, garmentModels, garmentUsageMap, garments]
+  );
+  const categoryFilterOptions = useMemo(
+    () =>
+      Array.from(new Set(garmentBrowseItems.map((entry) => entry.categoryName).filter(Boolean))).sort((left, right) =>
+        left.localeCompare(right)
+      ),
+    [garmentBrowseItems]
+  );
+  const brandFilterOptions = useMemo(
+    () =>
+      Array.from(new Set(garmentBrowseItems.map((entry) => entry.brandName).filter(Boolean))).sort((left, right) =>
+        left.localeCompare(right)
+      ),
+    [garmentBrowseItems]
+  );
   const filteredGarments = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-    return garments.filter((item) => {
+    const normalizedSearch = deferredSearchTerm.trim().toLowerCase();
+    const nextItems = garmentBrowseItems.filter((entry) => {
+      if (categoryFilter !== "all" && normalizeTextKey(entry.categoryName) !== normalizeTextKey(categoryFilter)) {
+        return false;
+      }
+
+      if (brandFilter !== "all" && normalizeTextKey(entry.brandName) !== normalizeTextKey(brandFilter)) {
+        return false;
+      }
+
+      if (!getGarmentPublishStateMatch(publishStateFilter, entry.usage)) {
+        return false;
+      }
+
       if (!normalizedSearch) return true;
-      return [item.title, item.notes]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(normalizedSearch));
+      return entry.searchIndex.includes(normalizedSearch);
     });
-  }, [garments, searchTerm]);
+
+    nextItems.sort((left, right) => {
+      if (sortOption === "alphabetical") {
+        return left.sortTitle.localeCompare(right.sortTitle);
+      }
+
+      if (sortOption === "most-variants") {
+        return right.variantCount - left.variantCount || left.sortTitle.localeCompare(right.sortTitle);
+      }
+
+      if (sortOption === "least-variants") {
+        return left.variantCount - right.variantCount || left.sortTitle.localeCompare(right.sortTitle);
+      }
+
+      if (sortOption === "most-published") {
+        return (
+          right.usage.publishedProductCount - left.usage.publishedProductCount ||
+          right.usage.linkedProductCount - left.usage.linkedProductCount ||
+          left.sortTitle.localeCompare(right.sortTitle)
+        );
+      }
+
+      return right.createdAt - left.createdAt || left.sortTitle.localeCompare(right.sortTitle);
+    });
+
+    return nextItems;
+  }, [brandFilter, categoryFilter, deferredSearchTerm, garmentBrowseItems, publishStateFilter, sortOption]);
+  const hasActiveGarmentFilters = Boolean(
+    searchTerm.trim() || categoryFilter !== "all" || brandFilter !== "all" || publishStateFilter !== "all"
+  );
+  const filteredGarmentCount = filteredGarments.length;
   const visibleVariants = useMemo(() => {
     const normalizedSearch = variantSearch.trim().toLowerCase();
     return form.variants.filter((variant) => {
@@ -1521,88 +1739,114 @@ export default function GarmentLibrary() {
                 type="search"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search garment title"
+                placeholder="Search title, brand, model, or variant"
                 style={fieldStyle}
               />
             </label>
+
+            <label className="products-toolbar-field">
+              <span>Category</span>
+              <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} style={fieldStyle}>
+                <option value="all">All Categories</option>
+                {categoryFilterOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="products-toolbar-field">
+              <span>Brand</span>
+              <select value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)} style={fieldStyle}>
+                <option value="all">All Brands</option>
+                {brandFilterOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="products-toolbar-field">
+              <span>Publish State</span>
+              <select
+                value={publishStateFilter}
+                onChange={(event) => setPublishStateFilter(event.target.value)}
+                style={fieldStyle}
+              >
+                <option value="all">All Publish States</option>
+                <option value="published">Published</option>
+                <option value="unpublished">Unpublished</option>
+                <option value="used">Used in Storefront</option>
+                <option value="unused">Unused</option>
+              </select>
+            </label>
+
+            <label className="products-toolbar-field">
+              <span>Sort</span>
+              <select value={sortOption} onChange={(event) => setSortOption(event.target.value)} style={fieldStyle}>
+                {GARMENT_SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="products-results-meta">
+            <span>
+              {hasActiveGarmentFilters
+                ? `Showing ${filteredGarmentCount} of ${garments.length} garments`
+                : `Showing ${garments.length} garments`}
+            </span>
+            <button
+              type="button"
+              className="products-clear-filters"
+              onClick={() => {
+                setSearchTerm("");
+                setCategoryFilter("all");
+                setBrandFilter("all");
+                setPublishStateFilter("all");
+                setSortOption("newest");
+              }}
+              disabled={!hasActiveGarmentFilters && sortOption === "newest"}
+            >
+              Clear Filters
+            </button>
           </div>
 
           <div className="products-list-scroll">
             <div className="products-list-grid">
-              {filteredGarments.map((item) => {
-                const linkedProductCount = products.filter(
-                  (product) => product.garment_model_lookup_id === item.garment_model_lookup_id
-                ).length;
-
-                return (
-                  <article key={item.id} className={`products-card ${editingId === item.id ? "is-active" : ""}`}>
-                    <div className="products-card-media">
-                      {item.image ? (
-                        <img src={item.image} alt={item.title} className="products-card-image" />
-                      ) : (
-                        <div className="products-card-image-placeholder">No Image</div>
-                      )}
-                    </div>
-
-                    <div className="products-card-body">
-                      <div className="products-card-topline">
-                        <div style={{ minWidth: 0 }}>
-                          <h3 style={{ margin: 0 }}>{item.title}</h3>
-                          <p className="products-card-subtitle">
-                            {buildGarmentLibraryLabel(item, brands, categories, garmentModels)}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="products-card-detail-grid">
-                        <div className="products-card-detail">
-                          <span>Variants</span>
-                          <strong>{(item.variants || []).length}</strong>
-                        </div>
-                        <div className="products-card-detail">
-                          <span>Sizes</span>
-                          <strong>{(item.sizes || []).join(", ") || "None"}</strong>
-                        </div>
-                        <div className="products-card-detail">
-                          <span>Defaults</span>
-                          <strong>{(item.default_production_methods || []).join(", ") || "None"}</strong>
-                        </div>
-                        <div className="products-card-detail">
-                          <span>Published</span>
-                          <strong>{linkedProductCount} products</strong>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="products-card-actions">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingId(item.id);
-                          setForm(buildFormFromGarment(item, brands, categories, garmentModels, sizes));
-                          setModelDraft(
-                            buildModelDraftFromModel(
-                              findLookupById(garmentModels, item.garment_model_lookup_id),
-                              item.brand_lookup_id
-                            )
-                          );
-                          editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                        }}
-                        className="products-card-button"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteGarmentLibraryItem(item.id)}
-                        className="products-card-button products-card-button-danger"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
+              {filteredGarments.length ? (
+                filteredGarments.map(({ item, subtitle, usage }) => (
+                  <GarmentLibraryCard
+                    key={item.id}
+                    item={item}
+                    isEditing={editingId === item.id}
+                    subtitle={subtitle}
+                    usage={usage}
+                    onEdit={() => {
+                      setEditingId(item.id);
+                      setForm(buildFormFromGarment(item, brands, categories, garmentModels, sizes));
+                      setModelDraft(
+                        buildModelDraftFromModel(
+                          findLookupById(garmentModels, item.garment_model_lookup_id),
+                          item.brand_lookup_id
+                        )
+                      );
+                      editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }}
+                    onRemove={() => deleteGarmentLibraryItem(item.id)}
+                  />
+                ))
+              ) : (
+                <div className="products-empty-state">
+                  <strong>No garments match current filters.</strong>
+                  <span>Adjust search, category, brand, or publish state to broaden the library view.</span>
+                </div>
+              )}
             </div>
           </div>
         </section>
