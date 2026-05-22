@@ -253,6 +253,11 @@ export function getGarmentLibraryItems() {
   try {
     if (isSupabaseConfigured && supabase) {
       if (hasLoadedRemote || loadStarted) {
+        console.log("[garmentLibraryStore] getGarmentLibraryItems using cached snapshot branch", {
+          hasLoadedRemote,
+          loadStarted,
+          cachedSnapshotCount: cachedSnapshot.length,
+        });
         console.debug("[garmentLibraryStore] getGarmentLibraryItems returning cached snapshot", {
           hasLoadedRemote,
           loadStarted,
@@ -262,6 +267,10 @@ export function getGarmentLibraryItems() {
         return cachedSnapshot;
       }
 
+      console.warn("[garmentLibraryStore] getGarmentLibraryItems returning EMPTY_ITEMS before remote load completes", {
+        hasLoadedRemote,
+        loadStarted,
+      });
       console.debug("[garmentLibraryStore] getGarmentLibraryItems returning EMPTY_ITEMS pending remote load", {
         hasLoadedRemote,
         loadStarted,
@@ -269,6 +278,11 @@ export function getGarmentLibraryItems() {
       return EMPTY_ITEMS;
     }
 
+    console.log("[garmentLibraryStore] getGarmentLibraryItems using local snapshot branch", {
+      hasLoadedRemote,
+      loadStarted,
+      cachedSnapshotCount: cachedSnapshot.length,
+    });
     console.debug("[garmentLibraryStore] getGarmentLibraryItems using local snapshot because Supabase is unavailable");
     return getLocalSnapshot();
   } catch (error) {
@@ -311,6 +325,11 @@ export function useGarmentLibraryItems() {
   );
 
   useEffect(() => {
+    console.log("[garmentLibraryStore] useGarmentLibraryItems mount: ensureLoaded starting", {
+      hasLoadedRemote,
+      loadStarted,
+      cachedSnapshotCount: cachedSnapshot.length,
+    });
     ensureLoaded();
   }, []);
 

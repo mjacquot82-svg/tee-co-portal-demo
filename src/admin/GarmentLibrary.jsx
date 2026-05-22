@@ -476,6 +476,30 @@ export default function GarmentLibrary() {
   const isEditorOpen = activeWorkspace === "create" || activeWorkspace === "edit";
   const isImportOpen = activeWorkspace === "import";
 
+  console.log("[GarmentLibrary] render start", {
+    garmentCount: Array.isArray(garments) ? garments.length : "non-array",
+    productCount: Array.isArray(products) ? products.length : "non-array",
+    categoryCount: categories.length,
+    brandCount: brands.length,
+    sizeCount: sizes.length,
+    garmentModelCount: garmentModels.length,
+    editingId,
+    activeWorkspace,
+    isEditMode,
+    isEditorOpen,
+    isImportOpen,
+  });
+
+  useEffect(() => {
+    console.log("[GarmentLibrary] component mounted", {
+      initialGarmentCount: Array.isArray(garments) ? garments.length : "non-array",
+      initialProductCount: Array.isArray(products) ? products.length : "non-array",
+      initialCategoryCount: categories.length,
+      initialBrandCount: brands.length,
+      initialGarmentModelCount: garmentModels.length,
+    });
+  }, []);
+
   const categoryMap = useMemo(() => {
     try {
       return buildLookupOptionMap(categories);
@@ -1666,6 +1690,20 @@ export default function GarmentLibrary() {
     };
   }, [brands, garmentModels, garments]);
 
+  console.log("[GarmentLibrary] before main render branches", {
+    garmentCount: garments.length,
+    garmentBrowseItemCount: garmentBrowseItems.length,
+    filteredGarmentCount,
+    hasActiveGarmentFilters,
+    brandFilterOptionsCount: brandFilterOptions.length,
+    brandSelectOptionsCount: brandSelectOptions.length,
+    importNoticePresent: Boolean(importNotice),
+    saveErrorPresent: Boolean(saveError),
+    importErrorPresent: Boolean(importError),
+    isEditorOpen,
+    isImportOpen,
+  });
+
   return (
     <div className="products-page garment-library-page">
       <div className="garment-library-shell">
@@ -1809,6 +1847,10 @@ export default function GarmentLibrary() {
 
           <div className="products-list-scroll garment-library-list-scroll">
             <div className="products-list-grid">
+              {console.log("[GarmentLibrary] evaluating garment list branch", {
+                filteredGarmentCount: filteredGarments.length,
+                garmentCardNodeCount: garmentCardNodes.length,
+              })}
               {filteredGarments.length ? (
                 garmentCardNodes
               ) : (

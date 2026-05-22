@@ -1109,7 +1109,24 @@ export default function Layout() {
       : "blocked"
     : "public";
 
+  if (isAdmin && location.pathname.startsWith("/admin/garments")) {
+    console.log("[Layout] admin garments route render gate", {
+      pathname: location.pathname,
+      hasVisibleStaffUser: Boolean(visibleStaffUser),
+      visibleStaffUserId: visibleStaffUser?.id || "",
+      visibleStaffUserRole: visibleStaffUser?.role || "",
+      resolvedStaffRole: resolvedStaffRole || "",
+      workspaceAccess,
+    });
+  }
+
   if (isAdmin && !visibleStaffUser) {
+    if (location.pathname.startsWith("/admin/garments")) {
+      console.warn("[Layout] blocking admin garments route before Outlet render: missing visible staff user", {
+        pathname: location.pathname,
+        workspaceAccess,
+      });
+    }
     return (
       <AdminDiagnosticsPanel
         title="Operational session missing"
@@ -1121,6 +1138,13 @@ export default function Layout() {
   }
 
   if (isAdmin && !resolvedStaffRole) {
+    if (location.pathname.startsWith("/admin/garments")) {
+      console.warn("[Layout] blocking admin garments route before Outlet render: unresolved staff role", {
+        pathname: location.pathname,
+        visibleStaffUser,
+        workspaceAccess,
+      });
+    }
     return (
       <AdminDiagnosticsPanel
         title="Operational role could not be resolved"
@@ -1140,6 +1164,14 @@ export default function Layout() {
           staffUser={visibleStaffUser}
           workspaceAccess={workspaceAccess}
         >
+          {location.pathname.startsWith("/admin/garments")
+            ? console.log("[Layout] allowing admin garments Outlet render", {
+                pathname: location.pathname,
+                visibleStaffUserId: visibleStaffUser?.id || "",
+                resolvedStaffRole,
+                workspaceAccess,
+              })
+            : null}
           <div style={{ display: "flex", alignItems: "flex-start" }}>
             <AdminSidebar
               pathname={location.pathname}
