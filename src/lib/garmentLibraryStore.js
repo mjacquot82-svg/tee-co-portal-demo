@@ -207,15 +207,11 @@ function ensureLoaded() {
 }
 
 export function getGarmentLibraryItems() {
-  if (isSupabaseConfigured && supabase) {
-    if (hasLoadedRemote || loadStarted) {
-      return cachedSnapshot;
-    }
-
-    return EMPTY_ITEMS;
+  if (hasBrowserStorage()) {
+    return getLocalSnapshot();
   }
 
-  return getLocalSnapshot();
+  return cachedSnapshot;
 }
 
 export function subscribeToGarmentLibrary(listener) {
