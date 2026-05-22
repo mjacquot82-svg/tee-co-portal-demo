@@ -129,6 +129,12 @@ function saveSnapshot(items) {
   const normalized = cacheSnapshot(items);
   cachedStorageRaw = JSON.stringify(normalized);
 
+  console.debug("[garmentLibraryStore] saveSnapshot", {
+    inputCount: Array.isArray(items) ? items.length : 0,
+    normalizedCount: normalized.length,
+    normalizedItems: normalized,
+  });
+
   if (hasBrowserStorage()) {
     setRawStorageItem(STORAGE_KEY, cachedStorageRaw);
   }
@@ -139,6 +145,10 @@ function saveSnapshot(items) {
 
 function getLocalSnapshot() {
   if (!hasBrowserStorage()) {
+    console.debug("[garmentLibraryStore] getLocalSnapshot without browser storage", {
+      cachedSnapshotCount: cachedSnapshot.length,
+      cachedSnapshot,
+    });
     return cachedSnapshot;
   }
 
@@ -148,7 +158,16 @@ function getLocalSnapshot() {
 
     const parsed = raw ? JSON.parse(raw) : EMPTY_ITEMS;
     cachedStorageRaw = raw;
-    return cacheSnapshot(parsed);
+    const snapshot = cacheSnapshot(parsed);
+    console.debug("[garmentLibraryStore] hydrated local snapshot", {
+      storageKey: STORAGE_KEY,
+      rawStorageLength: raw.length,
+      parsedCount: Array.isArray(parsed) ? parsed.length : 0,
+      parsedItems: parsed,
+      snapshotCount: snapshot.length,
+      snapshot,
+    });
+    return snapshot;
   } catch (error) {
     console.error("Unable to read Tee & Co garment library", error);
     cachedStorageRaw = null;
@@ -160,6 +179,10 @@ function getLocalSnapshot() {
 
 async function fetchLibraryFromSupabase() {
   if (!isSupabaseConfigured || !supabase) {
+    console.debug("[garmentLibraryStore] Supabase unavailable for garment library fetch", {
+      isSupabaseConfigured,
+      hasSupabaseClient: Boolean(supabase),
+    });
     return null;
   }
 
@@ -168,24 +191,44 @@ async function fetchLibraryFromSupabase() {
     .select(GARMENT_LIBRARY_SELECT_FIELDS)
     .order("title", { ascending: true });
 
+  console.debug("[garmentLibraryStore] raw Supabase garment query response", {
+    table: "garment_library_items",
+    select: GARMENT_LIBRARY_SELECT_FIELDS,
+    data,
+    error,
+  });
+  console.debug("[garmentLibraryStore] total rows returned from Supabase", Array.isArray(data) ? data.length : 0);
+
   if (error) {
     console.warn("[garmentLibraryStore] Falling back to local library", error);
     return null;
   }
 
-  return Array.isArray(data)
+  const mappedItems = Array.isArray(data)
     ? data.map((item) => normalizeGarmentLibraryItem(item)).filter(Boolean)
     : EMPTY_ITEMS;
+
+  console.debug("[garmentLibraryStore] mapped garment records after transformation", {
+    mappedCount: mappedItems.length,
+    mappedItems,
+  });
+
+  return mappedItems;
 }
 
 export async function refreshGarmentLibrary() {
   const remote = await fetchLibraryFromSupabase();
 
   if (!remote) {
+    console.debug("[garmentLibraryStore] refreshGarmentLibrary using local snapshot fallback");
     return getLocalSnapshot();
   }
 
   hasLoadedRemote = true;
+  console.debug("[garmentLibraryStore] refreshGarmentLibrary using remote snapshot", {
+    remoteCount: remote.length,
+    remote,
+  });
   return saveSnapshot(remote);
 }
 
@@ -209,12 +252,23 @@ function ensureLoaded() {
 export function getGarmentLibraryItems() {
   if (isSupabaseConfigured && supabase) {
     if (hasLoadedRemote || loadStarted) {
+      console.debug("[garmentLibraryStore] getGarmentLibraryItems returning cached snapshot", {
+        hasLoadedRemote,
+        loadStarted,
+        cachedSnapshotCount: cachedSnapshot.length,
+        cachedSnapshot,
+      });
       return cachedSnapshot;
     }
 
+    console.debug("[garmentLibraryStore] getGarmentLibraryItems returning EMPTY_ITEMS pending remote load", {
+      hasLoadedRemote,
+      loadStarted,
+    });
     return EMPTY_ITEMS;
   }
 
+  console.debug("[garmentLibraryStore] getGarmentLibraryItems using local snapshot because Supabase is unavailable");
   return getLocalSnapshot();
 }
 

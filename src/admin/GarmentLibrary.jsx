@@ -580,6 +580,45 @@ export default function GarmentLibrary() {
     [brands, filteredGarments, form.brand_lookup_id, garmentBrowseItems]
   );
   useEffect(() => {
+    const activeGarments = garments.filter((garment) => garment?.active !== false);
+
+    console.debug("[GarmentLibrary] active garment filtering results", {
+      totalGarments: garments.length,
+      activeGarmentCount: activeGarments.length,
+      inactiveGarmentCount: garments.length - activeGarments.length,
+      activeGarments,
+      activeLibraryBrandIds: Array.from(activeLibraryBrandIds),
+    });
+  }, [activeLibraryBrandIds, garments]);
+  useEffect(() => {
+    console.debug("[GarmentLibrary] final garmentBrowseItems array", {
+      garmentBrowseItemCount: garmentBrowseItems.length,
+      garmentBrowseItems,
+    });
+  }, [garmentBrowseItems]);
+  useEffect(() => {
+    console.debug("[GarmentLibrary] final visible garments array", {
+      filteredGarmentCount: filteredGarments.length,
+      filters: {
+        searchTerm,
+        deferredSearchTerm,
+        categoryFilter,
+        brandFilter,
+        storefrontUsageFilter,
+        sortOption,
+      },
+      filteredGarments,
+    });
+  }, [
+    brandFilter,
+    categoryFilter,
+    deferredSearchTerm,
+    filteredGarments,
+    searchTerm,
+    sortOption,
+    storefrontUsageFilter,
+  ]);
+  useEffect(() => {
     if (!brandSelectRef.current) return;
 
     const renderedOptions = Array.from(brandSelectRef.current.options).map((option) => ({
