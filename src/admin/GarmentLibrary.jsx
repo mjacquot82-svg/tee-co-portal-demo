@@ -147,6 +147,7 @@ export default function GarmentLibrary() {
   const [modelDraft, setModelDraft] = useState(buildModelDraftFromModel());
   const [importError, setImportError] = useState("");
   const [importNotice, setImportNotice] = useState("");
+  const [importWarnings, setImportWarnings] = useState([]);
   const [isPreparingImport, setIsPreparingImport] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
@@ -225,6 +226,7 @@ export default function GarmentLibrary() {
     setImportPreview(null);
     setImportError("");
     setImportNotice("");
+    setImportWarnings([]);
   }
 
   function updateField(event) {
@@ -482,8 +484,10 @@ export default function GarmentLibrary() {
     event.target.value = "";
     if (!file) return;
 
+    setImportPreview(null);
     setImportError("");
     setImportNotice("");
+    setImportWarnings([]);
     setIsPreparingImport(true);
 
     try {
@@ -499,9 +503,18 @@ export default function GarmentLibrary() {
         garments: parsed.garments.map((group) => ({ ...group, skip: false })),
         garmentCount: parsed.garmentCount,
         rowCount: parsed.rowCount,
+        validRowCount: parsed.validRowCount,
+        skippedEmptyRowCount: parsed.skippedEmptyRowCount,
+        skippedMalformedRowCount: parsed.skippedMalformedRowCount,
+        warningCount: parsed.warningCount,
       });
+      setImportWarnings(parsed.warnings || []);
+      setImportNotice(
+        `Preview ready. Detected ${parsed.garmentCount} garments from ${parsed.validRowCount} valid rows.`
+      );
     } catch (error) {
       setImportPreview(null);
+      setImportWarnings([]);
       setImportError(error?.message || "Unable to prepare this spreadsheet.");
     } finally {
       setIsPreparingImport(false);
@@ -643,6 +656,7 @@ export default function GarmentLibrary() {
         `Import complete. ${createdGarments} garments created, ${updatedGarments} garments updated, ${addedVariants} variants added, ${skippedVariants} duplicate variants skipped.`
       );
       setImportPreview(null);
+      setImportWarnings([]);
     } catch (error) {
       setImportError(error?.message || "Import failed before completion.");
     } finally {
@@ -663,7 +677,7 @@ export default function GarmentLibrary() {
           </div>
 
           {saveError ? <div className="products-error-banner">{saveError}</div> : null}
-          {importError ? <div className="products-error-banner">{importError}</div> : null}
+          {importError ? <div className="products-error-banner" role="alert">{importError}</div> : null}
           {importNotice ? <div className="products-callout">{importNotice}</div> : null}
 
           <section className="products-editor-section">
@@ -695,15 +709,41 @@ export default function GarmentLibrary() {
                 columns after these are ignored.
               </p>
 
-              {isPreparingImport ? <div className="products-summary-card">Preparing import preview...</div> : null}
+              {isPreparingImport ? (
+                <div className="products-summary-card" role="status" aria-live="polite">
+                  Preparing import preview...
+                </div>
+              ) : null}
+
+              {importWarnings.length ? (
+                <div className="products-import-warning-panel" role="status" aria-live="polite">
+                  <strong>
+                    {importWarnings.length} row{importWarnings.length === 1 ? "" : "s"} skipped during parsing
+                  </strong>
+                  <div className="products-import-warning-list">
+                    {importWarnings.map((warning) => (
+                      <div key={warning} className="products-import-warning-item">
+                        {warning}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               {importPreview ? (
-                <div className="products-import-preview">
+                <div className="products-import-preview" role="region" aria-label="Garment import preview">
                   <div className="products-status-row">
                     <span>
-                      {importPreview.fileName} • {importPreview.garmentCount} garments • {importPreview.rowCount} rows
+                      {importPreview.fileName} • {importPreview.garmentCount} garments detected •{" "}
+                      {importPreview.validRowCount} valid rows
                     </span>
                     <span>{importablePreviewCount} garments selected</span>
+                  </div>
+
+                  <div className="products-summary-meta">
+                    <span>{importPreview.rowCount} grouped row references included in preview</span>
+                    <span>{importPreview.skippedEmptyRowCount} empty rows skipped</span>
+                    <span>{importPreview.skippedMalformedRowCount} malformed rows skipped</span>
                   </div>
 
                   <div className="products-import-group-list">

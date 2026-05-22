@@ -18,6 +18,10 @@ function buildRowError(rowNumber, message) {
   return `Row ${rowNumber}: ${message}`;
 }
 
+function isRowEmpty(row = []) {
+  return !row.some((value) => normalizeText(value));
+}
+
 function parseCsv(text) {
   const rows = [];
   let currentRow = [];
@@ -113,37 +117,57 @@ export function parseTeeCoGarmentSpreadsheet(text) {
   const requiredColumnIndexes = validateHeader(rows[0]);
 
   const groupedGarments = new Map();
+  const warnings = [];
+  let skippedEmptyRowCount = 0;
+  let skippedMalformedRowCount = 0;
+  let validRowCount = 0;
 
   rows.slice(1).forEach((row, index) => {
     const rowNumber = index + 2;
+    if (isRowEmpty(row)) {
+      skippedEmptyRowCount += 1;
+      return;
+    }
+
     const normalizedRow = EXPECTED_TEE_CO_COLUMNS.map((columnName) =>
       normalizeText(row[requiredColumnIndexes.get(columnName)])
     );
 
     if (!normalizedRow.some(Boolean)) {
+      skippedEmptyRowCount += 1;
       return;
     }
 
     const [category, brand, supplierSku, productName, variantName] = normalizedRow;
 
     if (!category) {
-      throw new Error(buildRowError(rowNumber, "Category is required."));
+      skippedMalformedRowCount += 1;
+      warnings.push(buildRowError(rowNumber, "Skipped row because Category is required."));
+      return;
     }
 
     if (!brand) {
-      throw new Error(buildRowError(rowNumber, "Brand is required."));
+      skippedMalformedRowCount += 1;
+      warnings.push(buildRowError(rowNumber, "Skipped row because Brand is required."));
+      return;
     }
 
     if (!supplierSku) {
-      throw new Error(buildRowError(rowNumber, "Supplier SKU is required."));
+      skippedMalformedRowCount += 1;
+      warnings.push(buildRowError(rowNumber, "Skipped row because Supplier SKU is required."));
+      return;
     }
 
     if (!productName) {
-      throw new Error(buildRowError(rowNumber, "Product Name is required."));
+      skippedMalformedRowCount += 1;
+      warnings.push(buildRowError(rowNumber, "Skipped row because Product Name is required."));
+      return;
     }
 
     if (!variantName) {
-      throw new Error(buildRowError(rowNumber, "Variant/Color is required."));
+      skippedMalformedRowCount += 1;
+      warnings.push(buildRowError(rowNumber, "Skipped row because Variant/Color is required."));
+      return;
     }
 
     const garmentKey = `${normalizeKey(brand)}::${normalizeKey(productName)}`;
@@ -165,12 +189,12 @@ export function parseTeeCoGarmentSpreadsheet(text) {
       existingGroup.rowNumbers.push(rowNumber);
 
       if (normalizeKey(existingGroup.category) !== normalizeKey(category)) {
-        throw new Error(
-          buildRowError(
-            rowNumber,
-            `Category does not match other rows for ${brand} ${productName}.`
-          )
+        skippedMalformedRowCount += 1;
+        warnings.push(
+          buildRowError(rowNumber, `Skipped row because Category does not match other rows for ${brand} ${productName}.`)
         );
+        existingGroup.rowNumbers = existingGroup.rowNumbers.filter((value) => value !== rowNumber);
+        return;
       }
     }
 
@@ -180,16 +204,20 @@ export function parseTeeCoGarmentSpreadsheet(text) {
 
     if (existingVariant) {
       if (normalizeKey(existingVariant.supplierSku) !== normalizeKey(supplierSku)) {
-        throw new Error(
+        skippedMalformedRowCount += 1;
+        warnings.push(
           buildRowError(
             rowNumber,
-            `Variant/Color "${variantName}" has conflicting Supplier SKU values for ${group.title}.`
+            `Skipped row because Variant/Color "${variantName}" has conflicting Supplier SKU values for ${group.title}.`
           )
         );
+        group.rowNumbers = group.rowNumbers.filter((value) => value !== rowNumber);
+        return;
       }
 
       existingVariant.rowNumbers.push(rowNumber);
       group.duplicateRowCount += 1;
+      validRowCount += 1;
       return;
     }
 
@@ -201,6 +229,7 @@ export function parseTeeCoGarmentSpreadsheet(text) {
 
     group.variantMap.set(variantKey, variant);
     group.variants.push(variant);
+    validRowCount += 1;
   });
 
   const garments = Array.from(groupedGarments.values())
@@ -218,6 +247,10 @@ export function parseTeeCoGarmentSpreadsheet(text) {
     .sort((left, right) => left.title.localeCompare(right.title));
 
   if (!garments.length) {
+    if (warnings.length) {
+      throw new Error(`Spreadsheet does not contain any valid garment rows. ${warnings[0]}`);
+    }
+
     throw new Error("Spreadsheet does not contain any garment rows.");
   }
 
@@ -226,5 +259,10 @@ export function parseTeeCoGarmentSpreadsheet(text) {
     garments,
     garmentCount: garments.length,
     rowCount: garments.reduce((total, garment) => total + garment.rowNumbers.length, 0),
+    validRowCount,
+    skippedEmptyRowCount,
+    skippedMalformedRowCount,
+    warningCount: warnings.length,
+    warnings,
   };
 }
