@@ -213,6 +213,40 @@ function buildVisibleBrandOptions(brands = [], garmentBrowseItems = [], selected
   );
 }
 
+function buildBrandSelectOptions(visibleBrands = [], garmentBrowseItems = [], selectedBrandId = "") {
+  const fallbackNamesByBrandId = garmentBrowseItems.reduce((accumulator, entry) => {
+    const brandId = normalizeText(entry?.brandId);
+    const brandName = normalizeText(entry?.brandName);
+
+    if (brandId && brandName && !accumulator.has(brandId)) {
+      accumulator.set(brandId, brandName);
+    }
+
+    return accumulator;
+  }, new Map());
+
+  const options = visibleBrands.reduce((accumulator, brand) => {
+    const value = normalizeText(brand?.id);
+    const label = normalizeText(brand?.name) || fallbackNamesByBrandId.get(value) || "";
+
+    if (!value || !label || accumulator.some((option) => option.value === value)) {
+      return accumulator;
+    }
+
+    accumulator.push({ value, label });
+    return accumulator;
+  }, []);
+
+  if (selectedBrandId && !options.some((option) => option.value === selectedBrandId)) {
+    const fallbackLabel = fallbackNamesByBrandId.get(selectedBrandId);
+    if (fallbackLabel) {
+      options.push({ value: selectedBrandId, label: fallbackLabel });
+    }
+  }
+
+  return options.sort((left, right) => left.label.localeCompare(right.label));
+}
+
 function buildImportWarningSummary(warnings = []) {
   const summary = {
     total: warnings.length,
@@ -442,6 +476,7 @@ export default function GarmentLibrary() {
   const [sortOption, setSortOption] = useState("newest");
   const [activeWorkspace, setActiveWorkspace] = useState(null);
   const repairingBrandIdsRef = useRef(new Set());
+  const brandSelectRef = useRef(null);
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const isEditMode = Boolean(editingId);
   const isEditorOpen = activeWorkspace === "create" || activeWorkspace === "edit";
@@ -494,6 +529,10 @@ export default function GarmentLibrary() {
     () => buildVisibleBrandOptions(brands, garmentBrowseItems, form.brand_lookup_id),
     [brands, form.brand_lookup_id, garmentBrowseItems]
   );
+  const brandSelectOptions = useMemo(
+    () => buildBrandSelectOptions(visibleBrands, garmentBrowseItems, form.brand_lookup_id),
+    [form.brand_lookup_id, garmentBrowseItems, visibleBrands]
+  );
   const categoryFilterOptions = useMemo(
     () =>
       Array.from(new Set(garmentBrowseItems.map((entry) => entry.categoryName).filter(Boolean))).sort((left, right) =>
@@ -514,6 +553,7 @@ export default function GarmentLibrary() {
         id: brand.id,
         name: brand.name,
       })),
+      normalizedBrandSelectOptions: brandSelectOptions,
       isBrandOptionsArrayEmpty: visibleBrands.length === 0,
       brandsLookupCount: brands.length,
       garmentCount: garments.length,
@@ -530,7 +570,27 @@ export default function GarmentLibrary() {
       garmentBrowseBrandNames: brandFilterOptions,
       selectedBrandId: form.brand_lookup_id,
     });
-  }, [activeLibraryBrandIds, brandFilterOptions, brands, form.brand_lookup_id, garmentBrowseItems, garments, visibleBrands]);
+  }, [
+    activeLibraryBrandIds,
+    brandFilterOptions,
+    brandSelectOptions,
+    brands,
+    form.brand_lookup_id,
+    garmentBrowseItems,
+    garments,
+    visibleBrands,
+  ]);
+  useEffect(() => {
+    if (!brandSelectRef.current) return;
+
+    const renderedOptions = Array.from(brandSelectRef.current.options).map((option) => ({
+      value: option.value,
+      label: option.textContent,
+      disabled: option.disabled,
+    }));
+
+    console.debug("[GarmentLibrary] rendered brand select options", renderedOptions);
+  }, [brandSelectOptions]);
   const filteredGarments = useMemo(() => {
     const normalizedSearch = deferredSearchTerm.trim().toLowerCase();
     const nextItems = garmentBrowseItems.filter((entry) => {
@@ -1939,6 +1999,7 @@ export default function GarmentLibrary() {
                     <label style={labelStyle}>
                       Brand
                       <select
+                        ref={brandSelectRef}
                         name="brand_lookup_id"
                         value={form.brand_lookup_id}
                         onChange={updateField}
@@ -1946,9 +2007,9 @@ export default function GarmentLibrary() {
                         disabled={isImportedSelectionLocked}
                       >
                         <option value="">Select brand</option>
-                        {visibleBrands.map((brand) => (
-                          <option key={brand.id} value={brand.id}>
-                            {brand.name}
+                        {brandSelectOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
                           </option>
                         ))}
                       </select>
