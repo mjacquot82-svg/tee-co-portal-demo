@@ -1,12 +1,17 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { getRawStorageItem, hasBrowserStorage, setRawStorageItem } from "./browserStorage";
-import { isSupabaseConfigured, supabase } from "./supabaseClient";
+import { hasBrowserStorage } from "./browserStorage";
+import {
+  isSupabaseConfigured,
+  supabase,
+  supabaseConfig,
+  supabaseDiagnostics,
+  supabaseInitializationError,
+} from "./supabaseClient";
 
 const STORAGE_KEY = "teeCoGarmentLibrary";
 const EMPTY_ITEMS = [];
 const GARMENT_LIBRARY_TABLE = "garment_library_items";
 const listeners = new Set();
-let cachedStorageRaw = null;
 let cachedSnapshotRaw = null;
 let cachedSnapshot = EMPTY_ITEMS;
 let snapshotVersion = 0;
@@ -42,6 +47,33 @@ const GARMENT_LIBRARY_SELECT_FIELDS = [
   "updated_at",
 ].join(", ");
 
+function getSupabaseUnavailableDiagnostics() {
+  return {
+    reason: !isSupabaseConfigured
+      ? "missing_env_configuration"
+      : !supabase
+        ? "client_initialization_failed"
+        : null,
+    missingConfiguration: !isSupabaseConfigured,
+    missingClient: !supabase,
+    hasSupabaseClient: Boolean(supabase),
+    hasSupabaseUrlValue: Boolean(supabaseConfig.url),
+    hasSupabasePublishableKeyValue: Boolean(supabaseConfig.publishableKey),
+    hasSupabaseUrlEnvVar: supabaseDiagnostics.hasSupabaseUrlEnvVar,
+    hasSupabasePublishableKeyEnvVar: supabaseDiagnostics.hasSupabasePublishableKeyEnvVar,
+    hasSupabaseAnonKeyEnvVar: supabaseDiagnostics.hasSupabaseAnonKeyEnvVar,
+    resolvedPublishableKeySource: supabaseDiagnostics.resolvedPublishableKeySource,
+    isCodespacesHost: supabaseDiagnostics.isCodespacesHost,
+    hostname: supabaseDiagnostics.hostname,
+    initializationError: supabaseInitializationError
+      ? {
+          name: supabaseInitializationError.name,
+          message: supabaseInitializationError.message,
+        }
+      : null,
+  };
+}
+
 function emitUpdated() {
   console.log("[garmentLibraryStore] emitUpdated publishing garment library snapshot", {
     listenerCount: listeners.size,
@@ -71,6 +103,12 @@ function updateExternalSnapshot(items = cachedSnapshot) {
 
 function normalizeText(value) {
   return String(value || "").trim();
+}
+
+function isUuidLike(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    normalizeText(value)
+  );
 }
 
 function normalizeTextKey(value) {
@@ -166,42 +204,6 @@ function setInMemorySnapshot(items) {
   return normalized;
 }
 
-function buildStoredSnapshot(items) {
-  return {
-    version: SNAPSHOT_VERSION,
-    garments: Array.isArray(items) ? items : EMPTY_ITEMS,
-    savedAt: new Date().toISOString(),
-  };
-}
-
-function extractStoredSnapshotItems(parsed) {
-  if (Array.isArray(parsed)) {
-    return parsed;
-  }
-
-  if (!parsed || typeof parsed !== "object") {
-    return EMPTY_ITEMS;
-  }
-
-  if (Array.isArray(parsed.garments)) {
-    return parsed.garments;
-  }
-
-  if (Array.isArray(parsed.items)) {
-    return parsed.items;
-  }
-
-  if (Array.isArray(parsed.snapshot)) {
-    return parsed.snapshot;
-  }
-
-  if (Array.isArray(parsed.data)) {
-    return parsed.data;
-  }
-
-  return EMPTY_ITEMS;
-}
-
 function saveSnapshot(items) {
   const normalized = cacheSnapshot(items);
   console.log("[garmentLibraryStore] saveSnapshot bypassed; keeping garment library in memory only", {
@@ -212,14 +214,6 @@ function saveSnapshot(items) {
   });
   emitUpdated();
   return normalized;
-}
-
-function getLocalSnapshot() {
-  console.debug("[garmentLibraryStore] getLocalSnapshot bypassed; returning in-memory garment library only", {
-    storageKey: STORAGE_KEY,
-    cachedSnapshotCount: cachedSnapshot.length,
-  });
-  return cachedSnapshot;
 }
 
 function getActiveSnapshot() {
@@ -256,8 +250,7 @@ function getGarmentLibrarySnapshot() {
 async function fetchLibraryFromSupabase() {
   if (!isSupabaseConfigured || !supabase) {
     console.log("[garmentLibraryStore] Supabase unavailable for garment library fetch", {
-      isSupabaseConfigured,
-      hasSupabaseClient: Boolean(supabase),
+      ...getSupabaseUnavailableDiagnostics(),
     });
     return null;
   }
@@ -567,6 +560,11 @@ export async function createGarmentLibraryItem(values) {
   }
 
   if (!isSupabaseConfigured || !supabase) {
+    console.warn("[garmentLibraryStore] createGarmentLibraryItem using local-only fallback because Supabase is unavailable", {
+      table: GARMENT_LIBRARY_TABLE,
+      insertCount: 1,
+      title: normalized.title,
+    });
     const localRecord = {
       ...normalized,
       id: normalized.id || `garment-library-${Date.now()}`,
@@ -578,8 +576,21 @@ export async function createGarmentLibraryItem(values) {
 
   try {
     const { id: _unusedId, ...insertPayload } = normalized;
+    console.info("[garmentLibraryStore] remote garment insert start", {
+      table: GARMENT_LIBRARY_TABLE,
+      insertCount: 1,
+      title: normalized.title,
+      variantCount: Array.isArray(insertPayload.variants) ? insertPayload.variants.length : 0,
+      categoryLookupId: insertPayload.category_lookup_id || null,
+      brandLookupId: insertPayload.brand_lookup_id || null,
+      garmentModelLookupId: insertPayload.garment_model_lookup_id || null,
+      categoryLookupIdIsUuid: isUuidLike(insertPayload.category_lookup_id),
+      brandLookupIdIsUuid: isUuidLike(insertPayload.brand_lookup_id),
+      garmentModelLookupIdIsUuid: isUuidLike(insertPayload.garment_model_lookup_id),
+      payload: insertPayload,
+    });
     const { data, error } = await supabase
-      .from("garment_library_items")
+      .from(GARMENT_LIBRARY_TABLE)
       .insert(insertPayload)
       .select(GARMENT_LIBRARY_SELECT_FIELDS)
       .single();
@@ -587,16 +598,24 @@ export async function createGarmentLibraryItem(values) {
     if (error) throw error;
 
     const created = normalizeGarmentLibraryItem(data);
+    console.info("[garmentLibraryStore] remote garment insert success", {
+      table: GARMENT_LIBRARY_TABLE,
+      insertCount: 1,
+      recordId: created?.id || null,
+      title: created?.title || normalized.title,
+      fetchedRowCount: created ? 1 : 0,
+    });
     saveSnapshot([created, ...getGarmentLibraryItems().filter((item) => item.id !== created.id)]);
     return created;
   } catch (error) {
-    console.warn("[garmentLibraryStore] Remote create failed, using local fallback", error);
-    const localRecord = {
-      ...normalized,
-      id: normalized.id || `garment-library-${Date.now()}`,
-    };
-    saveSnapshot([localRecord, ...getGarmentLibraryItems()]);
-    return localRecord;
+    console.error("[garmentLibraryStore] remote garment insert failed", {
+      table: GARMENT_LIBRARY_TABLE,
+      insertCount: 1,
+      title: normalized.title,
+      message: error?.message,
+      error,
+    });
+    throw error;
   }
 }
 
@@ -616,26 +635,39 @@ export async function updateGarmentLibraryItem(itemId, updates) {
   if (!updated) return null;
 
   if (!isSupabaseConfigured || !supabase) {
+    console.warn("[garmentLibraryStore] updateGarmentLibraryItem using local-only fallback because Supabase is unavailable", {
+      table: GARMENT_LIBRARY_TABLE,
+      itemId,
+    });
     saveSnapshot(nextItems);
     return updated;
   }
 
   try {
+    const updatePayload = {
+      title: updated.title,
+      category_lookup_id: updated.category_lookup_id || null,
+      brand_lookup_id: updated.brand_lookup_id || null,
+      garment_model_lookup_id: updated.garment_model_lookup_id || null,
+      image: updated.image,
+      variants: updated.variants,
+      sizes: updated.sizes,
+      default_placements: updated.default_placements,
+      default_production_methods: updated.default_production_methods,
+      notes: updated.notes,
+      active: updated.active,
+    };
+    console.info("[garmentLibraryStore] remote garment update start", {
+      table: GARMENT_LIBRARY_TABLE,
+      itemId,
+      updateCount: 1,
+      title: updated.title,
+      variantCount: Array.isArray(updatePayload.variants) ? updatePayload.variants.length : 0,
+      payload: updatePayload,
+    });
     const { data, error } = await supabase
-      .from("garment_library_items")
-      .update({
-        title: updated.title,
-        category_lookup_id: updated.category_lookup_id || null,
-        brand_lookup_id: updated.brand_lookup_id || null,
-        garment_model_lookup_id: updated.garment_model_lookup_id || null,
-        image: updated.image,
-        variants: updated.variants,
-        sizes: updated.sizes,
-        default_placements: updated.default_placements,
-        default_production_methods: updated.default_production_methods,
-        notes: updated.notes,
-        active: updated.active,
-      })
+      .from(GARMENT_LIBRARY_TABLE)
+      .update(updatePayload)
       .eq("id", itemId)
       .select(GARMENT_LIBRARY_SELECT_FIELDS)
       .single();
@@ -643,12 +675,24 @@ export async function updateGarmentLibraryItem(itemId, updates) {
     if (error) throw error;
 
     const remoteUpdated = normalizeGarmentLibraryItem(data);
+    console.info("[garmentLibraryStore] remote garment update success", {
+      table: GARMENT_LIBRARY_TABLE,
+      itemId,
+      updateCount: 1,
+      fetchedRowCount: remoteUpdated ? 1 : 0,
+    });
     saveSnapshot(nextItems.map((item) => (item.id === itemId ? remoteUpdated : item)));
     return remoteUpdated;
   } catch (error) {
-    console.warn("[garmentLibraryStore] Remote update failed, using local fallback", error);
-    saveSnapshot(nextItems);
-    return updated;
+    console.error("[garmentLibraryStore] remote garment update failed", {
+      table: GARMENT_LIBRARY_TABLE,
+      itemId,
+      updateCount: 1,
+      title: updated.title,
+      message: error?.message,
+      error,
+    });
+    throw error;
   }
 }
 

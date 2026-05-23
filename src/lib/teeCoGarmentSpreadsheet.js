@@ -109,6 +109,11 @@ export function parseTeeCoGarmentSpreadsheet(text) {
     throw new Error("Spreadsheet is empty.");
   }
 
+  console.info("[teeCoGarmentSpreadsheet] parse start", {
+    source: "spreadsheet_import",
+    characterCount: normalizedText.length,
+  });
+
   const rows = parseCsv(normalizedText);
   if (!rows.length) {
     throw new Error("Spreadsheet is empty.");
@@ -254,7 +259,7 @@ export function parseTeeCoGarmentSpreadsheet(text) {
     throw new Error("Spreadsheet does not contain any garment rows.");
   }
 
-  return {
+  const parsedResult = {
     columns: EXPECTED_TEE_CO_COLUMNS,
     garments,
     garmentCount: garments.length,
@@ -265,4 +270,16 @@ export function parseTeeCoGarmentSpreadsheet(text) {
     warningCount: warnings.length,
     warnings,
   };
+
+  console.info("[teeCoGarmentSpreadsheet] parse success", {
+    source: "spreadsheet_import",
+    garmentCount: parsedResult.garmentCount,
+    rowCount: parsedResult.rowCount,
+    validRowCount: parsedResult.validRowCount,
+    warningCount: parsedResult.warningCount,
+    skippedEmptyRowCount: parsedResult.skippedEmptyRowCount,
+    skippedMalformedRowCount: parsedResult.skippedMalformedRowCount,
+  });
+
+  return parsedResult;
 }

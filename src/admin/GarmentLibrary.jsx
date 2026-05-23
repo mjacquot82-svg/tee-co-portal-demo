@@ -1320,13 +1320,21 @@ export default function GarmentLibrary() {
     });
   }, [form.variants, variantSearch]);
   const renderedGarmentCards = useMemo(() => {
+    const renderMetrics = {
+      attemptedCount: garmentEntriesForRender.length,
+      renderedCount: 0,
+      failedCount: 0,
+      nullCount: 0,
+    };
+
     try {
       console.log("[GarmentLibrary] entering renderedGarmentCards derivation", {
         garmentEntriesForRenderCount: garmentEntriesForRender.length,
         editingId,
         activeWorkspace,
       });
-      return garmentEntriesForRender.map(({ item, subtitle, usage }, index) => {
+
+      const mappedCards = garmentEntriesForRender.map(({ item, subtitle, usage }, index) => {
         try {
           console.log("[GarmentLibrary] mapping garment card node", {
             index,
@@ -1355,6 +1363,14 @@ export default function GarmentLibrary() {
             />
           );
         } catch (error) {
+          renderMetrics.failedCount += 1;
+          console.error("[GarmentLibrary] garment card render failure", {
+            garment: item,
+            error,
+            index,
+            subtitle,
+            usage,
+          });
           logGarmentDerivationError("garment card mapping", error, {
             index,
             garmentId: item?.id,
@@ -1362,14 +1378,50 @@ export default function GarmentLibrary() {
             item,
             usage,
           });
-          return null;
+
+          return (
+            <article
+              key={item?.id || `garment-render-failure-${index}`}
+              className="products-card"
+              role="article"
+            >
+              <div className="products-card-body">
+                <div className="products-card-title-row">
+                  <h3 style={{ margin: 0 }}>{item?.title || "Garment render failed"}</h3>
+                </div>
+                <p className="products-card-subtitle">
+                  This garment could not be rendered. See console for the failing garment payload.
+                </p>
+              </div>
+            </article>
+          );
         }
       });
+
+      renderMetrics.nullCount = mappedCards.filter((card) => card == null).length;
+      renderMetrics.renderedCount = mappedCards.length - renderMetrics.nullCount;
+
+      console.log("[GarmentLibrary] leaving renderedGarmentCards derivation", {
+        garmentEntriesForRenderCount: garmentEntriesForRender.length,
+        editingId,
+        activeWorkspace,
+        ...renderMetrics,
+      });
+
+      return mappedCards;
     } catch (error) {
+      renderMetrics.failedCount = garmentEntriesForRender.length;
       logGarmentDerivationError("rendered garment cards useMemo", error, {
         garmentEntriesForRender,
         editingId,
         activeWorkspace,
+      });
+      console.log("[GarmentLibrary] leaving renderedGarmentCards derivation", {
+        garmentEntriesForRenderCount: garmentEntriesForRender.length,
+        editingId,
+        activeWorkspace,
+        ...renderMetrics,
+        bailedOut: true,
       });
       return EMPTY_LIST;
     }

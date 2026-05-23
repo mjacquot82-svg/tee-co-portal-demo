@@ -4,6 +4,7 @@ import { isSupabaseConfigured, supabase } from "./supabaseClient";
 
 const STORAGE_KEY = "teeCoCatalogLookups";
 const LOOKUP_TABLES = ["categories", "brands", "colors", "sizes", "garment_models"];
+const UUID_LOOKUP_TABLES = new Set(["categories", "brands", "garment_models"]);
 
 const DEFAULT_LOOKUPS = {
   categories: [
@@ -65,6 +66,12 @@ function cloneLookups(lookups) {
 
 function normalizeText(value) {
   return String(value || "").trim();
+}
+
+function isUuidLike(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    normalizeText(value)
+  );
 }
 
 function slugify(value) {
@@ -178,22 +185,36 @@ function getLookupDedupKey(table, item = {}) {
   return normalizeText(item.name).toLowerCase();
 }
 
+function shouldKeepLookupRecord(table, item) {
+  if (!item) {
+    return false;
+  }
+
+  if (!isSupabaseConfigured || !supabase) {
+    return true;
+  }
+
+  if (!UUID_LOOKUP_TABLES.has(table)) {
+    return true;
+  }
+
+  return isUuidLike(item.id);
+}
+
 function mergeLookups(primary = {}, fallback = {}) {
   return LOOKUP_TABLES.reduce((accumulator, table) => {
-    const seenKeys = new Set();
-    const combined = [];
+    const recordsByKey = new Map();
 
     [...(fallback?.[table] || []), ...(primary?.[table] || [])]
       .map((item) => normalizeLookupItem(table, item))
-      .filter(Boolean)
+      .filter((item) => shouldKeepLookupRecord(table, item))
       .forEach((item) => {
         const dedupKey = getLookupDedupKey(table, item);
-        if (!dedupKey || seenKeys.has(dedupKey)) return;
-        seenKeys.add(dedupKey);
-        combined.push(item);
+        if (!dedupKey) return;
+        recordsByKey.set(dedupKey, item);
       });
 
-    accumulator[table] = sortLookupItems(table, combined);
+    accumulator[table] = sortLookupItems(table, Array.from(recordsByKey.values()));
     return accumulator;
   }, {});
 }
@@ -470,11 +491,15 @@ export async function createCatalogLookup(table, values) {
     normalizedRecord,
     getCatalogLookups()?.[table] || []
   );
-  if (existingLocalRecord) {
+  if (existingLocalRecord && (!isSupabaseConfigured || !supabase || isUuidLike(existingLocalRecord.id))) {
     return existingLocalRecord;
   }
 
   if (!isSupabaseConfigured || !supabase) {
+    console.warn("[catalogLookupsStore] createCatalogLookup using local-only fallback because Supabase is unavailable", {
+      table,
+      values: normalizedRecord,
+    });
     const nextLookups = appendLookupRecord(getCatalogLookups(), table, normalizedRecord);
     saveLocalLookupsSnapshot(nextLookups);
     return normalizedRecord;
@@ -482,6 +507,11 @@ export async function createCatalogLookup(table, values) {
 
   try {
     const { id: _unusedId, ...insertPayload } = normalizedRecord;
+    console.info("[catalogLookupsStore] remote lookup insert start", {
+      table,
+      insertCount: 1,
+      payload: insertPayload,
+    });
     const { data, error } = await supabase
       .from(table)
       .insert(insertPayload)
@@ -493,14 +523,32 @@ export async function createCatalogLookup(table, values) {
     }
 
     const remoteRecord = normalizeLookupItem(table, data);
+    console.info("[catalogLookupsStore] remote lookup insert success", {
+      table,
+      insertCount: 1,
+      recordId: remoteRecord?.id || null,
+      recordIdIsUuid: isUuidLike(remoteRecord?.id),
+    });
     const nextLookups = appendLookupRecord(getCatalogLookups(), table, remoteRecord);
     saveLocalLookupsSnapshot(nextLookups);
     return remoteRecord;
   } catch (error) {
+    console.error("[catalogLookupsStore] remote lookup insert failed", {
+      table,
+      insertCount: 1,
+      payload: normalizedRecord,
+      message: error?.message,
+      error,
+    });
     try {
       const existingRemoteRecord = await fetchExistingLookupRecordFromSupabase(table, normalizedRecord);
       if (existingRemoteRecord) {
         const activeRecord = await reactivateLookupRecord(table, existingRemoteRecord);
+        console.info("[catalogLookupsStore] recovered existing remote lookup after insert failure", {
+          table,
+          recordId: activeRecord?.id || null,
+          recordIdIsUuid: isUuidLike(activeRecord?.id),
+        });
         const nextLookups = replaceLookupRecord(getCatalogLookups(), table, activeRecord);
         saveLocalLookupsSnapshot(nextLookups);
         return activeRecord;
@@ -512,9 +560,6 @@ export async function createCatalogLookup(table, values) {
       );
     }
 
-    console.warn(`[catalogLookupsStore] Creating ${table} remotely failed, using local fallback`, error);
-    const nextLookups = appendLookupRecord(getCatalogLookups(), table, normalizedRecord);
-    saveLocalLookupsSnapshot(nextLookups);
-    return normalizedRecord;
+    throw error;
   }
 }
