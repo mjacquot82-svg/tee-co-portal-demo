@@ -328,6 +328,12 @@ function logGarmentDerivationError(stage, error, context = {}) {
   console.error(`[GarmentLibrary] ${stage} context`, context);
 }
 
+function logGarmentRenderError(stage, error, context = {}) {
+  console.error(`[GarmentLibrary] ${stage} render failed`, error);
+  console.error(`[GarmentLibrary] ${stage} render stack`, error?.stack);
+  console.error(`[GarmentLibrary] ${stage} render context`, context);
+}
+
 function summarizeGarmentBrowseItems(entries = []) {
   return entries.reduce(
     (summary, entry) => {
@@ -371,12 +377,37 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
   onRemove,
 }) {
   const [hasImageError, setHasImageError] = useState(false);
-  const imageSrc = normalizeText(item.image || item.imageSrc);
+  const garmentId = item?.id;
+  const garmentTitle = item?.title;
+
+  function logCardFieldError(field, error, extraContext = {}) {
+    logGarmentRenderError("GarmentLibraryCard field access", error, {
+      field,
+      garmentId,
+      garmentTitle,
+      subtitle,
+      isSelected,
+      usage,
+      item,
+      ...extraContext,
+    });
+  }
+
+  function readCardField(field, reader, extraContext = {}) {
+    try {
+      return reader();
+    } catch (error) {
+      logCardFieldError(field, error, extraContext);
+      throw error;
+    }
+  }
+
+  const imageSrc = readCardField("item.image/item.imageSrc", () => normalizeText(item.image || item.imageSrc));
   const showUploadedImage = Boolean(imageSrc) && !hasImageError;
 
   useEffect(() => {
     setHasImageError(false);
-  }, [imageSrc, item.id, item.title]);
+  }, [imageSrc, garmentId, garmentTitle]);
 
   function handleKeyDown(event) {
     if (event.key === "Enter" || event.key === " ") {
@@ -385,86 +416,130 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
     }
   }
 
-  return (
-    <article
-      className={`products-card ${isSelected ? "is-active" : ""}`}
-      onClick={onSelect}
-      onKeyDown={handleKeyDown}
-      role="button"
-      tabIndex={0}
-      aria-pressed={isSelected}
-    >
-      <div className="products-card-media garment-library-card-media">
-        {showUploadedImage ? (
-          <img
-            key={`${item.id || item.title}-${imageSrc}`}
-            src={imageSrc}
-            alt={item.title}
-            className="products-card-image"
-            onError={() => {
-              setHasImageError(true);
-            }}
-          />
-        ) : (
-          <NoImagePlaceholder className="products-card-image-placeholder garment-library-card-image-placeholder" />
-        )}
-      </div>
+  try {
+    const cardKey = readCardField("item.id/item.title", () => `${item.id || item.title}-${imageSrc}`);
+    const altText = readCardField("item.title", () => item.title);
+    const renderedTitle = readCardField("item.title", () => item.title);
+    const variants = readCardField("item.variants", () => item.variants || []);
+    const variantCount = readCardField("item.variants.length", () => variants.length, {
+      variantsType: typeof variants,
+      variantsIsArray: Array.isArray(variants),
+    });
+    const sizes = readCardField("item.sizes", () => item.sizes || []);
+    const sizesLabel = readCardField("item.sizes.join", () => sizes.join(", ") || "None", {
+      sizesType: typeof sizes,
+      sizesIsArray: Array.isArray(sizes),
+    });
+    const defaultProductionMethods = readCardField(
+      "item.default_production_methods",
+      () => item.default_production_methods || []
+    );
+    const defaultsLabel = readCardField(
+      "item.default_production_methods.join",
+      () => defaultProductionMethods.join(", ") || "None",
+      {
+        defaultProductionMethodsType: typeof defaultProductionMethods,
+        defaultProductionMethodsIsArray: Array.isArray(defaultProductionMethods),
+      }
+    );
+    const linkedProductCount = readCardField("usage.linkedProductCount", () => usage.linkedProductCount, {
+      usageType: typeof usage,
+      usageKeys: usage && typeof usage === "object" ? Object.keys(usage) : [],
+    });
 
-      <div className="products-card-body">
-        <div className="products-card-topline">
-          <div style={{ minWidth: 0 }}>
-            <div className="products-card-title-row">
-              <h3 style={{ margin: 0 }}>{item.title}</h3>
-              {isSelected ? <span className="products-card-editing-pill">Selected</span> : null}
+    return (
+      <article
+        className={`products-card ${isSelected ? "is-active" : ""}`}
+        onClick={onSelect}
+        onKeyDown={handleKeyDown}
+        role="button"
+        tabIndex={0}
+        aria-pressed={isSelected}
+      >
+        <div className="products-card-media garment-library-card-media">
+          {showUploadedImage ? (
+            <img
+              key={cardKey}
+              src={imageSrc}
+              alt={altText}
+              className="products-card-image"
+              onError={() => {
+                setHasImageError(true);
+              }}
+            />
+          ) : (
+            <NoImagePlaceholder className="products-card-image-placeholder garment-library-card-image-placeholder" />
+          )}
+        </div>
+
+        <div className="products-card-body">
+          <div className="products-card-topline">
+            <div style={{ minWidth: 0 }}>
+              <div className="products-card-title-row">
+                <h3 style={{ margin: 0 }}>{renderedTitle}</h3>
+                {isSelected ? <span className="products-card-editing-pill">Selected</span> : null}
+              </div>
+              <p className="products-card-subtitle">{subtitle}</p>
             </div>
-            <p className="products-card-subtitle">{subtitle}</p>
+          </div>
+
+          <div className="products-card-detail-grid">
+            <div className="products-card-detail">
+              <span>Variants</span>
+              <strong>{variantCount}</strong>
+            </div>
+            <div className="products-card-detail">
+              <span>Sizes</span>
+              <strong>{sizesLabel}</strong>
+            </div>
+            <div className="products-card-detail">
+              <span>Defaults</span>
+              <strong>{defaultsLabel}</strong>
+            </div>
+            <div className="products-card-detail">
+              <span>Storefront Usage</span>
+              <strong>{linkedProductCount} linked product{linkedProductCount === 1 ? "" : "s"}</strong>
+            </div>
           </div>
         </div>
 
-        <div className="products-card-detail-grid">
-          <div className="products-card-detail">
-            <span>Variants</span>
-            <strong>{(item.variants || []).length}</strong>
-          </div>
-          <div className="products-card-detail">
-            <span>Sizes</span>
-            <strong>{(item.sizes || []).join(", ") || "None"}</strong>
-          </div>
-          <div className="products-card-detail">
-            <span>Defaults</span>
-            <strong>{(item.default_production_methods || []).join(", ") || "None"}</strong>
-          </div>
-          <div className="products-card-detail">
-            <span>Storefront Usage</span>
-            <strong>{usage.linkedProductCount} linked product{usage.linkedProductCount === 1 ? "" : "s"}</strong>
-          </div>
+        <div className="products-card-actions">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelect();
+            }}
+            className="products-card-button"
+          >
+            {isSelected ? "Editing" : "Edit"}
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onRemove();
+            }}
+            className="products-card-button products-card-button-danger"
+          >
+            Remove
+          </button>
         </div>
-      </div>
-
-      <div className="products-card-actions">
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onSelect();
-          }}
-          className="products-card-button"
-        >
-          {isSelected ? "Editing" : "Edit"}
-        </button>
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onRemove();
-          }}
-          className="products-card-button products-card-button-danger"
-        >
-          Remove
-        </button>
-      </div>
-    </article>
-  );
+      </article>
+    );
+  } catch (error) {
+    logGarmentRenderError("GarmentLibraryCard", error, {
+      garmentId,
+      garmentTitle,
+      subtitle,
+      isSelected,
+      hasImageError,
+      imageSrc,
+      usage,
+      item,
+    });
+    throw error;
+  }
 });
 
 export default function GarmentLibrary() {
@@ -2182,29 +2257,116 @@ export default function GarmentLibrary() {
 
           <div className="products-list-scroll garment-library-list-scroll">
             <div className="products-list-grid">
-              {isGarmentLibraryLoading && garments.length === 0 ? (
-                <div className="products-empty-state">
-                  <strong>Loading garment library...</strong>
-                  <span>Fetching reusable garments from the remote catalog.</span>
-                </div>
-              ) : renderedGarmentCards.length > 0 ? (
-                renderedGarmentCards
-              ) : (
-                <div className="products-empty-state">
-                  <strong>
-                    {hasActiveGarmentFilters
-                      ? "No garments match the current filters."
-                      : "No garments are available yet."}
-                  </strong>
-                  <span>
-                    {hasActiveGarmentFilters
-                      ? "Clear or adjust the search, category, brand, or storefront filters."
-                      : hasFinishedInitialLoad
-                        ? "Create a garment or import the supplier spreadsheet to populate the library."
-                        : "The garment library has not finished loading yet."}
-                  </span>
-                </div>
-              )}
+              {(() => {
+                try {
+                  console.log("[GarmentLibrary] evaluating garment list branch", {
+                    isGarmentLibraryLoading,
+                    garmentCount: garments.length,
+                    filteredGarmentCount,
+                    renderedGarmentCardCount: renderedGarmentCards.length,
+                    hasActiveGarmentFilters,
+                    hasFinishedInitialLoad,
+                  });
+
+                  if (isGarmentLibraryLoading && garments.length === 0) {
+                    console.log("[GarmentLibrary] taking loading-state branch");
+                    return (
+                      <div className="products-empty-state">
+                        <strong>Loading garment library...</strong>
+                        <span>Fetching reusable garments from the remote catalog.</span>
+                      </div>
+                    );
+                  }
+
+                  console.log("[GarmentLibrary] before renderedGarmentCards.length branch", {
+                    renderedGarmentCardCount: renderedGarmentCards.length,
+                    renderedGarmentCardPreview: renderedGarmentCards.slice(0, 3).map((card, index) => ({
+                      index,
+                      key: card?.key,
+                      type:
+                        typeof card?.type === "string"
+                          ? card.type
+                          : card?.type?.displayName || card?.type?.name || typeof card?.type,
+                    })),
+                  });
+
+                  if (renderedGarmentCards.length > 0) {
+                    console.log("[GarmentLibrary] taking garment list branch", {
+                      renderedGarmentCardCount: renderedGarmentCards.length,
+                    });
+                    return renderedGarmentCards;
+                  }
+
+                  console.log("[GarmentLibrary] taking empty-state branch", {
+                    hasActiveGarmentFilters,
+                    hasFinishedInitialLoad,
+                  });
+                  return (
+                    <div className="products-empty-state">
+                      <strong>
+                        {hasActiveGarmentFilters
+                          ? "No garments match the current filters."
+                          : "No garments are available yet."}
+                      </strong>
+                      <span>
+                        {hasActiveGarmentFilters
+                          ? "Clear or adjust the search, category, brand, or storefront filters."
+                          : hasFinishedInitialLoad
+                            ? "Create a garment or import the supplier spreadsheet to populate the library."
+                            : "The garment library has not finished loading yet."}
+                      </span>
+                    </div>
+                  );
+                } catch (error) {
+                  const suspectedGarment = filteredGarments.find(({ item, usage }) => {
+                    if (!item || typeof item !== "object") return true;
+                    if (!Array.isArray(item.variants)) return true;
+                    if (!Array.isArray(item.sizes)) return true;
+                    if (!Array.isArray(item.default_production_methods)) return true;
+                    if (!usage || typeof usage !== "object") return true;
+                    if (typeof usage.linkedProductCount !== "number") return true;
+                    return false;
+                  });
+                  logGarmentRenderError("main garment list branch", error, {
+                    isGarmentLibraryLoading,
+                    garmentCount: garments.length,
+                    filteredGarmentCount,
+                    renderedGarmentCardCount: renderedGarmentCards.length,
+                    hasActiveGarmentFilters,
+                    hasFinishedInitialLoad,
+                    suspectedGarmentId: suspectedGarment?.item?.id,
+                    suspectedGarmentTitle: suspectedGarment?.item?.title,
+                    suspectedFailureField: !suspectedGarment
+                      ? "unknown"
+                      : !suspectedGarment?.item
+                        ? "filteredGarments[].item"
+                        : !Array.isArray(suspectedGarment.item.variants)
+                          ? "item.variants"
+                          : !Array.isArray(suspectedGarment.item.sizes)
+                            ? "item.sizes"
+                            : !Array.isArray(suspectedGarment.item.default_production_methods)
+                              ? "item.default_production_methods"
+                              : !suspectedGarment?.usage || typeof suspectedGarment.usage !== "object"
+                                ? "usage"
+                                : typeof suspectedGarment.usage.linkedProductCount !== "number"
+                                  ? "usage.linkedProductCount"
+                                  : "unknown",
+                    suspectedGarment,
+                    filteredGarmentSample: filteredGarments.slice(0, 3).map(({ item, subtitle, usage }, index) => ({
+                      index,
+                      garmentId: item?.id,
+                      garmentTitle: item?.title,
+                      subtitle,
+                      hasImage: Boolean(item?.image || item?.imageSrc),
+                      variantsIsArray: Array.isArray(item?.variants),
+                      sizesIsArray: Array.isArray(item?.sizes),
+                      defaultProductionMethodsIsArray: Array.isArray(item?.default_production_methods),
+                      linkedProductCount: usage?.linkedProductCount,
+                    })),
+                  });
+                  throw error;
+                }
+              })()}
             </div>
           </div>
         </section>
