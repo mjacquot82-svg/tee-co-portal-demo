@@ -1,3 +1,5 @@
+import Papa from "papaparse";
+
 const EXPECTED_TEE_CO_COLUMNS = [
   "Category",
   "Brand",
@@ -32,56 +34,71 @@ function isRowEmpty(row = []) {
   return !row.some((value) => normalizeText(value));
 }
 
+function previewCsvWhitespace(value) {
+  return String(value || "")
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n\n");
+}
+
+function buildCsvContextSnippet(text, searchTerms = [], contextRadius = 180) {
+  const normalizedText = String(text || "");
+  const normalizedTerms = searchTerms
+    .map((value) => normalizeText(value))
+    .filter((value) => value.length >= 3);
+
+  const anchor = normalizedTerms.find((value) => normalizedText.includes(value));
+  const anchorIndex = anchor ? normalizedText.indexOf(anchor) : -1;
+  const start = Math.max(0, anchorIndex >= 0 ? anchorIndex - contextRadius : 0);
+  const end = Math.min(
+    normalizedText.length,
+    anchorIndex >= 0 ? anchorIndex + anchor.length + contextRadius : Math.min(normalizedText.length, contextRadius * 2)
+  );
+  const snippet = normalizedText.slice(start, end);
+
+  return {
+    anchor: anchor || null,
+    start,
+    end,
+    rawSnippet: snippet,
+    visibleSnippet: previewCsvWhitespace(snippet),
+  };
+}
+
 function parseCsv(text) {
-  const rows = [];
-  let currentRow = [];
-  let currentValue = "";
-  let inQuotes = false;
+  const result = Papa.parse(String(text || ""), {
+    skipEmptyLines: false,
+  });
 
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    const nextChar = text[index + 1];
-
-    if (char === "\"") {
-      if (inQuotes && nextChar === "\"") {
-        currentValue += "\"";
-        index += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-
-    if (char === "," && !inQuotes) {
-      currentRow.push(currentValue);
-      currentValue = "";
-      continue;
-    }
-
-    if ((char === "\n" || char === "\r") && !inQuotes) {
-      if (char === "\r" && nextChar === "\n") {
-        index += 1;
-      }
-      currentRow.push(currentValue);
-      rows.push(currentRow);
-      currentRow = [];
-      currentValue = "";
-      continue;
-    }
-
-    currentValue += char;
+  const parseErrors = Array.isArray(result.errors) ? result.errors : [];
+  if (parseErrors.length) {
+    const firstError = parseErrors[0];
+    const rowSuffix =
+      typeof firstError?.row === "number" ? ` near parsed row ${firstError.row + 1}` : "";
+    throw new Error(`Invalid CSV: ${firstError?.message || "unknown parse error"}${rowSuffix}.`);
   }
 
-  if (inQuotes) {
-    throw new Error("Invalid CSV: unmatched quote detected.");
-  }
+  const rows = Array.isArray(result.data) ? result.data : [];
+  const maxFieldCount = rows.reduce(
+    (largestCount, row) => Math.max(largestCount, Array.isArray(row) ? row.length : 0),
+    0
+  );
 
-  if (currentValue || currentRow.length) {
-    currentRow.push(currentValue);
-    rows.push(currentRow);
-  }
-
-  return rows;
+  return {
+    rows,
+    diagnostics: {
+      parserName: "papaparse",
+      delimiter: result.meta?.delimiter || ",",
+      linebreak: result.meta?.linebreak || "unknown",
+      aborted: result.meta?.aborted === true,
+      rowCount: rows.length,
+      maxFieldCount,
+      parseErrorCount: parseErrors.length,
+      fieldCountsByRow: rows.map((row, index) => ({
+        rowNumber: index + 1,
+        fieldCount: Array.isArray(row) ? row.length : 0,
+      })),
+    },
+  };
 }
 
 function validateHeader(headerRow) {
@@ -138,6 +155,33 @@ function splitCommaList(value) {
     .filter(Boolean);
 }
 
+function detectMalformedOrphanRow(row, requiredColumnIndexes, expectedFieldCount) {
+  const category = normalizeText(row[requiredColumnIndexes.get("Category")]);
+  const brand = normalizeText(row[requiredColumnIndexes.get("Brand")]);
+  const supplierSku = normalizeText(row[requiredColumnIndexes.get("Supplier SKU")]);
+  const productName = normalizeText(row[requiredColumnIndexes.get("Product Name")]);
+  const variantName = normalizeText(row[requiredColumnIndexes.get("Variant/Color")]);
+  const nonEmptyValues = row.map((value) => normalizeText(value)).filter(Boolean);
+  const missingLeadingRequiredColumn = !category || !brand || !supplierSku || !productName;
+  const fieldCountMismatch = row.length !== expectedFieldCount;
+  const likelyOrphanedFragment =
+    nonEmptyValues.length > 0 && missingLeadingRequiredColumn && (fieldCountMismatch || nonEmptyValues.length <= 2);
+
+  return {
+    fieldCount: row.length,
+    expectedFieldCount,
+    fieldCountMismatch,
+    missingLeadingRequiredColumn,
+    likelyOrphanedFragment,
+    category,
+    brand,
+    supplierSku,
+    productName,
+    variantName,
+    nonEmptyValues,
+  };
+}
+
 function stripRepeatedBrandPrefix(productName, brand) {
   let normalizedProductName = normalizeText(productName);
   const normalizedBrand = normalizeText(brand);
@@ -185,15 +229,27 @@ export function parseTeeCoGarmentSpreadsheet(text) {
     characterCount: normalizedText.length,
   });
 
-  const rows = parseCsv(normalizedText);
+  const { rows, diagnostics: csvDiagnostics } = parseCsv(normalizedText);
   if (!rows.length) {
     throw new Error("Spreadsheet is empty.");
   }
+
+  console.info("[teeCoGarmentSpreadsheet] csv parse diagnostics", {
+    source: "spreadsheet_import",
+    parserName: csvDiagnostics.parserName,
+    delimiter: csvDiagnostics.delimiter,
+    linebreak: csvDiagnostics.linebreak,
+    parsedRowCount: csvDiagnostics.rowCount,
+    maxFieldCount: csvDiagnostics.maxFieldCount,
+    parseErrorCount: csvDiagnostics.parseErrorCount,
+    fieldCountsByRow: csvDiagnostics.fieldCountsByRow,
+  });
 
   const { requiredColumnIndexes, optionalColumnIndexes } = validateHeader(rows[0]);
   const headerRow = rows[0].map((value, index) =>
     index === 0 ? normalizeText(value).replace(/^\uFEFF/, "") : normalizeText(value)
   );
+  const expectedFieldCount = headerRow.length;
 
   const groupedGarments = new Map();
   const warnings = [];
@@ -208,6 +264,7 @@ export function parseTeeCoGarmentSpreadsheet(text) {
       return;
     }
 
+    const rowDiagnostics = detectMalformedOrphanRow(row, requiredColumnIndexes, expectedFieldCount);
     const rawVariantCell = row[requiredColumnIndexes.get("Variant/Color")];
     const rawSizesCell = row[optionalColumnIndexes.get("Sizes")];
     const rawRowObject = headerRow.reduce((accumulator, headerName, columnIndex) => {
@@ -228,9 +285,21 @@ export function parseTeeCoGarmentSpreadsheet(text) {
     const normalizedProductName = stripRepeatedBrandPrefix(productName, brand);
     const parsedColors = Array.from(new Set(splitMultilineList(variantName)));
     const parsedSizes = Array.from(new Set(splitCommaList(sizesCell)));
+    const csvContextSnippet = buildCsvContextSnippet(normalizedText, [
+      supplierSku,
+      productName,
+      variantName,
+      rawVariantCell,
+    ]);
 
     console.info("[teeCoGarmentSpreadsheet] raw spreadsheet row", {
       rowNumber,
+      fieldCount: rowDiagnostics.fieldCount,
+      expectedFieldCount: rowDiagnostics.expectedFieldCount,
+      fieldCountMismatch: rowDiagnostics.fieldCountMismatch,
+      likelyOrphanedFragment: rowDiagnostics.likelyOrphanedFragment,
+      missingLeadingRequiredColumn: rowDiagnostics.missingLeadingRequiredColumn,
+      nonEmptyValues: rowDiagnostics.nonEmptyValues,
       rawRowObject,
       rawRow: row,
       rawVariantCell,
@@ -253,7 +322,25 @@ export function parseTeeCoGarmentSpreadsheet(text) {
       normalizedRow,
       normalizedVariantCell: variantName,
       normalizedSizesCell: sizesCell,
+      rawCsvContextAnchor: csvContextSnippet.anchor,
+      rawCsvContextOffsets: {
+        start: csvContextSnippet.start,
+        end: csvContextSnippet.end,
+      },
+      rawCsvContextSnippet: csvContextSnippet.rawSnippet,
+      rawCsvContextVisibleSnippet: csvContextSnippet.visibleSnippet,
     });
+
+    if (rowDiagnostics.likelyOrphanedFragment) {
+      console.warn("[teeCoGarmentSpreadsheet] detected likely orphaned row fragment", {
+        rowNumber,
+        fieldCount: rowDiagnostics.fieldCount,
+        expectedFieldCount: rowDiagnostics.expectedFieldCount,
+        nonEmptyValues: rowDiagnostics.nonEmptyValues,
+        rawRow: row,
+        rawCsvContextVisibleSnippet: csvContextSnippet.visibleSnippet,
+      });
+    }
 
     if (!category) {
       skippedMalformedRowCount += 1;
@@ -303,6 +390,10 @@ export function parseTeeCoGarmentSpreadsheet(text) {
       parsedColors,
       parsedSizes,
       groupedVariantSourceMode: parsedColors.length > 1 ? "single_row_multi_color_cell" : "one_color_per_row",
+      multilineVariantCellSurvivedParsing:
+        typeof rawVariantCell === "string" && rawVariantCell.includes("\n") && parsedColors.length > 1,
+      multilineSizesCellSurvivedParsing:
+        typeof rawSizesCell === "string" && rawSizesCell.includes("\n") && parsedSizes.length > 1,
     });
 
     const garmentKey = `${normalizeKey(brand)}::${normalizeKey(normalizedProductName)}`;
@@ -451,7 +542,11 @@ export function parseTeeCoGarmentSpreadsheet(text) {
 
   console.info("[teeCoGarmentSpreadsheet] parse success", {
     source: "spreadsheet_import",
-    parserMode: "csv_text_only",
+    parserMode: "papaparse_multiline_quoted_csv",
+    csvParser: csvDiagnostics.parserName,
+    csvDelimiter: csvDiagnostics.delimiter,
+    csvLinebreak: csvDiagnostics.linebreak,
+    parsedCsvRowCount: csvDiagnostics.rowCount,
     garmentCount: parsedResult.garmentCount,
     rowCount: parsedResult.rowCount,
     validRowCount: parsedResult.validRowCount,
