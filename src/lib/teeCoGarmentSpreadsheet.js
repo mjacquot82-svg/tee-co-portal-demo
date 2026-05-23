@@ -125,14 +125,30 @@ function splitMultilineList(value) {
 
 function splitCommaList(value) {
   return String(value || "")
-    .split(",")
+    .split(/[\r?\n,;|]+/)
     .map((item) => normalizeText(item))
     .filter(Boolean);
 }
 
+function stripRepeatedBrandPrefix(productName, brand) {
+  let normalizedProductName = normalizeText(productName);
+  const normalizedBrand = normalizeText(brand);
+  const normalizedBrandKey = normalizeKey(normalizedBrand);
+
+  if (!normalizedProductName || !normalizedBrandKey) {
+    return normalizedProductName;
+  }
+
+  while (normalizeKey(normalizedProductName).startsWith(`${normalizedBrandKey} ${normalizedBrandKey} `)) {
+    normalizedProductName = normalizeText(normalizedProductName.slice(normalizedBrand.length).trim());
+  }
+
+  return normalizedProductName;
+}
+
 function buildGarmentTitle(brand, productName) {
   const normalizedBrand = normalizeText(brand);
-  const normalizedProductName = normalizeText(productName);
+  const normalizedProductName = stripRepeatedBrandPrefix(productName, brand);
   const normalizedBrandKey = normalizeKey(normalizedBrand);
   const normalizedProductNameKey = normalizeKey(normalizedProductName);
 
@@ -192,8 +208,16 @@ export function parseTeeCoGarmentSpreadsheet(text) {
     }
 
     const [category, brand, supplierSku, productName, variantName] = normalizedRow;
+    const normalizedProductName = stripRepeatedBrandPrefix(productName, brand);
     const parsedColors = Array.from(new Set(splitMultilineList(variantName)));
     const parsedSizes = Array.from(new Set(splitCommaList(sizesCell)));
+
+    console.info("[teeCoGarmentSpreadsheet] raw spreadsheet row", {
+      rowNumber,
+      rawRow: row,
+      normalizedRow,
+      rawSizesCell: sizesCell,
+    });
 
     if (!category) {
       skippedMalformedRowCount += 1;
@@ -242,7 +266,7 @@ export function parseTeeCoGarmentSpreadsheet(text) {
       parsedSizes,
     });
 
-    const garmentKey = `${normalizeKey(brand)}::${normalizeKey(productName)}`;
+    const garmentKey = `${normalizeKey(brand)}::${normalizeKey(normalizedProductName)}`;
     const existingGroup = groupedGarments.get(garmentKey);
 
     if (!existingGroup) {
@@ -250,8 +274,8 @@ export function parseTeeCoGarmentSpreadsheet(text) {
         id: `import-${groupedGarments.size + 1}`,
         category,
         brand,
-        productName,
-        title: buildGarmentTitle(brand, productName),
+        productName: normalizedProductName,
+        title: buildGarmentTitle(brand, normalizedProductName),
         rowNumbers: [rowNumber],
         sizes: [],
         variants: [],
@@ -264,7 +288,10 @@ export function parseTeeCoGarmentSpreadsheet(text) {
       if (normalizeKey(existingGroup.category) !== normalizeKey(category)) {
         skippedMalformedRowCount += 1;
         warnings.push(
-          buildRowError(rowNumber, `Skipped row because Category does not match other rows for ${brand} ${productName}.`)
+          buildRowError(
+            rowNumber,
+            `Skipped row because Category does not match other rows for ${brand} ${normalizedProductName}.`
+          )
         );
         existingGroup.rowNumbers = existingGroup.rowNumbers.filter((value) => value !== rowNumber);
         return;
@@ -320,6 +347,8 @@ export function parseTeeCoGarmentSpreadsheet(text) {
       parsedColorCount: parsedColors.length,
       parsedSizeCount: parsedSizes.length,
       generatedVariantCount: group.variants.length,
+      parsedColors,
+      parsedSizes,
     });
 
     validRowCount += 1;
@@ -384,6 +413,7 @@ export function parseTeeCoGarmentSpreadsheet(text) {
     warningCount: parsedResult.warningCount,
     skippedEmptyRowCount: parsedResult.skippedEmptyRowCount,
     skippedMalformedRowCount: parsedResult.skippedMalformedRowCount,
+    garments,
   });
 
   return parsedResult;

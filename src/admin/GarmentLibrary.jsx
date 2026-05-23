@@ -570,6 +570,17 @@ function buildGarmentDebugContext(item, usage, extraContext = {}) {
   };
 }
 
+function buildGarmentFilterLogContext(entry, extraContext = {}) {
+  return {
+    garmentId: entry?.item?.id,
+    garmentTitle: entry?.item?.title,
+    garmentCategory: normalizeText(entry?.categoryName),
+    garmentBrand: normalizeText(entry?.brandName),
+    linkedProductCount: entry?.usage?.linkedProductCount ?? 0,
+    ...extraContext,
+  };
+}
+
 function summarizeGarmentBrowseItems(entries = []) {
   return entries.reduce(
     (summary, entry) => {
@@ -1118,185 +1129,129 @@ export default function GarmentLibrary() {
   const filteredGarments = useMemo(() => {
     try {
       const normalizedSearch = deferredSearchTerm.trim().toLowerCase();
-      const discardReasonCounts = {
-        "missing-entry": 0,
-        "missing-item": 0,
-        "missing-title": 0,
-        "missing-search-index": 0,
-        "missing-category-name": 0,
-        "missing-brand-name": 0,
-        "inactive-garment": 0,
-        "category-mismatch": 0,
-        "brand-mismatch": 0,
-        "storefront-usage-mismatch": 0,
-        "search-mismatch": 0,
-      };
-      console.log("[GarmentLibrary] entering filteredGarments derivation", {
-        inputCount: garmentBrowseItems.length,
+      const discardReasonCounts = {};
+      const activeFilters = {
         categoryFilter,
         brandFilter,
         storefrontUsageFilter,
-        normalizedSearch,
+        searchTerm: normalizedSearch,
         sortOption,
+      };
+      const normalizedCategoryFilter = normalizeTextKey(categoryFilter);
+      const normalizedBrandFilter = normalizeTextKey(brandFilter);
+
+      console.log("[GarmentLibrary] entering filteredGarments derivation", {
+        inputCount: garmentBrowseItems.length,
+        activeFilters,
       });
       console.debug("[GarmentLibrary] filteredGarments derivation start", {
         inputCount: garmentBrowseItems.length,
-        filters: {
-          categoryFilter,
-          brandFilter,
-          storefrontUsageFilter,
-          normalizedSearch,
-          sortOption,
-        },
+        activeFilters,
       });
-      const nextItems = garmentBrowseItems.filter((entry, index) => {
-        try {
-          const discardReasons = [];
-          const normalizedCategoryName = normalizeTextKey(entry?.categoryName);
-          const normalizedCategoryFilter = normalizeTextKey(categoryFilter);
-          const normalizedBrandName = normalizeTextKey(entry?.brandName);
-          const normalizedBrandFilter = normalizeTextKey(brandFilter);
-          const linkedProductCount = entry?.usage?.linkedProductCount ?? 0;
-          const searchIndex = typeof entry?.searchIndex === "string" ? entry.searchIndex : "";
-          const searchIndexIncludesTerm = normalizedSearch ? searchIndex.includes(normalizedSearch) : true;
-          const storefrontUsageMatches = getGarmentStorefrontUsageMatch(storefrontUsageFilter, entry?.usage);
-          const isCategoryFilterActive = categoryFilter !== "all";
-          const isBrandFilterActive = brandFilter !== "all";
-          const predicateResults = {
-            hasEntry: Boolean(entry),
-            hasItem: Boolean(entry?.item),
-            hasTitle: Boolean(normalizeText(entry?.item?.title)),
-            hasCategoryName: Boolean(normalizeText(entry?.categoryName)),
-            hasBrandName: Boolean(normalizeText(entry?.brandName)),
-            isInactiveGarment: entry?.item?.active === false,
-            hasSearchIndex: Boolean(normalizeText(searchIndex)),
-            categoryFilterActive: isCategoryFilterActive,
-            categoryFilterPassed:
-              !isCategoryFilterActive || normalizedCategoryName === normalizedCategoryFilter,
-            brandFilterActive: isBrandFilterActive,
-            brandFilterPassed: !isBrandFilterActive || normalizedBrandName === normalizedBrandFilter,
-            storefrontUsageFilterActive: storefrontUsageFilter !== "all",
-            storefrontUsageFilterPassed: storefrontUsageMatches,
-            searchFilterActive: Boolean(normalizedSearch),
-            searchFilterPassed: searchIndexIncludesTerm,
-          };
-          const diagnosticSnapshot = {
-            index,
-            garmentId: entry?.item?.id,
-            title: entry?.item?.title,
-            subtitle: entry?.subtitle,
-            predicateResults,
-            normalizedFields: {
-              categoryName: normalizedCategoryName,
-              categoryFilter: normalizedCategoryFilter,
-              brandName: normalizedBrandName,
-              brandFilter: normalizedBrandFilter,
-              searchIndex,
-              normalizedSearch,
-              storefrontUsageFilter,
-              linkedProductCount,
-            },
-          };
+      const nextItems = garmentBrowseItems
+        .filter((entry, index) => {
+          try {
+            const include = Boolean(entry?.item) && entry.item.active !== false && Boolean(normalizeText(entry.item.title));
+            const exclusionReason = include
+              ? "included-in-base-set"
+              : !entry
+                ? "missing-entry"
+                : !entry.item
+                  ? "missing-item"
+                  : entry.item.active === false
+                    ? "inactive-garment"
+                    : "missing-title";
 
-          if (!predicateResults.hasEntry) {
-            discardReasons.push("missing-entry");
-          }
+            if (!include) {
+              discardReasonCounts[exclusionReason] = (discardReasonCounts[exclusionReason] || 0) + 1;
+            }
 
-          if (!predicateResults.hasItem) {
-            discardReasons.push("missing-item");
-          }
+            console.debug("[GarmentLibrary] garment base filter decision", buildGarmentFilterLogContext(entry, {
+              index,
+              activeFilters,
+              included: include,
+              reason: exclusionReason,
+            }));
 
-          if (!predicateResults.hasTitle) {
-            discardReasons.push("missing-title");
-          }
-
-          if (isCategoryFilterActive && !predicateResults.hasCategoryName) {
-            discardReasons.push("missing-category-name");
-          }
-
-          if (isBrandFilterActive && !predicateResults.hasBrandName) {
-            discardReasons.push("missing-brand-name");
-          }
-
-          if (predicateResults.isInactiveGarment) {
-            discardReasons.push("inactive-garment");
-          }
-
-          if (predicateResults.searchFilterActive && !predicateResults.hasSearchIndex) {
-            discardReasons.push("missing-search-index");
-          }
-
-          if (!predicateResults.categoryFilterPassed) {
-            discardReasons.push("category-mismatch");
-          }
-
-          if (!predicateResults.brandFilterPassed) {
-            discardReasons.push("brand-mismatch");
-          }
-
-          if (!predicateResults.storefrontUsageFilterPassed) {
-            discardReasons.push("storefront-usage-mismatch");
-          }
-
-          if (!predicateResults.searchFilterPassed) {
-            discardReasons.push("search-mismatch");
-          }
-
-          if (discardReasons.length > 0) {
-            discardReasons.forEach((reason) => {
-              discardReasonCounts[reason] = (discardReasonCounts[reason] || 0) + 1;
-            });
-            console.debug("[GarmentLibrary] garment discarded by filteredGarments", {
-              discardReasons,
-              discardReasonText: discardReasons.map((reason) => {
-                if (reason === "inactive-garment") return "failed activeOnly filter";
-                if (reason === "category-mismatch") return "failed category filter";
-                if (reason === "brand-mismatch") return "failed brand filter";
-                if (reason === "storefront-usage-mismatch") return "failed storefront usage filter";
-                if (reason === "search-mismatch") return "failed search filter";
-                if (reason === "missing-category-name") return "missing normalized field: categoryName";
-                if (reason === "missing-brand-name") return "missing normalized field: brandName";
-                if (reason === "missing-search-index") return "missing normalized field: searchIndex";
-                if (reason === "missing-title") return "missing normalized field: title";
-                if (reason === "missing-item") return "invalid derived status: missing item";
-                if (reason === "missing-entry") return "invalid derived status: missing entry";
-                return reason;
-              }),
-              ...diagnosticSnapshot,
-              filters: {
-                categoryFilter,
-                brandFilter,
-                storefrontUsageFilter,
-                normalizedSearch,
-              },
+            return include;
+          } catch (error) {
+            logGarmentDerivationError("visible garment base filtering", error, {
+              index,
+              activeFilters,
+              entry,
             });
             return false;
           }
+        })
+        .filter((entry, index) => {
+          const normalizedCategoryName = normalizeTextKey(entry?.categoryName);
+          const include =
+            categoryFilter === "all" || normalizedCategoryName === normalizedCategoryFilter;
 
-          console.debug("[GarmentLibrary] garment passed filteredGarments", {
-            discardReasons,
-            discardReasonText: ["passed all filteredGarments predicates"],
-            ...diagnosticSnapshot,
-            filters: {
-              categoryFilter,
-              brandFilter,
-              storefrontUsageFilter,
-              normalizedSearch,
-            },
-          });
-          return true;
-        } catch (error) {
-          logGarmentDerivationError("visible garment filtering", error, {
+          if (!include) {
+            discardReasonCounts["category-mismatch"] = (discardReasonCounts["category-mismatch"] || 0) + 1;
+          }
+
+          console.debug("[GarmentLibrary] garment category filter decision", buildGarmentFilterLogContext(entry, {
             index,
-            categoryFilter,
-            brandFilter,
-            storefrontUsageFilter,
-            normalizedSearch,
-            entry,
-          });
-          return false;
-        }
-      });
+            activeFilters,
+            included: include,
+            reason: include ? "category-match" : "category-mismatch",
+          }));
+
+          return include;
+        })
+        .filter((entry, index) => {
+          const normalizedBrandName = normalizeTextKey(entry?.brandName);
+          const include = brandFilter === "all" || normalizedBrandName === normalizedBrandFilter;
+
+          if (!include) {
+            discardReasonCounts["brand-mismatch"] = (discardReasonCounts["brand-mismatch"] || 0) + 1;
+          }
+
+          console.debug("[GarmentLibrary] garment brand filter decision", buildGarmentFilterLogContext(entry, {
+            index,
+            activeFilters,
+            included: include,
+            reason: include ? "brand-match" : "brand-mismatch",
+          }));
+
+          return include;
+        })
+        .filter((entry, index) => {
+          const include = getGarmentStorefrontUsageMatch(storefrontUsageFilter, entry?.usage || EMPTY_GARMENT_USAGE);
+
+          if (!include) {
+            discardReasonCounts["storefront-usage-mismatch"] =
+              (discardReasonCounts["storefront-usage-mismatch"] || 0) + 1;
+          }
+
+          console.debug("[GarmentLibrary] garment storefront usage filter decision", buildGarmentFilterLogContext(entry, {
+            index,
+            activeFilters,
+            included: include,
+            reason: include ? "storefront-usage-match" : "storefront-usage-mismatch",
+          }));
+
+          return include;
+        })
+        .filter((entry, index) => {
+          const searchIndex = typeof entry?.searchIndex === "string" ? entry.searchIndex : "";
+          const include = !normalizedSearch || searchIndex.includes(normalizedSearch);
+
+          if (!include) {
+            discardReasonCounts["search-mismatch"] = (discardReasonCounts["search-mismatch"] || 0) + 1;
+          }
+
+          console.debug("[GarmentLibrary] garment search filter decision", buildGarmentFilterLogContext(entry, {
+            index,
+            activeFilters,
+            included: include,
+            reason: include ? "search-match" : "search-mismatch",
+          }));
+
+          return include;
+        });
 
       try {
         nextItems.sort((left, right) => {
@@ -1333,12 +1288,17 @@ export default function GarmentLibrary() {
         outputCount: nextItems.length,
         discardedCount: garmentBrowseItems.length - nextItems.length,
         discardReasonCounts,
+        activeFilters,
+        finalFilteredArrayCount: nextItems.length,
+        finalFilteredGarmentIds: nextItems.map((entry) => entry?.item?.id).filter(Boolean),
       });
       console.log("[GarmentLibrary] leaving filteredGarments derivation", {
         inputCount: garmentBrowseItems.length,
         outputCount: nextItems.length,
         discardedCount: garmentBrowseItems.length - nextItems.length,
         discardReasonCounts,
+        activeFilters,
+        finalFilteredArrayCount: nextItems.length,
       });
 
       return nextItems;
@@ -1357,39 +1317,6 @@ export default function GarmentLibrary() {
   const hasActiveGarmentFilters = Boolean(
     searchTerm.trim() || categoryFilter !== "all" || brandFilter !== "all" || storefrontUsageFilter !== "all"
   );
-  const liveGarmentEntries = useMemo(
-    () =>
-      liveGarments
-        .filter((item) => item?.active !== false)
-        .map((item) => {
-          const resolvedBrandId = resolveGarmentBrandId(item, garmentModelMap);
-          const brand = brandMap.get(resolvedBrandId);
-          const model = garmentModelMap.get(item.garment_model_lookup_id);
-
-          return {
-            item,
-            usage: garmentUsageMap.get(item.id) || EMPTY_GARMENT_USAGE,
-            brandId: resolvedBrandId,
-            brandName: normalizeText(brand?.name),
-            categoryName: normalizeText(categoryMap.get(item.category_lookup_id)?.name),
-            modelLabel: normalizeText(model?.display_name),
-            modelCode: normalizeText(model?.model_code),
-            imageSrc: normalizeText(item?.image),
-            subtitle: buildGarmentLibraryLabel(item, brands, categories, garmentModels),
-            searchIndex: [
-              item.title,
-              brand?.name,
-              model?.display_name,
-              model?.model_code,
-              ...((item.variants || []).map((variant) => variant?.name) || []),
-            ]
-              .filter(Boolean)
-              .join(" ")
-              .toLowerCase(),
-          };
-        }),
-    [brandMap, brands, categories, categoryMap, garmentModelMap, garmentModels, garmentUsageMap, liveGarments]
-  );
   const activeGarmentEntries = useMemo(
     () => garmentBrowseItems.filter((entry) => entry?.item?.active !== false),
     [garmentBrowseItems]
@@ -1397,22 +1324,8 @@ export default function GarmentLibrary() {
   const activeGarmentCount = activeGarmentEntries.length;
   const shouldShowLoadingState = isGarmentLibraryLoading && activeGarmentCount === 0;
   const shouldShowEmptyState = hasFinishedInitialLoad && activeGarmentCount === 0;
-  const garmentEntriesForRender = useMemo(() => {
-    if (filteredGarments.length > 0) {
-      return filteredGarments;
-    }
-
-    if (liveGarmentEntries.length > 0) {
-      return liveGarmentEntries;
-    }
-
-    if (activeGarmentCount > 0) {
-      return activeGarmentEntries;
-    }
-
-    return EMPTY_LIST;
-  }, [activeGarmentCount, activeGarmentEntries, filteredGarments, liveGarmentEntries]);
-  const filteredGarmentCount = filteredGarments.length;
+  const garmentEntriesForRender = filteredGarments;
+  const filteredGarmentCount = garmentEntriesForRender.length;
   const brandSelectOptions = useMemo(
     () => {
       try {
