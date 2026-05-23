@@ -589,6 +589,10 @@ export default function GarmentLibrary() {
   const garmentBrowseItems = useMemo(
     () => {
       try {
+        console.log("[GarmentLibrary] entering garmentBrowseItems derivation", {
+          garmentsIsArray: Array.isArray(garments),
+          garmentCount: Array.isArray(garments) ? garments.length : "non-array",
+        });
         console.debug("[GarmentLibrary] garmentBrowseItems derivation start", {
           inputCount: Array.isArray(garments) ? garments.length : "non-array",
           garmentIds: Array.isArray(garments) ? garments.map((item) => item?.id) : [],
@@ -690,6 +694,11 @@ export default function GarmentLibrary() {
           normalizationWarningCount: normalizationWarnings.length,
           outputSummary: summarizeGarmentBrowseItems(mappedItems),
         });
+        console.log("[GarmentLibrary] leaving garmentBrowseItems derivation", {
+          inputCount: Array.isArray(garments) ? garments.length : 0,
+          outputCount: mappedItems.length,
+          discardedCount: Math.max((Array.isArray(garments) ? garments.length : 0) - mappedItems.length, 0),
+        });
 
         return mappedItems;
       } catch (error) {
@@ -737,6 +746,14 @@ export default function GarmentLibrary() {
         "storefront-usage-mismatch": 0,
         "search-mismatch": 0,
       };
+      console.log("[GarmentLibrary] entering filteredGarments derivation", {
+        inputCount: garmentBrowseItems.length,
+        categoryFilter,
+        brandFilter,
+        storefrontUsageFilter,
+        normalizedSearch,
+        sortOption,
+      });
       console.debug("[GarmentLibrary] filteredGarments derivation start", {
         inputCount: garmentBrowseItems.length,
         filters: {
@@ -842,6 +859,12 @@ export default function GarmentLibrary() {
       }
 
       console.debug("[GarmentLibrary] filteredGarments derivation complete", {
+        inputCount: garmentBrowseItems.length,
+        outputCount: nextItems.length,
+        discardedCount: garmentBrowseItems.length - nextItems.length,
+        discardReasonCounts,
+      });
+      console.log("[GarmentLibrary] leaving filteredGarments derivation", {
         inputCount: garmentBrowseItems.length,
         outputCount: nextItems.length,
         discardedCount: garmentBrowseItems.length - nextItems.length,
@@ -999,8 +1022,18 @@ export default function GarmentLibrary() {
   }, [form.variants, variantSearch]);
   const garmentCardNodes = useMemo(() => {
     try {
+      console.log("[GarmentLibrary] entering garmentCardNodes derivation", {
+        filteredGarmentCount: filteredGarments.length,
+        editingId,
+        activeWorkspace,
+      });
       return filteredGarments.map(({ item, subtitle, usage }, index) => {
         try {
+          console.log("[GarmentLibrary] mapping garment card node", {
+            index,
+            garmentId: item?.id,
+            title: item?.title,
+          });
           return (
             <GarmentLibraryCard
               key={item.id}
@@ -1042,6 +1075,13 @@ export default function GarmentLibrary() {
       return EMPTY_LIST;
     }
   }, [activeWorkspace, editingId, filteredGarments]);
+  useEffect(() => {
+    console.log("[GarmentLibrary] leaving garmentCardNodes derivation", {
+      filteredGarmentCount,
+      garmentCardNodeCount: garmentCardNodes.length,
+      renderedNonNullCardCount: garmentCardNodes.filter(Boolean).length,
+    });
+  }, [filteredGarmentCount, garmentCardNodes]);
   useEffect(() => {
     console.debug("[GarmentLibrary] final rendered garment card count", {
       renderedCardCount: garmentCardNodes.length,
@@ -2026,14 +2066,32 @@ export default function GarmentLibrary() {
                 filteredGarmentCount: filteredGarments.length,
                 garmentCardNodeCount: garmentCardNodes.length,
               })}
-              {filteredGarments.length ? (
-                garmentCardNodes
-              ) : (
-                <div className="products-empty-state">
-                  <strong>No garments match current filters.</strong>
-                  <span>Adjust search, category, brand, or storefront usage filters to broaden the library view.</span>
-                </div>
-              )}
+              {(() => {
+                console.log("[GarmentLibrary] before filteredGarments.length branch", {
+                  filteredGarmentCount: filteredGarments.length,
+                  garmentCardNodeCount: garmentCardNodes.length,
+                });
+
+                if (filteredGarments.length) {
+                  console.log("[GarmentLibrary] taking garmentCardNodes branch", {
+                    filteredGarmentCount: filteredGarments.length,
+                    garmentCardNodeCount: garmentCardNodes.length,
+                  });
+                  return garmentCardNodes;
+                }
+
+                console.log("[GarmentLibrary] taking empty-state branch", {
+                  filteredGarmentCount: filteredGarments.length,
+                  garmentCardNodeCount: garmentCardNodes.length,
+                  hasActiveGarmentFilters,
+                });
+                return (
+                  <div className="products-empty-state">
+                    <strong>No garments match current filters.</strong>
+                    <span>Adjust search, category, brand, or storefront usage filters to broaden the library view.</span>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </section>
