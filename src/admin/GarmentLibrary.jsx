@@ -327,6 +327,40 @@ function logGarmentDerivationError(stage, error, context = {}) {
   console.error(`[GarmentLibrary] ${stage} context`, context);
 }
 
+function summarizeGarmentBrowseItems(entries = []) {
+  return entries.reduce(
+    (summary, entry) => {
+      if (!entry?.item) {
+        summary.missingItem += 1;
+        return summary;
+      }
+
+      if (entry.item.active === false) summary.inactive += 1;
+      else summary.active += 1;
+
+      if (!normalizeText(entry.item.title)) summary.missingTitle += 1;
+      if (!normalizeText(entry.brandId)) summary.missingBrandId += 1;
+      if (!normalizeText(entry.brandName)) summary.missingBrandName += 1;
+      if (!normalizeText(entry.categoryName)) summary.missingCategoryName += 1;
+      if (!normalizeText(entry.modelLabel) && !normalizeText(entry.modelCode)) summary.missingModelDetails += 1;
+      if (!normalizeText(entry.searchIndex)) summary.emptySearchIndex += 1;
+
+      return summary;
+    },
+    {
+      active: 0,
+      inactive: 0,
+      missingItem: 0,
+      missingTitle: 0,
+      missingBrandId: 0,
+      missingBrandName: 0,
+      missingCategoryName: 0,
+      missingModelDetails: 0,
+      emptySearchIndex: 0,
+    }
+  );
+}
+
 const GarmentLibraryCard = memo(function GarmentLibraryCard({
   item,
   isSelected,
@@ -336,7 +370,7 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
   onRemove,
 }) {
   const [hasImageError, setHasImageError] = useState(false);
-  const imageSrc = normalizeText(item.imageSrc);
+  const imageSrc = normalizeText(item.image || item.imageSrc);
   const showUploadedImage = Boolean(imageSrc) && !hasImageError;
 
   useEffect(() => {
@@ -499,6 +533,12 @@ export default function GarmentLibrary() {
       initialGarmentModelCount: garmentModels.length,
     });
   }, []);
+  useEffect(() => {
+    console.debug("[GarmentLibrary] raw garments entering component", {
+      garmentCount: Array.isArray(garments) ? garments.length : "non-array",
+      garments,
+    });
+  }, [garments]);
 
   const categoryMap = useMemo(() => {
     try {
@@ -549,14 +589,19 @@ export default function GarmentLibrary() {
   const garmentBrowseItems = useMemo(
     () => {
       try {
-        return garments.map((item, index) => {
+        console.debug("[GarmentLibrary] garmentBrowseItems derivation start", {
+          inputCount: Array.isArray(garments) ? garments.length : "non-array",
+          garmentIds: Array.isArray(garments) ? garments.map((item) => item?.id) : [],
+        });
+
+        const normalizationWarnings = [];
+        const mappedItems = garments.map((item, index) => {
           try {
             const resolvedBrandId = resolveGarmentBrandId(item, garmentModelMap);
             const brand = brandMap.get(resolvedBrandId);
             const model = garmentModelMap.get(item.garment_model_lookup_id);
             const usage = garmentUsageMap.get(item.id) || EMPTY_GARMENT_USAGE;
-
-            return {
+            const browseItem = {
               item,
               usage,
               brandId: resolvedBrandId,
@@ -580,6 +625,53 @@ export default function GarmentLibrary() {
                 .join(" ")
                 .toLowerCase(),
             };
+            const warningReasons = [];
+
+            if (item?.active === false) warningReasons.push("inactive-garment");
+            if (!normalizeText(item?.title)) warningReasons.push("missing-title");
+            if (!normalizeText(resolvedBrandId)) warningReasons.push("missing-brand-id");
+            if (!normalizeText(browseItem.brandName)) warningReasons.push("missing-brand-name");
+            if (!normalizeText(browseItem.categoryName)) warningReasons.push("missing-category-name");
+            if (!normalizeText(browseItem.modelLabel) && !normalizeText(browseItem.modelCode)) {
+              warningReasons.push("missing-model-details");
+            }
+            if (!normalizeText(browseItem.searchIndex)) warningReasons.push("empty-search-index");
+
+            console.debug("[GarmentLibrary] garmentBrowseItems mapped garment", {
+              index,
+              garmentId: item?.id,
+              title: item?.title,
+              active: item?.active !== false,
+              resolvedBrandId,
+              resolvedBrandName: browseItem.brandName,
+              resolvedCategoryName: browseItem.categoryName,
+              modelCode: browseItem.modelCode,
+              variantCount: browseItem.variantCount,
+              linkedProductCount: usage.linkedProductCount,
+              hasImage: Boolean(browseItem.imageSrc),
+            });
+
+            if (warningReasons.length > 0) {
+              const warningPayload = {
+                index,
+                garmentId: item?.id,
+                title: item?.title,
+                warningReasons,
+                normalizedSnapshot: {
+                  active: item?.active !== false,
+                  brandId: browseItem.brandId,
+                  brandName: browseItem.brandName,
+                  categoryName: browseItem.categoryName,
+                  modelLabel: browseItem.modelLabel,
+                  modelCode: browseItem.modelCode,
+                  searchIndex: browseItem.searchIndex,
+                },
+              };
+              normalizationWarnings.push(warningPayload);
+              console.warn("[GarmentLibrary] garmentBrowseItems normalization warnings", warningPayload);
+            }
+
+            return browseItem;
           } catch (error) {
             logGarmentDerivationError("garmentBrowseItems normalized mapping", error, {
               index,
@@ -590,6 +682,16 @@ export default function GarmentLibrary() {
             return null;
           }
         }).filter(Boolean);
+
+        console.debug("[GarmentLibrary] garmentBrowseItems derivation complete", {
+          inputCount: Array.isArray(garments) ? garments.length : 0,
+          outputCount: mappedItems.length,
+          discardedCount: Math.max((Array.isArray(garments) ? garments.length : 0) - mappedItems.length, 0),
+          normalizationWarningCount: normalizationWarnings.length,
+          outputSummary: summarizeGarmentBrowseItems(mappedItems),
+        });
+
+        return mappedItems;
       } catch (error) {
         logGarmentDerivationError("garmentBrowseItems useMemo", error, {
           garments,
@@ -629,22 +731,73 @@ export default function GarmentLibrary() {
   const filteredGarments = useMemo(() => {
     try {
       const normalizedSearch = deferredSearchTerm.trim().toLowerCase();
+      const discardReasonCounts = {
+        "category-mismatch": 0,
+        "brand-mismatch": 0,
+        "storefront-usage-mismatch": 0,
+        "search-mismatch": 0,
+      };
+      console.debug("[GarmentLibrary] filteredGarments derivation start", {
+        inputCount: garmentBrowseItems.length,
+        filters: {
+          categoryFilter,
+          brandFilter,
+          storefrontUsageFilter,
+          normalizedSearch,
+          sortOption,
+        },
+      });
       const nextItems = garmentBrowseItems.filter((entry, index) => {
         try {
+          const discardReasons = [];
+
           if (categoryFilter !== "all" && normalizeTextKey(entry.categoryName) !== normalizeTextKey(categoryFilter)) {
-            return false;
+            discardReasons.push("category-mismatch");
           }
 
           if (brandFilter !== "all" && normalizeTextKey(entry.brandName) !== normalizeTextKey(brandFilter)) {
-            return false;
+            discardReasons.push("brand-mismatch");
           }
 
           if (!getGarmentStorefrontUsageMatch(storefrontUsageFilter, entry.usage)) {
+            discardReasons.push("storefront-usage-mismatch");
+          }
+
+          if (normalizedSearch && !entry.searchIndex.includes(normalizedSearch)) {
+            discardReasons.push("search-mismatch");
+          }
+
+          if (discardReasons.length > 0) {
+            discardReasons.forEach((reason) => {
+              discardReasonCounts[reason] = (discardReasonCounts[reason] || 0) + 1;
+            });
+            console.debug("[GarmentLibrary] garment discarded by filteredGarments", {
+              index,
+              garmentId: entry?.item?.id,
+              title: entry?.item?.title,
+              discardReasons,
+              entrySnapshot: {
+                categoryName: entry?.categoryName,
+                brandName: entry?.brandName,
+                linkedProductCount: entry?.usage?.linkedProductCount,
+                searchIndex: entry?.searchIndex,
+              },
+              filters: {
+                categoryFilter,
+                brandFilter,
+                storefrontUsageFilter,
+                normalizedSearch,
+              },
+            });
             return false;
           }
 
-          if (!normalizedSearch) return true;
-          return entry.searchIndex.includes(normalizedSearch);
+          console.debug("[GarmentLibrary] garment passed filteredGarments", {
+            index,
+            garmentId: entry?.item?.id,
+            title: entry?.item?.title,
+          });
+          return true;
         } catch (error) {
           logGarmentDerivationError("visible garment filtering", error, {
             index,
@@ -687,6 +840,13 @@ export default function GarmentLibrary() {
           nextItems,
         });
       }
+
+      console.debug("[GarmentLibrary] filteredGarments derivation complete", {
+        inputCount: garmentBrowseItems.length,
+        outputCount: nextItems.length,
+        discardedCount: garmentBrowseItems.length - nextItems.length,
+        discardReasonCounts,
+      });
 
       return nextItems;
     } catch (error) {
@@ -772,6 +932,14 @@ export default function GarmentLibrary() {
     sortOption,
     storefrontUsageFilter,
   ]);
+  useEffect(() => {
+    console.debug("[GarmentLibrary] filter option counts", {
+      categoryFilterOptionsCount: categoryFilterOptions.length,
+      brandFilterOptionsCount: brandFilterOptions.length,
+      categoryFilterOptions,
+      brandFilterOptions,
+    });
+  }, [brandFilterOptions, categoryFilterOptions]);
   useEffect(() => {
     if (!brandSelectRef.current) return;
 
@@ -874,6 +1042,13 @@ export default function GarmentLibrary() {
       return EMPTY_LIST;
     }
   }, [activeWorkspace, editingId, filteredGarments]);
+  useEffect(() => {
+    console.debug("[GarmentLibrary] final rendered garment card count", {
+      renderedCardCount: garmentCardNodes.length,
+      renderedNonNullCardCount: garmentCardNodes.filter(Boolean).length,
+      filteredGarmentCount,
+    });
+  }, [filteredGarmentCount, garmentCardNodes]);
   const garmentPreviewMap = useMemo(() => buildGarmentMap(garments), [garments]);
   const previewGarments = useMemo(() => {
     if (!importPreview) return [];
