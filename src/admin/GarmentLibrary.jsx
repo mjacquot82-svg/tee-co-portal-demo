@@ -85,20 +85,67 @@ function buildVariantDraft() {
   };
 }
 
+function normalizeDelimitedTextList(value) {
+  if (Array.isArray(value)) {
+    return uniqueList(value.flatMap((item) => normalizeDelimitedTextList(item)));
+  }
+
+  const normalizedValue = normalizeText(value);
+  if (!normalizedValue) return [];
+
+  return uniqueList(
+    normalizedValue
+      .split(/[\n,;|/]+/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+  );
+}
+
+function splitCollapsedColorTokens(value) {
+  const normalizedValue = normalizeText(value);
+  if (!normalizedValue || /[\s,;|/]/.test(normalizedValue)) {
+    return normalizedValue ? [normalizedValue] : [];
+  }
+
+  const segments = normalizedValue.match(/[A-Z][a-z]+|[A-Z]{2,}(?=[A-Z][a-z]|\b)/g);
+  if (!Array.isArray(segments) || segments.length < 3) {
+    return normalizedValue ? [normalizedValue] : [];
+  }
+
+  return segments.map((segment) => normalizeText(segment)).filter(Boolean);
+}
+
+function extractVariantColorNames(variant = {}) {
+  const colorCandidates = [
+    variant.color,
+    variant.colors,
+    variant.color_name,
+    variant.colorName,
+    variant.variant_color,
+    variant.variant_colors,
+    variant.supplier_variant,
+    variant.supplierVariant,
+    variant.variant_name,
+    variant.name,
+  ];
+
+  const normalizedColors = uniqueList(
+    colorCandidates.flatMap((candidate) => {
+      const values = normalizeDelimitedTextList(candidate);
+      if (values.length > 1) return values;
+      return values.flatMap((value) => splitCollapsedColorTokens(value));
+    })
+  );
+
+  return normalizedColors;
+}
+
 function resolveVariantSupplierSku(variant = {}) {
   return normalizeText(variant.supplier_sku || variant.supplierSku || variant.sku);
 }
 
 function resolveVariantColorName(variant = {}) {
-  return normalizeText(
-    variant.color ||
-      variant.color_name ||
-      variant.colorName ||
-      variant.variant_color ||
-      variant.supplier_variant ||
-      variant.supplierVariant ||
-      variant.name
-  );
+  return extractVariantColorNames(variant)[0] || "";
 }
 
 function resolveVariantSizes(variant = {}) {
@@ -121,6 +168,7 @@ function normalizeVariantForEditor(variant = {}) {
   if (!name) return null;
 
   const color = resolveVariantColorName(variant) || name;
+  const colorOptions = extractVariantColorNames(variant);
   const sizes = resolveVariantSizes(variant);
   const supplierSku = resolveVariantSupplierSku(variant);
 
@@ -129,6 +177,7 @@ function normalizeVariantForEditor(variant = {}) {
     id: variant.id || `variant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name,
     color,
+    colors: colorOptions,
     sizes,
     size: normalizeText(variant.size) || sizes[0] || "",
     supplier_variant:
@@ -147,6 +196,7 @@ function normalizeVariantForSave(variant = {}) {
     ...normalizedVariant,
     name: normalizeText(normalizedVariant.name),
     color: resolveVariantColorName(normalizedVariant),
+    colors: extractVariantColorNames(normalizedVariant),
     sizes: resolveVariantSizes(normalizedVariant),
     size: normalizeText(normalizedVariant.size) || resolveVariantSizes(normalizedVariant)[0] || "",
     supplier_variant:
@@ -203,14 +253,82 @@ function buildUniqueSelectOptions(values = []) {
   return Array.from(optionsByKey.values()).sort((left, right) => left.label.localeCompare(right.label));
 }
 
-function buildVariantColorOptions(variants = []) {
-  return buildUniqueSelectOptions((variants || []).map((variant) => resolveVariantColorName(variant)));
+function buildImportedCapabilityMatrix(variants = [], sizeValues = [], sizeLookups = []) {
+  const fallbackSizes = sortSizesByLookup(uniqueList(sizeValues), sizeLookups);
+  const capabilitiesByColor = new Map();
+
+  (variants || [])
+    .map((variant) => normalizeVariantForEditor(variant))
+    .filter(Boolean)
+    .forEach((variant) => {
+      const colorNames = extractVariantColorNames(variant);
+      const variantSizes = resolveVariantSizes(variant);
+      const normalizedSizes = sortSizesByLookup(
+        uniqueList(variantSizes.length ? variantSizes : fallbackSizes),
+        sizeLookups
+      );
+      const supplierSku = resolveVariantSupplierSku(variant);
+
+      colorNames.forEach((colorName) => {
+        const colorKey = normalizeTextKey(colorName);
+        if (!colorKey) return;
+
+        const existingCapability = capabilitiesByColor.get(colorKey) || {
+          id: colorKey,
+          name: colorName,
+          sizes: [],
+          supplierSkus: [],
+        };
+
+        existingCapability.sizes = sortSizesByLookup(
+          uniqueList([...existingCapability.sizes, ...normalizedSizes]),
+          sizeLookups
+        );
+        existingCapability.supplierSkus = uniqueList(
+          supplierSku ? [...existingCapability.supplierSkus, supplierSku] : existingCapability.supplierSkus
+        );
+
+        capabilitiesByColor.set(colorKey, existingCapability);
+      });
+    });
+
+  return Array.from(capabilitiesByColor.values()).sort((left, right) => left.name.localeCompare(right.name));
 }
 
-function buildGarmentSizeOptions(sizeValues = [], sizeLookups = [], variants = []) {
-  const derivedVariantSizes = uniqueList((variants || []).flatMap((variant) => resolveVariantSizes(variant)));
-  const sortedSizes = sortSizesByLookup(uniqueList([...(sizeValues || []), ...derivedVariantSizes]), sizeLookups);
-  return buildUniqueSelectOptions(sortedSizes);
+function buildAutoGeneratedVariantsFromSelections(
+  capabilities = [],
+  selectedColors = [],
+  selectedSizes = [],
+  sizeLookups = []
+) {
+  const selectedColorKeys = new Set(selectedColors.map((value) => normalizeTextKey(value)).filter(Boolean));
+  const selectedSizeKeys = new Set(selectedSizes.map((value) => normalizeTextKey(value)).filter(Boolean));
+
+  return capabilities
+    .filter((capability) => selectedColorKeys.has(normalizeTextKey(capability.name)))
+    .map((capability) => {
+      const variantSizes = sortSizesByLookup(
+        capability.sizes.filter(
+          (size) => selectedSizeKeys.size === 0 || selectedSizeKeys.has(normalizeTextKey(size))
+        ),
+        sizeLookups
+      );
+
+      return {
+        id: `generated-${normalizeTextKey(capability.name)}`,
+        name: capability.name,
+        color: capability.name,
+        colors: [capability.name],
+        sizes: variantSizes,
+        size: variantSizes[0] || "",
+        supplier_variant: capability.name,
+        supplier_sku: capability.supplierSkus[0] || "",
+        sku: capability.supplierSkus[0] || "",
+        active: true,
+        auto_generated: true,
+      };
+    })
+    .filter((variant) => variant.sizes.length > 0 || selectedSizes.length === 0);
 }
 
 function inferImportedGarmentBrandName(item, model) {
@@ -720,8 +838,6 @@ export default function GarmentLibrary() {
   const [modelDraft, setModelDraft] = useState(buildModelDraftFromModel());
   const [createMode, setCreateMode] = useState("imported");
   const [selectedReusableGarmentId, setSelectedReusableGarmentId] = useState("");
-  const [selectedImportedColor, setSelectedImportedColor] = useState("");
-  const [selectedImportedSize, setSelectedImportedSize] = useState("");
   const [importError, setImportError] = useState("");
   const [importNotice, setImportNotice] = useState("");
   const [importWarnings, setImportWarnings] = useState([]);
@@ -1717,19 +1833,52 @@ export default function GarmentLibrary() {
       matchingImportedGarments.find((entry) => entry.item.id === selectedReusableGarmentId) || null,
     [matchingImportedGarments, selectedReusableGarmentId]
   );
-  const derivedImportedColorOptions = useMemo(
-    () => buildVariantColorOptions(selectedReusableGarmentEntry?.item?.variants || EMPTY_LIST),
-    [selectedReusableGarmentEntry]
-  );
-  const derivedImportedSizeOptions = useMemo(
+  const importedCapabilityMatrix = useMemo(
     () =>
-      buildGarmentSizeOptions(
+      buildImportedCapabilityMatrix(
+        selectedReusableGarmentEntry?.item?.variants || EMPTY_LIST,
         selectedReusableGarmentEntry?.item?.sizes || EMPTY_LIST,
-        sizes,
-        selectedReusableGarmentEntry?.item?.variants || EMPTY_LIST
+        sizes
       ),
     [selectedReusableGarmentEntry, sizes]
   );
+  const selectedImportedColorValues = useMemo(
+    () => uniqueList(form.variants.map((variant) => resolveVariantColorName(variant)).filter(Boolean)),
+    [form.variants]
+  );
+  const derivedImportedColorOptions = useMemo(
+    () =>
+      importedCapabilityMatrix.map((capability) => ({
+        id: capability.id,
+        name: capability.name,
+        meta: capability.supplierSkus.length ? `SKU ${capability.supplierSkus.join(", ")}` : "",
+      })),
+    [importedCapabilityMatrix]
+  );
+  const derivedImportedSizeOptions = useMemo(
+    () => {
+      const activeCapabilityKeys = new Set(
+        selectedImportedColorValues.map((value) => normalizeTextKey(value)).filter(Boolean)
+      );
+      const relevantCapabilities = activeCapabilityKeys.size
+        ? importedCapabilityMatrix.filter((capability) =>
+            activeCapabilityKeys.has(normalizeTextKey(capability.name))
+          )
+        : importedCapabilityMatrix;
+
+      return buildUniqueSelectOptions(
+        sortSizesByLookup(
+          uniqueList(relevantCapabilities.flatMap((capability) => capability.sizes)),
+          sizes
+        )
+      ).map((option) => ({
+        id: option.value,
+        name: option.label,
+      }));
+    },
+    [importedCapabilityMatrix, selectedImportedColorValues, sizes]
+  );
+  const isImportedCapabilityMode = Boolean(selectedReusableGarmentEntry);
   const isImportedSelectionLocked = Boolean(
     selectedReusableGarmentId && editingId === selectedReusableGarmentId
   );
@@ -1757,6 +1906,8 @@ export default function GarmentLibrary() {
       derivedModelCount: matchingImportedGarments.length,
       derivedColorCount: derivedImportedColorOptions.length,
       derivedSizeCount: derivedImportedSizeOptions.length,
+      selectedColorCount: selectedImportedColorValues.length,
+      selectedSizeCount: form.sizes.length,
     });
   }, [
     brandMap,
@@ -1765,17 +1916,11 @@ export default function GarmentLibrary() {
     derivedImportedSizeOptions.length,
     form.brand_lookup_id,
     form.category_lookup_id,
+    form.sizes.length,
     matchingImportedGarments.length,
+    selectedImportedColorValues.length,
     selectedReusableGarmentEntry,
   ]);
-  const currentSelectedImportedColor =
-    derivedImportedColorOptions.find((option) => option.value === selectedImportedColor)?.value ||
-    derivedImportedColorOptions[0]?.value ||
-    "";
-  const currentSelectedImportedSize =
-    derivedImportedSizeOptions.find((option) => option.value === selectedImportedSize)?.value ||
-    derivedImportedSizeOptions[0]?.value ||
-    "";
   const selectedGarmentLabel = getGarmentModeLabel(form.title || selectedGarment?.title);
   const placementSuggestionContext = useMemo(() => {
     const selectedCategory = categoryMap.get(form.category_lookup_id);
@@ -1875,8 +2020,6 @@ export default function GarmentLibrary() {
     setModelDraft(buildModelDraftFromModel());
     setCreateMode("imported");
     setSelectedReusableGarmentId("");
-    setSelectedImportedColor("");
-    setSelectedImportedSize("");
     setVariantSearch("");
   }
 
@@ -1904,8 +2047,6 @@ export default function GarmentLibrary() {
 
     setCreateMode("custom");
     setSelectedReusableGarmentId("");
-    setSelectedImportedColor("");
-    setSelectedImportedSize("");
     setEditingId(item.id);
     setForm(buildFormFromGarment(item, brands, categories, garmentModels, sizes));
     setHasCustomizedPlacements(
@@ -1928,13 +2069,21 @@ export default function GarmentLibrary() {
   function handleReusableGarmentSelect(garmentId) {
     if (!garmentId) {
       setSelectedReusableGarmentId("");
-      setSelectedImportedColor("");
-      setSelectedImportedSize("");
       return;
     }
 
     const matchedEntry = matchingImportedGarments.find((entry) => entry.item.id === garmentId);
     if (!matchedEntry) return;
+    const importedCapabilities = buildImportedCapabilityMatrix(
+      matchedEntry.item?.variants || EMPTY_LIST,
+      matchedEntry.item?.sizes || EMPTY_LIST,
+      sizes
+    );
+    const nextSelectedColors = importedCapabilities.map((capability) => capability.name);
+    const nextSelectedSizes = sortSizesByLookup(
+      uniqueList(importedCapabilities.flatMap((capability) => capability.sizes)),
+      sizes
+    );
     const nextSuggestedPlacements = getSuggestedGarmentPlacements({
       categoryName: categoryMap.get(matchedEntry.item.category_lookup_id)?.name || "",
       garmentType: matchedEntry.model?.display_name || "",
@@ -1943,10 +2092,17 @@ export default function GarmentLibrary() {
 
     setCreateMode("imported");
     setSelectedReusableGarmentId(matchedEntry.item.id);
-    setSelectedImportedColor("");
-    setSelectedImportedSize("");
     setEditingId(matchedEntry.item.id);
-    setForm(buildFormFromGarment(matchedEntry.item, brands, categories, garmentModels, sizes));
+    setForm((current) => ({
+      ...buildFormFromGarment(matchedEntry.item, brands, categories, garmentModels, sizes),
+      sizes: nextSelectedSizes,
+      variants: buildAutoGeneratedVariantsFromSelections(
+        importedCapabilities,
+        nextSelectedColors,
+        nextSelectedSizes,
+        sizes
+      ),
+    }));
     setHasCustomizedPlacements(
       Array.isArray(matchedEntry.item?.default_placements) &&
         matchedEntry.item.default_placements.length > 0 &&
@@ -1982,8 +2138,6 @@ export default function GarmentLibrary() {
     setModelDraft(buildModelDraftFromModel(null, preservedBrandId));
     setCreateMode("custom");
     setSelectedReusableGarmentId("");
-    setSelectedImportedColor("");
-    setSelectedImportedSize("");
     setVariantSearch("");
     setActiveWorkspace("create");
   }
@@ -2037,9 +2191,66 @@ export default function GarmentLibrary() {
       selectedReusableGarmentId
     ) {
       setSelectedReusableGarmentId("");
-      setSelectedImportedColor("");
-      setSelectedImportedSize("");
     }
+  }
+
+  function applyImportedCapabilitySelections(selectedColors, selectedSizes, sourceItem = selectedReusableGarmentEntry?.item) {
+    const capabilities = buildImportedCapabilityMatrix(
+      sourceItem?.variants || EMPTY_LIST,
+      sourceItem?.sizes || EMPTY_LIST,
+      sizes
+    );
+    const normalizedSelectedColors = uniqueList(selectedColors);
+    const selectedColorKeySet = new Set(
+      normalizedSelectedColors.map((value) => normalizeTextKey(value)).filter(Boolean)
+    );
+    const relevantCapabilities = selectedColorKeySet.size
+      ? capabilities.filter((capability) => selectedColorKeySet.has(normalizeTextKey(capability.name)))
+      : capabilities;
+    const availableSizeKeys = new Set(
+      uniqueList(relevantCapabilities.flatMap((capability) => capability.sizes))
+        .map((value) => normalizeTextKey(value))
+        .filter(Boolean)
+    );
+    const normalizedSelectedSizes = sortSizesByLookup(
+      uniqueList(selectedSizes).filter(
+        (value) => availableSizeKeys.size === 0 || availableSizeKeys.has(normalizeTextKey(value))
+      ),
+      sizes
+    );
+
+    setForm((current) => ({
+      ...current,
+      sizes: normalizedSelectedSizes,
+      variants: buildAutoGeneratedVariantsFromSelections(
+        capabilities,
+        normalizedSelectedColors,
+        normalizedSelectedSizes,
+        sizes
+      ),
+    }));
+  }
+
+  function toggleImportedColor(colorName) {
+    const nextSelectedColors = selectedImportedColorValues.some(
+      (value) => normalizeTextKey(value) === normalizeTextKey(colorName)
+    )
+      ? selectedImportedColorValues.filter(
+          (value) => normalizeTextKey(value) !== normalizeTextKey(colorName)
+        )
+      : [...selectedImportedColorValues, colorName];
+
+    applyImportedCapabilitySelections(nextSelectedColors, form.sizes);
+  }
+
+  function toggleImportedSize(sizeName) {
+    const nextSelectedSizes = form.sizes.some(
+      (value) => normalizeTextKey(value) === normalizeTextKey(sizeName)
+    )
+      ? form.sizes.filter((value) => normalizeTextKey(value) !== normalizeTextKey(sizeName))
+      : [...form.sizes, sizeName];
+
+    applyImportedCapabilitySelections(selectedImportedColorValues, nextSelectedSizes);
   }
 
   function toggleSize(sizeName) {
@@ -2359,6 +2570,9 @@ export default function GarmentLibrary() {
           nextVariants.push({
             id: `variant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             name: variant.name,
+            color: variant.name,
+            colors: [variant.name],
+            supplier_variant: variant.name,
             supplier_sku: variant.supplierSku,
             active: true,
           });
@@ -3183,46 +3397,23 @@ export default function GarmentLibrary() {
                           </label>
 
                           {selectedReusableGarmentEntry ? (
-                            <div className="products-editor-grid">
-                              <label style={labelStyle}>
-                                Color
-                                <select
-                                  value={currentSelectedImportedColor}
-                                  onChange={(event) => setSelectedImportedColor(event.target.value)}
-                                  style={fieldStyle}
-                                >
-                                  <option value="">
-                                    {derivedImportedColorOptions.length
-                                      ? "Select color"
-                                      : "No colors available"}
-                                  </option>
-                                  {derivedImportedColorOptions.map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                      {option.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-
-                              <label style={labelStyle}>
-                                Size
-                                <select
-                                  value={currentSelectedImportedSize}
-                                  onChange={(event) => setSelectedImportedSize(event.target.value)}
-                                  style={fieldStyle}
-                                >
-                                  <option value="">
-                                    {derivedImportedSizeOptions.length
-                                      ? "Select size"
-                                      : "No sizes available"}
-                                  </option>
-                                  {derivedImportedSizeOptions.map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                      {option.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
+                            <div className="products-card-detail-grid">
+                              <div className="products-card-detail">
+                                <span>Supplier Colors</span>
+                                <strong>{derivedImportedColorOptions.length || "None"}</strong>
+                              </div>
+                              <div className="products-card-detail">
+                                <span>Supplier Sizes</span>
+                                <strong>{derivedImportedSizeOptions.length || "None"}</strong>
+                              </div>
+                              <div className="products-card-detail">
+                                <span>Enabled Colors</span>
+                                <strong>{selectedImportedColorValues.length || "None"}</strong>
+                              </div>
+                              <div className="products-card-detail">
+                                <span>Enabled Sizes</span>
+                                <strong>{form.sizes.length || "None"}</strong>
+                              </div>
                             </div>
                           ) : null}
 
@@ -3231,7 +3422,7 @@ export default function GarmentLibrary() {
                               {matchingImportedGarments.length} model
                               {matchingImportedGarments.length === 1 ? "" : "s"} found.{" "}
                               {selectedReusableGarmentEntry
-                                ? `${derivedImportedColorOptions.length} colors and ${derivedImportedSizeOptions.length} sizes derived from the selected library garment.`
+                                ? `${derivedImportedColorOptions.length} supplier colors and ${derivedImportedSizeOptions.length} supplier sizes were derived from the imported library data. Enable only the ones this garment should keep available.`
                                 : "Choose a model to derive colors and sizes from the library."}
                             </span>
                             <button
@@ -3356,126 +3547,214 @@ export default function GarmentLibrary() {
             <div className="products-section-header">
               <div>
                 <p className="products-section-step">Section 2</p>
-                <h2>Available Sizes</h2>
+                <h2>{isImportedCapabilityMode ? "Available Colors" : "Available Sizes"}</h2>
               </div>
-              <p>Select the size run this garment should support.</p>
+              <p>
+                {isImportedCapabilityMode
+                  ? "These supplier colors are derived directly from the imported garment library record."
+                  : "Select the size run this garment should support."}
+              </p>
             </div>
 
-            <MultiSelectLookupField
-              label="Available Sizes"
-              helperText="This becomes the reusable size run for storefront products built from this garment."
-              options={sizes.map((size) => ({ id: size.id, name: size.name }))}
-              selectedValues={form.sizes}
-              onToggle={toggleSize}
-              createHelper="Add a size below if it does not exist yet."
-            />
-
-            <details className="products-helper-details">
-              <summary className="products-helper-summary">Add a new size</summary>
-              <div className="products-inline-create-panel">
-                <input
-                  value={sizeDraft}
-                  onChange={(event) => setSizeDraft(event.target.value)}
-                  placeholder="Create new size"
-                  style={{ ...fieldStyle, flex: 1 }}
+            {isImportedCapabilityMode ? (
+              <MultiSelectLookupField
+                label="Available Colors"
+                helperText="Enable the supplier colors this garment should expose. No manual color entry is required."
+                options={derivedImportedColorOptions}
+                selectedValues={selectedImportedColorValues}
+                onToggle={toggleImportedColor}
+                createHelper="No supplier colors were derived from this imported garment."
+                searchPlaceholder="Search supplier colors or SKU"
+              />
+            ) : (
+              <>
+                <MultiSelectLookupField
+                  label="Available Sizes"
+                  helperText="This becomes the reusable size run for storefront products built from this garment."
+                  options={sizes.map((size) => ({ id: size.id, name: size.name }))}
+                  selectedValues={form.sizes}
+                  onToggle={toggleSize}
+                  createHelper="Add a size below if it does not exist yet."
                 />
-                <button type="button" className="products-inline-save" onClick={handleCreateSize}>
-                  Save Size
-                </button>
-              </div>
-            </details>
+
+                <details className="products-helper-details">
+                  <summary className="products-helper-summary">Add a new size</summary>
+                  <div className="products-inline-create-panel">
+                    <input
+                      value={sizeDraft}
+                      onChange={(event) => setSizeDraft(event.target.value)}
+                      placeholder="Create new size"
+                      style={{ ...fieldStyle, flex: 1 }}
+                    />
+                    <button type="button" className="products-inline-save" onClick={handleCreateSize}>
+                      Save Size
+                    </button>
+                  </div>
+                </details>
+              </>
+            )}
           </section>
 
           <section className="products-editor-section">
             <div className="products-section-header">
               <div>
                 <p className="products-section-step">Section 3</p>
-                <h2>Supplier Variants / Colors</h2>
+                <h2>{isImportedCapabilityMode ? "Available Sizes" : "Supplier Variants / Colors"}</h2>
               </div>
-              <p>Capture supplier-facing colors and SKUs without interrupting the main setup flow.</p>
+              <p>
+                {isImportedCapabilityMode
+                  ? "Sizes are derived from the imported supplier variant matrix and can be narrowed here."
+                  : "Capture supplier-facing colors and SKUs without interrupting the main setup flow."}
+              </p>
             </div>
 
-            <div className="products-multiselect-header">
-              <strong>Variant List</strong>
-              <p>Large variant lists and supplier SKUs belong here, not on the storefront publishing form.</p>
-            </div>
-
-            <div className="products-multiselect-toolbar">
-              <input
-                type="search"
-                value={variantSearch}
-                onChange={(event) => setVariantSearch(event.target.value)}
-                placeholder="Search variants or supplier SKU"
-                style={fieldStyle}
+            {isImportedCapabilityMode ? (
+              <MultiSelectLookupField
+                label="Available Sizes"
+                helperText="Sizes come from the imported supplier matrix. Disable any sizes this garment should not expose."
+                options={derivedImportedSizeOptions}
+                selectedValues={form.sizes}
+                onToggle={toggleImportedSize}
+                createHelper="No supplier sizes were derived from the selected colors."
               />
-            </div>
+            ) : (
+              <>
+                <div className="products-multiselect-header">
+                  <strong>Variant List</strong>
+                  <p>Large variant lists and supplier SKUs belong here, not on the storefront publishing form.</p>
+                </div>
 
-            <div className="products-inline-model-grid">
-              <input
-                value={variantDraft.name}
-                onChange={(event) =>
-                  setVariantDraft((current) => ({ ...current, name: event.target.value }))
-                }
-                placeholder="Variant name"
-                style={fieldStyle}
-              />
-              <input
-                value={variantDraft.supplier_sku}
-                onChange={(event) =>
-                  setVariantDraft((current) => ({ ...current, supplier_sku: event.target.value }))
-                }
-                placeholder="Supplier SKU"
-                style={fieldStyle}
-              />
-            </div>
-            <button type="button" className="products-inline-save" onClick={addVariant}>
-              Add Variant
-            </button>
+                <div className="products-multiselect-toolbar">
+                  <input
+                    type="search"
+                    value={variantSearch}
+                    onChange={(event) => setVariantSearch(event.target.value)}
+                    placeholder="Search variants or supplier SKU"
+                    style={fieldStyle}
+                  />
+                </div>
 
-            <div className="products-variant-list">
-              {visibleVariants.length ? (
-                visibleVariants.map((variant) => (
-                  <div key={variant.id} className="products-variant-row">
-                    <input
-                      value={variant.name}
-                      onChange={(event) => updateVariant(variant.id, { name: event.target.value })}
-                      style={fieldStyle}
-                    />
-                    <input
-                      value={variant.supplier_sku}
-                      onChange={(event) =>
-                        updateVariant(variant.id, { supplier_sku: event.target.value })
-                      }
-                      placeholder="Supplier SKU"
-                      style={fieldStyle}
-                    />
-                    <label className="products-inline-toggle">
-                      <input
-                        type="checkbox"
-                        checked={variant.active !== false}
-                        onChange={(event) => updateVariant(variant.id, { active: event.target.checked })}
-                      />
-                      <span>Active</span>
-                    </label>
-                    <button
-                      type="button"
-                      className="products-inline-cancel"
-                      onClick={() => removeVariant(variant.id)}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <div className="products-selection-empty">No variants added yet.</div>
-              )}
-            </div>
+                <div className="products-inline-model-grid">
+                  <input
+                    value={variantDraft.name}
+                    onChange={(event) =>
+                      setVariantDraft((current) => ({ ...current, name: event.target.value }))
+                    }
+                    placeholder="Variant name"
+                    style={fieldStyle}
+                  />
+                  <input
+                    value={variantDraft.supplier_sku}
+                    onChange={(event) =>
+                      setVariantDraft((current) => ({ ...current, supplier_sku: event.target.value }))
+                    }
+                    placeholder="Supplier SKU"
+                    style={fieldStyle}
+                  />
+                </div>
+                <button type="button" className="products-inline-save" onClick={addVariant}>
+                  Add Variant
+                </button>
+
+                <div className="products-variant-list">
+                  {visibleVariants.length ? (
+                    visibleVariants.map((variant) => (
+                      <div key={variant.id} className="products-variant-row">
+                        <input
+                          value={variant.name}
+                          onChange={(event) => updateVariant(variant.id, { name: event.target.value })}
+                          style={fieldStyle}
+                        />
+                        <input
+                          value={variant.supplier_sku}
+                          onChange={(event) =>
+                            updateVariant(variant.id, { supplier_sku: event.target.value })
+                          }
+                          placeholder="Supplier SKU"
+                          style={fieldStyle}
+                        />
+                        <label className="products-inline-toggle">
+                          <input
+                            type="checkbox"
+                            checked={variant.active !== false}
+                            onChange={(event) => updateVariant(variant.id, { active: event.target.checked })}
+                          />
+                          <span>Active</span>
+                        </label>
+                        <button
+                          type="button"
+                          className="products-inline-cancel"
+                          onClick={() => removeVariant(variant.id)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="products-selection-empty">No variants added yet.</div>
+                  )}
+                </div>
+              </>
+            )}
           </section>
+
+          {isImportedCapabilityMode ? (
+            <section className="products-editor-section">
+              <div className="products-section-header">
+                <div>
+                  <p className="products-section-step">Section 4</p>
+                  <h2>Auto-Generated Variant Matrix</h2>
+                </div>
+                <p>Variant rows are built internally from the enabled supplier colors and sizes.</p>
+              </div>
+
+              <div className="products-multiselect-toolbar">
+                <input
+                  type="search"
+                  value={variantSearch}
+                  onChange={(event) => setVariantSearch(event.target.value)}
+                  placeholder="Search variants or supplier SKU"
+                  style={fieldStyle}
+                />
+              </div>
+
+              <div className="products-variant-list">
+                {visibleVariants.length ? (
+                  visibleVariants.map((variant) => (
+                    <div key={variant.id} className="products-variant-row">
+                      <input value={variant.name} readOnly style={{ ...fieldStyle, background: "#f8fafc" }} />
+                      <input
+                        value={variant.supplier_sku}
+                        readOnly
+                        placeholder="Supplier SKU"
+                        style={{ ...fieldStyle, background: "#f8fafc" }}
+                      />
+                      <input
+                        value={(variant.sizes || []).join(", ")}
+                        readOnly
+                        placeholder="Enabled sizes"
+                        style={{ ...fieldStyle, background: "#f8fafc" }}
+                      />
+                    </div>
+                  ))
+                ) : (
+                  <div className="products-selection-empty">
+                    No variants can be generated until at least one color is enabled.
+                  </div>
+                )}
+              </div>
+
+              <div className="products-callout">
+                Manual variant row creation is not required for imported garments. Adjust colors and
+                sizes above and the supplier matrix updates automatically.
+              </div>
+            </section>
+          ) : null}
 
           <details className="products-editor-section products-advanced-section" open>
             <summary className="products-advanced-summary">
               <div>
-                <p className="products-section-step">Section 4</p>
+                <p className="products-section-step">Section 5</p>
                 <strong>Garment Defaults</strong>
                 <span>Store reusable placements and production defaults here so storefront products can inherit them.</span>
               </div>

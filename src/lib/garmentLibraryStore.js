@@ -126,11 +126,47 @@ function normalizeStringList(value) {
     .filter(Boolean);
 }
 
+function splitCollapsedColorTokens(value) {
+  const normalizedValue = normalizeText(value);
+  if (!normalizedValue || /[\s,;|/]/.test(normalizedValue)) {
+    return normalizedValue ? [normalizedValue] : [];
+  }
+
+  const segments = normalizedValue.match(/[A-Z][a-z]+|[A-Z]{2,}(?=[A-Z][a-z]|\b)/g);
+  if (!Array.isArray(segments) || segments.length < 3) {
+    return normalizedValue ? [normalizedValue] : [];
+  }
+
+  return segments.map((segment) => normalizeText(segment)).filter(Boolean);
+}
+
+function normalizeColorList(value) {
+  const normalizedValues = normalizeStringList(value);
+  if (normalizedValues.length > 1) {
+    return normalizedValues;
+  }
+
+  return normalizedValues.flatMap((item) => splitCollapsedColorTokens(item));
+}
+
 function normalizeVariant(variant = {}) {
   const supplierSku = normalizeText(variant.supplier_sku || variant.supplierSku || variant.sku);
-  const color = normalizeText(
-    variant.color || variant.color_name || variant.colorName || variant.variant_color
+  const colors = Array.from(
+    new Set(
+      [
+        ...normalizeColorList(variant.color || variant.color_name || variant.colorName || variant.variant_color),
+        ...normalizeColorList(
+          variant.colors ||
+            variant.variant_colors ||
+            variant.supplier_variant ||
+            variant.supplierVariant ||
+            variant.variant_name ||
+            variant.name
+        ),
+      ].filter(Boolean)
+    )
   );
+  const color = normalizeText(colors[0] || "");
   const size = normalizeText(
     variant.size || variant.size_name || variant.sizeName || variant.variant_size
   );
@@ -148,6 +184,7 @@ function normalizeVariant(variant = {}) {
     id: variant.id || `variant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name,
     color,
+    colors,
     size,
     sizes,
     supplier_variant: supplierVariant || name,

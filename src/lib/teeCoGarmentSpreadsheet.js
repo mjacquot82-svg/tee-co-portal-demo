@@ -228,6 +228,8 @@ export function parseTeeCoGarmentSpreadsheet(text) {
 
     const variant = {
       name: variantName,
+      color: variantName,
+      supplier_variant: variantName,
       supplierSku,
       rowNumbers: [rowNumber],
     };
