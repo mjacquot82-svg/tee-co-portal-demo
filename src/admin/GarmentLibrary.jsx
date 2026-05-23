@@ -633,9 +633,6 @@ export default function GarmentLibrary() {
   const [storefrontUsageFilter, setStorefrontUsageFilter] = useState("all");
   const [sortOption, setSortOption] = useState("newest");
   const [activeWorkspace, setActiveWorkspace] = useState(null);
-  const [isShowingLoadingState, setIsShowingLoadingState] = useState(
-    () => isGarmentLibraryLoading && garments.length === 0 && !hasFinishedInitialLoad
-  );
   const repairingBrandIdsRef = useRef(new Set());
   const brandSelectRef = useRef(null);
   const deferredSearchTerm = useDeferredValue(searchTerm);
@@ -686,26 +683,6 @@ export default function GarmentLibrary() {
       rawGarments,
     });
   }, [garments, rawGarments]);
-  useEffect(() => {
-    const nextIsShowingLoadingState =
-      isGarmentLibraryLoading && garments.length === 0 && !hasFinishedInitialLoad;
-
-    setIsShowingLoadingState((currentValue) => {
-      if (currentValue === nextIsShowingLoadingState) {
-        return currentValue;
-      }
-
-      console.log("[GarmentLibrary] syncing loading-state flag", {
-        previousIsShowingLoadingState: currentValue,
-        nextIsShowingLoadingState,
-        isGarmentLibraryLoading,
-        hasFinishedInitialLoad,
-        garmentCount: garments.length,
-      });
-
-      return nextIsShowingLoadingState;
-    });
-  }, [garments.length, hasFinishedInitialLoad, isGarmentLibraryLoading]);
   const categoryMap = useMemo(() => {
     try {
       return buildLookupOptionMap(categories);
@@ -1153,19 +1130,37 @@ export default function GarmentLibrary() {
   const hasActiveGarmentFilters = Boolean(
     searchTerm.trim() || categoryFilter !== "all" || brandFilter !== "all" || storefrontUsageFilter !== "all"
   );
+  const activeGarmentEntries = useMemo(
+    () => garmentBrowseItems.filter((entry) => entry?.item?.active !== false),
+    [garmentBrowseItems]
+  );
+  const activeGarmentCount = activeGarmentEntries.length;
+  const shouldShowLoadingState = isGarmentLibraryLoading && activeGarmentCount === 0;
+  const shouldShowEmptyState = hasFinishedInitialLoad && activeGarmentCount === 0;
+  const garmentEntriesForRender = useMemo(() => {
+    if (filteredGarments.length > 0) {
+      return filteredGarments;
+    }
+
+    if (activeGarmentCount > 0) {
+      return activeGarmentEntries;
+    }
+
+    return EMPTY_LIST;
+  }, [activeGarmentCount, activeGarmentEntries, filteredGarments]);
   const filteredGarmentCount = filteredGarments.length;
   const brandSelectOptions = useMemo(
     () => {
       try {
         return buildBrandSelectOptionsFromVisibleGarments(
-          filteredGarments,
+          garmentEntriesForRender,
           garmentBrowseItems,
           brands,
           form.brand_lookup_id
         );
       } catch (error) {
         logGarmentDerivationError("brand select options useMemo", error, {
-          filteredGarments,
+          garmentEntriesForRender,
           garmentBrowseItems,
           brands,
           selectedBrandId: form.brand_lookup_id,
@@ -1173,7 +1168,7 @@ export default function GarmentLibrary() {
         return EMPTY_LIST;
       }
     },
-    [brands, filteredGarments, form.brand_lookup_id, garmentBrowseItems]
+    [brands, form.brand_lookup_id, garmentBrowseItems, garmentEntriesForRender]
   );
   useEffect(() => {
     try {
@@ -1286,14 +1281,14 @@ export default function GarmentLibrary() {
         .some((value) => String(value).toLowerCase().includes(normalizedSearch));
     });
   }, [form.variants, variantSearch]);
-  const garmentCardNodes = useMemo(() => {
+  const renderedGarmentCards = useMemo(() => {
     try {
-      console.log("[GarmentLibrary] entering garmentCardNodes derivation", {
-        filteredGarmentCount: filteredGarments.length,
+      console.log("[GarmentLibrary] entering renderedGarmentCards derivation", {
+        garmentEntriesForRenderCount: garmentEntriesForRender.length,
         editingId,
         activeWorkspace,
       });
-      return filteredGarments.map(({ item, subtitle, usage }, index) => {
+      return garmentEntriesForRender.map(({ item, subtitle, usage }, index) => {
         try {
           console.log("[GarmentLibrary] mapping garment card node", {
             index,
@@ -1333,28 +1328,28 @@ export default function GarmentLibrary() {
         }
       });
     } catch (error) {
-      logGarmentDerivationError("garment card mapping useMemo", error, {
-        filteredGarments,
+      logGarmentDerivationError("rendered garment cards useMemo", error, {
+        garmentEntriesForRender,
         editingId,
         activeWorkspace,
       });
       return EMPTY_LIST;
     }
-  }, [activeWorkspace, editingId, filteredGarments]);
+  }, [activeWorkspace, editingId, garmentEntriesForRender]);
   useEffect(() => {
-    console.log("[GarmentLibrary] leaving garmentCardNodes derivation", {
+    console.log("[GarmentLibrary] leaving renderedGarmentCards derivation", {
       filteredGarmentCount,
-      garmentCardNodeCount: garmentCardNodes.length,
-      renderedNonNullCardCount: garmentCardNodes.filter(Boolean).length,
+      renderedGarmentCardCount: renderedGarmentCards.length,
+      garmentEntriesForRenderCount: garmentEntriesForRender.length,
     });
-  }, [filteredGarmentCount, garmentCardNodes]);
+  }, [filteredGarmentCount, garmentEntriesForRender.length, renderedGarmentCards.length]);
   useEffect(() => {
     console.debug("[GarmentLibrary] final rendered garment card count", {
-      renderedCardCount: garmentCardNodes.length,
-      renderedNonNullCardCount: garmentCardNodes.filter(Boolean).length,
+      renderedCardCount: renderedGarmentCards.length,
+      garmentEntriesForRenderCount: garmentEntriesForRender.length,
       filteredGarmentCount,
     });
-  }, [filteredGarmentCount, garmentCardNodes]);
+  }, [filteredGarmentCount, garmentEntriesForRender.length, renderedGarmentCards.length]);
   const garmentPreviewMap = useMemo(() => buildGarmentMap(garments), [garments]);
   const previewGarments = useMemo(() => {
     if (!importPreview) return [];
@@ -1606,21 +1601,6 @@ export default function GarmentLibrary() {
       return 0;
     }
   }, [garments]);
-  const renderedGarmentCards = useMemo(() => {
-    try {
-      if (!Array.isArray(garmentCardNodes)) {
-        throw new Error("garmentCardNodes is not an array");
-      }
-      return garmentCardNodes.filter(Boolean);
-    } catch (error) {
-      logGarmentRenderError("renderedGarmentCards derivation", error, {
-        garmentCardNodesType: typeof garmentCardNodes,
-        garmentCardNodesIsArray: Array.isArray(garmentCardNodes),
-      });
-      return EMPTY_LIST;
-    }
-  }, [garmentCardNodes]);
-
   function resetForm() {
     setForm(emptyLibraryForm);
     setEditingId(null);
@@ -2250,7 +2230,9 @@ export default function GarmentLibrary() {
   console.log("[GarmentLibrary] before main render branches", {
     garmentCount: garments.length,
     isGarmentLibraryLoading,
-    isShowingLoadingState,
+    shouldShowLoadingState,
+    shouldShowEmptyState,
+    activeGarmentCount,
     hasFinishedInitialLoad,
     garmentBrowseItemCount: garmentBrowseItems.length,
     filteredGarmentCount,
@@ -2386,9 +2368,9 @@ export default function GarmentLibrary() {
 
           <div className="products-results-meta">
             <span>
-              {isShowingLoadingState
+              {shouldShowLoadingState
                 ? "Loading garment library..."
-                : `${filteredGarmentCount} garment${filteredGarmentCount === 1 ? "" : "s"} shown`}
+                : `${renderedGarmentCards.length} garment${renderedGarmentCards.length === 1 ? "" : "s"} shown`}
             </span>
             <button
               type="button"
@@ -2412,15 +2394,17 @@ export default function GarmentLibrary() {
                 try {
                   console.log("[GarmentLibrary] evaluating garment list branch", {
                     isGarmentLibraryLoading,
-                    isShowingLoadingState,
+                    shouldShowLoadingState,
+                    shouldShowEmptyState,
                     garmentCount: garments.length,
+                    activeGarmentCount,
                     filteredGarmentCount,
                     renderedGarmentCardCount: renderedGarmentCards.length,
                     hasActiveGarmentFilters,
                     hasFinishedInitialLoad,
                   });
 
-                  if (isShowingLoadingState) {
+                  if (shouldShowLoadingState) {
                     console.log("[GarmentLibrary] taking loading-state branch");
                     return (
                       <div className="products-empty-state">
@@ -2452,20 +2436,23 @@ export default function GarmentLibrary() {
                   console.log("[GarmentLibrary] taking empty-state branch", {
                     hasActiveGarmentFilters,
                     hasFinishedInitialLoad,
+                    activeGarmentCount,
                   });
                   return (
                     <div className="products-empty-state">
                       <strong>
-                        {hasActiveGarmentFilters
+                        {shouldShowEmptyState
+                          ? "No garments are available yet."
+                          : hasActiveGarmentFilters
                           ? "No garments match the current filters."
-                          : "No garments are available yet."}
+                          : "No garments are available to render right now."}
                       </strong>
                       <span>
-                        {hasActiveGarmentFilters
+                        {shouldShowEmptyState
+                          ? "Create a garment or import the supplier spreadsheet to populate the library."
+                          : hasActiveGarmentFilters
                           ? "Clear or adjust the search, category, brand, or storefront filters."
-                          : hasFinishedInitialLoad
-                            ? "Create a garment or import the supplier spreadsheet to populate the library."
-                            : "The garment library has not finished loading yet."}
+                          : "Live garments exist, but no renderable cards were produced from the filtered list."}
                       </span>
                     </div>
                   );
@@ -2481,8 +2468,10 @@ export default function GarmentLibrary() {
                   });
                   logGarmentRenderError("main garment list branch", error, {
                     isGarmentLibraryLoading,
-                    isShowingLoadingState,
+                    shouldShowLoadingState,
+                    shouldShowEmptyState,
                     garmentCount: garments.length,
+                    activeGarmentCount,
                     filteredGarmentCount,
                     renderedGarmentCardCount: renderedGarmentCards.length,
                     hasActiveGarmentFilters,
