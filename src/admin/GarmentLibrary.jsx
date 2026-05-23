@@ -12,6 +12,7 @@ import {
 import {
   createGarmentLibraryItem,
   deleteGarmentLibraryItem,
+  getGarmentLibraryItems,
   updateGarmentLibraryItem,
   useGarmentLibraryItems,
 } from "../lib/garmentLibraryStore";
@@ -469,6 +470,8 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
 export default function GarmentLibrary() {
   const rawGarments = useGarmentLibraryItems();
   const garments = Array.isArray(rawGarments) ? rawGarments : EMPTY_LIST;
+  const directGarmentSnapshot = getGarmentLibraryItems();
+  const debugVisibleGarments = Array.isArray(directGarmentSnapshot) ? directGarmentSnapshot : EMPTY_LIST;
   const products = useStoredProducts();
   const lookups = useCatalogLookups();
   const categories = lookups.categories ?? EMPTY_LIST;
@@ -554,6 +557,16 @@ export default function GarmentLibrary() {
       rawGarments,
     });
   }, [garments, rawGarments]);
+  useEffect(() => {
+    console.debug("[GarmentLibrary] temporary raw render snapshot", {
+      directGarmentSnapshotIsArray: Array.isArray(directGarmentSnapshot),
+      directGarmentSnapshotLength: Array.isArray(directGarmentSnapshot)
+        ? directGarmentSnapshot.length
+        : "non-array",
+      debugVisibleGarmentCount: debugVisibleGarments.length,
+      debugVisibleGarments,
+    });
+  }, [debugVisibleGarments, directGarmentSnapshot]);
 
   const categoryMap = useMemo(() => {
     try {
@@ -1393,6 +1406,7 @@ export default function GarmentLibrary() {
     () => garments.reduce((total, garment) => total + (Array.isArray(garment.variants) ? garment.variants.length : 0), 0),
     [garments]
   );
+  const debugVisibleGarmentCount = debugVisibleGarments.length;
 
   function resetForm() {
     setForm(emptyLibraryForm);
@@ -2022,6 +2036,7 @@ export default function GarmentLibrary() {
 
   console.log("[GarmentLibrary] before main render branches", {
     garmentCount: garments.length,
+    debugVisibleGarmentCount,
     garmentBrowseItemCount: garmentBrowseItems.length,
     filteredGarmentCount,
     hasActiveGarmentFilters,
@@ -2087,8 +2102,8 @@ export default function GarmentLibrary() {
             </div>
             <div className="products-stat-card garment-library-summary-card">
               <span>Current View</span>
-              <strong>{filteredGarmentCount}</strong>
-              <p>{hasActiveGarmentFilters ? "Garments matching current filters." : "Garments visible right now."}</p>
+              <strong>{debugVisibleGarmentCount}</strong>
+              <p>Raw garments returned from `getGarmentLibraryItems()`.</p>
             </div>
           </div>
 
@@ -2155,9 +2170,7 @@ export default function GarmentLibrary() {
 
           <div className="products-results-meta">
             <span>
-              {hasActiveGarmentFilters
-                ? `Showing ${filteredGarmentCount} of ${garments.length} garments`
-                : `Showing ${garments.length} garments`}
+              {`Debug view: showing ${debugVisibleGarmentCount} raw garments from getGarmentLibraryItems()`}
             </span>
             <button
               type="button"
@@ -2177,33 +2190,44 @@ export default function GarmentLibrary() {
 
           <div className="products-list-scroll garment-library-list-scroll">
             <div className="products-list-grid">
-              {console.log("[GarmentLibrary] evaluating garment list branch", {
+              {console.log("[GarmentLibrary] evaluating temporary raw garment list branch", {
+                debugVisibleGarmentCount,
                 filteredGarmentCount: filteredGarments.length,
                 garmentCardNodeCount: garmentCardNodes.length,
               })}
               {(() => {
-                console.log("[GarmentLibrary] before filteredGarments.length branch", {
+                console.log("[GarmentLibrary] before debugVisibleGarments.length branch", {
+                  debugVisibleGarmentCount,
                   filteredGarmentCount: filteredGarments.length,
                   garmentCardNodeCount: garmentCardNodes.length,
                 });
 
-                if (filteredGarments.length) {
-                  console.log("[GarmentLibrary] taking garmentCardNodes branch", {
-                    filteredGarmentCount: filteredGarments.length,
-                    garmentCardNodeCount: garmentCardNodes.length,
+                if (debugVisibleGarments.length) {
+                  console.log("[GarmentLibrary] taking temporary raw garment branch", {
+                    debugVisibleGarmentCount,
                   });
-                  return garmentCardNodes;
+                  return debugVisibleGarments.map((item, index) => (
+                    <article
+                      key={item?.id || `debug-garment-${index}`}
+                      className="products-card garment-library-card"
+                      style={{ display: "grid", gap: "0.35rem" }}
+                    >
+                      <strong>{item?.title || "Untitled garment"}</strong>
+                      <span>{item?.brand || item?.brand_name || item?.brand_lookup_id || "No brand"}</span>
+                      <span>{item?.id || "No ID"}</span>
+                    </article>
+                  ));
                 }
 
-                console.log("[GarmentLibrary] taking empty-state branch", {
+                console.log("[GarmentLibrary] taking temporary raw empty-state branch", {
+                  debugVisibleGarmentCount,
                   filteredGarmentCount: filteredGarments.length,
                   garmentCardNodeCount: garmentCardNodes.length,
-                  hasActiveGarmentFilters,
                 });
                 return (
                   <div className="products-empty-state">
-                    <strong>No garments match current filters.</strong>
-                    <span>Adjust search, category, brand, or storefront usage filters to broaden the library view.</span>
+                    <strong>No raw garments returned from `getGarmentLibraryItems()`.</strong>
+                    <span>The component is not receiving any direct garment records to render.</span>
                   </div>
                 );
               })()}
