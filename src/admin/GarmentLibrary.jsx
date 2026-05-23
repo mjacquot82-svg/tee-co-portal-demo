@@ -66,6 +66,35 @@ function safeStringify(value) {
   }
 }
 
+function summarizeVariantForDebug(variant = {}) {
+  if (!variant || typeof variant !== "object") {
+    return {
+      variantType: typeof variant,
+      variant,
+    };
+  }
+
+  return {
+    id: variant.id || null,
+    name: variant.name || null,
+    color: variant.color || null,
+    colors: Array.isArray(variant.colors) ? variant.colors : variant.colors || null,
+    size: variant.size || null,
+    sizes: Array.isArray(variant.sizes) ? variant.sizes : variant.sizes || null,
+    available_sizes: Array.isArray(variant.available_sizes)
+      ? variant.available_sizes
+      : variant.available_sizes || null,
+    availableSizes: Array.isArray(variant.availableSizes)
+      ? variant.availableSizes
+      : variant.availableSizes || null,
+    supplier_variant: variant.supplier_variant || variant.supplierVariant || null,
+    supplier_sku: variant.supplier_sku || variant.supplierSku || variant.sku || null,
+    auto_generated: variant.auto_generated === true,
+    active: variant.active,
+    keys: Object.keys(variant),
+  };
+}
+
 function getGarmentModeLabel(itemTitle) {
   return normalizeText(itemTitle) || "Selected Garment";
 }
@@ -90,6 +119,32 @@ function buildFormFromGarment(item, brands, categories, garmentModels, sizeLooku
     hydratedVariantCount: hydratedForm.variants.length,
     sourceSizes: item?.sizes || [],
     hydratedSizes: hydratedForm.sizes,
+    uiExpectedVariantSchema: {
+      required: ["name"],
+      normalized: ["id", "name", "color", "colors", "sizes", "size", "supplier_variant", "supplier_sku", "active"],
+      acceptedAliases: {
+        color: ["color", "color_name", "colorName", "variant_color"],
+        colors: [
+          "colors",
+          "variant_colors",
+          "supplier_variant",
+          "supplierVariant",
+          "variant_name",
+          "name",
+        ],
+        sizes: [
+          "sizes",
+          "available_sizes",
+          "availableSizes",
+          "size",
+          "size_name",
+          "sizeName",
+          "variant_size",
+        ],
+        supplierSku: ["supplier_sku", "supplierSku", "sku"],
+      },
+    },
+    hydratedUiVariantStructure: normalizedVariants.map((variant) => summarizeVariantForDebug(variant)),
     sourceItemJson: safeStringify(item),
     hydratedFormJson: safeStringify({
       title: hydratedForm.title,
@@ -176,6 +231,7 @@ function resolveVariantSizes(variant = {}) {
   const explicitSizes = [
     ...(Array.isArray(variant.sizes) ? variant.sizes : []),
     ...(Array.isArray(variant.available_sizes) ? variant.available_sizes : []),
+    ...(Array.isArray(variant.availableSizes) ? variant.availableSizes : []),
   ]
     .map((value) => normalizeText(value))
     .filter(Boolean);
@@ -188,15 +244,37 @@ function resolveVariantSizes(variant = {}) {
 }
 
 function normalizeVariantForEditor(variant = {}) {
+  const parsedSizesBeforeNormalization = [
+    ...(Array.isArray(variant.sizes) ? variant.sizes : []),
+    ...(Array.isArray(variant.available_sizes) ? variant.available_sizes : []),
+    ...(Array.isArray(variant.availableSizes) ? variant.availableSizes : []),
+    normalizeText(variant.size || variant.size_name || variant.sizeName || variant.variant_size),
+  ].filter(Boolean);
+  const parsedVariantBeforeNormalization = summarizeVariantForDebug(variant);
+
+  console.info("[GarmentLibrary] parsed variant before UI normalization", {
+    parsedVariantBeforeNormalization,
+    parsedSizesBeforeNormalization,
+    rawVariantJson: safeStringify(variant),
+  });
+
   const name = normalizeText(variant.name || resolveVariantColorName(variant));
-  if (!name) return null;
+  if (!name) {
+    console.warn("[GarmentLibrary] rejected variant during UI normalization", {
+      rejectionReason: "missing-name-after-ui-normalization",
+      parsedVariantBeforeNormalization,
+      parsedSizesBeforeNormalization,
+      rawVariantJson: safeStringify(variant),
+    });
+    return null;
+  }
 
   const color = resolveVariantColorName(variant) || name;
   const colorOptions = extractVariantColorNames(variant);
   const sizes = resolveVariantSizes(variant);
   const supplierSku = resolveVariantSupplierSku(variant);
 
-  return {
+  const normalizedVariant = {
     ...variant,
     id: variant.id || `variant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name,
@@ -210,13 +288,28 @@ function normalizeVariantForEditor(variant = {}) {
     sku: supplierSku,
     active: variant.active !== false,
   };
+
+  console.info("[GarmentLibrary] accepted variant after UI normalization", {
+    parsedSizesBeforeNormalization,
+    normalizedVariant: summarizeVariantForDebug(normalizedVariant),
+    normalizedVariantJson: safeStringify(normalizedVariant),
+  });
+
+  return normalizedVariant;
 }
 
 function normalizeVariantForSave(variant = {}) {
   const normalizedVariant = normalizeVariantForEditor(variant);
-  if (!normalizedVariant) return null;
+  if (!normalizedVariant) {
+    console.warn("[GarmentLibrary] rejected variant during save normalization", {
+      rejectionReason: "normalizeVariantForEditor-returned-null",
+      rawVariant: summarizeVariantForDebug(variant),
+      rawVariantJson: safeStringify(variant),
+    });
+    return null;
+  }
 
-  return {
+  const savedVariant = {
     ...normalizedVariant,
     name: normalizeText(normalizedVariant.name),
     color: resolveVariantColorName(normalizedVariant),
@@ -230,6 +323,13 @@ function normalizeVariantForSave(variant = {}) {
     supplier_sku: resolveVariantSupplierSku(normalizedVariant),
     sku: resolveVariantSupplierSku(normalizedVariant),
   };
+
+  console.info("[GarmentLibrary] final variant structure before save", {
+    savedVariant: summarizeVariantForDebug(savedVariant),
+    savedVariantJson: safeStringify(savedVariant),
+  });
+
+  return savedVariant;
 }
 
 function buildModelDraftFromModel(model, fallbackBrandId = "") {
@@ -2354,6 +2454,18 @@ export default function GarmentLibrary() {
         active: form.active,
       };
 
+      console.info("[GarmentLibrary] submitting garment payload", {
+        mode: editingId ? "update" : "create",
+        editingId,
+        formVariantCount: Array.isArray(form.variants) ? form.variants.length : 0,
+        formVariantsBeforeSaveNormalization: (form.variants || []).map((variant) =>
+          summarizeVariantForDebug(variant)
+        ),
+        formSizesBeforeSaveNormalization: form.sizes || [],
+        persistedVariantStructure: (payload.variants || []).map((variant) => summarizeVariantForDebug(variant)),
+        payloadJson: safeStringify(payload),
+      });
+
       if (editingId) {
         const updated = await updateGarmentLibraryItem(editingId, payload);
         if (updated) {
@@ -2517,6 +2629,9 @@ export default function GarmentLibrary() {
           parsedColors: previewGroup.variants.map((variant) => variant?.name).filter(Boolean),
           parsedSizes: previewGroup.sizes || [],
           generatedVariantCount: previewGroup.variants.length,
+          parsedVariantArrayBeforeNormalization: previewGroup.variants.map((variant) =>
+            summarizeVariantForDebug(variant)
+          ),
           previewGroupJson: safeStringify(previewGroup),
           existingGarmentJson: safeStringify(existingGarment),
         });
@@ -2534,6 +2649,15 @@ export default function GarmentLibrary() {
               sizes
             );
 
+            console.info("[GarmentLibrary] merged imported variant into existing variant", {
+              garmentTitle: previewGroup.title,
+              variantKey,
+              existingVariantIndex,
+              incomingVariant: summarizeVariantForDebug(variant),
+              existingVariant: summarizeVariantForDebug(existingVariant),
+              mergedSizes,
+            });
+
             nextVariants[existingVariantIndex] = {
               ...existingVariant,
               sizes: mergedSizes,
@@ -2544,7 +2668,7 @@ export default function GarmentLibrary() {
           }
 
           const nextVariantSizes = sortSizesByLookup(uniqueList(variant.sizes || []), sizes);
-          nextVariants.push({
+          const nextVariant = {
             id: `variant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             name: variant.name,
             color: variant.name,
@@ -2554,9 +2678,25 @@ export default function GarmentLibrary() {
             supplier_variant: variant.name,
             supplier_sku: variant.supplierSku,
             active: true,
+          };
+          console.info("[GarmentLibrary] accepted imported variant for persistence", {
+            garmentTitle: previewGroup.title,
+            variantKey,
+            persistedVariant: summarizeVariantForDebug(nextVariant),
+            persistedVariantJson: safeStringify(nextVariant),
           });
+          nextVariants.push(nextVariant);
           addedVariants += 1;
         });
+
+        if (nextVariants.length === 0) {
+          console.warn("[GarmentLibrary] nextVariants resolved empty before persistence", {
+            garmentTitle: previewGroup.title,
+            existingGarmentId: existingGarment?.id || null,
+            previewGroupVariantCount: previewGroup.variants.length,
+            previewGroupVariants: previewGroup.variants.map((variant) => summarizeVariantForDebug(variant)),
+          });
+        }
 
         if (existingGarment) {
           const existingSizes = sortSizesByLookup(uniqueList(existingGarment.sizes || []), sizes);
@@ -2572,6 +2712,7 @@ export default function GarmentLibrary() {
               title: previewGroup.title,
               nextSizes,
               nextVariantCount: nextVariants.length,
+              finalPersistedVariantStructure: nextVariants.map((variant) => summarizeVariantForDebug(variant)),
               nextVariantsJson: safeStringify(nextVariants),
             });
             await updateGarmentLibraryItem(existingGarment.id, {
@@ -2590,6 +2731,7 @@ export default function GarmentLibrary() {
           title: previewGroup.title,
           nextSizes,
           nextVariantCount: nextVariants.length,
+          finalPersistedVariantStructure: nextVariants.map((variant) => summarizeVariantForDebug(variant)),
           nextVariantsJson: safeStringify(nextVariants),
         });
         await createGarmentLibraryItem({

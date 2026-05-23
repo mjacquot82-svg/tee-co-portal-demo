@@ -113,6 +113,35 @@ function safeStringify(value) {
   }
 }
 
+function summarizeVariantForDebug(variant = {}) {
+  if (!variant || typeof variant !== "object") {
+    return {
+      variantType: typeof variant,
+      variant,
+    };
+  }
+
+  return {
+    id: variant.id || null,
+    name: variant.name || null,
+    color: variant.color || null,
+    colors: Array.isArray(variant.colors) ? variant.colors : variant.colors || null,
+    size: variant.size || null,
+    sizes: Array.isArray(variant.sizes) ? variant.sizes : variant.sizes || null,
+    available_sizes: Array.isArray(variant.available_sizes)
+      ? variant.available_sizes
+      : variant.available_sizes || null,
+    availableSizes: Array.isArray(variant.availableSizes)
+      ? variant.availableSizes
+      : variant.availableSizes || null,
+    size_run: variant.size_run || null,
+    supplier_variant: variant.supplier_variant || variant.supplierVariant || null,
+    supplier_sku: variant.supplier_sku || variant.supplierSku || variant.sku || null,
+    active: variant.active,
+    keys: Object.keys(variant),
+  };
+}
+
 function isUuidLike(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     normalizeText(value)
@@ -164,7 +193,44 @@ function normalizeColorList(value) {
   return normalizedValues.flatMap((item) => splitCollapsedColorTokens(item));
 }
 
-function normalizeVariant(variant = {}) {
+function normalizeVariant(variant = {}, context = {}) {
+  const parsedSizesBeforeNormalization = normalizeStringList(
+    variant?.sizes ||
+      variant?.available_sizes ||
+      variant?.availableSizes ||
+      variant?.size_run ||
+      variant?.sizeRun ||
+      variant?.size ||
+      variant?.size_name ||
+      variant?.sizeName ||
+      variant?.variant_size
+  );
+  const parsedColorsBeforeNormalization = Array.from(
+    new Set(
+      [
+        ...normalizeColorList(
+          variant?.color || variant?.color_name || variant?.colorName || variant?.variant_color
+        ),
+        ...normalizeColorList(
+          variant?.colors ||
+            variant?.variant_colors ||
+            variant?.supplier_variant ||
+            variant?.supplierVariant ||
+            variant?.variant_name ||
+            variant?.name
+        ),
+      ].filter(Boolean)
+    )
+  );
+
+  console.info("[garmentLibraryStore] parsed variant before normalization", {
+    ...context,
+    parsedColorsBeforeNormalization,
+    parsedSizesBeforeNormalization,
+    rawVariant: summarizeVariantForDebug(variant),
+    rawVariantJson: safeStringify(variant),
+  });
+
   const supplierSku = normalizeText(variant.supplier_sku || variant.supplierSku || variant.sku);
   const colors = Array.from(
     new Set(
@@ -186,15 +252,30 @@ function normalizeVariant(variant = {}) {
     variant.size || variant.size_name || variant.sizeName || variant.variant_size
   );
   const sizes = normalizeStringList(
-    variant.sizes || variant.available_sizes || variant.size_run || (size ? [size] : [])
+    variant.sizes ||
+      variant.available_sizes ||
+      variant.availableSizes ||
+      variant.size_run ||
+      variant.sizeRun ||
+      (size ? [size] : [])
   );
   const supplierVariant = normalizeText(
     variant.supplier_variant || variant.supplierVariant || variant.variant_name || color || variant.name
   );
   const name = normalizeText(variant.name || supplierVariant || color);
-  if (!name) return null;
+  if (!name) {
+    console.warn("[garmentLibraryStore] rejected variant during normalization", {
+      ...context,
+      rejectionReason: "missing-name-after-normalization",
+      parsedColorsBeforeNormalization,
+      parsedSizesBeforeNormalization,
+      rawVariant: summarizeVariantForDebug(variant),
+      rawVariantJson: safeStringify(variant),
+    });
+    return null;
+  }
 
-  return {
+  const normalizedVariant = {
     ...variant,
     id: variant.id || `variant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name,
@@ -207,6 +288,16 @@ function normalizeVariant(variant = {}) {
     sku: supplierSku,
     active: variant.active !== false,
   };
+
+  console.info("[garmentLibraryStore] normalized variant accepted", {
+    ...context,
+    parsedColorsBeforeNormalization,
+    parsedSizesBeforeNormalization,
+    normalizedVariant: summarizeVariantForDebug(normalizedVariant),
+    normalizedVariantJson: safeStringify(normalizedVariant),
+  });
+
+  return normalizedVariant;
 }
 
 function normalizeGarmentLibraryItem(item = {}) {
@@ -214,9 +305,27 @@ function normalizeGarmentLibraryItem(item = {}) {
   if (!title) return null;
 
   const rawVariants = Array.isArray(item.variants) ? item.variants : [];
-  const variants = Array.isArray(item.variants)
-    ? item.variants.map((variant) => normalizeVariant(variant)).filter(Boolean)
-    : [];
+  const variantNormalizationResults = rawVariants.map((variant, variantIndex) =>
+    normalizeVariant(variant, {
+      garmentTitle: title,
+      variantIndex,
+      source: "normalizeGarmentLibraryItem",
+    })
+  );
+  const rejectedVariants = rawVariants
+    .map((variant, variantIndex) => ({
+      variantIndex,
+      variant,
+      normalizedVariant: variantNormalizationResults[variantIndex],
+    }))
+    .filter((entry) => !entry.normalizedVariant)
+    .map((entry) => ({
+      variantIndex: entry.variantIndex,
+      rejectionReason: "normalizeVariant-returned-null",
+      rawVariant: summarizeVariantForDebug(entry.variant),
+      rawVariantJson: safeStringify(entry.variant),
+    }));
+  const variants = variantNormalizationResults.filter(Boolean);
   const derivedVariantSizes = variants.flatMap((variant) => normalizeStringList(variant.sizes));
   const sizes = normalizeStringList([...(Array.isArray(item.sizes) ? item.sizes : []), ...derivedVariantSizes]);
   const placeholderVariantCount = rawVariants.filter((variant) => {
@@ -228,10 +337,16 @@ function normalizeGarmentLibraryItem(item = {}) {
     title,
     rawVariantCount: rawVariants.length,
     rawVariantsWereArray: Array.isArray(item.variants),
+    rawVariantsJson: safeStringify(rawVariants),
     placeholderVariantCount,
+    rejectedVariantCount: rejectedVariants.length,
+    rejectedVariants,
+    parsedVariantArrayBeforeNormalization: rawVariants.map((variant) => summarizeVariantForDebug(variant)),
+    parsedSizesBeforeNormalization: Array.isArray(item.sizes) ? item.sizes : item.sizes || [],
     parsedColors: variants.map((variant) => variant.color || variant.name).filter(Boolean),
     parsedSizes: sizes,
     generatedVariantCount: variants.length,
+    finalPersistedVariantStructure: variants.map((variant) => summarizeVariantForDebug(variant)),
     rawItemJson: safeStringify(item),
     normalizedItemJson: safeStringify({
       ...item,
@@ -664,6 +779,7 @@ export async function createGarmentLibraryItem(values) {
     parsedColors: normalized.variants.map((variant) => variant.color || variant.name).filter(Boolean),
     parsedSizes: normalized.sizes,
     generatedVariantCount: normalized.variants.length,
+    finalPersistedVariantStructure: normalized.variants.map((variant) => summarizeVariantForDebug(variant)),
     garment: normalized,
     garmentJson: safeStringify(normalized),
   });
@@ -755,6 +871,7 @@ export async function updateGarmentLibraryItem(itemId, updates) {
     parsedColors: updated.variants.map((variant) => variant.color || variant.name).filter(Boolean),
     parsedSizes: updated.sizes,
     generatedVariantCount: updated.variants.length,
+    finalPersistedVariantStructure: updated.variants.map((variant) => summarizeVariantForDebug(variant)),
     garment: updated,
     garmentJson: safeStringify(updated),
   });

@@ -155,6 +155,27 @@ function splitCommaList(value) {
     .filter(Boolean);
 }
 
+function summarizeVariantForDebug(variant = {}) {
+  if (!variant || typeof variant !== "object") {
+    return {
+      variantType: typeof variant,
+      variant,
+    };
+  }
+
+  return {
+    name: variant.name || null,
+    color: variant.color || null,
+    colors: Array.isArray(variant.colors) ? variant.colors : variant.colors || null,
+    size: variant.size || null,
+    sizes: Array.isArray(variant.sizes) ? variant.sizes : variant.sizes || null,
+    supplier_variant: variant.supplier_variant || variant.supplierVariant || null,
+    supplier_sku: variant.supplier_sku || variant.supplierSku || variant.sku || null,
+    rowNumbers: Array.isArray(variant.rowNumbers) ? variant.rowNumbers : [],
+    keys: Object.keys(variant),
+  };
+}
+
 function detectMalformedOrphanRow(row, requiredColumnIndexes, expectedFieldCount) {
   const category = normalizeText(row[requiredColumnIndexes.get("Category")]);
   const brand = normalizeText(row[requiredColumnIndexes.get("Brand")]);
@@ -343,36 +364,74 @@ export function parseTeeCoGarmentSpreadsheet(text) {
     }
 
     if (!category) {
+      console.warn("[teeCoGarmentSpreadsheet] validation failure", {
+        rowNumber,
+        rejectionReason: "missing-category",
+        rawRowObject,
+        rawRow: row,
+      });
       skippedMalformedRowCount += 1;
       warnings.push(buildRowError(rowNumber, "Skipped row because Category is required."));
       return;
     }
 
     if (!brand) {
+      console.warn("[teeCoGarmentSpreadsheet] validation failure", {
+        rowNumber,
+        rejectionReason: "missing-brand",
+        rawRowObject,
+        rawRow: row,
+      });
       skippedMalformedRowCount += 1;
       warnings.push(buildRowError(rowNumber, "Skipped row because Brand is required."));
       return;
     }
 
     if (!supplierSku) {
+      console.warn("[teeCoGarmentSpreadsheet] validation failure", {
+        rowNumber,
+        rejectionReason: "missing-supplier-sku",
+        rawRowObject,
+        rawRow: row,
+      });
       skippedMalformedRowCount += 1;
       warnings.push(buildRowError(rowNumber, "Skipped row because Supplier SKU is required."));
       return;
     }
 
     if (!productName) {
+      console.warn("[teeCoGarmentSpreadsheet] validation failure", {
+        rowNumber,
+        rejectionReason: "missing-product-name",
+        rawRowObject,
+        rawRow: row,
+      });
       skippedMalformedRowCount += 1;
       warnings.push(buildRowError(rowNumber, "Skipped row because Product Name is required."));
       return;
     }
 
     if (!variantName) {
+      console.warn("[teeCoGarmentSpreadsheet] validation failure", {
+        rowNumber,
+        rejectionReason: "missing-variant-color",
+        rawRowObject,
+        rawRow: row,
+      });
       skippedMalformedRowCount += 1;
       warnings.push(buildRowError(rowNumber, "Skipped row because Variant/Color is required."));
       return;
     }
 
     if (!parsedColors.length) {
+      console.warn("[teeCoGarmentSpreadsheet] validation failure", {
+        rowNumber,
+        rejectionReason: "no-parsed-colors",
+        rawVariantCell,
+        normalizedVariantCell: variantName,
+        rawRowObject,
+        rawRow: row,
+      });
       skippedMalformedRowCount += 1;
       warnings.push(buildRowError(rowNumber, "Skipped row because Variant/Color did not produce any parsed colors."));
       return;
@@ -394,6 +453,16 @@ export function parseTeeCoGarmentSpreadsheet(text) {
         typeof rawVariantCell === "string" && rawVariantCell.includes("\n") && parsedColors.length > 1,
       multilineSizesCellSurvivedParsing:
         typeof rawSizesCell === "string" && rawSizesCell.includes("\n") && parsedSizes.length > 1,
+      parsedVariantArrayBeforeNormalization: parsedColors.map((parsedColor) => ({
+        name: parsedColor,
+        color: parsedColor,
+        colors: [parsedColor],
+        size: parsedSizes[0] || "",
+        sizes: parsedSizes,
+        supplier_variant: parsedColor,
+        supplierSku,
+        supplier_sku: supplierSku,
+      })),
     });
 
     const garmentKey = `${normalizeKey(brand)}::${normalizeKey(normalizedProductName)}`;
@@ -479,6 +548,7 @@ export function parseTeeCoGarmentSpreadsheet(text) {
       generatedVariantCount: group.variants.length,
       parsedColors,
       parsedSizes,
+      finalPersistedVariantStructure: group.variants.map((variant) => summarizeVariantForDebug(variant)),
       groupSnapshotJson: safeStringify({
         title: group.title,
         sizes: group.sizes,
