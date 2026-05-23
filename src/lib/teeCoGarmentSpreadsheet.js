@@ -8,6 +8,14 @@ const EXPECTED_TEE_CO_COLUMNS = [
 
 const OPTIONAL_SIZE_COLUMNS = ["Sizes", "Size", "Available Sizes", "Size Run", "Available Sizes / Size Run"];
 
+function safeStringify(value) {
+  try {
+    return JSON.stringify(value);
+  } catch (error) {
+    return `[unstringifiable: ${error?.message || "unknown_error"}]`;
+  }
+}
+
 function normalizeText(value) {
   return String(value || "").trim();
 }
@@ -183,6 +191,9 @@ export function parseTeeCoGarmentSpreadsheet(text) {
   }
 
   const { requiredColumnIndexes, optionalColumnIndexes } = validateHeader(rows[0]);
+  const headerRow = rows[0].map((value, index) =>
+    index === 0 ? normalizeText(value).replace(/^\uFEFF/, "") : normalizeText(value)
+  );
 
   const groupedGarments = new Map();
   const warnings = [];
@@ -197,10 +208,16 @@ export function parseTeeCoGarmentSpreadsheet(text) {
       return;
     }
 
+    const rawVariantCell = row[requiredColumnIndexes.get("Variant/Color")];
+    const rawSizesCell = row[optionalColumnIndexes.get("Sizes")];
+    const rawRowObject = headerRow.reduce((accumulator, headerName, columnIndex) => {
+      accumulator[headerName || `column_${columnIndex + 1}`] = row[columnIndex];
+      return accumulator;
+    }, {});
     const normalizedRow = EXPECTED_TEE_CO_COLUMNS.map((columnName) =>
       normalizeText(row[requiredColumnIndexes.get(columnName)])
     );
-    const sizesCell = normalizeText(row[optionalColumnIndexes.get("Sizes")]);
+    const sizesCell = normalizeText(rawSizesCell);
 
     if (!normalizedRow.some(Boolean)) {
       skippedEmptyRowCount += 1;
@@ -214,9 +231,28 @@ export function parseTeeCoGarmentSpreadsheet(text) {
 
     console.info("[teeCoGarmentSpreadsheet] raw spreadsheet row", {
       rowNumber,
+      rawRowObject,
       rawRow: row,
+      rawVariantCell,
+      rawVariantCellType: typeof rawVariantCell,
+      rawVariantCellIsArray: Array.isArray(rawVariantCell),
+      rawVariantCellContainsLf:
+        typeof rawVariantCell === "string" ? rawVariantCell.includes("\n") : false,
+      rawVariantCellContainsCrLf:
+        typeof rawVariantCell === "string" ? rawVariantCell.includes("\r\n") : false,
+      rawVariantCellContainsCr:
+        typeof rawVariantCell === "string" ? rawVariantCell.includes("\r") : false,
+      rawSizesCell,
+      rawSizesCellType: typeof rawSizesCell,
+      rawSizesCellIsArray: Array.isArray(rawSizesCell),
+      rawSizesCellContainsLf:
+        typeof rawSizesCell === "string" ? rawSizesCell.includes("\n") : false,
+      rawSizesCellContainsCrLf:
+        typeof rawSizesCell === "string" ? rawSizesCell.includes("\r\n") : false,
+      rawRowObjectJson: safeStringify(rawRowObject),
       normalizedRow,
-      rawSizesCell: sizesCell,
+      normalizedVariantCell: variantName,
+      normalizedSizesCell: sizesCell,
     });
 
     if (!category) {
@@ -260,10 +296,13 @@ export function parseTeeCoGarmentSpreadsheet(text) {
       brand,
       productName,
       supplierSku,
-      rawVariantCell: variantName,
-      rawSizesCell: sizesCell,
+      rawVariantCell,
+      rawSizesCell,
+      normalizedVariantCell: variantName,
+      normalizedSizesCell: sizesCell,
       parsedColors,
       parsedSizes,
+      groupedVariantSourceMode: parsedColors.length > 1 ? "single_row_multi_color_cell" : "one_color_per_row",
     });
 
     const garmentKey = `${normalizeKey(brand)}::${normalizeKey(normalizedProductName)}`;
@@ -349,6 +388,11 @@ export function parseTeeCoGarmentSpreadsheet(text) {
       generatedVariantCount: group.variants.length,
       parsedColors,
       parsedSizes,
+      groupSnapshotJson: safeStringify({
+        title: group.title,
+        sizes: group.sizes,
+        variants: group.variants,
+      }),
     });
 
     validRowCount += 1;
@@ -407,6 +451,7 @@ export function parseTeeCoGarmentSpreadsheet(text) {
 
   console.info("[teeCoGarmentSpreadsheet] parse success", {
     source: "spreadsheet_import",
+    parserMode: "csv_text_only",
     garmentCount: parsedResult.garmentCount,
     rowCount: parsedResult.rowCount,
     validRowCount: parsedResult.validRowCount,

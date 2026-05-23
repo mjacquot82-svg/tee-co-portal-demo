@@ -58,6 +58,14 @@ const emptyLibraryForm = {
   active: true,
 };
 
+function safeStringify(value) {
+  try {
+    return JSON.stringify(value);
+  } catch (error) {
+    return `[unstringifiable: ${error?.message || "unknown_error"}]`;
+  }
+}
+
 function getGarmentModeLabel(itemTitle) {
   return normalizeText(itemTitle) || "Selected Garment";
 }
@@ -67,8 +75,7 @@ function buildFormFromGarment(item, brands, categories, garmentModels, sizeLooku
     ? item.variants.map((variant) => normalizeVariantForEditor(variant)).filter(Boolean)
     : [];
   const derivedSizes = uniqueList(normalizedVariants.flatMap((variant) => variant.sizes || []));
-
-  return {
+  const hydratedForm = {
     ...emptyLibraryForm,
     ...item,
     variants: normalizedVariants,
@@ -76,6 +83,23 @@ function buildFormFromGarment(item, brands, categories, garmentModels, sizeLooku
     default_production_methods:
       item?.default_production_methods?.length ? item.default_production_methods : ["Screen Print"],
   };
+
+  console.info("[GarmentLibrary] hydrated garment form", {
+    title: hydratedForm.title,
+    sourceVariantCount: Array.isArray(item?.variants) ? item.variants.length : 0,
+    hydratedVariantCount: hydratedForm.variants.length,
+    sourceSizes: item?.sizes || [],
+    hydratedSizes: hydratedForm.sizes,
+    sourceItemJson: safeStringify(item),
+    hydratedFormJson: safeStringify({
+      title: hydratedForm.title,
+      sizes: hydratedForm.sizes,
+      variants: hydratedForm.variants,
+      default_production_methods: hydratedForm.default_production_methods,
+    }),
+  });
+
+  return hydratedForm;
 }
 
 function buildVariantDraft() {
@@ -2374,8 +2398,7 @@ export default function GarmentLibrary() {
 
       const fileContents = await readFileAsText(file);
       const parsed = parseTeeCoGarmentSpreadsheet(fileContents);
-
-      setImportPreview({
+      const previewPayload = {
         fileName: file.name,
         garments: parsed.garments.map((group) => ({ ...group, skip: false })),
         garmentCount: parsed.garmentCount,
@@ -2384,7 +2407,18 @@ export default function GarmentLibrary() {
         skippedEmptyRowCount: parsed.skippedEmptyRowCount,
         skippedMalformedRowCount: parsed.skippedMalformedRowCount,
         warningCount: parsed.warningCount,
+      };
+
+      console.info("[GarmentLibrary] normalized import preview payload", {
+        fileName: file.name,
+        parserMode: "csv_text_only",
+        garmentCount: parsed.garmentCount,
+        warningCount: parsed.warningCount,
+        garmentsJson: safeStringify(parsed.garments),
+        previewPayloadJson: safeStringify(previewPayload),
       });
+
+      setImportPreview(previewPayload);
       setImportWarnings(parsed.warnings || []);
       setImportNotice(
         `Preview ready. Detected ${parsed.garmentCount} garments from ${parsed.validRowCount} valid rows.`
@@ -2483,6 +2517,8 @@ export default function GarmentLibrary() {
           parsedColors: previewGroup.variants.map((variant) => variant?.name).filter(Boolean),
           parsedSizes: previewGroup.sizes || [],
           generatedVariantCount: previewGroup.variants.length,
+          previewGroupJson: safeStringify(previewGroup),
+          existingGarmentJson: safeStringify(existingGarment),
         });
 
         previewGroup.variants.forEach((variant) => {
@@ -2532,6 +2568,12 @@ export default function GarmentLibrary() {
             existingGarment.garment_model_lookup_id !== garmentModelId;
 
           if (shouldUpdate) {
+            console.info("[GarmentLibrary] persisted garment update payload", {
+              title: previewGroup.title,
+              nextSizes,
+              nextVariantCount: nextVariants.length,
+              nextVariantsJson: safeStringify(nextVariants),
+            });
             await updateGarmentLibraryItem(existingGarment.id, {
               category_lookup_id: category.id,
               brand_lookup_id: brand.id,
@@ -2544,6 +2586,12 @@ export default function GarmentLibrary() {
           continue;
         }
 
+        console.info("[GarmentLibrary] persisted garment create payload", {
+          title: previewGroup.title,
+          nextSizes,
+          nextVariantCount: nextVariants.length,
+          nextVariantsJson: safeStringify(nextVariants),
+        });
         await createGarmentLibraryItem({
           title: previewGroup.title,
           category_lookup_id: category.id,

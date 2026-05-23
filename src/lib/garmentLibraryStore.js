@@ -105,6 +105,14 @@ function normalizeText(value) {
   return String(value || "").trim();
 }
 
+function safeStringify(value) {
+  try {
+    return JSON.stringify(value);
+  } catch (error) {
+    return `[unstringifiable: ${error?.message || "unknown_error"}]`;
+  }
+}
+
 function isUuidLike(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     normalizeText(value)
@@ -205,17 +213,32 @@ function normalizeGarmentLibraryItem(item = {}) {
   const title = normalizeText(item.title);
   if (!title) return null;
 
+  const rawVariants = Array.isArray(item.variants) ? item.variants : [];
   const variants = Array.isArray(item.variants)
     ? item.variants.map((variant) => normalizeVariant(variant)).filter(Boolean)
     : [];
   const derivedVariantSizes = variants.flatMap((variant) => normalizeStringList(variant.sizes));
   const sizes = normalizeStringList([...(Array.isArray(item.sizes) ? item.sizes : []), ...derivedVariantSizes]);
+  const placeholderVariantCount = rawVariants.filter((variant) => {
+    if (!variant || typeof variant !== "object") return false;
+    return !Object.values(variant).some((value) => normalizeText(value));
+  }).length;
 
   console.info("[garmentLibraryStore] normalized garment library item", {
     title,
+    rawVariantCount: rawVariants.length,
+    rawVariantsWereArray: Array.isArray(item.variants),
+    placeholderVariantCount,
     parsedColors: variants.map((variant) => variant.color || variant.name).filter(Boolean),
     parsedSizes: sizes,
     generatedVariantCount: variants.length,
+    rawItemJson: safeStringify(item),
+    normalizedItemJson: safeStringify({
+      ...item,
+      title,
+      variants,
+      sizes,
+    }),
   });
 
   return {
@@ -634,10 +657,15 @@ export async function createGarmentLibraryItem(values) {
   console.info("[garmentLibraryStore] final garment object before persistence", {
     operation: "create",
     title: normalized.title,
+    placeholderVariantCount: normalized.variants.filter((variant) => {
+      if (!variant || typeof variant !== "object") return false;
+      return !normalizeText(variant.name) && !normalizeText(variant.color);
+    }).length,
     parsedColors: normalized.variants.map((variant) => variant.color || variant.name).filter(Boolean),
     parsedSizes: normalized.sizes,
     generatedVariantCount: normalized.variants.length,
     garment: normalized,
+    garmentJson: safeStringify(normalized),
   });
 
   if (!isSupabaseConfigured || !supabase) {
@@ -669,6 +697,7 @@ export async function createGarmentLibraryItem(values) {
       brandLookupIdIsUuid: isUuidLike(insertPayload.brand_lookup_id),
       garmentModelLookupIdIsUuid: isUuidLike(insertPayload.garment_model_lookup_id),
       payload: insertPayload,
+      payloadJson: safeStringify(insertPayload),
     });
     const { data, error } = await supabase
       .from(GARMENT_LIBRARY_TABLE)
@@ -719,10 +748,15 @@ export async function updateGarmentLibraryItem(itemId, updates) {
     operation: "update",
     itemId,
     title: updated.title,
+    placeholderVariantCount: updated.variants.filter((variant) => {
+      if (!variant || typeof variant !== "object") return false;
+      return !normalizeText(variant.name) && !normalizeText(variant.color);
+    }).length,
     parsedColors: updated.variants.map((variant) => variant.color || variant.name).filter(Boolean),
     parsedSizes: updated.sizes,
     generatedVariantCount: updated.variants.length,
     garment: updated,
+    garmentJson: safeStringify(updated),
   });
 
   if (!isSupabaseConfigured || !supabase) {
@@ -755,6 +789,7 @@ export async function updateGarmentLibraryItem(itemId, updates) {
       title: updated.title,
       variantCount: Array.isArray(updatePayload.variants) ? updatePayload.variants.length : 0,
       payload: updatePayload,
+      payloadJson: safeStringify(updatePayload),
     });
     const { data, error } = await supabase
       .from(GARMENT_LIBRARY_TABLE)
