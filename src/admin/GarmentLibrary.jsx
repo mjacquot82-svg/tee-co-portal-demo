@@ -633,6 +633,9 @@ export default function GarmentLibrary() {
   const [storefrontUsageFilter, setStorefrontUsageFilter] = useState("all");
   const [sortOption, setSortOption] = useState("newest");
   const [activeWorkspace, setActiveWorkspace] = useState(null);
+  const [isShowingLoadingState, setIsShowingLoadingState] = useState(
+    () => isGarmentLibraryLoading && garments.length === 0 && !hasFinishedInitialLoad
+  );
   const repairingBrandIdsRef = useRef(new Set());
   const brandSelectRef = useRef(null);
   const deferredSearchTerm = useDeferredValue(searchTerm);
@@ -683,6 +686,26 @@ export default function GarmentLibrary() {
       rawGarments,
     });
   }, [garments, rawGarments]);
+  useEffect(() => {
+    const nextIsShowingLoadingState =
+      isGarmentLibraryLoading && garments.length === 0 && !hasFinishedInitialLoad;
+
+    setIsShowingLoadingState((currentValue) => {
+      if (currentValue === nextIsShowingLoadingState) {
+        return currentValue;
+      }
+
+      console.log("[GarmentLibrary] syncing loading-state flag", {
+        previousIsShowingLoadingState: currentValue,
+        nextIsShowingLoadingState,
+        isGarmentLibraryLoading,
+        hasFinishedInitialLoad,
+        garmentCount: garments.length,
+      });
+
+      return nextIsShowingLoadingState;
+    });
+  }, [garments.length, hasFinishedInitialLoad, isGarmentLibraryLoading]);
   const categoryMap = useMemo(() => {
     try {
       return buildLookupOptionMap(categories);
@@ -2227,6 +2250,7 @@ export default function GarmentLibrary() {
   console.log("[GarmentLibrary] before main render branches", {
     garmentCount: garments.length,
     isGarmentLibraryLoading,
+    isShowingLoadingState,
     hasFinishedInitialLoad,
     garmentBrowseItemCount: garmentBrowseItems.length,
     filteredGarmentCount,
@@ -2362,7 +2386,7 @@ export default function GarmentLibrary() {
 
           <div className="products-results-meta">
             <span>
-              {isGarmentLibraryLoading && garments.length === 0
+              {isShowingLoadingState
                 ? "Loading garment library..."
                 : `${filteredGarmentCount} garment${filteredGarmentCount === 1 ? "" : "s"} shown`}
             </span>
@@ -2388,6 +2412,7 @@ export default function GarmentLibrary() {
                 try {
                   console.log("[GarmentLibrary] evaluating garment list branch", {
                     isGarmentLibraryLoading,
+                    isShowingLoadingState,
                     garmentCount: garments.length,
                     filteredGarmentCount,
                     renderedGarmentCardCount: renderedGarmentCards.length,
@@ -2395,7 +2420,7 @@ export default function GarmentLibrary() {
                     hasFinishedInitialLoad,
                   });
 
-                  if (isGarmentLibraryLoading && garments.length === 0) {
+                  if (isShowingLoadingState) {
                     console.log("[GarmentLibrary] taking loading-state branch");
                     return (
                       <div className="products-empty-state">
@@ -2456,6 +2481,7 @@ export default function GarmentLibrary() {
                   });
                   logGarmentRenderError("main garment list branch", error, {
                     isGarmentLibraryLoading,
+                    isShowingLoadingState,
                     garmentCount: garments.length,
                     filteredGarmentCount,
                     renderedGarmentCardCount: renderedGarmentCards.length,
