@@ -110,6 +110,29 @@ function buildImportedGarmentOptionLabel(item, model) {
   return modelCode || modelName || garmentTitle || "Untitled Garment";
 }
 
+function buildUniqueSelectOptions(values = []) {
+  const optionsByKey = new Map();
+
+  values.forEach((value) => {
+    const label = normalizeText(value);
+    const key = normalizeTextKey(label);
+
+    if (!label || !key || optionsByKey.has(key)) return;
+    optionsByKey.set(key, { value: label, label });
+  });
+
+  return Array.from(optionsByKey.values()).sort((left, right) => left.label.localeCompare(right.label));
+}
+
+function buildVariantColorOptions(variants = []) {
+  return buildUniqueSelectOptions((variants || []).map((variant) => variant?.name));
+}
+
+function buildGarmentSizeOptions(sizeValues = [], sizeLookups = []) {
+  const sortedSizes = sortSizesByLookup(uniqueList(sizeValues), sizeLookups);
+  return buildUniqueSelectOptions(sortedSizes);
+}
+
 function inferImportedGarmentBrandName(item, model) {
   const title = normalizeText(item?.title);
   const modelName = normalizeText(model?.display_name);
@@ -617,6 +640,8 @@ export default function GarmentLibrary() {
   const [modelDraft, setModelDraft] = useState(buildModelDraftFromModel());
   const [createMode, setCreateMode] = useState("imported");
   const [selectedReusableGarmentId, setSelectedReusableGarmentId] = useState("");
+  const [selectedImportedColor, setSelectedImportedColor] = useState("");
+  const [selectedImportedSize, setSelectedImportedSize] = useState("");
   const [importError, setImportError] = useState("");
   const [importNotice, setImportNotice] = useState("");
   const [importWarnings, setImportWarnings] = useState([]);
@@ -1607,6 +1632,19 @@ export default function GarmentLibrary() {
       })
       .sort((left, right) => left.sortKey.localeCompare(right.sortKey));
   }, [form.brand_lookup_id, form.category_lookup_id, garmentModelMap, garments]);
+  const selectedReusableGarmentEntry = useMemo(
+    () =>
+      matchingImportedGarments.find((entry) => entry.item.id === selectedReusableGarmentId) || null,
+    [matchingImportedGarments, selectedReusableGarmentId]
+  );
+  const derivedImportedColorOptions = useMemo(
+    () => buildVariantColorOptions(selectedReusableGarmentEntry?.item?.variants || EMPTY_LIST),
+    [selectedReusableGarmentEntry]
+  );
+  const derivedImportedSizeOptions = useMemo(
+    () => buildGarmentSizeOptions(selectedReusableGarmentEntry?.item?.sizes || EMPTY_LIST, sizes),
+    [selectedReusableGarmentEntry, sizes]
+  );
   const isImportedSelectionLocked = Boolean(
     selectedReusableGarmentId && editingId === selectedReusableGarmentId
   );
@@ -1626,6 +1664,33 @@ export default function GarmentLibrary() {
       createMode === "custom" ||
       (hasCategoryAndBrandSelected && matchingImportedGarments.length === 0)
   );
+  useEffect(() => {
+    console.log("[GarmentLibrary] create garment selector derivation", {
+      selectedCategory: categoryMap.get(form.category_lookup_id)?.name || "",
+      selectedBrand: brandMap.get(form.brand_lookup_id)?.name || "",
+      selectedGarmentModel: selectedReusableGarmentEntry?.optionLabel || "",
+      derivedModelCount: matchingImportedGarments.length,
+      derivedColorCount: derivedImportedColorOptions.length,
+      derivedSizeCount: derivedImportedSizeOptions.length,
+    });
+  }, [
+    brandMap,
+    categoryMap,
+    derivedImportedColorOptions.length,
+    derivedImportedSizeOptions.length,
+    form.brand_lookup_id,
+    form.category_lookup_id,
+    matchingImportedGarments.length,
+    selectedReusableGarmentEntry,
+  ]);
+  const currentSelectedImportedColor =
+    derivedImportedColorOptions.find((option) => option.value === selectedImportedColor)?.value ||
+    derivedImportedColorOptions[0]?.value ||
+    "";
+  const currentSelectedImportedSize =
+    derivedImportedSizeOptions.find((option) => option.value === selectedImportedSize)?.value ||
+    derivedImportedSizeOptions[0]?.value ||
+    "";
   const selectedGarmentLabel = getGarmentModeLabel(form.title || selectedGarment?.title);
   const placementSuggestionContext = useMemo(() => {
     const selectedCategory = categoryMap.get(form.category_lookup_id);
@@ -1725,6 +1790,8 @@ export default function GarmentLibrary() {
     setModelDraft(buildModelDraftFromModel());
     setCreateMode("imported");
     setSelectedReusableGarmentId("");
+    setSelectedImportedColor("");
+    setSelectedImportedSize("");
     setVariantSearch("");
   }
 
@@ -1752,6 +1819,8 @@ export default function GarmentLibrary() {
 
     setCreateMode("custom");
     setSelectedReusableGarmentId("");
+    setSelectedImportedColor("");
+    setSelectedImportedSize("");
     setEditingId(item.id);
     setForm(buildFormFromGarment(item, brands, categories, garmentModels, sizes));
     setHasCustomizedPlacements(
@@ -1774,6 +1843,8 @@ export default function GarmentLibrary() {
   function handleReusableGarmentSelect(garmentId) {
     if (!garmentId) {
       setSelectedReusableGarmentId("");
+      setSelectedImportedColor("");
+      setSelectedImportedSize("");
       return;
     }
 
@@ -1787,6 +1858,8 @@ export default function GarmentLibrary() {
 
     setCreateMode("imported");
     setSelectedReusableGarmentId(matchedEntry.item.id);
+    setSelectedImportedColor("");
+    setSelectedImportedSize("");
     setEditingId(matchedEntry.item.id);
     setForm(buildFormFromGarment(matchedEntry.item, brands, categories, garmentModels, sizes));
     setHasCustomizedPlacements(
@@ -1824,6 +1897,8 @@ export default function GarmentLibrary() {
     setModelDraft(buildModelDraftFromModel(null, preservedBrandId));
     setCreateMode("custom");
     setSelectedReusableGarmentId("");
+    setSelectedImportedColor("");
+    setSelectedImportedSize("");
     setVariantSearch("");
     setActiveWorkspace("create");
   }
@@ -1877,6 +1952,8 @@ export default function GarmentLibrary() {
       selectedReusableGarmentId
     ) {
       setSelectedReusableGarmentId("");
+      setSelectedImportedColor("");
+      setSelectedImportedSize("");
     }
   }
 
@@ -3008,7 +3085,7 @@ export default function GarmentLibrary() {
                       {matchingImportedGarments.length ? (
                         <div style={{ display: "grid", gap: "12px" }}>
                           <label style={labelStyle}>
-                            Available Imported Garments
+                            Garment Model / Style
                             <select
                               value={selectedReusableGarmentId}
                               onChange={(event) => handleReusableGarmentSelect(event.target.value)}
@@ -3016,7 +3093,7 @@ export default function GarmentLibrary() {
                               disabled={isImportedSelectionLocked}
                             >
                               <option value="">
-                                Select an imported garment for this brand and category
+                                Select a garment model or style
                               </option>
                               {matchingImportedGarments.map(({ item, optionLabel }) => (
                                 <option key={item.id} value={item.id}>
@@ -3026,11 +3103,57 @@ export default function GarmentLibrary() {
                             </select>
                           </label>
 
+                          {selectedReusableGarmentEntry ? (
+                            <div className="products-editor-grid">
+                              <label style={labelStyle}>
+                                Color
+                                <select
+                                  value={currentSelectedImportedColor}
+                                  onChange={(event) => setSelectedImportedColor(event.target.value)}
+                                  style={fieldStyle}
+                                >
+                                  <option value="">
+                                    {derivedImportedColorOptions.length
+                                      ? "Select color"
+                                      : "No colors available"}
+                                  </option>
+                                  {derivedImportedColorOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+
+                              <label style={labelStyle}>
+                                Size
+                                <select
+                                  value={currentSelectedImportedSize}
+                                  onChange={(event) => setSelectedImportedSize(event.target.value)}
+                                  style={fieldStyle}
+                                >
+                                  <option value="">
+                                    {derivedImportedSizeOptions.length
+                                      ? "Select size"
+                                      : "No sizes available"}
+                                  </option>
+                                  {derivedImportedSizeOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            </div>
+                          ) : null}
+
                           <div className="products-field-footer">
                             <span>
-                              {matchingImportedGarments.length} imported garment
-                              {matchingImportedGarments.length === 1 ? "" : "s"} found for this
-                              selection.
+                              {matchingImportedGarments.length} model
+                              {matchingImportedGarments.length === 1 ? "" : "s"} found.{" "}
+                              {selectedReusableGarmentEntry
+                                ? `${derivedImportedColorOptions.length} colors and ${derivedImportedSizeOptions.length} sizes derived from the selected library garment.`
+                                : "Choose a model to derive colors and sizes from the library."}
                             </span>
                             <button
                               type="button"
@@ -3044,7 +3167,8 @@ export default function GarmentLibrary() {
                           {isImportedSelectionLocked ? (
                             <div className="products-callout">
                               This garment is being reused from the import library. Category, brand,
-                              model, and display name are derived from that supplier record.
+                              model, colors, sizes, and display name are derived from that supplier
+                              record.
                             </div>
                           ) : null}
                         </div>
