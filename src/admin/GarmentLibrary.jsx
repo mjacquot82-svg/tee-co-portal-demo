@@ -596,7 +596,8 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
 
 export default function GarmentLibrary() {
   const rawGarments = useGarmentLibraryItems();
-  const garments = Array.isArray(rawGarments) ? rawGarments : EMPTY_LIST;
+  const liveGarments = Array.isArray(rawGarments) ? rawGarments : EMPTY_LIST;
+  const garments = liveGarments;
   const { isLoading: isGarmentLibraryLoading, hasFinishedInitialLoad } = useGarmentLibraryStatus();
   const products = useStoredProducts();
   const lookups = useCatalogLookups();
@@ -995,7 +996,7 @@ export default function GarmentLibrary() {
             discardReasons.push("inactive-garment");
           }
 
-          if (!predicateResults.hasSearchIndex) {
+          if (predicateResults.searchFilterActive && !predicateResults.hasSearchIndex) {
             discardReasons.push("missing-search-index");
           }
 
@@ -1130,6 +1131,39 @@ export default function GarmentLibrary() {
   const hasActiveGarmentFilters = Boolean(
     searchTerm.trim() || categoryFilter !== "all" || brandFilter !== "all" || storefrontUsageFilter !== "all"
   );
+  const liveGarmentEntries = useMemo(
+    () =>
+      liveGarments
+        .filter((item) => item?.active !== false)
+        .map((item) => {
+          const resolvedBrandId = resolveGarmentBrandId(item, garmentModelMap);
+          const brand = brandMap.get(resolvedBrandId);
+          const model = garmentModelMap.get(item.garment_model_lookup_id);
+
+          return {
+            item,
+            usage: garmentUsageMap.get(item.id) || EMPTY_GARMENT_USAGE,
+            brandId: resolvedBrandId,
+            brandName: normalizeText(brand?.name),
+            categoryName: normalizeText(categoryMap.get(item.category_lookup_id)?.name),
+            modelLabel: normalizeText(model?.display_name),
+            modelCode: normalizeText(model?.model_code),
+            imageSrc: normalizeText(item?.image),
+            subtitle: buildGarmentLibraryLabel(item, brands, categories, garmentModels),
+            searchIndex: [
+              item.title,
+              brand?.name,
+              model?.display_name,
+              model?.model_code,
+              ...((item.variants || []).map((variant) => variant?.name) || []),
+            ]
+              .filter(Boolean)
+              .join(" ")
+              .toLowerCase(),
+          };
+        }),
+    [brandMap, brands, categories, categoryMap, garmentModelMap, garmentModels, garmentUsageMap, liveGarments]
+  );
   const activeGarmentEntries = useMemo(
     () => garmentBrowseItems.filter((entry) => entry?.item?.active !== false),
     [garmentBrowseItems]
@@ -1142,12 +1176,16 @@ export default function GarmentLibrary() {
       return filteredGarments;
     }
 
+    if (liveGarmentEntries.length > 0) {
+      return liveGarmentEntries;
+    }
+
     if (activeGarmentCount > 0) {
       return activeGarmentEntries;
     }
 
     return EMPTY_LIST;
-  }, [activeGarmentCount, activeGarmentEntries, filteredGarments]);
+  }, [activeGarmentCount, activeGarmentEntries, filteredGarments, liveGarmentEntries]);
   const filteredGarmentCount = filteredGarments.length;
   const brandSelectOptions = useMemo(
     () => {
@@ -1350,6 +1388,29 @@ export default function GarmentLibrary() {
       filteredGarmentCount,
     });
   }, [filteredGarmentCount, garmentEntriesForRender.length, renderedGarmentCards.length]);
+  useEffect(() => {
+    console.log("[GarmentLibrary] derivation chain snapshot", {
+      liveGarmentsLength: liveGarments.length,
+      liveGarmentsFirstItem: liveGarments[0] ?? null,
+      garmentBrowseItemsLength: garmentBrowseItems.length,
+      garmentBrowseItemsFirstItem: garmentBrowseItems[0] ?? null,
+      filteredGarmentsLength: filteredGarments.length,
+      filteredGarmentsFirstItem: filteredGarments[0] ?? null,
+      renderedGarmentCardsLength: renderedGarmentCards.length,
+      renderedGarmentCardsFirstItem:
+        renderedGarmentCards[0] == null
+          ? null
+          : {
+              key: renderedGarmentCards[0].key ?? null,
+              type:
+                typeof renderedGarmentCards[0].type === "string"
+                  ? renderedGarmentCards[0].type
+                  : renderedGarmentCards[0].type?.displayName ||
+                    renderedGarmentCards[0].type?.name ||
+                    typeof renderedGarmentCards[0].type,
+            },
+    });
+  }, [filteredGarments, garmentBrowseItems, liveGarments, renderedGarmentCards]);
   const garmentPreviewMap = useMemo(() => buildGarmentMap(garments), [garments]);
   const previewGarments = useMemo(() => {
     if (!importPreview) return [];
