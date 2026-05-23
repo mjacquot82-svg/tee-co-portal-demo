@@ -334,6 +334,17 @@ function logGarmentRenderError(stage, error, context = {}) {
   console.error(`[GarmentLibrary] ${stage} render context`, context);
 }
 
+function buildGarmentDebugContext(item, usage, extraContext = {}) {
+  return {
+    garmentId: item?.id,
+    garmentTitle: item?.title || item?.display_name,
+    garmentBrand: item?.brand || item?.brandName || item?.brand_label || item?.brand_lookup_id || "",
+    usage,
+    item,
+    ...extraContext,
+  };
+}
+
 function summarizeGarmentBrowseItems(entries = []) {
   return entries.reduce(
     (summary, entry) => {
@@ -377,18 +388,23 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
   onRemove,
 }) {
   const [hasImageError, setHasImageError] = useState(false);
-  const garmentId = item?.id;
-  const garmentTitle = item?.title;
+  const safeItem = item && typeof item === "object" ? item : {};
+  const safeUsage = usage && typeof usage === "object" ? usage : EMPTY_GARMENT_USAGE;
+  const garmentId = safeItem?.id;
+  const garmentTitle = safeItem?.title || safeItem?.display_name;
+  const garmentBrand =
+    safeItem?.brand || safeItem?.brandName || safeItem?.brand_label || safeItem?.brand_lookup_id || "";
 
   function logCardFieldError(field, error, extraContext = {}) {
     logGarmentRenderError("GarmentLibraryCard field access", error, {
       field,
       garmentId,
       garmentTitle,
+      garmentBrand,
       subtitle,
       isSelected,
-      usage,
-      item,
+      usage: safeUsage,
+      item: safeItem,
       ...extraContext,
     });
   }
@@ -402,12 +418,9 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
     }
   }
 
-  const imageSrc = readCardField("item.image/item.imageSrc", () => normalizeText(item.image || item.imageSrc));
-  const showUploadedImage = Boolean(imageSrc) && !hasImageError;
-
   useEffect(() => {
     setHasImageError(false);
-  }, [imageSrc, garmentId, garmentTitle]);
+  }, [safeItem?.image, safeItem?.imageSrc, garmentId, garmentTitle]);
 
   function handleKeyDown(event) {
     if (event.key === "Enter" || event.key === " ") {
@@ -417,22 +430,44 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
   }
 
   try {
-    const cardKey = readCardField("item.id/item.title", () => `${item.id || item.title}-${imageSrc}`);
-    const altText = readCardField("item.title", () => item.title);
-    const renderedTitle = readCardField("item.title", () => item.title);
-    const variants = readCardField("item.variants", () => item.variants || []);
+    const imageSrc = readCardField("item.image/item.imageSrc", () =>
+      normalizeText(safeItem.image || safeItem.imageSrc)
+    );
+    const showUploadedImage = Boolean(imageSrc) && !hasImageError;
+    const cardKey = readCardField("item.id/item.title", () => `${safeItem.id || safeItem.title}-${imageSrc}`);
+    const altText = readCardField("item.title", () => safeItem.title || "Untitled Garment");
+    const renderedTitle = readCardField("item.title", () => safeItem.title || "Untitled Garment");
+    const variants = readCardField("item.variants", () => {
+      if (safeItem.variants == null) return [];
+      if (!Array.isArray(safeItem.variants)) {
+        throw new Error("Malformed variants array");
+      }
+      return safeItem.variants;
+    });
     const variantCount = readCardField("item.variants.length", () => variants.length, {
       variantsType: typeof variants,
       variantsIsArray: Array.isArray(variants),
     });
-    const sizes = readCardField("item.sizes", () => item.sizes || []);
+    const sizes = readCardField("item.sizes", () => {
+      if (safeItem.sizes == null) return [];
+      if (!Array.isArray(safeItem.sizes)) {
+        throw new Error("Malformed sizes array");
+      }
+      return safeItem.sizes;
+    });
     const sizesLabel = readCardField("item.sizes.join", () => sizes.join(", ") || "None", {
       sizesType: typeof sizes,
       sizesIsArray: Array.isArray(sizes),
     });
     const defaultProductionMethods = readCardField(
       "item.default_production_methods",
-      () => item.default_production_methods || []
+      () => {
+        if (safeItem.default_production_methods == null) return [];
+        if (!Array.isArray(safeItem.default_production_methods)) {
+          throw new Error("Malformed default_production_methods array");
+        }
+        return safeItem.default_production_methods;
+      }
     );
     const defaultsLabel = readCardField(
       "item.default_production_methods.join",
@@ -442,9 +477,15 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
         defaultProductionMethodsIsArray: Array.isArray(defaultProductionMethods),
       }
     );
-    const linkedProductCount = readCardField("usage.linkedProductCount", () => usage.linkedProductCount, {
-      usageType: typeof usage,
-      usageKeys: usage && typeof usage === "object" ? Object.keys(usage) : [],
+    const linkedProductCount = readCardField("usage.linkedProductCount", () => {
+      const value = safeUsage.linkedProductCount;
+      if (typeof value !== "number") {
+        throw new Error("Invalid storefront usage rendering: usage.linkedProductCount is not a number");
+      }
+      return value;
+    }, {
+      usageType: typeof safeUsage,
+      usageKeys: safeUsage && typeof safeUsage === "object" ? Object.keys(safeUsage) : [],
     });
 
     return (
@@ -531,14 +572,25 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
     logGarmentRenderError("GarmentLibraryCard", error, {
       garmentId,
       garmentTitle,
+      garmentBrand,
       subtitle,
       isSelected,
       hasImageError,
-      imageSrc,
-      usage,
-      item,
+      usage: safeUsage,
+      item: safeItem,
     });
-    throw error;
+    return (
+      <article className="products-card" role="article">
+        <div className="products-card-body">
+          <div className="products-card-title-row">
+            <h3 style={{ margin: 0 }}>{garmentTitle || "Garment render failed"}</h3>
+          </div>
+          <p className="products-card-subtitle">
+            Unable to render this garment card. See console for garment id, brand, and failing field.
+          </p>
+        </div>
+      </article>
+    );
   }
 });
 
@@ -1461,15 +1513,90 @@ export default function GarmentLibrary() {
     () => getPlacementOptionsForGarment(placementSuggestionContext),
     [placementSuggestionContext]
   );
-  const storefrontLinkedGarments = useMemo(
-    () => garmentBrowseItems.filter((entry) => entry.usage.linkedProductCount > 0).length,
-    [garmentBrowseItems]
-  );
-  const totalVariantCount = useMemo(
-    () => garments.reduce((total, garment) => total + (Array.isArray(garment.variants) ? garment.variants.length : 0), 0),
-    [garments]
-  );
-  const renderedGarmentCards = garmentCardNodes.filter(Boolean);
+  const storefrontLinkedGarments = useMemo(() => {
+    try {
+      return garmentBrowseItems.filter((entry, index) => {
+        try {
+          if (!entry || typeof entry !== "object") {
+            throw new Error("Invalid garment browse entry");
+          }
+          if (!entry.usage || typeof entry.usage !== "object") {
+            throw new Error("Missing storefront usage object");
+          }
+          if (typeof entry.usage.linkedProductCount !== "number") {
+            throw new Error("Invalid storefront usage rendering: usage.linkedProductCount is not a number");
+          }
+          return entry.usage.linkedProductCount > 0;
+        } catch (error) {
+          logGarmentRenderError(
+            "storefrontLinkedGarments derivation",
+            error,
+            buildGarmentDebugContext(entry?.item, entry?.usage, {
+              index,
+              suspectedFailureField:
+                !entry || typeof entry !== "object"
+                  ? "garmentBrowseItems[]"
+                  : !entry?.usage || typeof entry.usage !== "object"
+                    ? "entry.usage"
+                    : "entry.usage.linkedProductCount",
+              entry,
+            })
+          );
+          return false;
+        }
+      }).length;
+    } catch (error) {
+      logGarmentRenderError("storefrontLinkedGarments useMemo", error, {
+        garmentBrowseItemsCount: garmentBrowseItems.length,
+      });
+      return 0;
+    }
+  }, [garmentBrowseItems]);
+  const totalVariantCount = useMemo(() => {
+    try {
+      return garments.reduce((total, garment, index) => {
+        try {
+          if (!garment || typeof garment !== "object") {
+            throw new Error("Invalid garment object");
+          }
+          if (garment.variants != null && !Array.isArray(garment.variants)) {
+            throw new Error("Malformed variants array");
+          }
+          return total + (Array.isArray(garment.variants) ? garment.variants.length : 0);
+        } catch (error) {
+          logGarmentRenderError(
+            "totalVariantCount derivation",
+            error,
+            buildGarmentDebugContext(garment, null, {
+              index,
+              suspectedFailureField:
+                !garment || typeof garment !== "object" ? "garments[]" : "garment.variants",
+            })
+          );
+          return total;
+        }
+      }, 0);
+    } catch (error) {
+      logGarmentRenderError("totalVariantCount useMemo", error, {
+        garmentCount: garments.length,
+      });
+      return 0;
+    }
+  }, [garments]);
+  const renderedGarmentCards = useMemo(() => {
+    try {
+      if (!Array.isArray(garmentCardNodes)) {
+        throw new Error("garmentCardNodes is not an array");
+      }
+      return garmentCardNodes.filter(Boolean);
+    } catch (error) {
+      logGarmentRenderError("renderedGarmentCards derivation", error, {
+        garmentCardNodesType: typeof garmentCardNodes,
+        garmentCardNodesIsArray: Array.isArray(garmentCardNodes),
+      });
+      return EMPTY_LIST;
+    }
+  }, [garmentCardNodes]);
 
   function resetForm() {
     setForm(emptyLibraryForm);
