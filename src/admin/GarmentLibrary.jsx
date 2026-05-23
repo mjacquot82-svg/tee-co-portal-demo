@@ -741,6 +741,13 @@ export default function GarmentLibrary() {
     try {
       const normalizedSearch = deferredSearchTerm.trim().toLowerCase();
       const discardReasonCounts = {
+        "missing-entry": 0,
+        "missing-item": 0,
+        "missing-title": 0,
+        "missing-search-index": 0,
+        "missing-category-name": 0,
+        "missing-brand-name": 0,
+        "inactive-garment": 0,
         "category-mismatch": 0,
         "brand-mismatch": 0,
         "storefront-usage-mismatch": 0,
@@ -767,20 +774,91 @@ export default function GarmentLibrary() {
       const nextItems = garmentBrowseItems.filter((entry, index) => {
         try {
           const discardReasons = [];
+          const normalizedCategoryName = normalizeTextKey(entry?.categoryName);
+          const normalizedCategoryFilter = normalizeTextKey(categoryFilter);
+          const normalizedBrandName = normalizeTextKey(entry?.brandName);
+          const normalizedBrandFilter = normalizeTextKey(brandFilter);
+          const linkedProductCount = entry?.usage?.linkedProductCount ?? 0;
+          const searchIndex = typeof entry?.searchIndex === "string" ? entry.searchIndex : "";
+          const searchIndexIncludesTerm = normalizedSearch ? searchIndex.includes(normalizedSearch) : true;
+          const storefrontUsageMatches = getGarmentStorefrontUsageMatch(storefrontUsageFilter, entry?.usage);
+          const predicateResults = {
+            hasEntry: Boolean(entry),
+            hasItem: Boolean(entry?.item),
+            hasTitle: Boolean(normalizeText(entry?.item?.title)),
+            hasCategoryName: Boolean(normalizeText(entry?.categoryName)),
+            hasBrandName: Boolean(normalizeText(entry?.brandName)),
+            isInactiveGarment: entry?.item?.active === false,
+            hasSearchIndex: Boolean(normalizeText(searchIndex)),
+            categoryFilterActive: categoryFilter !== "all",
+            categoryFilterPassed:
+              categoryFilter === "all" || normalizedCategoryName === normalizedCategoryFilter,
+            brandFilterActive: brandFilter !== "all",
+            brandFilterPassed: brandFilter === "all" || normalizedBrandName === normalizedBrandFilter,
+            storefrontUsageFilterActive: storefrontUsageFilter !== "all",
+            storefrontUsageFilterPassed: storefrontUsageMatches,
+            searchFilterActive: Boolean(normalizedSearch),
+            searchFilterPassed: searchIndexIncludesTerm,
+          };
+          const diagnosticSnapshot = {
+            index,
+            garmentId: entry?.item?.id,
+            title: entry?.item?.title,
+            subtitle: entry?.subtitle,
+            predicateResults,
+            normalizedFields: {
+              categoryName: normalizedCategoryName,
+              categoryFilter: normalizedCategoryFilter,
+              brandName: normalizedBrandName,
+              brandFilter: normalizedBrandFilter,
+              searchIndex,
+              normalizedSearch,
+              storefrontUsageFilter,
+              linkedProductCount,
+            },
+          };
 
-          if (categoryFilter !== "all" && normalizeTextKey(entry.categoryName) !== normalizeTextKey(categoryFilter)) {
+          if (!predicateResults.hasEntry) {
+            discardReasons.push("missing-entry");
+          }
+
+          if (!predicateResults.hasItem) {
+            discardReasons.push("missing-item");
+          }
+
+          if (!predicateResults.hasTitle) {
+            discardReasons.push("missing-title");
+          }
+
+          if (!predicateResults.hasCategoryName) {
+            discardReasons.push("missing-category-name");
+          }
+
+          if (!predicateResults.hasBrandName) {
+            discardReasons.push("missing-brand-name");
+          }
+
+          if (predicateResults.isInactiveGarment) {
+            discardReasons.push("inactive-garment");
+          }
+
+          if (!predicateResults.hasSearchIndex) {
+            discardReasons.push("missing-search-index");
+          }
+
+          if (!predicateResults.categoryFilterPassed) {
             discardReasons.push("category-mismatch");
           }
 
-          if (brandFilter !== "all" && normalizeTextKey(entry.brandName) !== normalizeTextKey(brandFilter)) {
+          if (!predicateResults.brandFilterPassed) {
             discardReasons.push("brand-mismatch");
           }
 
-          if (!getGarmentStorefrontUsageMatch(storefrontUsageFilter, entry.usage)) {
+          if (!predicateResults.storefrontUsageFilterPassed) {
             discardReasons.push("storefront-usage-mismatch");
           }
 
-          if (normalizedSearch && !entry.searchIndex.includes(normalizedSearch)) {
+          if (!predicateResults.searchFilterPassed) {
             discardReasons.push("search-mismatch");
           }
 
@@ -789,16 +867,22 @@ export default function GarmentLibrary() {
               discardReasonCounts[reason] = (discardReasonCounts[reason] || 0) + 1;
             });
             console.debug("[GarmentLibrary] garment discarded by filteredGarments", {
-              index,
-              garmentId: entry?.item?.id,
-              title: entry?.item?.title,
               discardReasons,
-              entrySnapshot: {
-                categoryName: entry?.categoryName,
-                brandName: entry?.brandName,
-                linkedProductCount: entry?.usage?.linkedProductCount,
-                searchIndex: entry?.searchIndex,
-              },
+              discardReasonText: discardReasons.map((reason) => {
+                if (reason === "inactive-garment") return "failed activeOnly filter";
+                if (reason === "category-mismatch") return "failed category filter";
+                if (reason === "brand-mismatch") return "failed brand filter";
+                if (reason === "storefront-usage-mismatch") return "failed storefront usage filter";
+                if (reason === "search-mismatch") return "failed search filter";
+                if (reason === "missing-category-name") return "missing normalized field: categoryName";
+                if (reason === "missing-brand-name") return "missing normalized field: brandName";
+                if (reason === "missing-search-index") return "missing normalized field: searchIndex";
+                if (reason === "missing-title") return "missing normalized field: title";
+                if (reason === "missing-item") return "invalid derived status: missing item";
+                if (reason === "missing-entry") return "invalid derived status: missing entry";
+                return reason;
+              }),
+              ...diagnosticSnapshot,
               filters: {
                 categoryFilter,
                 brandFilter,
@@ -810,9 +894,15 @@ export default function GarmentLibrary() {
           }
 
           console.debug("[GarmentLibrary] garment passed filteredGarments", {
-            index,
-            garmentId: entry?.item?.id,
-            title: entry?.item?.title,
+            discardReasons,
+            discardReasonText: ["passed all filteredGarments predicates"],
+            ...diagnosticSnapshot,
+            filters: {
+              categoryFilter,
+              brandFilter,
+              storefrontUsageFilter,
+              normalizedSearch,
+            },
           });
           return true;
         } catch (error) {
