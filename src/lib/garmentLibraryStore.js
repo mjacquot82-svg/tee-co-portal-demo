@@ -13,10 +13,14 @@ let snapshotVersion = 0;
 let cachedExternalSnapshot = Object.freeze({
   version: snapshotVersion,
   items: cachedSnapshot,
+  isLoading: false,
+  hasLoadedRemote: false,
+  hasFinishedInitialLoad: false,
 });
 let loadStarted = false;
 let loadPromise = null;
 let hasLoadedRemote = false;
+let hasFinishedInitialLoad = false;
 
 const DEFAULT_LIBRARY_ITEMS = [];
 const SNAPSHOT_VERSION = 1;
@@ -47,11 +51,21 @@ function emitUpdated() {
   listeners.forEach((listener) => listener());
 }
 
-function updateExternalSnapshot(items) {
+function getSnapshotStatus() {
+  return {
+    isLoading: loadStarted && !hasFinishedInitialLoad,
+    hasLoadedRemote,
+    hasFinishedInitialLoad,
+  };
+}
+
+function updateExternalSnapshot(items = cachedSnapshot) {
+  const status = getSnapshotStatus();
   snapshotVersion += 1;
   cachedExternalSnapshot = Object.freeze({
     version: snapshotVersion,
     items,
+    ...status,
   });
 }
 
@@ -215,8 +229,14 @@ function getActiveSnapshot() {
 function getGarmentLibrarySnapshot() {
   try {
     const items = getGarmentLibraryItems();
+    const status = getSnapshotStatus();
 
-    if (items !== cachedExternalSnapshot.items) {
+    if (
+      items !== cachedExternalSnapshot.items ||
+      status.isLoading !== cachedExternalSnapshot.isLoading ||
+      status.hasLoadedRemote !== cachedExternalSnapshot.hasLoadedRemote ||
+      status.hasFinishedInitialLoad !== cachedExternalSnapshot.hasFinishedInitialLoad
+    ) {
       updateExternalSnapshot(items);
     }
 
@@ -367,6 +387,8 @@ function ensureLoaded() {
 
   getActiveSnapshot();
   loadStarted = true;
+  updateExternalSnapshot();
+  emitUpdated();
   console.log("[garmentLibraryStore] ensureLoaded starting refreshGarmentLibrary", {
     hasLoadedRemote,
     loadStarted,
@@ -385,8 +407,12 @@ function ensureLoaded() {
       return result;
     })
     .finally(() => {
+      hasFinishedInitialLoad = true;
+      updateExternalSnapshot();
+      emitUpdated();
       console.log("[garmentLibraryStore] ensureLoaded refresh finished", {
         hasLoadedRemote,
+        hasFinishedInitialLoad,
         cachedSnapshotCount: Array.isArray(cachedSnapshot) ? cachedSnapshot.length : 0,
       });
       loadPromise = null;
@@ -518,6 +544,20 @@ export function useGarmentLibraryItems() {
   });
 
   return Array.isArray(snapshot?.items) ? snapshot.items : EMPTY_ITEMS;
+}
+
+export function useGarmentLibraryStatus() {
+  const snapshot = useSyncExternalStore(
+    subscribeToGarmentLibrary,
+    getGarmentLibrarySnapshot,
+    () => cachedExternalSnapshot
+  );
+
+  return {
+    isLoading: Boolean(snapshot?.isLoading),
+    hasLoadedRemote: Boolean(snapshot?.hasLoadedRemote),
+    hasFinishedInitialLoad: Boolean(snapshot?.hasFinishedInitialLoad),
+  };
 }
 
 export async function createGarmentLibraryItem(values) {

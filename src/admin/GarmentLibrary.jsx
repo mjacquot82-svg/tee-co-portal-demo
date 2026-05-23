@@ -12,9 +12,9 @@ import {
 import {
   createGarmentLibraryItem,
   deleteGarmentLibraryItem,
-  getGarmentLibraryItems,
   updateGarmentLibraryItem,
   useGarmentLibraryItems,
+  useGarmentLibraryStatus,
 } from "../lib/garmentLibraryStore";
 import { buildGarmentUsageMap } from "../lib/productGarmentLinks";
 import { useStoredProducts } from "../lib/productsStore";
@@ -470,8 +470,7 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
 export default function GarmentLibrary() {
   const rawGarments = useGarmentLibraryItems();
   const garments = Array.isArray(rawGarments) ? rawGarments : EMPTY_LIST;
-  const directGarmentSnapshot = getGarmentLibraryItems();
-  const debugVisibleGarments = Array.isArray(directGarmentSnapshot) ? directGarmentSnapshot : EMPTY_LIST;
+  const { isLoading: isGarmentLibraryLoading, hasFinishedInitialLoad } = useGarmentLibraryStatus();
   const products = useStoredProducts();
   const lookups = useCatalogLookups();
   const categories = lookups.categories ?? EMPTY_LIST;
@@ -557,17 +556,6 @@ export default function GarmentLibrary() {
       rawGarments,
     });
   }, [garments, rawGarments]);
-  useEffect(() => {
-    console.debug("[GarmentLibrary] temporary raw render snapshot", {
-      directGarmentSnapshotIsArray: Array.isArray(directGarmentSnapshot),
-      directGarmentSnapshotLength: Array.isArray(directGarmentSnapshot)
-        ? directGarmentSnapshot.length
-        : "non-array",
-      debugVisibleGarmentCount: debugVisibleGarments.length,
-      debugVisibleGarments,
-    });
-  }, [debugVisibleGarments, directGarmentSnapshot]);
-
   const categoryMap = useMemo(() => {
     try {
       return buildLookupOptionMap(categories);
@@ -1406,7 +1394,7 @@ export default function GarmentLibrary() {
     () => garments.reduce((total, garment) => total + (Array.isArray(garment.variants) ? garment.variants.length : 0), 0),
     [garments]
   );
-  const debugVisibleGarmentCount = debugVisibleGarments.length;
+  const renderedGarmentCards = garmentCardNodes.filter(Boolean);
 
   function resetForm() {
     setForm(emptyLibraryForm);
@@ -2036,9 +2024,11 @@ export default function GarmentLibrary() {
 
   console.log("[GarmentLibrary] before main render branches", {
     garmentCount: garments.length,
-    debugVisibleGarmentCount,
+    isGarmentLibraryLoading,
+    hasFinishedInitialLoad,
     garmentBrowseItemCount: garmentBrowseItems.length,
     filteredGarmentCount,
+    renderedGarmentCardCount: renderedGarmentCards.length,
     hasActiveGarmentFilters,
     brandFilterOptionsCount: brandFilterOptions.length,
     brandSelectOptionsCount: brandSelectOptions.length,
@@ -2101,9 +2091,9 @@ export default function GarmentLibrary() {
               <p>Supplier colorways and SKUs tracked across the library.</p>
             </div>
             <div className="products-stat-card garment-library-summary-card">
-              <span>Current View</span>
-              <strong>{debugVisibleGarmentCount}</strong>
-              <p>Raw garments returned from `getGarmentLibraryItems()`.</p>
+              <span>Visible Results</span>
+              <strong>{filteredGarmentCount}</strong>
+              <p>Garments matching the current search and filter state.</p>
             </div>
           </div>
 
@@ -2170,7 +2160,9 @@ export default function GarmentLibrary() {
 
           <div className="products-results-meta">
             <span>
-              {`Debug view: showing ${debugVisibleGarmentCount} raw garments from getGarmentLibraryItems()`}
+              {isGarmentLibraryLoading && garments.length === 0
+                ? "Loading garment library..."
+                : `${filteredGarmentCount} garment${filteredGarmentCount === 1 ? "" : "s"} shown`}
             </span>
             <button
               type="button"
@@ -2190,47 +2182,29 @@ export default function GarmentLibrary() {
 
           <div className="products-list-scroll garment-library-list-scroll">
             <div className="products-list-grid">
-              {console.log("[GarmentLibrary] evaluating temporary raw garment list branch", {
-                debugVisibleGarmentCount,
-                filteredGarmentCount: filteredGarments.length,
-                garmentCardNodeCount: garmentCardNodes.length,
-              })}
-              {(() => {
-                console.log("[GarmentLibrary] before debugVisibleGarments.length branch", {
-                  debugVisibleGarmentCount,
-                  filteredGarmentCount: filteredGarments.length,
-                  garmentCardNodeCount: garmentCardNodes.length,
-                });
-
-                if (debugVisibleGarments.length) {
-                  console.log("[GarmentLibrary] taking temporary raw garment branch", {
-                    debugVisibleGarmentCount,
-                  });
-                  return debugVisibleGarments.map((item, index) => (
-                    <article
-                      key={item?.id || `debug-garment-${index}`}
-                      className="products-card garment-library-card"
-                      style={{ display: "grid", gap: "0.35rem" }}
-                    >
-                      <strong>{item?.title || "Untitled garment"}</strong>
-                      <span>{item?.brand || item?.brand_name || item?.brand_lookup_id || "No brand"}</span>
-                      <span>{item?.id || "No ID"}</span>
-                    </article>
-                  ));
-                }
-
-                console.log("[GarmentLibrary] taking temporary raw empty-state branch", {
-                  debugVisibleGarmentCount,
-                  filteredGarmentCount: filteredGarments.length,
-                  garmentCardNodeCount: garmentCardNodes.length,
-                });
-                return (
-                  <div className="products-empty-state">
-                    <strong>No raw garments returned from `getGarmentLibraryItems()`.</strong>
-                    <span>The component is not receiving any direct garment records to render.</span>
-                  </div>
-                );
-              })()}
+              {isGarmentLibraryLoading && garments.length === 0 ? (
+                <div className="products-empty-state">
+                  <strong>Loading garment library...</strong>
+                  <span>Fetching reusable garments from the remote catalog.</span>
+                </div>
+              ) : renderedGarmentCards.length > 0 ? (
+                renderedGarmentCards
+              ) : (
+                <div className="products-empty-state">
+                  <strong>
+                    {hasActiveGarmentFilters
+                      ? "No garments match the current filters."
+                      : "No garments are available yet."}
+                  </strong>
+                  <span>
+                    {hasActiveGarmentFilters
+                      ? "Clear or adjust the search, category, brand, or storefront filters."
+                      : hasFinishedInitialLoad
+                        ? "Create a garment or import the supplier spreadsheet to populate the library."
+                        : "The garment library has not finished loading yet."}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </section>
