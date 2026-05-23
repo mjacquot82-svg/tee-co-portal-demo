@@ -467,7 +467,8 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
 });
 
 export default function GarmentLibrary() {
-  const garments = useGarmentLibraryItems();
+  const rawGarments = useGarmentLibraryItems();
+  const garments = Array.isArray(rawGarments) ? rawGarments : EMPTY_LIST;
   const products = useStoredProducts();
   const lookups = useCatalogLookups();
   const categories = lookups.categories ?? EMPTY_LIST;
@@ -535,10 +536,24 @@ export default function GarmentLibrary() {
   }, []);
   useEffect(() => {
     console.debug("[GarmentLibrary] raw garments entering component", {
+      rawGarmentsIsArray: Array.isArray(rawGarments),
+      rawGarmentsType: typeof rawGarments,
+      rawGarmentsLength:
+        rawGarments && typeof rawGarments.length === "number" ? rawGarments.length : "no-length",
+      rawGarmentsKeys:
+        rawGarments && typeof rawGarments === "object" ? Object.keys(rawGarments) : EMPTY_LIST,
+      rawGarmentsItemsIsArray: Array.isArray(rawGarments?.items),
+      rawGarmentsItemsLength: Array.isArray(rawGarments?.items) ? rawGarments.items.length : "non-array",
+      rawGarmentsGarmentsIsArray: Array.isArray(rawGarments?.garments),
+      rawGarmentsGarmentsLength: Array.isArray(rawGarments?.garments)
+        ? rawGarments.garments.length
+        : "non-array",
       garmentCount: Array.isArray(garments) ? garments.length : "non-array",
+      derivationConsumes: "rawGarments array directly",
       garments,
+      rawGarments,
     });
-  }, [garments]);
+  }, [garments, rawGarments]);
 
   const categoryMap = useMemo(() => {
     try {
@@ -590,10 +605,18 @@ export default function GarmentLibrary() {
     () => {
       try {
         console.log("[GarmentLibrary] entering garmentBrowseItems derivation", {
+          rawGarmentsIsArray: Array.isArray(rawGarments),
+          rawGarmentsItemsIsArray: Array.isArray(rawGarments?.items),
+          rawGarmentsGarmentsIsArray: Array.isArray(rawGarments?.garments),
+          derivationInputShape: "direct-array",
           garmentsIsArray: Array.isArray(garments),
           garmentCount: Array.isArray(garments) ? garments.length : "non-array",
         });
         console.debug("[GarmentLibrary] garmentBrowseItems derivation start", {
+          rawGarmentsLength:
+            rawGarments && typeof rawGarments.length === "number" ? rawGarments.length : "no-length",
+          rawGarmentsKeys:
+            rawGarments && typeof rawGarments === "object" ? Object.keys(rawGarments) : EMPTY_LIST,
           inputCount: Array.isArray(garments) ? garments.length : "non-array",
           garmentIds: Array.isArray(garments) ? garments.map((item) => item?.id) : [],
         });
@@ -709,7 +732,7 @@ export default function GarmentLibrary() {
         return EMPTY_LIST;
       }
     },
-    [brandMap, brands, categories, categoryMap, garmentModelMap, garmentModels, garmentUsageMap, garments]
+    [brandMap, brands, categories, categoryMap, garmentModelMap, garmentModels, garmentUsageMap, garments, rawGarments]
   );
   const categoryFilterOptions = useMemo(
     () => {
@@ -782,6 +805,8 @@ export default function GarmentLibrary() {
           const searchIndex = typeof entry?.searchIndex === "string" ? entry.searchIndex : "";
           const searchIndexIncludesTerm = normalizedSearch ? searchIndex.includes(normalizedSearch) : true;
           const storefrontUsageMatches = getGarmentStorefrontUsageMatch(storefrontUsageFilter, entry?.usage);
+          const isCategoryFilterActive = categoryFilter !== "all";
+          const isBrandFilterActive = brandFilter !== "all";
           const predicateResults = {
             hasEntry: Boolean(entry),
             hasItem: Boolean(entry?.item),
@@ -790,11 +815,11 @@ export default function GarmentLibrary() {
             hasBrandName: Boolean(normalizeText(entry?.brandName)),
             isInactiveGarment: entry?.item?.active === false,
             hasSearchIndex: Boolean(normalizeText(searchIndex)),
-            categoryFilterActive: categoryFilter !== "all",
+            categoryFilterActive: isCategoryFilterActive,
             categoryFilterPassed:
-              categoryFilter === "all" || normalizedCategoryName === normalizedCategoryFilter,
-            brandFilterActive: brandFilter !== "all",
-            brandFilterPassed: brandFilter === "all" || normalizedBrandName === normalizedBrandFilter,
+              !isCategoryFilterActive || normalizedCategoryName === normalizedCategoryFilter,
+            brandFilterActive: isBrandFilterActive,
+            brandFilterPassed: !isBrandFilterActive || normalizedBrandName === normalizedBrandFilter,
             storefrontUsageFilterActive: storefrontUsageFilter !== "all",
             storefrontUsageFilterPassed: storefrontUsageMatches,
             searchFilterActive: Boolean(normalizedSearch),
@@ -830,11 +855,11 @@ export default function GarmentLibrary() {
             discardReasons.push("missing-title");
           }
 
-          if (!predicateResults.hasCategoryName) {
+          if (isCategoryFilterActive && !predicateResults.hasCategoryName) {
             discardReasons.push("missing-category-name");
           }
 
-          if (!predicateResults.hasBrandName) {
+          if (isBrandFilterActive && !predicateResults.hasBrandName) {
             discardReasons.push("missing-brand-name");
           }
 
