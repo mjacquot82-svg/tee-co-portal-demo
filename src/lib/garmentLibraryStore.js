@@ -117,11 +117,18 @@ function normalizeTextKey(value) {
 
 function normalizeStringList(value) {
   if (Array.isArray(value)) {
-    return Array.from(new Set(value.map((item) => normalizeText(item)).filter(Boolean)));
+    return Array.from(
+      new Set(
+        value
+          .flatMap((item) => normalizeStringList(item))
+          .map((item) => normalizeText(item))
+          .filter(Boolean)
+      )
+    );
   }
 
   return String(value || "")
-    .split(",")
+    .split(/[\n,;|]+/)
     .map((item) => item.trim())
     .filter(Boolean);
 }
@@ -202,6 +209,14 @@ function normalizeGarmentLibraryItem(item = {}) {
     ? item.variants.map((variant) => normalizeVariant(variant)).filter(Boolean)
     : [];
   const derivedVariantSizes = variants.flatMap((variant) => normalizeStringList(variant.sizes));
+  const sizes = normalizeStringList([...(Array.isArray(item.sizes) ? item.sizes : []), ...derivedVariantSizes]);
+
+  console.info("[garmentLibraryStore] normalized garment library item", {
+    title,
+    parsedColors: variants.map((variant) => variant.color || variant.name).filter(Boolean),
+    parsedSizes: sizes,
+    generatedVariantCount: variants.length,
+  });
 
   return {
     id: item.id || `garment-library-${Date.now()}`,
@@ -211,7 +226,7 @@ function normalizeGarmentLibraryItem(item = {}) {
     garment_model_lookup_id: item.garment_model_lookup_id || "",
     image: normalizeText(item.image),
     variants,
-    sizes: normalizeStringList([...(Array.isArray(item.sizes) ? item.sizes : []), ...derivedVariantSizes]),
+    sizes,
     default_placements: normalizeStringList(item.default_placements),
     default_production_methods: normalizeStringList(item.default_production_methods),
     notes: normalizeText(item.notes),
@@ -616,6 +631,15 @@ export async function createGarmentLibraryItem(values) {
     throw new Error("Invalid garment library item");
   }
 
+  console.info("[garmentLibraryStore] final garment object before persistence", {
+    operation: "create",
+    title: normalized.title,
+    parsedColors: normalized.variants.map((variant) => variant.color || variant.name).filter(Boolean),
+    parsedSizes: normalized.sizes,
+    generatedVariantCount: normalized.variants.length,
+    garment: normalized,
+  });
+
   if (!isSupabaseConfigured || !supabase) {
     console.warn("[garmentLibraryStore] createGarmentLibraryItem using local-only fallback because Supabase is unavailable", {
       table: GARMENT_LIBRARY_TABLE,
@@ -690,6 +714,16 @@ export async function updateGarmentLibraryItem(itemId, updates) {
 
   const updated = nextItems.find((item) => item.id === itemId) || null;
   if (!updated) return null;
+
+  console.info("[garmentLibraryStore] final garment object before persistence", {
+    operation: "update",
+    itemId,
+    title: updated.title,
+    parsedColors: updated.variants.map((variant) => variant.color || variant.name).filter(Boolean),
+    parsedSizes: updated.sizes,
+    generatedVariantCount: updated.variants.length,
+    garment: updated,
+  });
 
   if (!isSupabaseConfigured || !supabase) {
     console.warn("[garmentLibraryStore] updateGarmentLibraryItem using local-only fallback because Supabase is unavailable", {

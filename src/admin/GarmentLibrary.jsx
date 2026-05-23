@@ -239,6 +239,10 @@ function buildImportedGarmentOptionLabel(item, model) {
   return modelCode || modelName || garmentTitle || "Untitled Garment";
 }
 
+function formatCountLabel(count, singular, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 function buildUniqueSelectOptions(values = []) {
   const optionsByKey = new Map();
 
@@ -676,7 +680,7 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
       }
       return safeItem.sizes;
     });
-    const sizesLabel = readCardField("item.sizes.join", () => sizes.join(", ") || "None", {
+    const sizeCount = readCardField("item.sizes.length", () => sizes.length, {
       sizesType: typeof sizes,
       sizesIsArray: Array.isArray(sizes),
     });
@@ -752,7 +756,7 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
             </div>
             <div className="products-card-detail">
               <span>Sizes</span>
-              <strong>{sizesLabel}</strong>
+              <strong>{sizeCount}</strong>
             </div>
             <div className="products-card-detail">
               <span>Defaults</span>
@@ -1024,6 +1028,7 @@ export default function GarmentLibrary() {
               resolvedCategoryName: browseItem.categoryName,
               modelCode: browseItem.modelCode,
               variantCount: browseItem.variantCount,
+              sizeCount: Array.isArray(item.sizes) ? item.sizes.length : 0,
               linkedProductCount: usage.linkedProductCount,
               hasImage: Boolean(browseItem.imageSrc),
             });
@@ -2554,24 +2559,49 @@ export default function GarmentLibrary() {
           garmentModelId = garmentModel.id;
         }
 
-        const existingVariantNames = new Set(
-          (existingGarment?.variants || []).map((variant) => normalizeTextKey(variant?.name))
-        );
         const nextVariants = [...(existingGarment?.variants || [])];
+        const nextSizes = sortSizesByLookup(
+          uniqueList([...(existingGarment?.sizes || []), ...(previewGroup.sizes || [])]),
+          sizes
+        );
+
+        console.info("[GarmentLibrary] importing parsed garment group", {
+          title: previewGroup.title,
+          parsedColors: previewGroup.variants.map((variant) => variant?.name).filter(Boolean),
+          parsedSizes: previewGroup.sizes || [],
+          generatedVariantCount: previewGroup.variants.length,
+        });
 
         previewGroup.variants.forEach((variant) => {
           const variantKey = normalizeTextKey(variant.name);
-          if (existingVariantNames.has(variantKey)) {
+          const existingVariantIndex = nextVariants.findIndex(
+            (existingVariant) => normalizeTextKey(existingVariant?.name) === variantKey
+          );
+
+          if (existingVariantIndex >= 0) {
+            const existingVariant = normalizeVariantForSave(nextVariants[existingVariantIndex]);
+            const mergedSizes = sortSizesByLookup(
+              uniqueList([...(existingVariant?.sizes || []), ...(variant.sizes || [])]),
+              sizes
+            );
+
+            nextVariants[existingVariantIndex] = {
+              ...existingVariant,
+              sizes: mergedSizes,
+              size: mergedSizes[0] || "",
+            };
             skippedVariants += 1;
             return;
           }
 
-          existingVariantNames.add(variantKey);
+          const nextVariantSizes = sortSizesByLookup(uniqueList(variant.sizes || []), sizes);
           nextVariants.push({
             id: `variant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             name: variant.name,
             color: variant.name,
             colors: [variant.name],
+            sizes: nextVariantSizes,
+            size: nextVariantSizes[0] || "",
             supplier_variant: variant.name,
             supplier_sku: variant.supplierSku,
             active: true,
@@ -2580,8 +2610,10 @@ export default function GarmentLibrary() {
         });
 
         if (existingGarment) {
+          const existingSizes = sortSizesByLookup(uniqueList(existingGarment.sizes || []), sizes);
           const shouldUpdate =
             nextVariants.length !== (existingGarment.variants || []).length ||
+            JSON.stringify(nextSizes) !== JSON.stringify(existingSizes) ||
             existingGarment.category_lookup_id !== category.id ||
             existingGarment.brand_lookup_id !== brand.id ||
             existingGarment.garment_model_lookup_id !== garmentModelId;
@@ -2591,6 +2623,7 @@ export default function GarmentLibrary() {
               category_lookup_id: category.id,
               brand_lookup_id: brand.id,
               garment_model_lookup_id: garmentModelId,
+              sizes: nextSizes,
               variants: nextVariants,
             });
             updatedGarments += 1;
@@ -2605,7 +2638,7 @@ export default function GarmentLibrary() {
           garment_model_lookup_id: garmentModelId,
           image: "",
           variants: nextVariants,
-          sizes: [],
+          sizes: nextSizes,
           default_placements: getSuggestedGarmentPlacements({
             categoryName: category.name,
             garmentType: previewGroup.productName,
@@ -3033,7 +3066,7 @@ export default function GarmentLibrary() {
                     </label>
 
                     <p className="products-selection-empty">
-                      Required columns: Category, Brand, Supplier SKU, Product Name, Variant/Color. Extra columns after these are ignored.
+                      Required columns: Category, Brand, Supplier SKU, Product Name, Variant/Color. Optional size columns such as Sizes are parsed, colors split on newlines, and size lists split on commas.
                     </p>
 
                     {isPreparingImport ? (
@@ -3197,7 +3230,7 @@ export default function GarmentLibrary() {
                                   <div style={{ minWidth: 0 }}>
                                     <h3 style={{ margin: 0 }}>{group.title}</h3>
                                     <p className="products-card-subtitle">
-                                      {group.category} • {group.variantCount} variants detected
+                                      {group.category} • {formatCountLabel(group.variantCount, "variant")} • {formatCountLabel(group.sizeCount || group.sizes?.length || 0, "size")} detected
                                     </p>
                                   </div>
                                   <div className="products-import-group-actions">

@@ -6,6 +6,8 @@ const EXPECTED_TEE_CO_COLUMNS = [
   "Variant/Color",
 ];
 
+const OPTIONAL_SIZE_COLUMNS = ["Sizes", "Size", "Available Sizes", "Size Run", "Available Sizes / Size Run"];
+
 function normalizeText(value) {
   return String(value || "").trim();
 }
@@ -85,6 +87,7 @@ function validateHeader(headerRow) {
   }
 
   const requiredColumnIndexes = new Map();
+  const optionalColumnIndexes = new Map();
 
   EXPECTED_TEE_CO_COLUMNS.forEach((columnName, index) => {
     const headerValue = sanitizedHeader[index];
@@ -100,7 +103,51 @@ function validateHeader(headerRow) {
     requiredColumnIndexes.set(columnName, index);
   });
 
-  return requiredColumnIndexes;
+  OPTIONAL_SIZE_COLUMNS.forEach((columnName) => {
+    const columnIndex = sanitizedHeader.findIndex((value) => value === columnName);
+    if (columnIndex >= 0) {
+      optionalColumnIndexes.set("Sizes", columnIndex);
+    }
+  });
+
+  return {
+    requiredColumnIndexes,
+    optionalColumnIndexes,
+  };
+}
+
+function splitMultilineList(value) {
+  return String(value || "")
+    .split(/\r?\n+/)
+    .map((item) => normalizeText(item))
+    .filter(Boolean);
+}
+
+function splitCommaList(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => normalizeText(item))
+    .filter(Boolean);
+}
+
+function buildGarmentTitle(brand, productName) {
+  const normalizedBrand = normalizeText(brand);
+  const normalizedProductName = normalizeText(productName);
+  const normalizedBrandKey = normalizeKey(normalizedBrand);
+  const normalizedProductNameKey = normalizeKey(normalizedProductName);
+
+  if (!normalizedBrand || !normalizedProductName) {
+    return normalizedProductName || normalizedBrand;
+  }
+
+  if (
+    normalizedProductNameKey === normalizedBrandKey ||
+    normalizedProductNameKey.startsWith(`${normalizedBrandKey} `)
+  ) {
+    return normalizedProductName;
+  }
+
+  return `${normalizedBrand} ${normalizedProductName}`;
 }
 
 export function parseTeeCoGarmentSpreadsheet(text) {
@@ -119,7 +166,7 @@ export function parseTeeCoGarmentSpreadsheet(text) {
     throw new Error("Spreadsheet is empty.");
   }
 
-  const requiredColumnIndexes = validateHeader(rows[0]);
+  const { requiredColumnIndexes, optionalColumnIndexes } = validateHeader(rows[0]);
 
   const groupedGarments = new Map();
   const warnings = [];
@@ -137,6 +184,7 @@ export function parseTeeCoGarmentSpreadsheet(text) {
     const normalizedRow = EXPECTED_TEE_CO_COLUMNS.map((columnName) =>
       normalizeText(row[requiredColumnIndexes.get(columnName)])
     );
+    const sizesCell = normalizeText(row[optionalColumnIndexes.get("Sizes")]);
 
     if (!normalizedRow.some(Boolean)) {
       skippedEmptyRowCount += 1;
@@ -144,6 +192,8 @@ export function parseTeeCoGarmentSpreadsheet(text) {
     }
 
     const [category, brand, supplierSku, productName, variantName] = normalizedRow;
+    const parsedColors = Array.from(new Set(splitMultilineList(variantName)));
+    const parsedSizes = Array.from(new Set(splitCommaList(sizesCell)));
 
     if (!category) {
       skippedMalformedRowCount += 1;
@@ -175,6 +225,23 @@ export function parseTeeCoGarmentSpreadsheet(text) {
       return;
     }
 
+    if (!parsedColors.length) {
+      skippedMalformedRowCount += 1;
+      warnings.push(buildRowError(rowNumber, "Skipped row because Variant/Color did not produce any parsed colors."));
+      return;
+    }
+
+    console.info("[teeCoGarmentSpreadsheet] parsed row details", {
+      rowNumber,
+      brand,
+      productName,
+      supplierSku,
+      rawVariantCell: variantName,
+      rawSizesCell: sizesCell,
+      parsedColors,
+      parsedSizes,
+    });
+
     const garmentKey = `${normalizeKey(brand)}::${normalizeKey(productName)}`;
     const existingGroup = groupedGarments.get(garmentKey);
 
@@ -184,8 +251,9 @@ export function parseTeeCoGarmentSpreadsheet(text) {
         category,
         brand,
         productName,
-        title: `${brand} ${productName}`,
+        title: buildGarmentTitle(brand, productName),
         rowNumbers: [rowNumber],
+        sizes: [],
         variants: [],
         variantMap: new Map(),
         duplicateRowCount: 0,
@@ -204,42 +272,64 @@ export function parseTeeCoGarmentSpreadsheet(text) {
     }
 
     const group = groupedGarments.get(garmentKey);
-    const variantKey = normalizeKey(variantName);
-    const existingVariant = group.variantMap.get(variantKey);
+    group.sizes = Array.from(new Set([...group.sizes, ...parsedSizes]));
 
-    if (existingVariant) {
-      if (normalizeKey(existingVariant.supplierSku) !== normalizeKey(supplierSku)) {
-        skippedMalformedRowCount += 1;
-        warnings.push(
-          buildRowError(
-            rowNumber,
-            `Skipped row because Variant/Color "${variantName}" has conflicting Supplier SKU values for ${group.title}.`
-          )
-        );
-        group.rowNumbers = group.rowNumbers.filter((value) => value !== rowNumber);
+    parsedColors.forEach((parsedColor) => {
+      const variantKey = normalizeKey(parsedColor);
+      const existingVariant = group.variantMap.get(variantKey);
+
+      if (existingVariant) {
+        if (normalizeKey(existingVariant.supplierSku) !== normalizeKey(supplierSku)) {
+          skippedMalformedRowCount += 1;
+          warnings.push(
+            buildRowError(
+              rowNumber,
+              `Skipped row because Variant/Color "${parsedColor}" has conflicting Supplier SKU values for ${group.title}.`
+            )
+          );
+          return;
+        }
+
+        existingVariant.rowNumbers = Array.from(new Set([...existingVariant.rowNumbers, rowNumber]));
+        existingVariant.sizes = Array.from(new Set([...(existingVariant.sizes || []), ...parsedSizes]));
+        existingVariant.size = existingVariant.sizes[0] || "";
+        group.duplicateRowCount += 1;
         return;
       }
 
-      existingVariant.rowNumbers.push(rowNumber);
-      group.duplicateRowCount += 1;
-      validRowCount += 1;
-      return;
-    }
+      const variant = {
+        name: parsedColor,
+        color: parsedColor,
+        colors: [parsedColor],
+        size: parsedSizes[0] || "",
+        sizes: parsedSizes,
+        supplier_variant: parsedColor,
+        supplierSku,
+        supplier_sku: supplierSku,
+        rowNumbers: [rowNumber],
+      };
 
-    const variant = {
-      name: variantName,
-      color: variantName,
-      supplier_variant: variantName,
-      supplierSku,
-      rowNumbers: [rowNumber],
-    };
+      group.variantMap.set(variantKey, variant);
+      group.variants.push(variant);
+    });
 
-    group.variantMap.set(variantKey, variant);
-    group.variants.push(variant);
+    console.info("[teeCoGarmentSpreadsheet] generated garment variants", {
+      rowNumber,
+      garmentKey,
+      title: group.title,
+      parsedColorCount: parsedColors.length,
+      parsedSizeCount: parsedSizes.length,
+      generatedVariantCount: group.variants.length,
+    });
+
     validRowCount += 1;
   });
 
   const garments = Array.from(groupedGarments.values())
+    .map((group) => ({
+      ...group,
+      constSortedSizes: group.sizes.sort((left, right) => left.localeCompare(right)),
+    }))
     .map((group) => ({
       id: group.id,
       category: group.category,
@@ -248,8 +338,21 @@ export function parseTeeCoGarmentSpreadsheet(text) {
       title: group.title,
       rowNumbers: group.rowNumbers,
       duplicateRowCount: group.duplicateRowCount,
-      variants: group.variants.sort((left, right) => left.name.localeCompare(right.name)),
+      sizes: group.constSortedSizes,
+      variants: group.variants
+        .map((variant) => {
+          const sortedVariantSizes = Array.from(new Set(variant.sizes || [])).sort((left, right) =>
+            left.localeCompare(right)
+          );
+          return {
+            ...variant,
+            sizes: sortedVariantSizes,
+            size: sortedVariantSizes[0] || "",
+          };
+        })
+        .sort((left, right) => left.name.localeCompare(right.name)),
       variantCount: group.variants.length,
+      sizeCount: group.constSortedSizes.length,
     }))
     .sort((left, right) => left.title.localeCompare(right.title));
 
