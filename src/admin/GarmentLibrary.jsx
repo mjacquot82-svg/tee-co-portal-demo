@@ -63,10 +63,16 @@ function getGarmentModeLabel(itemTitle) {
 }
 
 function buildFormFromGarment(item, brands, categories, garmentModels, sizeLookups) {
+  const normalizedVariants = Array.isArray(item?.variants)
+    ? item.variants.map((variant) => normalizeVariantForEditor(variant)).filter(Boolean)
+    : [];
+  const derivedSizes = uniqueList(normalizedVariants.flatMap((variant) => variant.sizes || []));
+
   return {
     ...emptyLibraryForm,
     ...item,
-    sizes: sortSizesByLookup(item?.sizes || [], sizeLookups),
+    variants: normalizedVariants,
+    sizes: sortSizesByLookup(uniqueList([...(item?.sizes || []), ...derivedSizes]), sizeLookups),
     default_production_methods:
       item?.default_production_methods?.length ? item.default_production_methods : ["Screen Print"],
   };
@@ -76,6 +82,79 @@ function buildVariantDraft() {
   return {
     name: "",
     supplier_sku: "",
+  };
+}
+
+function resolveVariantSupplierSku(variant = {}) {
+  return normalizeText(variant.supplier_sku || variant.supplierSku || variant.sku);
+}
+
+function resolveVariantColorName(variant = {}) {
+  return normalizeText(
+    variant.color ||
+      variant.color_name ||
+      variant.colorName ||
+      variant.variant_color ||
+      variant.supplier_variant ||
+      variant.supplierVariant ||
+      variant.name
+  );
+}
+
+function resolveVariantSizes(variant = {}) {
+  const explicitSizes = [
+    ...(Array.isArray(variant.sizes) ? variant.sizes : []),
+    ...(Array.isArray(variant.available_sizes) ? variant.available_sizes : []),
+  ]
+    .map((value) => normalizeText(value))
+    .filter(Boolean);
+
+  const singularSize = normalizeText(
+    variant.size || variant.size_name || variant.sizeName || variant.variant_size
+  );
+
+  return uniqueList(singularSize ? [...explicitSizes, singularSize] : explicitSizes);
+}
+
+function normalizeVariantForEditor(variant = {}) {
+  const name = normalizeText(variant.name || resolveVariantColorName(variant));
+  if (!name) return null;
+
+  const color = resolveVariantColorName(variant) || name;
+  const sizes = resolveVariantSizes(variant);
+  const supplierSku = resolveVariantSupplierSku(variant);
+
+  return {
+    ...variant,
+    id: variant.id || `variant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name,
+    color,
+    sizes,
+    size: normalizeText(variant.size) || sizes[0] || "",
+    supplier_variant:
+      normalizeText(variant.supplier_variant || variant.supplierVariant) || color || name,
+    supplier_sku: supplierSku,
+    sku: supplierSku,
+    active: variant.active !== false,
+  };
+}
+
+function normalizeVariantForSave(variant = {}) {
+  const normalizedVariant = normalizeVariantForEditor(variant);
+  if (!normalizedVariant) return null;
+
+  return {
+    ...normalizedVariant,
+    name: normalizeText(normalizedVariant.name),
+    color: resolveVariantColorName(normalizedVariant),
+    sizes: resolveVariantSizes(normalizedVariant),
+    size: normalizeText(normalizedVariant.size) || resolveVariantSizes(normalizedVariant)[0] || "",
+    supplier_variant:
+      normalizeText(normalizedVariant.supplier_variant || normalizedVariant.supplierVariant) ||
+      resolveVariantColorName(normalizedVariant) ||
+      normalizedVariant.name,
+    supplier_sku: resolveVariantSupplierSku(normalizedVariant),
+    sku: resolveVariantSupplierSku(normalizedVariant),
   };
 }
 
@@ -125,11 +204,12 @@ function buildUniqueSelectOptions(values = []) {
 }
 
 function buildVariantColorOptions(variants = []) {
-  return buildUniqueSelectOptions((variants || []).map((variant) => variant?.name));
+  return buildUniqueSelectOptions((variants || []).map((variant) => resolveVariantColorName(variant)));
 }
 
-function buildGarmentSizeOptions(sizeValues = [], sizeLookups = []) {
-  const sortedSizes = sortSizesByLookup(uniqueList(sizeValues), sizeLookups);
+function buildGarmentSizeOptions(sizeValues = [], sizeLookups = [], variants = []) {
+  const derivedVariantSizes = uniqueList((variants || []).flatMap((variant) => resolveVariantSizes(variant)));
+  const sortedSizes = sortSizesByLookup(uniqueList([...(sizeValues || []), ...derivedVariantSizes]), sizeLookups);
   return buildUniqueSelectOptions(sortedSizes);
 }
 
@@ -1642,7 +1722,12 @@ export default function GarmentLibrary() {
     [selectedReusableGarmentEntry]
   );
   const derivedImportedSizeOptions = useMemo(
-    () => buildGarmentSizeOptions(selectedReusableGarmentEntry?.item?.sizes || EMPTY_LIST, sizes),
+    () =>
+      buildGarmentSizeOptions(
+        selectedReusableGarmentEntry?.item?.sizes || EMPTY_LIST,
+        sizes,
+        selectedReusableGarmentEntry?.item?.variants || EMPTY_LIST
+      ),
     [selectedReusableGarmentEntry, sizes]
   );
   const isImportedSelectionLocked = Boolean(
@@ -2109,13 +2194,7 @@ export default function GarmentLibrary() {
         garment_model_lookup_id: garmentModel.id,
         image: form.image,
         sizes: sortSizesByLookup(uniqueList(form.sizes), sizes),
-        variants: form.variants
-          .map((variant) => ({
-            ...variant,
-            name: normalizeText(variant.name),
-            supplier_sku: normalizeText(variant.supplier_sku),
-          }))
-          .filter((variant) => variant.name),
+        variants: form.variants.map((variant) => normalizeVariantForSave(variant)).filter(Boolean),
         default_placements: uniqueList(form.default_placements),
         default_production_methods: uniqueList(form.default_production_methods),
         notes: form.notes,

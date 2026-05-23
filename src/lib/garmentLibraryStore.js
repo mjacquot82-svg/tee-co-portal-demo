@@ -127,13 +127,32 @@ function normalizeStringList(value) {
 }
 
 function normalizeVariant(variant = {}) {
-  const name = normalizeText(variant.name);
+  const supplierSku = normalizeText(variant.supplier_sku || variant.supplierSku || variant.sku);
+  const color = normalizeText(
+    variant.color || variant.color_name || variant.colorName || variant.variant_color
+  );
+  const size = normalizeText(
+    variant.size || variant.size_name || variant.sizeName || variant.variant_size
+  );
+  const sizes = normalizeStringList(
+    variant.sizes || variant.available_sizes || variant.size_run || (size ? [size] : [])
+  );
+  const supplierVariant = normalizeText(
+    variant.supplier_variant || variant.supplierVariant || variant.variant_name || color || variant.name
+  );
+  const name = normalizeText(variant.name || supplierVariant || color);
   if (!name) return null;
 
   return {
+    ...variant,
     id: variant.id || `variant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name,
-    supplier_sku: normalizeText(variant.supplier_sku),
+    color,
+    size,
+    sizes,
+    supplier_variant: supplierVariant || name,
+    supplier_sku: supplierSku,
+    sku: supplierSku,
     active: variant.active !== false,
   };
 }
@@ -145,6 +164,7 @@ function normalizeGarmentLibraryItem(item = {}) {
   const variants = Array.isArray(item.variants)
     ? item.variants.map((variant) => normalizeVariant(variant)).filter(Boolean)
     : [];
+  const derivedVariantSizes = variants.flatMap((variant) => normalizeStringList(variant.sizes));
 
   return {
     id: item.id || `garment-library-${Date.now()}`,
@@ -154,7 +174,7 @@ function normalizeGarmentLibraryItem(item = {}) {
     garment_model_lookup_id: item.garment_model_lookup_id || "",
     image: normalizeText(item.image),
     variants,
-    sizes: normalizeStringList(item.sizes),
+    sizes: normalizeStringList([...(Array.isArray(item.sizes) ? item.sizes : []), ...derivedVariantSizes]),
     default_placements: normalizeStringList(item.default_placements),
     default_production_methods: normalizeStringList(item.default_production_methods),
     notes: normalizeText(item.notes),
