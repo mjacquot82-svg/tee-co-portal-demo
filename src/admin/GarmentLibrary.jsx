@@ -18,9 +18,10 @@ import {
   useGarmentLibraryStatus,
 } from "../lib/garmentLibraryStore";
 import { buildGarmentUsageMap } from "../lib/productGarmentLinks";
-import { useStoredProducts } from "../lib/productsStore";
+import { createStoredProduct, useStoredProducts } from "../lib/productsStore";
 import { parseTeeCoGarmentSpreadsheet } from "../lib/teeCoGarmentSpreadsheet";
 import {
+  buildLegacyBrandModelValue,
   buildGarmentLibraryLabel,
   fieldStyle,
   findLookupByName,
@@ -28,6 +29,7 @@ import {
   labelStyle,
   normalizeText,
   normalizeTextKey,
+  resolveStructuredProductType,
   SearchableLookupField,
   sortSizesByLookup,
   uniqueList,
@@ -228,29 +230,25 @@ function resolveVariantColorName(variant = {}) {
   return extractVariantColorNames(variant)[0] || "";
 }
 
+function extractVariantSizeValues(variant = {}) {
+  return uniqueList([
+    ...normalizeDelimitedTextList(variant.sizes),
+    ...normalizeDelimitedTextList(variant.available_sizes),
+    ...normalizeDelimitedTextList(variant.availableSizes),
+    ...normalizeDelimitedTextList(variant.size_run),
+    ...normalizeDelimitedTextList(variant.sizeRun),
+    ...normalizeDelimitedTextList(
+      variant.size || variant.size_name || variant.sizeName || variant.variant_size
+    ),
+  ]);
+}
+
 function resolveVariantSizes(variant = {}) {
-  const explicitSizes = [
-    ...(Array.isArray(variant.sizes) ? variant.sizes : []),
-    ...(Array.isArray(variant.available_sizes) ? variant.available_sizes : []),
-    ...(Array.isArray(variant.availableSizes) ? variant.availableSizes : []),
-  ]
-    .map((value) => normalizeText(value))
-    .filter(Boolean);
-
-  const singularSize = normalizeText(
-    variant.size || variant.size_name || variant.sizeName || variant.variant_size
-  );
-
-  return uniqueList(singularSize ? [...explicitSizes, singularSize] : explicitSizes);
+  return extractVariantSizeValues(variant);
 }
 
 function normalizeVariantForEditor(variant = {}) {
-  const parsedSizesBeforeNormalization = [
-    ...(Array.isArray(variant.sizes) ? variant.sizes : []),
-    ...(Array.isArray(variant.available_sizes) ? variant.available_sizes : []),
-    ...(Array.isArray(variant.availableSizes) ? variant.availableSizes : []),
-    normalizeText(variant.size || variant.size_name || variant.sizeName || variant.variant_size),
-  ].filter(Boolean);
+  const parsedSizesBeforeNormalization = extractVariantSizeValues(variant);
   const parsedVariantBeforeNormalization = summarizeVariantForDebug(variant);
 
   console.info("[GarmentLibrary] parsed variant before UI normalization", {
@@ -350,6 +348,56 @@ function buildGarmentDisplayName(model, brand) {
   const baseLabel = [brandName, modelName].filter(Boolean).join(" ");
 
   return modelCode ? `${baseLabel} - ${modelCode}` : baseLabel;
+}
+
+function buildStorefrontProductPayloadFromGarment(item, context = {}) {
+  const garmentModel = findLookupById(context.garmentModels, item?.garment_model_lookup_id);
+  const brandId = resolveGarmentBrandId(item, context.garmentModelMap) || item?.brand_lookup_id || "";
+  const brand = findLookupById(context.brands, brandId);
+  const category = findLookupById(context.categories, item?.category_lookup_id);
+  const activeVariants = Array.isArray(item?.variants)
+    ? item.variants
+        .map((variant) => normalizeVariantForEditor(variant))
+        .filter((variant) => variant && variant.active !== false)
+    : [];
+  const colors = uniqueList(activeVariants.map((variant) => resolveVariantColorName(variant)).filter(Boolean));
+  const derivedSizes = sortSizesByLookup(
+    uniqueList([
+      ...(Array.isArray(item?.sizes) ? item.sizes : []),
+      ...activeVariants.flatMap((variant) => resolveVariantSizes(variant)),
+    ]),
+    context.sizeLookups || []
+  );
+  const placements = uniqueList(item?.default_placements || []);
+  const productionMethods = uniqueList(item?.default_production_methods || []);
+
+  return {
+    name: normalizeText(item?.title),
+    garment_library_item_id: item?.id || null,
+    category: category?.name || "Catalog",
+    category_lookup_id: category?.id || item?.category_lookup_id || null,
+    product_type: resolveStructuredProductType(garmentModel, "", item?.title || ""),
+    brand_model: buildLegacyBrandModelValue(brand, garmentModel, ""),
+    brand_lookup_id: brand?.id || brandId || null,
+    garment_model_lookup_id: garmentModel?.id || item?.garment_model_lookup_id || null,
+    image: item?.image || "",
+    status: "Active",
+    colors,
+    sizes: derivedSizes,
+    placements,
+    placement_prices: placements.reduce((accumulator, placement) => {
+      accumulator[placement] = null;
+      return accumulator;
+    }, {}),
+    production_methods: productionMethods.length ? productionMethods : ["Screen Print"],
+    decoration_types: productionMethods.length ? productionMethods : ["Screen Print"],
+    production_method_prices: {},
+    cost_price: 0,
+    markup_percentage: 0,
+    base_garment_price: null,
+    unit_price: null,
+    notes: item?.notes || "",
+  };
 }
 
 function buildImportedGarmentOptionLabel(item, model) {
@@ -876,6 +924,7 @@ function summarizeGarmentBrowseItems(entries = []) {
 const GarmentLibraryCard = memo(function GarmentLibraryCard({
   item,
   isSelected,
+  isCreatingStorefrontProduct,
   subtitle,
   usage,
   sizeLookups,
@@ -1112,8 +1161,9 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
               onCreateStorefrontProduct();
             }}
             className="products-card-button"
+            disabled={isCreatingStorefrontProduct}
           >
-            Create Storefront Product
+            {isCreatingStorefrontProduct ? "Creating..." : "Create Storefront Product"}
           </button>
           <button
             type="button"
@@ -1170,6 +1220,7 @@ export default function GarmentLibrary() {
   const [editingId, setEditingId] = useState(null);
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isCreatingStorefrontProduct, setIsCreatingStorefrontProduct] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [variantSearch, setVariantSearch] = useState("");
   const [variantDraft, setVariantDraft] = useState(buildVariantDraft());
@@ -1842,6 +1893,7 @@ export default function GarmentLibrary() {
               subtitle={subtitle}
               usage={usage}
               sizeLookups={sizes}
+              isCreatingStorefrontProduct={isCreatingStorefrontProduct}
               onSelect={() => {
                 startEditingGarment(item);
               }}
@@ -2113,14 +2165,25 @@ export default function GarmentLibrary() {
       matchingImportedGarments.find((entry) => entry.item.id === selectedReusableGarmentId) || null,
     [matchingImportedGarments, selectedReusableGarmentId]
   );
+  const importedCapabilitySourceItem = useMemo(() => {
+    if (selectedReusableGarmentEntry?.item) {
+      return selectedReusableGarmentEntry.item;
+    }
+
+    if (selectedReusableGarmentId && selectedGarment?.id === selectedReusableGarmentId) {
+      return selectedGarment;
+    }
+
+    return null;
+  }, [selectedGarment, selectedReusableGarmentEntry, selectedReusableGarmentId]);
   const importedCapabilityMatrix = useMemo(
     () =>
       buildImportedCapabilityMatrix(
-        selectedReusableGarmentEntry?.item?.variants || EMPTY_LIST,
-        selectedReusableGarmentEntry?.item?.sizes || EMPTY_LIST,
+        importedCapabilitySourceItem?.variants || form.variants || EMPTY_LIST,
+        importedCapabilitySourceItem?.sizes || form.sizes || EMPTY_LIST,
         sizes
       ),
-    [selectedReusableGarmentEntry, sizes]
+    [form.sizes, form.variants, importedCapabilitySourceItem, sizes]
   );
   const selectedImportedColorValues = useMemo(
     () => uniqueList(form.variants.map((variant) => resolveVariantColorName(variant)).filter(Boolean)),
@@ -2341,14 +2404,34 @@ export default function GarmentLibrary() {
     setActiveWorkspace("edit");
   }
 
-  function startCreatingStorefrontProduct(item) {
+  async function startCreatingStorefrontProduct(item) {
     if (!item?.id) return;
 
-    navigate("/admin/products", {
-      state: {
-        createFromGarmentId: item.id,
-      },
-    });
+    try {
+      setIsCreatingStorefrontProduct(true);
+      setSaveError("");
+      const createdProduct = await createStoredProduct(
+        buildStorefrontProductPayloadFromGarment(item, {
+          brands,
+          categories,
+          garmentModels,
+          garmentModelMap,
+          sizeLookups: sizes,
+        })
+      );
+
+      navigate("/admin/products", {
+        state: {
+          focusProductIds: createdProduct?.id ? [createdProduct.id] : [],
+          focusGarmentTitle: item.title || "",
+        },
+      });
+    } catch (error) {
+      console.error("Unable to create storefront product from garment", error);
+      setSaveError(error?.message || "Unable to create a storefront product from this garment right now.");
+    } finally {
+      setIsCreatingStorefrontProduct(false);
+    }
   }
 
   function startViewingLinkedStorefrontProducts(item, usage) {
@@ -3761,8 +3844,9 @@ export default function GarmentLibrary() {
                       type="button"
                       className="products-primary-button"
                       onClick={() => startCreatingStorefrontProduct(editingGarment)}
+                      disabled={isCreatingStorefrontProduct}
                     >
-                      Create Storefront Product
+                      {isCreatingStorefrontProduct ? "Creating..." : "Create Storefront Product"}
                     </button>
                   </div>
                 ) : null}
