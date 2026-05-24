@@ -284,8 +284,7 @@ function buildFormFromProduct(
     resolveStorefrontCategoryOption(
       storefrontCategories,
       product?.storefront_category_lookup_id,
-      product?.storefront_category,
-      product?.category
+      product?.storefront_category
     ) || null;
   const placements = getProductPlacementConfig(product).map((placement) => placement.label);
   const productionMethods = Array.isArray(product?.production_methods) && product.production_methods.length
@@ -326,8 +325,7 @@ function buildFormFromProduct(
         ? ""
         : String(product.markup_percentage),
     notes: product?.notes || "",
-    storefront_category:
-      storefrontCategory?.name || product?.storefront_category || product?.category || "",
+    storefront_category: storefrontCategory?.name || product?.storefront_category || "",
     storefront_category_lookup_id: storefrontCategory?.id || "",
   };
 }
@@ -1207,11 +1205,6 @@ export default function Products() {
       return;
     }
 
-    if (!normalizeText(form.storefront_category_lookup_id) && !normalizeText(form.storefront_category)) {
-      setSaveError("Assign a storefront category before publishing this product.");
-      return;
-    }
-
     const placements = placementOptions;
     const placementPrices = placements.reduce((accumulator, placement) => {
       accumulator[placement] = parseOptionalPrice(form.placementPriceMap?.[placement]);
@@ -1251,6 +1244,8 @@ export default function Products() {
     const resolvedSupplierCategoryName = isManualProductMode
       ? "Manual"
       : category?.name || form.category || "Catalog";
+    const resolvedStorefrontCategoryName =
+      storefrontCategory?.name || normalizeText(form.storefront_category) || "";
 
     const productPayload = {
       name: normalizeText(form.name),
@@ -1258,11 +1253,11 @@ export default function Products() {
         ? null
         : selectedGarmentItem?.id || form.selectedGarmentLibraryId || null,
       category: resolvedSupplierCategoryName,
-      storefront_category:
-        storefrontCategory?.name || form.storefront_category || category?.name || "Catalog",
+      storefront_category: resolvedStorefrontCategoryName || null,
       category_lookup_id: isManualProductMode ? null : category?.id || form.category_lookup_id || null,
-      storefront_category_lookup_id:
-        storefrontCategory?.id || form.storefront_category_lookup_id || null,
+      storefront_category_lookup_id: resolvedStorefrontCategoryName
+        ? storefrontCategory?.id || form.storefront_category_lookup_id || null
+        : null,
       product_type: resolvedProductType,
       brand_model: isManualProductMode
         ? buildLegacyBrandModelValue(brand, null, form.brand_model)
@@ -1591,7 +1586,7 @@ export default function Products() {
                       <div className="products-card-body">
                         <div className="products-card-topline">
                           <span className="products-card-category-pill">
-                            {product.storefront_category || product.category || "Catalog"}
+                            {product.storefront_category || "Uncategorized"}
                           </span>
                           <span className={`products-status products-status-${statusIsActive ? "active" : "archived"}`}>
                             {statusIsActive ? "Active" : "Archived"}
@@ -1803,6 +1798,20 @@ export default function Products() {
                         style={fieldStyle}
                       />
                     </label>
+
+                    <label style={labelStyle}>
+                      Compare-at Price
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        name="compare_at_price"
+                        value={form.compare_at_price}
+                        onChange={updateField}
+                        placeholder="32.00"
+                        style={fieldStyle}
+                      />
+                    </label>
                   </div>
 
                   <div className="products-editor-grid">
@@ -1815,7 +1824,7 @@ export default function Products() {
                           onChange={handleStorefrontCategorySelect}
                           style={fieldStyle}
                         >
-                          <option value="">Select storefront category</option>
+                          <option value="">Uncategorized for now</option>
                           {activeStorefrontCategories.map((category) => (
                             <option key={category.id} value={category.id}>
                               {category.name}
@@ -1940,15 +1949,17 @@ export default function Products() {
                   <div className="products-storefront-header-glance">
                     <div className="products-summary-card">
                       <span className="products-summary-label">Category</span>
-                      <strong>{form.storefront_category || "Choose storefront category"}</strong>
+                      <strong>{form.storefront_category || "Uncategorized"}</strong>
                     </div>
                     <div className="products-summary-card">
                       <span className="products-summary-label">Price</span>
                       <strong>{form.flat_price ? formatMoney(form.flat_price) : "Add sale price"}</strong>
                     </div>
                     <div className="products-summary-card">
-                      <span className="products-summary-label">Storefront</span>
-                      <strong>{storefrontVisibilityLabel}</strong>
+                      <span className="products-summary-label">Compare-at</span>
+                      <strong>
+                        {form.compare_at_price ? formatMoney(form.compare_at_price) : "No compare-at price"}
+                      </strong>
                     </div>
                   </div>
                 </div>
@@ -2285,7 +2296,7 @@ export default function Products() {
                   Customer price: {form.flat_price ? formatMoney(form.flat_price) : "not set"}.
                   {form.storefront_category
                     ? ` Storefront category: ${form.storefront_category}.`
-                    : " Storefront category still needs to be assigned."}
+                    : " Storefront category: uncategorized for now."}
                   {isManualProductMode
                     ? " Manual product mode does not require a garment template."
                     : ` Garment link: ${selectedGarmentItem?.title || "required before create"}.`}
@@ -2300,8 +2311,8 @@ export default function Products() {
                 {isSaving
                   ? "Saving..."
                   : editingProduct
-                    ? "Update Storefront Product"
-                    : "Create Storefront Product"}
+                    ? "Save Product"
+                    : "Create Product"}
               </button>
             </div>
 

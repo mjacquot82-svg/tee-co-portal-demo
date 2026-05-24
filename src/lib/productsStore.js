@@ -357,9 +357,8 @@ function normalizeProduct(product) {
     status: buildPersistentStatus(
       product?.status ?? (product?.active === false ? "Inactive" : "Active")
     ),
-    storefront_category: product.storefront_category || product.category || "Catalog",
-    storefront_category_lookup_id:
-      product.storefront_category_lookup_id || product.category_lookup_id || null,
+    storefront_category: product.storefront_category || "",
+    storefront_category_lookup_id: product.storefront_category_lookup_id || null,
     garment_library_item_id:
       product.garment_library_item_id || product.garment_library_id || null,
     product_type: product.product_type || product.type || product.name || "General",
@@ -485,10 +484,9 @@ function buildSupabaseProductRecord(product = {}, options = {}) {
     sku: product.sku || "",
     name: product.name || "",
     category: product.category || "Catalog",
-    storefront_category: product.storefront_category || product.category || "Catalog",
+    storefront_category: product.storefront_category || null,
     category_lookup_id: product.category_lookup_id || null,
-    storefront_category_lookup_id:
-      product.storefront_category_lookup_id || product.category_lookup_id || null,
+    storefront_category_lookup_id: product.storefront_category_lookup_id || null,
     product_type: product.product_type || product.type || product.name || "",
     brand_model: product.brand_model || "",
     brand_lookup_id: product.brand_lookup_id || null,
@@ -981,8 +979,7 @@ export async function createStoredProduct(productInput) {
       : null,
     rowExistsImmediatelyAfterInsert: Boolean(immediateQuery.data),
     rowStillExistsAfterDelay: Boolean(delayedQuery.data),
-    rowDisappearedAfterInsert:
-      Boolean(immediateQuery.data) && !Boolean(delayedQuery.data),
+    rowDisappearedAfterInsert: Boolean(immediateQuery.data && !delayedQuery.data),
     delayedQueryDelayMs,
   });
   const nextProducts = [
