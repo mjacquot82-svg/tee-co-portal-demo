@@ -701,14 +701,14 @@
   border-radius: 24px;
   padding: 20px;
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto;
   gap: 16px;
-  position: sticky;
-  top: 18px;
-  height: calc(100vh - 36px);
-  max-height: calc(100vh - 36px);
-  min-height: calc(100vh - 36px);
-  overflow: hidden;
+  position: relative;
+  top: auto;
+  height: auto;
+  max-height: none;
+  min-height: 0;
+  overflow: visible;
   align-content: start;
   min-width: 0;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
@@ -853,10 +853,10 @@
 
 .products-list-scroll {
   min-height: 0;
-  height: 100%;
-  overflow: auto;
-  padding-right: 4px;
-  overscroll-behavior: contain;
+  height: auto;
+  overflow: visible;
+  padding-right: 0;
+  overscroll-behavior: auto;
 }
 
 .products-list-grid {
