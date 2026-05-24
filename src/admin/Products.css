@@ -356,6 +356,10 @@
   gap: 12px;
 }
 
+.products-capability-selector {
+  gap: 14px;
+}
+
 .products-searchable-field {
   position: relative;
 }
@@ -473,6 +477,62 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
+}
+
+.products-capability-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.products-capability-count {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.products-capability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.products-capability-chip {
+  border: 1px solid #dbe4ee;
+  border-radius: 16px;
+  background: #f8fafc;
+  color: #0f172a;
+  padding: 12px 14px;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.products-capability-chip:hover {
+  border-color: #94a3b8;
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+
+.products-capability-chip strong {
+  color: #0f172a;
+}
+
+.products-capability-chip span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.products-capability-chip.is-selected {
+  border-color: #0f766e;
+  background: #f0fdfa;
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.08);
 }
 
 .products-multiselect-panel {
@@ -1061,7 +1121,7 @@
 
 .products-variant-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   padding: 12px 14px;
@@ -1095,6 +1155,46 @@
   gap: 8px;
   color: #475569;
   font-weight: 700;
+}
+
+.products-supplier-data-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.products-supplier-data-card {
+  border: 1px solid #dbe4ee;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.products-supplier-data-card p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.products-supplier-data-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.products-supplier-data-header strong {
+  color: #0f172a;
+}
+
+.products-supplier-data-header span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .products-import-shell,
@@ -1463,6 +1563,7 @@
   .products-import-toolbar,
   .products-stat-row,
   .products-multiselect-toolbar,
+  .products-capability-toolbar,
   .products-variant-row,
   .products-import-variant-row,
   .products-import-actions,
@@ -1493,6 +1594,11 @@
   .products-variant-card {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .products-capability-grid,
+  .products-supplier-data-grid {
+    grid-template-columns: 1fr;
   }
 
   .products-variant-card-actions {

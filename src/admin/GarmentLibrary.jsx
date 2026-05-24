@@ -25,7 +25,6 @@ import {
   findLookupByName,
   findLookupById,
   labelStyle,
-  MultiSelectLookupField,
   normalizeText,
   normalizeTextKey,
   SearchableLookupField,
@@ -442,6 +441,76 @@ function buildUniqueSelectOptions(values = []) {
   });
 
   return Array.from(optionsByKey.values()).sort((left, right) => left.label.localeCompare(right.label));
+}
+
+function CompactCapabilitySelector({
+  label,
+  helperText,
+  options,
+  selectedValues,
+  onToggle,
+  searchPlaceholder,
+  emptyState,
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const normalizedSearch = normalizeTextKey(searchTerm);
+  const selectedSet = new Set(selectedValues.map((value) => normalizeTextKey(value)).filter(Boolean));
+
+  const filteredOptions = useMemo(() => {
+    if (!normalizedSearch) return options;
+
+    return options.filter((option) =>
+      [option?.name, option?.meta]
+        .filter(Boolean)
+        .some((value) => normalizeTextKey(value).includes(normalizedSearch))
+    );
+  }, [options, normalizedSearch]);
+
+  return (
+    <div className="products-multiselect products-capability-selector">
+      <div className="products-multiselect-header">
+        <strong>{label}</strong>
+        <p>{helperText}</p>
+      </div>
+
+      <div className="products-capability-toolbar">
+        <input
+          type="search"
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder={searchPlaceholder || `Search ${label.toLowerCase()}`}
+          style={fieldStyle}
+        />
+        <span className="products-capability-count">
+          {selectedValues.length} selected
+        </span>
+      </div>
+
+      <div className="products-capability-grid" role="list" aria-label={label}>
+        {filteredOptions.length ? (
+          filteredOptions.map((option) => {
+            const isSelected = selectedSet.has(normalizeTextKey(option?.name));
+
+            return (
+              <button
+                key={option.id || option.name}
+                type="button"
+                className={`products-capability-chip ${isSelected ? "is-selected" : ""}`}
+                onClick={() => onToggle(option.name)}
+                role="listitem"
+                aria-pressed={isSelected}
+              >
+                <strong>{option.name}</strong>
+                {option.meta ? <span>{option.meta}</span> : null}
+              </button>
+            );
+          })
+        ) : (
+          <div className="products-selection-empty">{emptyState}</div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function buildImportedCapabilityMatrix(variants = [], sizeValues = [], sizeLookups = []) {
@@ -1687,6 +1756,39 @@ export default function GarmentLibrary() {
         .some((value) => String(value).toLowerCase().includes(normalizedSearch));
     });
   }, [form.variants, variantSearch]);
+  const normalizedEditorVariants = useMemo(
+    () => form.variants.map((variant) => normalizeVariantForEditor(variant)).filter(Boolean),
+    [form.variants]
+  );
+  const customColorOptions = useMemo(
+    () =>
+      normalizedEditorVariants
+        .map((variant) => ({
+          id: variant.id,
+          name: variant.name,
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    [normalizedEditorVariants]
+  );
+  const selectedCustomColorValues = useMemo(
+    () =>
+      uniqueList(
+        normalizedEditorVariants
+          .filter((variant) => variant.active !== false)
+          .map((variant) => resolveVariantColorName(variant))
+          .filter(Boolean)
+      ),
+    [normalizedEditorVariants]
+  );
+  const visibleImportedCapabilities = useMemo(() => {
+    const normalizedSearch = variantSearch.trim().toLowerCase();
+    return importedCapabilityMatrix.filter((capability) => {
+      if (!normalizedSearch) return true;
+      return [capability.name, capability.supplierSkus.join(", "), capability.sizes.join(", ")]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedSearch));
+    });
+  }, [importedCapabilityMatrix, variantSearch]);
   const renderedGarmentCards = useMemo(() => {
     const renderMetrics = {
       attemptedCount: garmentEntriesForRender.length,
@@ -2378,6 +2480,17 @@ export default function GarmentLibrary() {
     applyImportedCapabilitySelections(selectedImportedColorValues, nextSelectedSizes);
   }
 
+  function toggleCustomColor(colorName) {
+    setForm((current) => ({
+      ...current,
+      variants: current.variants.map((variant) =>
+        normalizeTextKey(resolveVariantColorName(variant) || variant.name) === normalizeTextKey(colorName)
+          ? { ...variant, active: variant.active === false }
+          : variant
+      ),
+    }));
+  }
+
   function toggleSize(sizeName) {
     setForm((current) => {
       const nextSizes = current.sizes.some(
@@ -2425,18 +2538,45 @@ export default function GarmentLibrary() {
     const name = normalizeText(variantDraft.name);
     if (!name) return;
 
-    setForm((current) => ({
-      ...current,
-      variants: [
-        ...current.variants,
-        {
-          id: `variant-${Date.now()}`,
-          name,
-          supplier_sku: normalizeText(variantDraft.supplier_sku),
-          active: true,
-        },
-      ],
-    }));
+    setForm((current) => {
+      const existingVariantIndex = current.variants.findIndex(
+        (variant) => normalizeTextKey(resolveVariantColorName(variant) || variant.name) === normalizeTextKey(name)
+      );
+
+      if (existingVariantIndex >= 0) {
+        return {
+          ...current,
+          variants: current.variants.map((variant, index) =>
+            index === existingVariantIndex
+              ? {
+                  ...variant,
+                  name,
+                  color: name,
+                  colors: [name],
+                  supplier_variant: name,
+                  active: true,
+                }
+              : variant
+          ),
+        };
+      }
+
+      return {
+        ...current,
+        variants: [
+          ...current.variants,
+          {
+            id: `variant-${Date.now()}`,
+            name,
+            color: name,
+            colors: [name],
+            supplier_variant: name,
+            supplier_sku: normalizeText(variantDraft.supplier_sku),
+            active: true,
+          },
+        ],
+      };
+    });
     setVariantDraft(buildVariantDraft());
   }
 
@@ -3668,44 +3808,13 @@ export default function GarmentLibrary() {
                             emptyState="No imported garments match this category and brand."
                           />
 
-                          {selectedReusableGarmentEntry ? (
-                            <div className="products-card-detail-grid">
-                              <div className="products-card-detail">
-                                <span>Supplier Colors</span>
-                                <strong>{derivedImportedColorOptions.length || "None"}</strong>
-                              </div>
-                              <div className="products-card-detail">
-                                <span>Supplier Sizes</span>
-                                <strong>{derivedImportedSizeOptions.length || "None"}</strong>
-                              </div>
-                              <div className="products-card-detail">
-                                <span>Enabled Colors</span>
-                                <strong>{selectedImportedColorValues.length || "None"}</strong>
-                              </div>
-                              <div className="products-card-detail">
-                                <span>Enabled Sizes</span>
-                                <strong>{form.sizes.length || "None"}</strong>
-                              </div>
-                            </div>
-                          ) : null}
-
                           <div className="products-field-footer">
                             <span>
-                              {matchingImportedGarments.length} model
-                              {matchingImportedGarments.length === 1 ? "" : "s"} found.{" "}
                               {selectedReusableGarmentEntry
-                                ? `${derivedImportedColorOptions.length} supplier colors and ${derivedImportedSizeOptions.length} supplier sizes were loaded from the selected model. Adjust anything below as needed.`
+                                ? "Imported supplier data is loaded. Use colors and sizes below to decide what this garment should expose."
                                 : "Use a model as a shortcut, or keep filling out the garment form manually."}
                             </span>
                           </div>
-
-                          {selectedReusableGarmentEntry ? (
-                            <div className="products-callout">
-                              Imported supplier data is loaded into this form. You can edit fields,
-                              narrow the enabled variants and sizes, or continue without keeping the
-                              imported starting point.
-                            </div>
-                          ) : null}
                         </div>
                       ) : hasCategoryAndBrandSelected ? (
                         <div className="products-field-footer">
@@ -3785,112 +3894,161 @@ export default function GarmentLibrary() {
                   <div className="products-section-header">
                     <div>
                       <p className="products-section-step">Section 2</p>
-                      <h2>{isImportedCapabilityMode ? "Available Colors" : "Available Sizes"}</h2>
+                      <h2>Available Colors</h2>
                     </div>
                     <p>
                       {isImportedCapabilityMode
-                        ? "These supplier colors are derived directly from the imported garment library record."
-                        : "Select the size run this garment should support."}
+                        ? "Enable the supplier colors this garment should expose."
+                        : "Build a lightweight storefront-facing color set for this garment."}
                     </p>
                   </div>
 
-            {isImportedCapabilityMode ? (
-              <MultiSelectLookupField
-                label="Available Colors"
-                helperText="Enable the supplier colors this garment should expose. No manual color entry is required."
-                options={derivedImportedColorOptions}
-                selectedValues={selectedImportedColorValues}
-                onToggle={toggleImportedColor}
-                createHelper="No supplier colors were derived from this imported garment."
-                searchPlaceholder="Search supplier colors or SKU"
-              />
-            ) : (
-              <>
-                <MultiSelectLookupField
-                  label="Available Sizes"
-                  helperText="This becomes the reusable size run for storefront products built from this garment."
-                  options={sizes.map((size) => ({ id: size.id, name: size.name }))}
-                  selectedValues={form.sizes}
-                  onToggle={toggleSize}
-                  createHelper="Add a size below if it does not exist yet."
-                />
-
-                <details className="products-helper-details">
-                  <summary className="products-helper-summary">Add a new size</summary>
-                  <div className="products-inline-create-panel">
-                    <input
-                      value={sizeDraft}
-                      onChange={(event) => setSizeDraft(event.target.value)}
-                      placeholder="Create new size"
-                      style={{ ...fieldStyle, flex: 1 }}
+                  {isImportedCapabilityMode ? (
+                    <CompactCapabilitySelector
+                      label="Available Colors"
+                      helperText="Search and toggle the colors customers should see."
+                      options={derivedImportedColorOptions}
+                      selectedValues={selectedImportedColorValues}
+                      onToggle={toggleImportedColor}
+                      searchPlaceholder="Search colors"
+                      emptyState="No supplier colors were derived from this imported garment."
                     />
-                    <button type="button" className="products-inline-save" onClick={handleCreateSize}>
-                      Save Size
-                    </button>
-                  </div>
-                </details>
-              </>
-            )}
+                  ) : (
+                    <>
+                      <CompactCapabilitySelector
+                        label="Available Colors"
+                        helperText="Add colors below, then click them here to enable or disable them."
+                        options={customColorOptions}
+                        selectedValues={selectedCustomColorValues}
+                        onToggle={toggleCustomColor}
+                        searchPlaceholder="Search colors"
+                        emptyState="No colors added yet."
+                      />
+
+                      <div className="products-variant-create-row">
+                        <input
+                          value={variantDraft.name}
+                          onChange={(event) =>
+                            setVariantDraft((current) => ({ ...current, name: event.target.value }))
+                          }
+                          placeholder="Add color"
+                          style={fieldStyle}
+                          aria-label="Add color variant"
+                        />
+                        <button type="button" className="products-inline-save" onClick={addVariant}>
+                          Add Color
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </section>
 
                 <section className="products-editor-section">
                   <div className="products-section-header">
                     <div>
                       <p className="products-section-step">Section 3</p>
-                      <h2>{isImportedCapabilityMode ? "Available Sizes" : "Supplier Variants / Colors"}</h2>
+                      <h2>Available Sizes</h2>
                     </div>
                     <p>
                       {isImportedCapabilityMode
-                        ? "Sizes are derived from the imported supplier variant matrix and can be narrowed here."
-                        : "Capture supplier-facing colors and SKUs without interrupting the main setup flow."}
+                        ? "Sizes are derived from the imported garment and can be narrowed here."
+                        : "Select the size run this garment should support."}
                     </p>
                   </div>
 
-            {isImportedCapabilityMode ? (
-              <MultiSelectLookupField
-                label="Available Sizes"
-                helperText="Sizes come from the imported supplier matrix. Disable any sizes this garment should not expose."
-                options={derivedImportedSizeOptions}
-                selectedValues={form.sizes}
-                onToggle={toggleImportedSize}
-                createHelper="No supplier sizes were derived from the selected colors."
-              />
-            ) : (
-              <>
-                <div className="products-multiselect-header">
-                  <strong>Variant List</strong>
-                  <p>
-                    Supplier and distributor details stay at the garment level. Manage the color catalog
-                    below without repeating those fields on every row.
-                  </p>
-                </div>
-
-                <div className="products-multiselect-toolbar">
-                  <input
-                    type="search"
-                    value={variantSearch}
-                    onChange={(event) => setVariantSearch(event.target.value)}
-                    placeholder="Search variants or supplier SKU"
-                    style={fieldStyle}
-                  />
-                </div>
-
-                <div className="products-variant-create-row">
-                  <input
-                    value={variantDraft.name}
-                    onChange={(event) =>
-                      setVariantDraft((current) => ({ ...current, name: event.target.value }))
+                  <CompactCapabilitySelector
+                    label="Available Sizes"
+                    helperText={
+                      isImportedCapabilityMode
+                        ? "Search and toggle the sizes this garment should expose."
+                        : "Choose the reusable size run for storefront products built from this garment."
                     }
-                    placeholder="Add color"
-                    style={fieldStyle}
-                    aria-label="Add color variant"
+                    options={
+                      isImportedCapabilityMode
+                        ? derivedImportedSizeOptions
+                        : sizes.map((size) => ({ id: size.id, name: size.name }))
+                    }
+                    selectedValues={form.sizes}
+                    onToggle={isImportedCapabilityMode ? toggleImportedSize : toggleSize}
+                    searchPlaceholder="Search sizes"
+                    emptyState={
+                      isImportedCapabilityMode
+                        ? "No supplier sizes were derived from the selected colors."
+                        : "No sizes available yet."
+                    }
                   />
-                  <button type="button" className="products-inline-save" onClick={addVariant}>
-                    Add Color
-                  </button>
-                </div>
 
-                <div className="products-variant-catalog" role="list" aria-label="Supplier color variants">
+                  {!isImportedCapabilityMode ? (
+                    <details className="products-helper-details">
+                      <summary className="products-helper-summary">Add a new size</summary>
+                      <div className="products-inline-create-panel">
+                        <input
+                          value={sizeDraft}
+                          onChange={(event) => setSizeDraft(event.target.value)}
+                          placeholder="Create new size"
+                          style={{ ...fieldStyle, flex: 1 }}
+                        />
+                        <button type="button" className="products-inline-save" onClick={handleCreateSize}>
+                          Save Size
+                        </button>
+                      </div>
+                    </details>
+                  ) : null}
+                </section>
+
+                <details className="products-editor-section products-advanced-section">
+            <summary className="products-advanced-summary">
+              <div>
+                <p className="products-section-step">Optional</p>
+                <strong>Advanced Supplier Data</strong>
+                <span>
+                  Hidden by default so supplier SKUs and internal variant structure do not crowd the main flow.
+                </span>
+              </div>
+            </summary>
+
+            <div className="products-advanced-stack">
+              <div className="products-multiselect-toolbar">
+                <input
+                  type="search"
+                  value={variantSearch}
+                  onChange={(event) => setVariantSearch(event.target.value)}
+                  placeholder="Search colors, sizes, or supplier SKU"
+                  style={fieldStyle}
+                />
+              </div>
+
+              {isImportedCapabilityMode ? (
+                <div className="products-supplier-data-grid">
+                  {visibleImportedCapabilities.length ? (
+                    visibleImportedCapabilities.map((capability) => {
+                      const isEnabled = selectedImportedColorValues.some(
+                        (value) => normalizeTextKey(value) === normalizeTextKey(capability.name)
+                      );
+
+                      return (
+                        <article key={capability.id} className="products-supplier-data-card">
+                          <div className="products-supplier-data-header">
+                            <strong>{capability.name}</strong>
+                            <span>{isEnabled ? "Enabled" : "Hidden"}</span>
+                          </div>
+                          <p>
+                            SKUs: {capability.supplierSkus.length ? capability.supplierSkus.join(", ") : "None"}
+                          </p>
+                          <p>
+                            Sizes: {capability.sizes.length ? capability.sizes.join(", ") : "None"}
+                          </p>
+                        </article>
+                      );
+                    })
+                  ) : (
+                    <div className="products-selection-empty">
+                      {variantSearch.trim() ? "No supplier data matches that search." : "No supplier data available."}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="products-variant-catalog" role="list" aria-label="Advanced color management">
                   {visibleVariants.length ? (
                     visibleVariants.map((variant) => (
                       <div key={variant.id} className="products-variant-card" role="listitem">
@@ -3901,6 +4059,13 @@ export default function GarmentLibrary() {
                           className="products-variant-name"
                           aria-label={`Color name for ${variant.name || "variant"}`}
                         />
+                        <input
+                          value={variant.supplier_sku || ""}
+                          onChange={(event) => updateVariant(variant.id, { supplier_sku: event.target.value })}
+                          style={fieldStyle}
+                          placeholder="Supplier SKU"
+                          aria-label={`Supplier SKU for ${variant.name || "variant"}`}
+                        />
                         <div className="products-variant-card-actions">
                           <label className="products-inline-toggle">
                             <input
@@ -3909,7 +4074,7 @@ export default function GarmentLibrary() {
                               onChange={(event) => updateVariant(variant.id, { active: event.target.checked })}
                               aria-label={`Set ${variant.name || "variant"} active`}
                             />
-                            <span>Active</span>
+                            <span>Enabled</span>
                           </label>
                           <button
                             type="button"
@@ -3924,70 +4089,18 @@ export default function GarmentLibrary() {
                     ))
                   ) : (
                     <div className="products-selection-empty">
-                      {variantSearch.trim() ? "No variants match that search." : "No variants added yet."}
+                      {variantSearch.trim() ? "No colors match that search." : "No colors added yet."}
                     </div>
                   )}
                 </div>
-              </>
-            )}
-                </section>
+              )}
+            </div>
+          </details>
 
-                {isImportedCapabilityMode ? (
-                  <section className="products-editor-section">
-                    <div className="products-section-header">
-                      <div>
-                        <p className="products-section-step">Section 4</p>
-                        <h2>Auto-Generated Variant Matrix</h2>
-                      </div>
-                      <p>Variant rows are built internally from the enabled supplier colors and sizes.</p>
-                    </div>
-
-              <div className="products-multiselect-toolbar">
-                <input
-                  type="search"
-                  value={variantSearch}
-                  onChange={(event) => setVariantSearch(event.target.value)}
-                  placeholder="Search variants or supplier SKU"
-                  style={fieldStyle}
-                />
-              </div>
-
-              <div className="products-variant-list">
-                {visibleVariants.length ? (
-                  visibleVariants.map((variant) => (
-                    <div key={variant.id} className="products-variant-row">
-                      <input value={variant.name} readOnly style={{ ...fieldStyle, background: "#f8fafc" }} />
-                      <input
-                        value={variant.supplier_sku}
-                        readOnly
-                        placeholder="Supplier SKU"
-                        style={{ ...fieldStyle, background: "#f8fafc" }}
-                      />
-                      <input
-                        value={(variant.sizes || []).join(", ")}
-                        readOnly
-                        placeholder="Enabled sizes"
-                        style={{ ...fieldStyle, background: "#f8fafc" }}
-                      />
-                    </div>
-                  ))
-                ) : (
-                  <div className="products-selection-empty">
-                    No variants can be generated until at least one color is enabled.
-                  </div>
-                )}
-              </div>
-
-                    <div className="products-callout">
-                      Manual variant row creation is not required for imported garments. Adjust colors and
-                      sizes above and the supplier matrix updates automatically.
-                    </div>
-                  </section>
-                ) : null}
                 <details className="products-editor-section products-advanced-section" open>
             <summary className="products-advanced-summary">
               <div>
-                <p className="products-section-step">Section 5</p>
+                <p className="products-section-step">Section 4</p>
                 <strong>Garment Defaults</strong>
                 <span>Store reusable placements and production defaults here so storefront products can inherit them.</span>
               </div>
