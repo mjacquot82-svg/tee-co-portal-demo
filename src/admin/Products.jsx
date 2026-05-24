@@ -488,6 +488,13 @@ export default function Products() {
   ]);
 
   const activeCount = products.filter((product) => normalizeStatusValue(product?.status) === "active").length;
+  const hasActiveFilters =
+    Boolean(searchTerm.trim()) ||
+    selectedStorefrontCategory !== "all" ||
+    selectedBrand !== "all" ||
+    selectedProductType !== "all" ||
+    selectedProductMode !== "all" ||
+    selectedStatus !== "all";
 
   useEffect(() => {
     const duplicateProductIds = products.reduce((summary, product, index) => {
@@ -645,6 +652,7 @@ export default function Products() {
     setCreationNotice("");
     setHighlightedProductIds([]);
     setCategorySaveError("");
+    setSaveError("");
   }
 
   function handleProductModeChange(productMode) {
@@ -1174,6 +1182,36 @@ export default function Products() {
 
   return (
     <div ref={pageRef} className="products-page">
+      <section className="products-page-hero">
+        <div className="products-page-hero-copy">
+          <p className="products-eyebrow">Customer Product Catalog</p>
+          <h1 style={{ margin: 0 }}>Storefront Product Workspace</h1>
+          <p style={{ margin: 0, color: "#64748b" }}>
+            Edit products in a wider, calmer workspace, then review the published catalog below.
+          </p>
+        </div>
+
+        <div className="products-page-hero-actions">
+          <button
+            type="button"
+            className="products-secondary-button"
+            onClick={() => {
+              editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+              window.requestAnimationFrame(() => nameInputRef.current?.focus());
+            }}
+          >
+            Jump To Editor
+          </button>
+          <button
+            type="button"
+            className="products-secondary-button"
+            onClick={() => catalogPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          >
+            Jump To Catalog
+          </button>
+        </div>
+      </section>
+
       <div className="products-workspace">
         <form
           ref={editorRef}
@@ -1181,19 +1219,31 @@ export default function Products() {
           className={`products-editor ${editingProduct ? "is-editing" : ""}`}
         >
           <div style={{ display: "grid", gap: "10px" }}>
-            <p className="products-eyebrow">Customer Product Catalog</p>
-            <h1 style={{ margin: 0 }}>
-              {editingProduct ? `Edit ${editingProduct.name}` : "Storefront Product Editor"}
-            </h1>
+            <p className="products-eyebrow">Focused Editor</p>
+            <h2 style={{ margin: 0 }}>
+              {editingProduct ? `Edit ${editingProduct.name}` : "Create Storefront Product"}
+            </h2>
             <p style={{ margin: 0, color: "#64748b" }}>
               {editingProduct
                 ? "Update the customer-facing product details here."
-                : "Choose whether this storefront item is apparel tied to a garment template or a standalone manual catalog product."}
+                : "Start with the customer-facing basics, then add garment linkage and merchandising only where needed."}
             </p>
+            <div className="products-editor-topbar">
+              <button
+                type="button"
+                className="products-secondary-button"
+                onClick={() => catalogPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              >
+                View Published Catalog
+              </button>
+              {editingProduct ? (
+                <button type="button" onClick={resetForm} className="products-secondary-button">
+                  Cancel Editing
+                </button>
+              ) : null}
+            </div>
             <div className="products-callout">
-              Garment templates live in the <Link to="/admin/garments">Garment Library</Link>. The normal workflow is
-              template to storefront product to catalog card, but manual catalog products can also be created here
-              without garment linkage.
+              Garment templates live in the <Link to="/admin/garments">Garment Library</Link>. Most products should start there, but manual catalog items can still be created here.
             </div>
           </div>
 
@@ -1310,23 +1360,6 @@ export default function Products() {
               </label>
             </div>
 
-            <div className="products-inline-create-panel">
-              <input
-                value={newStorefrontCategoryName}
-                onChange={(event) => setNewStorefrontCategoryName(event.target.value)}
-                placeholder="Create storefront category like Drinkware"
-                style={{ ...fieldStyle, flex: "1 1 220px" }}
-              />
-              <button
-                type="button"
-                className="products-inline-save"
-                onClick={handleCreateStorefrontCategory}
-                disabled={isSavingCategory || !normalizeText(newStorefrontCategoryName)}
-              >
-                {isSavingCategory ? "Saving..." : "Create Category"}
-              </button>
-            </div>
-
             <div className="products-editor-grid">
               <label style={labelStyle}>
                 Supplier Category
@@ -1357,88 +1390,117 @@ export default function Products() {
               </label>
             </div>
 
-            {categorySaveError ? <div className="products-error-banner">{categorySaveError}</div> : null}
+          </section>
 
-            <div className="products-category-manager">
-              <div className="products-category-manager-header">
-                <div>
-                  <strong>Storefront Category Manager</strong>
-                  <p>Create, rename, or deactivate customer-facing browse categories.</p>
+          <details className="products-editor-section products-utility-section">
+            <summary className="products-advanced-summary">
+              <div>
+                <strong>Storefront Categories</strong>
+                <span>Create, rename, or deactivate browse categories without crowding the main editor.</span>
+              </div>
+            </summary>
+
+            <div className="products-advanced-stack">
+              <div className="products-inline-create-panel">
+                <input
+                  value={newStorefrontCategoryName}
+                  onChange={(event) => setNewStorefrontCategoryName(event.target.value)}
+                  placeholder="Create storefront category like Drinkware"
+                  style={{ ...fieldStyle, flex: "1 1 220px" }}
+                />
+                <button
+                  type="button"
+                  className="products-inline-save"
+                  onClick={handleCreateStorefrontCategory}
+                  disabled={isSavingCategory || !normalizeText(newStorefrontCategoryName)}
+                >
+                  {isSavingCategory ? "Saving..." : "Create Category"}
+                </button>
+              </div>
+
+              {categorySaveError ? <div className="products-error-banner">{categorySaveError}</div> : null}
+
+              <div className="products-category-manager">
+                <div className="products-category-manager-header">
+                  <div>
+                    <strong>Storefront Category Manager</strong>
+                    <p>Create, rename, or deactivate customer-facing browse categories.</p>
+                  </div>
+                </div>
+
+                <div className="products-category-manager-list">
+                  {storefrontCategories.map((category) => {
+                    const isEditingCategory = editingStorefrontCategoryId === category.id;
+                    return (
+                      <div key={category.id} className="products-category-manager-item">
+                        {isEditingCategory ? (
+                          <input
+                            value={editingStorefrontCategoryName}
+                            onChange={(event) => setEditingStorefrontCategoryName(event.target.value)}
+                            style={fieldStyle}
+                          />
+                        ) : (
+                          <div>
+                            <strong>{category.name}</strong>
+                            <div className="products-category-manager-meta">
+                              <span>{category.active === false ? "Inactive" : "Active"}</span>
+                              <span>{category.id}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="products-category-manager-actions">
+                          {isEditingCategory ? (
+                            <>
+                              <button
+                                type="button"
+                                className="products-inline-save"
+                                onClick={() => handleSaveStorefrontCategoryEdits(category.id)}
+                                disabled={isSavingCategory || !normalizeText(editingStorefrontCategoryName)}
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                className="products-inline-cancel"
+                                onClick={() => {
+                                  setEditingStorefrontCategoryId("");
+                                  setEditingStorefrontCategoryName("");
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                className="products-inline-action"
+                                onClick={() => {
+                                  setEditingStorefrontCategoryId(category.id);
+                                  setEditingStorefrontCategoryName(category.name);
+                                }}
+                              >
+                                Rename
+                              </button>
+                              <button
+                                type="button"
+                                className="products-inline-action"
+                                onClick={() => handleToggleStorefrontCategoryActive(category)}
+                                disabled={isSavingCategory}
+                              >
+                                {category.active === false ? "Activate" : "Deactivate"}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-
-              <div className="products-category-manager-list">
-                {storefrontCategories.map((category) => {
-                  const isEditingCategory = editingStorefrontCategoryId === category.id;
-                  return (
-                    <div key={category.id} className="products-category-manager-item">
-                      {isEditingCategory ? (
-                        <input
-                          value={editingStorefrontCategoryName}
-                          onChange={(event) => setEditingStorefrontCategoryName(event.target.value)}
-                          style={fieldStyle}
-                        />
-                      ) : (
-                        <div>
-                          <strong>{category.name}</strong>
-                          <div className="products-category-manager-meta">
-                            <span>{category.active === false ? "Inactive" : "Active"}</span>
-                            <span>{category.id}</span>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="products-category-manager-actions">
-                        {isEditingCategory ? (
-                          <>
-                            <button
-                              type="button"
-                              className="products-inline-save"
-                              onClick={() => handleSaveStorefrontCategoryEdits(category.id)}
-                              disabled={isSavingCategory || !normalizeText(editingStorefrontCategoryName)}
-                            >
-                              Save
-                            </button>
-                            <button
-                              type="button"
-                              className="products-inline-cancel"
-                              onClick={() => {
-                                setEditingStorefrontCategoryId("");
-                                setEditingStorefrontCategoryName("");
-                              }}
-                            >
-                              Cancel
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              className="products-inline-action"
-                              onClick={() => {
-                                setEditingStorefrontCategoryId(category.id);
-                                setEditingStorefrontCategoryName(category.name);
-                              }}
-                            >
-                              Rename
-                            </button>
-                            <button
-                              type="button"
-                              className="products-inline-action"
-                              onClick={() => handleToggleStorefrontCategoryActive(category)}
-                              disabled={isSavingCategory}
-                            >
-                              {category.active === false ? "Activate" : "Deactivate"}
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
             </div>
-          </section>
+          </details>
 
           {!isManualProductMode ? (
           <section className="products-editor-section">
@@ -1777,95 +1839,125 @@ export default function Products() {
             </div>
           </div>
 
-          <div className="products-toolbar">
-            <label className="products-toolbar-field">
-              <span>Search Products</span>
-              <input
-                type="search"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search product, category, brand, type"
-                style={fieldStyle}
-              />
-            </label>
+          <div className="products-catalog-controls">
+            <div className="products-catalog-search-row">
+              <label className="products-toolbar-field">
+                <span>Search Products</span>
+                <input
+                  type="search"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search product, category, brand, type"
+                  style={fieldStyle}
+                />
+              </label>
 
-            <label className="products-toolbar-field">
-              <span>Storefront Category</span>
-              <select
-                value={selectedStorefrontCategory}
-                onChange={(event) => setSelectedStorefrontCategory(event.target.value)}
-                style={fieldStyle}
+              <button
+                type="button"
+                className="products-primary-button"
+                onClick={() => {
+                  resetForm();
+                  editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  window.requestAnimationFrame(() => nameInputRef.current?.focus());
+                }}
               >
-                <option value="all">All categories</option>
-                {activeStorefrontCategories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                New Product
+              </button>
+            </div>
 
-            <label className="products-toolbar-field">
-              <span>Brand</span>
-              <select value={selectedBrand} onChange={(event) => setSelectedBrand(event.target.value)} style={fieldStyle}>
-                <option value="all">All brands</option>
-                {brandFilterOptions.map((brand) => (
-                  <option key={brand} value={brand}>
-                    {brand}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <details className="products-filter-panel" open={hasActiveFilters}>
+              <summary className="products-filter-summary">
+                <strong>Filters</strong>
+                <span>
+                  {hasActiveFilters
+                    ? "Refine the visible catalog list."
+                    : "Open filters for category, brand, type, mode, and status."}
+                </span>
+              </summary>
 
-            <label className="products-toolbar-field">
-              <span>Product Type</span>
-              <select
-                value={selectedProductType}
-                onChange={(event) => setSelectedProductType(event.target.value)}
-                style={fieldStyle}
-              >
-                <option value="all">All product types</option>
-                {productTypeOptions.map((productType) => (
-                  <option key={productType} value={productType}>
-                    {productType}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <div className="products-toolbar">
+                <label className="products-toolbar-field">
+                  <span>Storefront Category</span>
+                  <select
+                    value={selectedStorefrontCategory}
+                    onChange={(event) => setSelectedStorefrontCategory(event.target.value)}
+                    style={fieldStyle}
+                  >
+                    <option value="all">All categories</option>
+                    {activeStorefrontCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-            <label className="products-toolbar-field">
-              <span>Mode</span>
-              <select
-                value={selectedProductMode}
-                onChange={(event) => setSelectedProductMode(event.target.value)}
-                style={fieldStyle}
-              >
-                <option value="all">All products</option>
-                <option value="apparel">Garment-linked</option>
-                <option value="manual">Manual products</option>
-              </select>
-            </label>
+                <label className="products-toolbar-field">
+                  <span>Brand</span>
+                  <select
+                    value={selectedBrand}
+                    onChange={(event) => setSelectedBrand(event.target.value)}
+                    style={fieldStyle}
+                  >
+                    <option value="all">All brands</option>
+                    {brandFilterOptions.map((brand) => (
+                      <option key={brand} value={brand}>
+                        {brand}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-            <label className="products-toolbar-field">
-              <span>Status</span>
-              <select value={selectedStatus} onChange={(event) => setSelectedStatus(event.target.value)} style={fieldStyle}>
-                <option value="all">All statuses</option>
-                <option value="active">Active</option>
-                <option value="archived">Inactive</option>
-              </select>
-            </label>
+                <label className="products-toolbar-field">
+                  <span>Product Type</span>
+                  <select
+                    value={selectedProductType}
+                    onChange={(event) => setSelectedProductType(event.target.value)}
+                    style={fieldStyle}
+                  >
+                    <option value="all">All product types</option>
+                    {productTypeOptions.map((productType) => (
+                      <option key={productType} value={productType}>
+                        {productType}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="products-toolbar-field">
+                  <span>Mode</span>
+                  <select
+                    value={selectedProductMode}
+                    onChange={(event) => setSelectedProductMode(event.target.value)}
+                    style={fieldStyle}
+                  >
+                    <option value="all">All products</option>
+                    <option value="apparel">Garment-linked</option>
+                    <option value="manual">Manual products</option>
+                  </select>
+                </label>
+
+                <label className="products-toolbar-field">
+                  <span>Status</span>
+                  <select
+                    value={selectedStatus}
+                    onChange={(event) => setSelectedStatus(event.target.value)}
+                    style={fieldStyle}
+                  >
+                    <option value="all">All statuses</option>
+                    <option value="active">Active</option>
+                    <option value="archived">Inactive</option>
+                  </select>
+                </label>
+              </div>
+            </details>
           </div>
 
           <div className="products-results-meta">
             <span>
               Showing <strong>{filteredProducts.length}</strong> of <strong>{products.length}</strong> products
             </span>
-            {(searchTerm ||
-              selectedStorefrontCategory !== "all" ||
-              selectedBrand !== "all" ||
-              selectedProductType !== "all" ||
-              selectedProductMode !== "all" ||
-              selectedStatus !== "all") ? (
+            {hasActiveFilters ? (
               <button
                 type="button"
                 className="products-clear-filters"
@@ -1890,6 +1982,9 @@ export default function Products() {
                 filteredProducts.map((product, index) => {
                   const linkedGarment = findLinkedGarmentLibraryItem(product, libraryItems);
                   const renderIdentity = buildProductRenderIdentity(product, index);
+                  const isActiveCard =
+                    product.id === editingProductId || highlightedProductIds.includes(product.id);
+                  const statusIsActive = normalizeStatusValue(product?.status) === "active";
 
                   console.info("[Products] Rendering customer catalog product card", {
                     index,
@@ -1912,9 +2007,7 @@ export default function Products() {
                           productCardRefs.current.delete(renderIdentity.key);
                         }
                       }}
-                      className={`products-card ${
-                        product.id === editingProductId || highlightedProductIds.includes(product.id) ? "is-active" : ""
-                      }`}
+                      className={`products-card ${isActiveCard ? "is-active" : ""}`}
                     >
                       <div className="products-card-media">
                         {product.image ? (
@@ -1926,50 +2019,46 @@ export default function Products() {
 
                       <div className="products-card-body">
                         <div className="products-card-topline">
-                          <div style={{ minWidth: 0 }}>
-                            <div className="products-card-title-row">
-                              <h3 style={{ margin: 0 }}>{product.name}</h3>
-                            </div>
-                            <p className="products-card-subtitle">
-                              {product.storefront_category || product.category || "Catalog"} •{" "}
-                              {linkedGarment?.title ||
-                                product.brand_model ||
-                                (product?.garment_library_item_id ? "Linked apparel product" : "Manual catalog product")}
-                            </p>
-                          </div>
-
+                          <span className="products-card-category-pill">
+                            {product.storefront_category || product.category || "Catalog"}
+                          </span>
                           <strong className="products-card-price">{formatMoney(product?.base_garment_price)}</strong>
                         </div>
 
-                        <div className="products-card-detail-grid">
-                          <div className="products-card-detail">
-                            <span>Category</span>
-                            <strong>
-                              {product?.storefront_category || product?.category || "Catalog"}
-                            </strong>
+                        <div className="products-card-title-block">
+                          <div className="products-card-title-row">
+                            <h3 style={{ margin: 0 }}>
+                              {product.name || product.product_type || "Catalog Product"}
+                            </h3>
+                            {isActiveCard ? (
+                              <span className="products-card-editing-pill">
+                                {product.id === editingProductId ? "Editing" : "Updated"}
+                              </span>
+                            ) : null}
                           </div>
+                          <p className="products-card-subtitle">
+                            {linkedGarment?.title ||
+                              product.brand_model ||
+                              (product?.garment_library_item_id
+                                ? "Linked apparel product"
+                                : "Manual catalog product")}
+                          </p>
+                          {product?.notes ? (
+                            <p className="products-card-description">{product.notes}</p>
+                          ) : null}
+                        </div>
 
-                          <div className="products-card-detail">
-                            <span>Type</span>
-                            <strong>
-                              {product?.product_type ||
-                                (product?.garment_library_item_id ? "Apparel Product" : "Manual Product")}
-                            </strong>
-                          </div>
-
-                          <div className="products-card-detail">
-                            <span>Status</span>
-                            <strong className={`products-status products-status-${normalizeStatusValue(product?.status) === "active" ? "active" : "archived"}`}>
-                              {normalizeStatusValue(product?.status) === "active" ? "Active" : "Archived"}
-                            </strong>
-                          </div>
-
-                          <div className="products-card-detail">
-                            <span>Mode</span>
-                            <strong>
-                              {product?.garment_library_item_id ? "Garment-linked" : "Manual"}
-                            </strong>
-                          </div>
+                        <div className="products-card-meta-row">
+                          <span className="products-card-meta-pill">
+                            {product?.product_type ||
+                              (product?.garment_library_item_id ? "Apparel Product" : "Manual Product")}
+                          </span>
+                          <span className="products-card-meta-pill">
+                            {product?.garment_library_item_id ? "Garment-linked" : "Manual"}
+                          </span>
+                          <span className={`products-status products-status-${statusIsActive ? "active" : "archived"}`}>
+                            {statusIsActive ? "Active" : "Archived"}
+                          </span>
                         </div>
                       </div>
 

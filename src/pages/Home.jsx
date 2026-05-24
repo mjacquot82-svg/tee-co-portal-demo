@@ -66,50 +66,71 @@ export default function Home() {
     >
       <section
         style={{
-          marginBottom: "24px",
+          marginBottom: "20px",
           borderRadius: "28px",
-          padding: "28px",
+          padding: "20px 22px",
           background:
             "radial-gradient(circle at top left, rgba(241, 245, 249, 0.96) 0%, rgba(255, 255, 255, 0.98) 46%, rgba(254, 243, 199, 0.9) 100%)",
           border: "1px solid #e5e7eb",
-          boxShadow: "0 24px 60px rgba(15, 23, 42, 0.08)",
+          boxShadow: "0 18px 40px rgba(15, 23, 42, 0.07)",
+          display: "grid",
+          gap: "16px",
         }}
       >
-        <p
+        <div
           style={{
-            margin: "0 0 10px",
-            fontSize: "12px",
-            fontWeight: 800,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: "#92400e",
+            display: "flex",
+            gap: "14px",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            flexWrap: "wrap",
           }}
         >
-          Tee & Co Storefront
-        </p>
-        <h1
-          style={{
-            margin: "0 0 10px",
-            fontSize: "clamp(2rem, 5vw, 3.5rem)",
-            lineHeight: 1,
-            letterSpacing: "-0.05em",
-            maxWidth: "9ch",
-          }}
-        >
-          Shop by category, not by product dump.
-        </h1>
-        <p
-          style={{
-            margin: "0 0 18px",
-            maxWidth: "640px",
-            fontSize: "15px",
-            lineHeight: 1.7,
-            color: "#4b5563",
-          }}
-        >
-          Browse apparel, drinkware, hats, accessories, and future merch collections through
-          cleaner storefront categories first, then drill into products.
-        </p>
+          <div style={{ display: "grid", gap: "8px", maxWidth: "560px" }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "12px",
+                fontWeight: 800,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: "#92400e",
+              }}
+            >
+              Tee & Co Storefront
+            </p>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: "clamp(1.75rem, 4vw, 2.5rem)",
+                lineHeight: 1.02,
+                letterSpacing: "-0.05em",
+              }}
+            >
+              Shop the collection
+            </h1>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "14px",
+                lineHeight: 1.6,
+                color: "#4b5563",
+              }}
+            >
+              Browse curated categories, featured products, and easy starting points for custom merch.
+            </p>
+          </div>
+
+          <div style={{ display: "grid", gap: "8px", minWidth: "220px" }}>
+            <span style={{ color: "#6b7280", fontSize: "13px", fontWeight: 700 }}>
+              {productsReady ? `${storefrontProducts.length} active products live` : "Loading catalog"}
+            </span>
+            <span style={{ color: "#6b7280", fontSize: "13px" }}>
+              {storefrontCategories.length} collections
+            </span>
+          </div>
+        </div>
+
         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
           <Link
             to={heroLink}
@@ -128,9 +149,26 @@ export default function Home() {
           >
             {getCategoryHeroCopy(storefrontCategories.length)}
           </Link>
-          <span style={{ color: "#6b7280", fontSize: "14px" }}>
-            {productsReady ? `${storefrontProducts.length} active products live` : "Loading catalog"}
-          </span>
+          {storefrontCategories.slice(0, 3).map((category) => (
+            <Link
+              key={category.id}
+              to={`/category/${category.id}`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                minHeight: "42px",
+                padding: "0 14px",
+                borderRadius: "999px",
+                textDecoration: "none",
+                background: "rgba(255, 255, 255, 0.86)",
+                border: "1px solid #e5e7eb",
+                color: "#1f2937",
+                fontWeight: 700,
+              }}
+            >
+              {category.name}
+            </Link>
+          ))}
         </div>
       </section>
 
