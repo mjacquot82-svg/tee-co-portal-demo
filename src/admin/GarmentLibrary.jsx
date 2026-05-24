@@ -161,7 +161,6 @@ function buildFormFromGarment(item, brands, categories, garmentModels, sizeLooku
 function buildVariantDraft() {
   return {
     name: "",
-    supplier_sku: "",
   };
 }
 
@@ -3885,7 +3884,10 @@ export default function GarmentLibrary() {
               <>
                 <div className="products-multiselect-header">
                   <strong>Variant List</strong>
-                  <p>Large variant lists and supplier SKUs belong here, not on the storefront publishing form.</p>
+                  <p>
+                    Supplier and distributor details stay at the garment level. Manage the color catalog
+                    below without repeating those fields on every row.
+                  </p>
                 </div>
 
                 <div className="products-multiselect-toolbar">
@@ -3898,64 +3900,57 @@ export default function GarmentLibrary() {
                   />
                 </div>
 
-                <div className="products-inline-model-grid">
+                <div className="products-variant-create-row">
                   <input
                     value={variantDraft.name}
                     onChange={(event) =>
                       setVariantDraft((current) => ({ ...current, name: event.target.value }))
                     }
-                    placeholder="Variant name"
+                    placeholder="Add color"
                     style={fieldStyle}
+                    aria-label="Add color variant"
                   />
-                  <input
-                    value={variantDraft.supplier_sku}
-                    onChange={(event) =>
-                      setVariantDraft((current) => ({ ...current, supplier_sku: event.target.value }))
-                    }
-                    placeholder="Supplier SKU"
-                    style={fieldStyle}
-                  />
+                  <button type="button" className="products-inline-save" onClick={addVariant}>
+                    Add Color
+                  </button>
                 </div>
-                <button type="button" className="products-inline-save" onClick={addVariant}>
-                  Add Variant
-                </button>
 
-                <div className="products-variant-list">
+                <div className="products-variant-catalog" role="list" aria-label="Supplier color variants">
                   {visibleVariants.length ? (
                     visibleVariants.map((variant) => (
-                      <div key={variant.id} className="products-variant-row">
+                      <div key={variant.id} className="products-variant-card" role="listitem">
                         <input
                           value={variant.name}
                           onChange={(event) => updateVariant(variant.id, { name: event.target.value })}
                           style={fieldStyle}
+                          className="products-variant-name"
+                          aria-label={`Color name for ${variant.name || "variant"}`}
                         />
-                        <input
-                          value={variant.supplier_sku}
-                          onChange={(event) =>
-                            updateVariant(variant.id, { supplier_sku: event.target.value })
-                          }
-                          placeholder="Supplier SKU"
-                          style={fieldStyle}
-                        />
-                        <label className="products-inline-toggle">
-                          <input
-                            type="checkbox"
-                            checked={variant.active !== false}
-                            onChange={(event) => updateVariant(variant.id, { active: event.target.checked })}
-                          />
-                          <span>Active</span>
-                        </label>
-                        <button
-                          type="button"
-                          className="products-inline-cancel"
-                          onClick={() => removeVariant(variant.id)}
-                        >
-                          Remove
-                        </button>
+                        <div className="products-variant-card-actions">
+                          <label className="products-inline-toggle">
+                            <input
+                              type="checkbox"
+                              checked={variant.active !== false}
+                              onChange={(event) => updateVariant(variant.id, { active: event.target.checked })}
+                              aria-label={`Set ${variant.name || "variant"} active`}
+                            />
+                            <span>Active</span>
+                          </label>
+                          <button
+                            type="button"
+                            className="products-inline-cancel"
+                            onClick={() => removeVariant(variant.id)}
+                            aria-label={`Remove ${variant.name || "variant"}`}
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
                     ))
                   ) : (
-                    <div className="products-selection-empty">No variants added yet.</div>
+                    <div className="products-selection-empty">
+                      {variantSearch.trim() ? "No variants match that search." : "No variants added yet."}
+                    </div>
                   )}
                 </div>
               </>
