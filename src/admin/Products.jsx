@@ -69,7 +69,6 @@ const emptyProduct = {
   selectedGarmentLibraryId: "",
   garmentSearch: "",
   flat_price: "",
-  compare_at_price: "",
   image: "",
   visibleVariants: [],
   sizes: [],
@@ -242,7 +241,6 @@ function buildFormFromGarmentDraft(
     visibleVariants: getVariantOptions(item).map((variant) => variant.name),
     sizes: sortSizesByLookup(item?.sizes || [], sizeLookups),
     flat_price: normalizeText(prefilledStorefrontSetup?.flat_price),
-    compare_at_price: normalizeText(prefilledStorefrontSetup?.compare_at_price),
     placementsText: defaultPlacements.join(", "),
     placementPriceMap: buildPlacementPriceMap(defaultPlacements, {}),
     production_methods: defaultProductionMethods,
@@ -305,10 +303,6 @@ function buildFormFromProduct(
       product?.base_garment_price === null || product?.base_garment_price === undefined
         ? ""
         : String(product.base_garment_price),
-    compare_at_price:
-      product?.compare_at_price === null || product?.compare_at_price === undefined
-        ? ""
-        : String(product.compare_at_price),
     visibleVariants: Array.isArray(product?.colors) ? uniqueList(product.colors) : [],
     sizes: sortSizesByLookup(Array.isArray(product?.sizes) ? product.sizes : [], sizeLookups),
     placementsText: placements.join(", "),
@@ -397,6 +391,7 @@ export default function Products() {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [productPendingRemoval, setProductPendingRemoval] = useState(null);
   const [isRemovingProduct, setIsRemovingProduct] = useState(false);
+  const [isGarmentPickerOpen, setIsGarmentPickerOpen] = useState(false);
 
   const editingProduct = editingProductId
     ? products.find((product) => product.id === editingProductId) || null
@@ -433,6 +428,12 @@ export default function Products() {
   const showVariantSelection = Boolean(selectedGarmentItem) && selectedGarmentVariantCount > 0;
   const showSizeSelection = Boolean(selectedGarmentItem) && garmentSizeOptions.length > 0;
   const isSelectedGarmentOneSize = isOneSizeOnly(garmentSizes);
+  const inheritedBrandLabel = isManualProductMode
+    ? normalizeText(findLookupById(brands, form.brand_lookup_id)?.name || form.brand_model)
+    : normalizeText(garmentBrand?.name || findLookupById(brands, form.brand_lookup_id)?.name || form.brand_model);
+  const inheritedCategoryLabel = isManualProductMode
+    ? "Manual product"
+    : normalizeText(garmentCategory?.name || form.category || "Catalog");
   const placementLibrary = useMemo(
     () => buildPlacementLibrary(products, libraryItems),
     [products, libraryItems]
@@ -786,6 +787,7 @@ export default function Products() {
     setSaveError("");
     setIsEditorOpen(false);
     setProductPendingRemoval(null);
+    setIsGarmentPickerOpen(false);
   }
 
   function focusEditorNameField() {
@@ -813,6 +815,7 @@ export default function Products() {
     setNewBrandName("");
     setSaveError("");
     setIsEditorOpen(true);
+    setIsGarmentPickerOpen(productMode === PRODUCT_MODES.APPAREL);
     focusEditorNameField();
   }
 
@@ -841,6 +844,7 @@ export default function Products() {
     setSaveError("");
     setCreationNotice("");
     setHighlightedProductIds([]);
+    setIsGarmentPickerOpen(productMode === PRODUCT_MODES.APPAREL && !form.selectedGarmentLibraryId);
     setForm((current) => {
       if (productMode === current.productMode) {
         return current;
@@ -858,6 +862,8 @@ export default function Products() {
           category_lookup_id: "",
           category: "Manual",
           product_type: current.product_type || "Manual Product",
+          brand_lookup_id: current.brand_lookup_id,
+          brand_model: current.brand_model,
         };
       }
 
@@ -888,6 +894,7 @@ export default function Products() {
         garmentTitle: item?.title || "",
         nextDraft,
       });
+      setIsGarmentPickerOpen(false);
       setForm(nextDraft);
       return;
     }
@@ -923,6 +930,7 @@ export default function Products() {
       product_type: resolveStructuredProductType(garmentModel, current.product_type, current.name || item.title),
       brand_model: buildLegacyBrandModelValue(brand, garmentModel, current.brand_model),
     }));
+    setIsGarmentPickerOpen(false);
   }
 
   useEffect(() => {
@@ -963,6 +971,7 @@ export default function Products() {
       )
     );
     setIsEditorOpen(true);
+    setIsGarmentPickerOpen(false);
     navigate(location.pathname, { replace: true, state: {} });
     focusEditorNameField();
   }, [
@@ -1033,6 +1042,7 @@ export default function Products() {
   function handleGarmentSearchChange(event) {
     const nextValue = event.target.value;
     setHighlightedProductIds([]);
+    setIsGarmentPickerOpen(true);
     setForm((current) => ({
       ...current,
       selectedGarmentLibraryId: "",
@@ -1130,6 +1140,7 @@ export default function Products() {
   function handleEdit(product) {
     setEditingProductId(product.id);
     setIsEditorOpen(true);
+    setIsGarmentPickerOpen(!product?.garment_library_item_id);
     setForm(
       buildFormFromProduct(
         product,
@@ -1231,7 +1242,6 @@ export default function Products() {
       form.storefront_category_lookup_id
     );
     const flatPrice = Number(form.flat_price || 0);
-    const compareAtPrice = form.compare_at_price === "" ? null : Number(form.compare_at_price || 0);
     const selectedSizes =
       !isManualProductMode && selectedGarmentItem && isOneSizeOnly(selectedGarmentItem.sizes || [])
         ? sortSizesByLookup(selectedGarmentItem.sizes || [], sizes)
@@ -1279,7 +1289,7 @@ export default function Products() {
       cost_price: Number(form.cost_price || 0),
       markup_percentage: Number(form.markup_percentage || 0),
       base_garment_price: flatPrice,
-      compare_at_price: compareAtPrice,
+      compare_at_price: null,
       unit_price: flatPrice,
       notes: form.notes,
     };
@@ -1770,8 +1780,8 @@ export default function Products() {
                     </div>
                   </div>
 
-                  <div className="products-pricing-grid">
-                    <label style={labelStyle}>
+                  <div className="products-title-price-grid">
+                    <label style={labelStyle} className="products-header-name-field">
                       Product Name
                       <input
                         ref={nameInputRef}
@@ -1784,7 +1794,7 @@ export default function Products() {
                       />
                     </label>
 
-                    <label style={labelStyle}>
+                    <label style={labelStyle} className="products-header-price-field">
                       Price
                       <input
                         type="number"
@@ -1795,20 +1805,6 @@ export default function Products() {
                         onChange={updateField}
                         placeholder="24.00"
                         required
-                        style={fieldStyle}
-                      />
-                    </label>
-
-                    <label style={labelStyle}>
-                      Compare-at Price
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        name="compare_at_price"
-                        value={form.compare_at_price}
-                        onChange={updateField}
-                        placeholder="32.00"
                         style={fieldStyle}
                       />
                     </label>
@@ -1881,72 +1877,134 @@ export default function Products() {
                     </div>
 
                     <div className="products-inline-field-stack">
-                      <label style={labelStyle}>
-                        Brand
-                        <select
-                          name="brand_lookup_id"
-                          value={form.brand_lookup_id}
-                          onChange={handleBrandSelect}
-                          style={fieldStyle}
-                        >
-                          <option value="">No brand</option>
-                          {brandSelectOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                          <option value={CREATE_BRAND_VALUE}>+ Create New Brand</option>
-                        </select>
-                      </label>
-
-                      {isCreatingBrand ? (
-                        <div className="products-inline-category-create">
-                          <label style={{ ...labelStyle, margin: 0 }}>
-                            New Brand
-                            <input
-                              ref={brandInputRef}
-                              value={newBrandName}
-                              onChange={(event) => setNewBrandName(event.target.value)}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  handleCreateBrand();
-                                }
-                              }}
-                              placeholder="Stanley"
+                      {isManualProductMode ? (
+                        <>
+                          <label style={labelStyle}>
+                            Brand
+                            <select
+                              name="brand_lookup_id"
+                              value={form.brand_lookup_id}
+                              onChange={handleBrandSelect}
                               style={fieldStyle}
-                            />
+                            >
+                              <option value="">No brand</option>
+                              {brandSelectOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                              <option value={CREATE_BRAND_VALUE}>+ Create New Brand</option>
+                            </select>
                           </label>
-                          <div className="products-inline-category-create-actions">
-                            <button
-                              type="button"
-                              className="products-inline-save"
-                              onClick={handleCreateBrand}
-                              disabled={isSavingBrand || !normalizeText(newBrandName)}
-                            >
-                              {isSavingBrand ? "Saving..." : "Create Brand"}
-                            </button>
-                            <button
-                              type="button"
-                              className="products-inline-cancel"
-                              onClick={() => {
-                                setIsCreatingBrand(false);
-                                setNewBrandName("");
-                                setBrandSaveError("");
-                              }}
-                              disabled={isSavingBrand}
-                            >
-                              Cancel
-                            </button>
+
+                          {isCreatingBrand ? (
+                            <div className="products-inline-category-create">
+                              <label style={{ ...labelStyle, margin: 0 }}>
+                                New Brand
+                                <input
+                                  ref={brandInputRef}
+                                  value={newBrandName}
+                                  onChange={(event) => setNewBrandName(event.target.value)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                      event.preventDefault();
+                                      handleCreateBrand();
+                                    }
+                                  }}
+                                  placeholder="Stanley"
+                                  style={fieldStyle}
+                                />
+                              </label>
+                              <div className="products-inline-category-create-actions">
+                                <button
+                                  type="button"
+                                  className="products-inline-save"
+                                  onClick={handleCreateBrand}
+                                  disabled={isSavingBrand || !normalizeText(newBrandName)}
+                                >
+                                  {isSavingBrand ? "Saving..." : "Create Brand"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="products-inline-cancel"
+                                  onClick={() => {
+                                    setIsCreatingBrand(false);
+                                    setNewBrandName("");
+                                    setBrandSaveError("");
+                                  }}
+                                  disabled={isSavingBrand}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {brandSaveError ? <div className="products-error-banner">{brandSaveError}</div> : null}
+                        </>
+                      ) : (
+                        <div className="products-summary-card products-inherited-card">
+                          <span className="products-summary-label">Inherited Brand</span>
+                          <strong>{inheritedBrandLabel || "No brand assigned"}</strong>
+                          <div className="products-summary-details">
+                            <span>{inheritedCategoryLabel}</span>
+                            <span>From garment template</span>
                           </div>
                         </div>
-                      ) : null}
-
-                      {brandSaveError ? <div className="products-error-banner">{brandSaveError}</div> : null}
+                      )}
                     </div>
                   </div>
 
-                  <div className="products-storefront-header-glance">
+                  {!isManualProductMode ? (
+                    <div className="products-inherited-strip">
+                      <div className="products-inherited-strip-copy">
+                        <span className="products-summary-label">Garment Template</span>
+                        <strong>
+                          {selectedGarmentItem?.title || "Choose the garment behind this storefront product"}
+                        </strong>
+                        <div className="products-summary-details">
+                          <span>{inheritedBrandLabel || "No brand"}</span>
+                          <span>{inheritedCategoryLabel}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="products-inline-action"
+                        onClick={() => setIsGarmentPickerOpen((current) => !current)}
+                      >
+                        {selectedGarmentItem ? "Change Template" : "Choose Template"}
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {!isManualProductMode && (isGarmentPickerOpen || !selectedGarmentItem) ? (
+                    <SearchableLookupField
+                      label="Garment Template"
+                      value={form.garmentSearch}
+                      onChange={handleGarmentSearchChange}
+                      onSelect={handleGarmentSelect}
+                      options={libraryItems.filter((item) => item.active !== false)}
+                      placeholder="Search garment library"
+                      helperText="The template supplies brand, category, colors, sizes, and production defaults."
+                      action={
+                        <Link className="products-inline-action-link" to="/admin/garments">
+                          Open Garment Library
+                        </Link>
+                      }
+                      renderOptionLabel={(item) =>
+                        buildGarmentLibraryLabel(item, brands, categories, garmentModels)
+                      }
+                      renderOptionMeta={(item) => {
+                        const variantCount = (item?.variants || []).filter(
+                          (variant) => variant.active !== false
+                        ).length;
+                        return `${variantCount} variants • ${(item?.sizes || []).length} sizes`;
+                      }}
+                      emptyState="No garments found. Add one in Garment Library first."
+                    />
+                  ) : null}
+
+                  <div className="products-storefront-header-glance products-storefront-header-glance-compact">
                     <div className="products-summary-card">
                       <span className="products-summary-label">Category</span>
                       <strong>{form.storefront_category || "Uncategorized"}</strong>
@@ -1954,12 +2012,9 @@ export default function Products() {
                     <div className="products-summary-card">
                       <span className="products-summary-label">Price</span>
                       <strong>{form.flat_price ? formatMoney(form.flat_price) : "Add sale price"}</strong>
-                    </div>
-                    <div className="products-summary-card">
-                      <span className="products-summary-label">Compare-at</span>
-                      <strong>
-                        {form.compare_at_price ? formatMoney(form.compare_at_price) : "No compare-at price"}
-                      </strong>
+                      <div className="products-summary-details">
+                        <span>{normalizeStatusValue(form.status) === "active" ? "Visible" : "Hidden"}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2000,132 +2055,71 @@ export default function Products() {
                 </div>
               </div>
 
-              {!isManualProductMode ? (
-                <div className="products-editor-grid">
-                  <label style={labelStyle}>
-                    Supplier Category
-                    <select
-                      name="category_lookup_id"
-                      value={form.category_lookup_id}
-                      onChange={updateField}
-                      style={fieldStyle}
-                    >
-                      <option value="">Catalog</option>
-                      {categories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-              ) : (
-                <div className="products-summary-card">
-                  <span className="products-summary-label">Supplier Category</span>
-                  <strong>Handled automatically</strong>
-                  <div className="products-summary-details">
-                    <span>Manual storefront items do not require supplier categorization.</span>
-                  </div>
-                </div>
-              )}
             </section>
-
-          {!isManualProductMode ? (
-          <section className="products-editor-section">
-            <div className="products-section-header">
-              <div>
-                <p className="products-section-step">Link</p>
-                <h2>Choose Garment Template</h2>
-              </div>
-              <p>Select the reusable garment behind this storefront product, then narrow what customers can buy.</p>
-            </div>
-
-            <SearchableLookupField
-              label="Garment"
-              value={form.garmentSearch}
-              onChange={handleGarmentSearchChange}
-              onSelect={handleGarmentSelect}
-              options={libraryItems.filter((item) => item.active !== false)}
-              placeholder="Search garment library"
-              helperText="This links the storefront product to a reusable supplier garment."
-              action={
-                <Link className="products-inline-action-link" to="/admin/garments">
-                  Open Garment Library
-                </Link>
-              }
-              renderOptionLabel={(item) => buildGarmentLibraryLabel(item, brands, categories, garmentModels)}
-              renderOptionMeta={(item) => {
-                const variantCount = (item?.variants || []).filter((variant) => variant.active !== false).length;
-                return `${variantCount} variants • ${(item?.sizes || []).length} sizes`;
-              }}
-              emptyState="No garments found. Add one in Garment Library first."
-            />
-
-            {selectedGarmentItem ? (
-              <div className="products-summary-card">
-                <span className="products-summary-label">Selected Garment</span>
-                <strong>{selectedGarmentItem.title}</strong>
-                <div className="products-summary-meta">
-                  <span>{garmentBrand?.name || "No brand"}</span>
-                  <span>{garmentCategory?.name || "No category"}</span>
-                </div>
-                <div className="products-summary-details">
-                  <span>{selectedGarmentVariantCount} variants</span>
-                  <span>
-                    {isSelectedGarmentOneSize
-                      ? "One size available"
-                      : garmentSizes.join(", ") || "No sizes configured"}
-                  </span>
-                </div>
-              </div>
-            ) : editingProduct ? (
-              <div className="products-legacy-note">
-                This product predates the new garment library. Select a library garment to relink it.
-              </div>
-            ) : null}
-          </section>
-          ) : null}
 
           {!isManualProductMode && selectedGarmentItem ? (
             <section className="products-editor-section">
               <div className="products-section-header">
-              <div>
-                <p className="products-section-step">Variants</p>
-                <h2>Storefront Options</h2>
+                <div>
+                  <p className="products-section-step">Variants</p>
+                  <h2>Available Options</h2>
+                </div>
+                <p>Use this as the single source of truth for the colors and sizes customers can buy.</p>
               </div>
-                <p>Keep the catalog clean by enabling only the colors and sizes you want to sell.</p>
+
+              <div className="products-variant-summary-row">
+                <div className="products-summary-card">
+                  <span className="products-summary-label">Colors Enabled</span>
+                  <strong>{form.visibleVariants.length || 0}</strong>
+                  <div className="products-summary-details">
+                    <span>{selectedGarmentVariantCount} template colors available</span>
+                  </div>
+                </div>
+                <div className="products-summary-card">
+                  <span className="products-summary-label">Sizes Enabled</span>
+                  <strong>
+                    {isSelectedGarmentOneSize ? "One size" : form.sizes.length || 0}
+                  </strong>
+                  <div className="products-summary-details">
+                    <span>
+                      {isSelectedGarmentOneSize
+                        ? "Inherited from template"
+                        : `${garmentSizes.length || 0} template sizes available`}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <div className="products-library-grid products-library-grid-wide">
-              {showVariantSelection ? (
-                <MultiSelectLookupField
-                  label="Visible Variants"
-                  helperText="Choose which garment colorways customers can buy."
-                  options={garmentVariants}
-                  selectedValues={form.visibleVariants}
-                  onToggle={toggleVariant}
-                  createHelper="No garment variants available."
-                  searchPlaceholder="Search variants or supplier SKU"
-                />
-              ) : null}
-
-              {showSizeSelection ? (
-                isSelectedGarmentOneSize ? (
-                  <div className="products-summary-card products-one-size-card">
-                    <span className="products-summary-label">Available Sizes</span>
-                    <strong>One size available</strong>
-                  </div>
-                ) : (
+                {showVariantSelection ? (
                   <MultiSelectLookupField
-                    label="Available Sizes"
-                    helperText="Sizes load from the garment library and can be narrowed per product."
-                    options={garmentSizeOptions}
-                    selectedValues={form.sizes}
-                    onToggle={toggleSize}
-                    createHelper="No garment sizes available."
+                    label="Colors"
+                    helperText="Enable only the garment colorways you want represented in the storefront."
+                    options={garmentVariants}
+                    selectedValues={form.visibleVariants}
+                    onToggle={toggleVariant}
+                    createHelper="No garment variants available."
+                    searchPlaceholder="Search variants or supplier SKU"
                   />
-                )
-              ) : null}
+                ) : null}
+
+                {showSizeSelection ? (
+                  isSelectedGarmentOneSize ? (
+                    <div className="products-summary-card products-one-size-card">
+                      <span className="products-summary-label">Sizes</span>
+                      <strong>One size available</strong>
+                    </div>
+                  ) : (
+                    <MultiSelectLookupField
+                      label="Sizes"
+                      helperText="Sizes load from the garment template and can be narrowed for this product."
+                      options={garmentSizeOptions}
+                      selectedValues={form.sizes}
+                      onToggle={toggleSize}
+                      createHelper="No garment sizes available."
+                    />
+                  )
+                ) : null}
               </div>
             </section>
           ) : null}
@@ -2133,27 +2127,14 @@ export default function Products() {
           <section className="products-editor-section">
             <div className="products-section-header">
               <div>
-                <p className="products-section-step">Preview</p>
-                <h2>Merchandising</h2>
+                <p className="products-section-step">Description</p>
+                <h2>Storefront Copy</h2>
               </div>
-              <p>Use this space for readiness and copy instead of core product controls.</p>
+              <p>Keep the customer-facing description short, useful, and product-focused.</p>
             </div>
 
             <div className="products-config-grid">
               <div className="products-config-sidebar">
-                <div className="products-summary-card">
-                  <span className="products-summary-label">Catalog Readiness</span>
-                  <strong>{form.flat_price ? formatMoney(form.flat_price) : "Add sale price"}</strong>
-                  <div className="products-summary-details">
-                    <span>
-                      {isManualProductMode ? "Standalone manual product" : `${form.visibleVariants.length || 0} color variants`}
-                    </span>
-                    <span>
-                      {isManualProductMode ? "No garment template required" : `${form.sizes.length || 0} sizes enabled`}
-                    </span>
-                  </div>
-                </div>
-
                 <label style={labelStyle}>
                   Storefront Description
                   <textarea
@@ -2161,7 +2142,7 @@ export default function Products() {
                     value={form.notes}
                     onChange={updateField}
                     rows={5}
-                    placeholder="Add a short storefront-ready description, selling note, or internal merchandising reminder."
+                    placeholder="Describe the fit, finish, feel, or why this product belongs in the storefront."
                     style={{ ...fieldStyle, resize: "vertical", minHeight: "132px" }}
                   />
                 </label>
@@ -2173,7 +2154,7 @@ export default function Products() {
             <summary className="products-advanced-summary">
               <div>
                 <strong>Advanced Settings</strong>
-                <span>Placements, production methods, pricing, and description.</span>
+                <span>Placements, production methods, and pricing rules.</span>
               </div>
             </summary>
 

@@ -31,6 +31,15 @@ function formatBasePrice(value) {
     : "Price unavailable";
 }
 
+function buildPreviewList(values = [], limit = 4) {
+  const safeValues = Array.isArray(values) ? values.filter(Boolean) : [];
+  return {
+    visible: safeValues.slice(0, limit),
+    remainingCount: Math.max(safeValues.length - limit, 0),
+    totalCount: safeValues.length,
+  };
+}
+
 export default function CategoryView() {
   const { categoryId } = useParams();
   const storedProducts = useStoredProducts();
@@ -198,6 +207,8 @@ export default function CategoryView() {
         {categoryProducts.map((item, index) => {
           const imageSrc = getStorefrontProductImage(item);
           const renderIdentity = buildCategoryProductRenderIdentity(item, index);
+          const colorPreview = buildPreviewList(item?.colors, 4);
+          const sizePreview = buildPreviewList(item?.sizes, 6);
           console.info("[CategoryView] Rendering category product card", {
             index,
             id: item?.id || null,
@@ -214,27 +225,27 @@ export default function CategoryView() {
               style={{
                 textDecoration: "none",
                 background: "#ffffff",
-                borderRadius: "16px",
+                borderRadius: "20px",
                 padding: "14px",
                 border: "1px solid #e7e5e4",
-                boxShadow: "0 8px 18px rgba(0,0,0,0.05)",
+                boxShadow: "0 10px 24px rgba(0,0,0,0.06)",
                 color: "#171717",
-                display: "block",
+                display: "grid",
+                gap: "12px",
               }}
-              >
+            >
                 <div
                   style={{
                     width: "100%",
-                  aspectRatio: "1 / 1",
-                  background: "#fafaf9",
-                  borderRadius: "12px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginBottom: "10px",
-                  padding: "10px",
-                  overflow: "hidden",
-                }}
+                    aspectRatio: "1 / 1",
+                    background: "#fafaf9",
+                    borderRadius: "14px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "10px",
+                    overflow: "hidden",
+                  }}
                 >
                   {imageSrc ? (
                     <img
@@ -255,38 +266,188 @@ export default function CategoryView() {
                   )}
                 </div>
 
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: "15px",
-                  fontWeight: 700,
-                  lineHeight: 1.25,
-                }}
-              >
+              <div style={{ display: "grid", gap: "5px" }}>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: "16px",
+                    fontWeight: 700,
+                    lineHeight: 1.25,
+                  }}
+                >
                   {item.name}
                 </h3>
 
-              <p
-                style={{
-                  margin: "4px 0 0 0",
-                  color: "#57534e",
-                  fontSize: "13px",
-                }}
-              >
-                  {item.notes || item.product_type || item.category}
-                </p>
-
-              <div style={{ marginTop: "8px" }}>
                 <p
                   style={{
                     margin: 0,
+                    color: "#57534e",
                     fontSize: "13px",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {item.notes || item.product_type || item.category}
+                </p>
+              </div>
+
+              <div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "14px",
                     fontWeight: 700,
                   }}
                 >
                   {formatBasePrice(resolveProductBasePrice(item))}
                 </p>
               </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "8px",
+                }}
+              >
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    borderRadius: "999px",
+                    padding: "6px 10px",
+                    fontSize: "11px",
+                    fontWeight: 800,
+                    background: "#fff7ed",
+                    color: "#9a3412",
+                  }}
+                >
+                  {colorPreview.totalCount || 0} colors
+                </span>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    borderRadius: "999px",
+                    padding: "6px 10px",
+                    fontSize: "11px",
+                    fontWeight: 800,
+                    background: "#f5f3ff",
+                    color: "#5b21b6",
+                  }}
+                >
+                  {sizePreview.totalCount || 0} sizes
+                </span>
+              </div>
+
+              {colorPreview.totalCount ? (
+                <div style={{ display: "grid", gap: "6px" }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "11px",
+                      fontWeight: 800,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      color: "#78716c",
+                    }}
+                  >
+                    Available Colors
+                  </p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                    {colorPreview.visible.map((color) => (
+                      <span
+                        key={color}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          borderRadius: "999px",
+                          padding: "5px 9px",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          background: "#fafaf9",
+                          border: "1px solid #e7e5e4",
+                          color: "#292524",
+                        }}
+                      >
+                        {color}
+                      </span>
+                    ))}
+                    {colorPreview.remainingCount ? (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          borderRadius: "999px",
+                          padding: "5px 9px",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          background: "#f5f5f4",
+                          color: "#57534e",
+                        }}
+                      >
+                        +{colorPreview.remainingCount}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
+              {sizePreview.totalCount ? (
+                <div style={{ display: "grid", gap: "6px" }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "11px",
+                      fontWeight: 800,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      color: "#78716c",
+                    }}
+                  >
+                    Sizes
+                  </p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                    {sizePreview.visible.map((size) => (
+                      <span
+                        key={size}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          minWidth: "32px",
+                          borderRadius: "999px",
+                          padding: "5px 9px",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          background: "#f8fafc",
+                          border: "1px solid #dbe4ee",
+                          color: "#0f172a",
+                        }}
+                      >
+                        {size}
+                      </span>
+                    ))}
+                    {sizePreview.remainingCount ? (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          minWidth: "32px",
+                          borderRadius: "999px",
+                          padding: "5px 9px",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          background: "#f1f5f9",
+                          color: "#475569",
+                        }}
+                      >
+                        +{sizePreview.remainingCount}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
             </Link>
           );
         })}

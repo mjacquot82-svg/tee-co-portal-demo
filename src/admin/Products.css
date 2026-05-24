@@ -420,6 +420,63 @@
   gap: 12px;
 }
 
+.products-storefront-header-glance-compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.products-title-price-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(180px, 0.55fr);
+  gap: 14px;
+  align-items: end;
+}
+
+.products-header-name-field input,
+.products-header-price-field input {
+  min-height: 58px;
+}
+
+.products-header-name-field input {
+  font-size: clamp(1.3rem, 2vw, 1.8rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  padding: 16px 18px;
+}
+
+.products-header-price-field input {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.products-inherited-strip {
+  border: 1px solid #dbe4ee;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.products-inherited-strip-copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.products-inherited-strip-copy strong {
+  color: #0f172a;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.products-inherited-card {
+  min-height: 100%;
+  align-content: start;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
 .products-inline-model-panel {
   border: 1px solid #dbe4ee;
   border-radius: 16px;
@@ -1593,6 +1650,12 @@
   align-items: start;
 }
 
+.products-variant-summary-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .products-config-sidebar,
 .products-completion-copy,
 .garment-library-completion-copy {
@@ -2406,6 +2469,17 @@
     padding-right: 0;
   }
 
+  .products-storefront-header {
+    grid-template-columns: 1fr;
+  }
+
+  .products-title-price-grid,
+  .products-storefront-header-glance,
+  .products-variant-summary-row,
+  .products-inherited-strip {
+    grid-template-columns: 1fr;
+  }
+
   .garment-library-panel {
     padding: 12px;
   }
@@ -2432,6 +2506,9 @@
   .products-editor-grid,
   .products-editor-glance-grid,
   .products-library-grid,
+  .products-title-price-grid,
+  .products-storefront-header-glance,
+  .products-variant-summary-row,
   .products-pricing-grid,
   .products-config-grid,
   .products-completion-row,
