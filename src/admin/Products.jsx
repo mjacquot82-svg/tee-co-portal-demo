@@ -61,6 +61,7 @@ const PRODUCT_MODES = {
 };
 
 const CREATE_STOREFRONT_CATEGORY_VALUE = "__create_storefront_category__";
+const CREATE_BRAND_VALUE = "__create_brand__";
 
 const emptyProduct = {
   productMode: PRODUCT_MODES.APPAREL,
@@ -334,6 +335,7 @@ export default function Products() {
   const catalogPanelRef = useRef(null);
   const nameInputRef = useRef(null);
   const storefrontCategoryInputRef = useRef(null);
+  const brandInputRef = useRef(null);
   const productCardRefs = useRef(new Map());
   const prefilledLocationKeyRef = useRef("");
   const location = useLocation();
@@ -356,12 +358,15 @@ export default function Products() {
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedStorefrontCategory, setSelectedStorefrontCategory] = useState("all");
   const [selectedBrand, setSelectedBrand] = useState("all");
-  const [selectedProductType, setSelectedProductType] = useState("all");
   const [selectedProductMode, setSelectedProductMode] = useState("all");
   const [newStorefrontCategoryName, setNewStorefrontCategoryName] = useState("");
+  const [newBrandName, setNewBrandName] = useState("");
   const [categorySaveError, setCategorySaveError] = useState("");
+  const [brandSaveError, setBrandSaveError] = useState("");
   const [isSavingCategory, setIsSavingCategory] = useState(false);
+  const [isSavingBrand, setIsSavingBrand] = useState(false);
   const [isCreatingStorefrontCategory, setIsCreatingStorefrontCategory] = useState(false);
+  const [isCreatingBrand, setIsCreatingBrand] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [creationNotice, setCreationNotice] = useState("");
@@ -414,17 +419,6 @@ export default function Products() {
     () => storefrontCategories.filter((category) => category?.active !== false),
     [storefrontCategories]
   );
-  const productTypeOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          products
-            .map((product) => normalizeText(product?.product_type))
-            .filter(Boolean)
-        )
-      ).sort((left, right) => left.localeCompare(right)),
-    [products]
-  );
   const brandFilterOptions = useMemo(
     () =>
       Array.from(
@@ -444,16 +438,12 @@ export default function Products() {
       const storefrontCategoryName = normalizeText(
         product?.storefront_category || product?.category
       );
-      const productTypeName = normalizeText(product?.product_type);
       const brandName = normalizeText(product?.brand_model);
       const matchesStorefrontCategory =
         selectedStorefrontCategory === "all" ||
         normalizeText(product?.storefront_category_lookup_id) === selectedStorefrontCategory;
       const matchesBrand =
         selectedBrand === "all" || brandName.toLowerCase() === selectedBrand.toLowerCase();
-      const matchesProductType =
-        selectedProductType === "all" ||
-        productTypeName.toLowerCase() === selectedProductType.toLowerCase();
       const matchesProductMode =
         selectedProductMode === "all" ||
         (selectedProductMode === "apparel"
@@ -466,7 +456,6 @@ export default function Products() {
           brandName,
           storefrontCategoryName,
           product?.category,
-          productTypeName,
           product?.notes,
         ]
           .filter(Boolean)
@@ -481,7 +470,6 @@ export default function Products() {
         matchesStatus &&
         matchesStorefrontCategory &&
         matchesBrand &&
-        matchesProductType &&
         matchesProductMode
       );
     });
@@ -491,7 +479,6 @@ export default function Products() {
     selectedStatus,
     selectedStorefrontCategory,
     selectedBrand,
-    selectedProductType,
     selectedProductMode,
   ]);
 
@@ -500,14 +487,13 @@ export default function Products() {
     Boolean(searchTerm.trim()) ||
     selectedStorefrontCategory !== "all" ||
     selectedBrand !== "all" ||
-    selectedProductType !== "all" ||
     selectedProductMode !== "all" ||
     selectedStatus !== "all";
-  const editorModeLabel = isManualProductMode ? "Manual Product" : "Garment-Linked Product";
-  const editorSourceLabel = isManualProductMode
-    ? "Standalone storefront item"
-    : selectedGarmentItem?.title || "Choose garment template";
   const isRemoveDialogOpen = Boolean(productPendingRemoval);
+  const storefrontVisibilityLabel =
+    normalizeStatusValue(form.status) === "active"
+      ? "Visible on storefront"
+      : "Hidden from storefront";
 
   useEffect(() => {
     const duplicateProductIds = products.reduce((summary, product, index) => {
@@ -632,6 +618,15 @@ export default function Products() {
   }, [isCreatingStorefrontCategory]);
 
   useEffect(() => {
+    if (!isCreatingBrand) return;
+
+    window.requestAnimationFrame(() => {
+      brandInputRef.current?.focus();
+      brandInputRef.current?.select();
+    });
+  }, [isCreatingBrand]);
+
+  useEffect(() => {
     if (!isRemoveDialogOpen) return undefined;
 
     window.requestAnimationFrame(() => {
@@ -733,6 +728,27 @@ export default function Products() {
     });
   }
 
+  function handleBrandSelect(event) {
+    const { value } = event.target;
+
+    if (value === CREATE_BRAND_VALUE) {
+      setIsCreatingBrand(true);
+      setBrandSaveError("");
+      return;
+    }
+
+    setIsCreatingBrand(false);
+    setBrandSaveError("");
+    setForm((current) => {
+      const selectedBrand = findLookupById(brands, value);
+      return {
+        ...current,
+        brand_lookup_id: value,
+        brand_model: selectedBrand?.name || "",
+      };
+    });
+  }
+
   function resetForm() {
     setForm(emptyProduct);
     setEditingProductId(null);
@@ -741,6 +757,9 @@ export default function Products() {
     setCategorySaveError("");
     setIsCreatingStorefrontCategory(false);
     setNewStorefrontCategoryName("");
+    setBrandSaveError("");
+    setIsCreatingBrand(false);
+    setNewBrandName("");
     setSaveError("");
     setIsEditorOpen(false);
     setProductPendingRemoval(null);
@@ -766,6 +785,9 @@ export default function Products() {
     setCategorySaveError("");
     setIsCreatingStorefrontCategory(false);
     setNewStorefrontCategoryName("");
+    setBrandSaveError("");
+    setIsCreatingBrand(false);
+    setNewBrandName("");
     setSaveError("");
     setIsEditorOpen(true);
     focusEditorNameField();
@@ -810,6 +832,8 @@ export default function Products() {
           visibleVariants: [],
           sizes: [],
           garment_model_lookup_id: "",
+          category_lookup_id: "",
+          category: "Manual",
           product_type: current.product_type || "Manual Product",
         };
       }
@@ -817,6 +841,7 @@ export default function Products() {
       return {
         ...current,
         productMode,
+        category: current.category === "Manual" ? "" : current.category,
         product_type: current.product_type === "Manual Product" ? "" : current.product_type,
       };
     });
@@ -1119,6 +1144,32 @@ export default function Products() {
     }
   }
 
+  async function handleCreateBrand() {
+    const nextName = normalizeText(newBrandName);
+    if (!nextName) return;
+
+    try {
+      setIsSavingBrand(true);
+      setBrandSaveError("");
+      const createdBrand = await createCatalogLookup("brands", {
+        name: nextName,
+        active: true,
+      });
+      setNewBrandName("");
+      setIsCreatingBrand(false);
+      setForm((current) => ({
+        ...current,
+        brand_lookup_id: createdBrand.id,
+        brand_model: createdBrand.name,
+      }));
+    } catch (error) {
+      console.error("Unable to create brand", error);
+      setBrandSaveError("Unable to create brand right now.");
+    } finally {
+      setIsSavingBrand(false);
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setSaveError("");
@@ -1166,18 +1217,21 @@ export default function Products() {
           ? []
           : sortSizesByLookup(form.sizes, sizes);
     const resolvedProductType = isManualProductMode
-      ? form.product_type || "Manual Product"
+      ? "Manual Product"
       : resolveStructuredProductType(garmentModel, form.product_type, form.name);
+    const resolvedSupplierCategoryName = isManualProductMode
+      ? "Manual"
+      : category?.name || form.category || "Catalog";
 
     const productPayload = {
       name: normalizeText(form.name),
       garment_library_item_id: isManualProductMode
         ? null
         : selectedGarmentItem?.id || form.selectedGarmentLibraryId || null,
-      category: category?.name || form.category || "Catalog",
+      category: resolvedSupplierCategoryName,
       storefront_category:
         storefrontCategory?.name || form.storefront_category || category?.name || "Catalog",
-      category_lookup_id: category?.id || form.category_lookup_id || null,
+      category_lookup_id: isManualProductMode ? null : category?.id || form.category_lookup_id || null,
       storefront_category_lookup_id:
         storefrontCategory?.id || form.storefront_category_lookup_id || null,
       product_type: resolvedProductType,
@@ -1343,7 +1397,7 @@ export default function Products() {
                   type="search"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search product, category, brand, type"
+                  placeholder="Search product, category, or brand"
                   style={fieldStyle}
                 />
               </label>
@@ -1410,22 +1464,6 @@ export default function Products() {
                 </label>
 
                 <label className="products-toolbar-field">
-                  <span>Product Type</span>
-                  <select
-                    value={selectedProductType}
-                    onChange={(event) => setSelectedProductType(event.target.value)}
-                    style={fieldStyle}
-                  >
-                    <option value="all">All product types</option>
-                    {productTypeOptions.map((productType) => (
-                      <option key={productType} value={productType}>
-                        {productType}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="products-toolbar-field">
                   <span>Mode</span>
                   <select
                     value={selectedProductMode}
@@ -1466,7 +1504,6 @@ export default function Products() {
                   setSearchTerm("");
                   setSelectedStorefrontCategory("all");
                   setSelectedBrand("all");
-                  setSelectedProductType("all");
                   setSelectedProductMode("all");
                   setSelectedStatus("all");
                 }}
@@ -1489,9 +1526,6 @@ export default function Products() {
                   const colorCount = Array.isArray(product?.colors) ? product.colors.length : 0;
                   const sizeCount = Array.isArray(product?.sizes) ? product.sizes.length : 0;
                   const productModeLabel = product?.garment_library_item_id ? "Garment-linked" : "Manual product";
-                  const merchandisingNote =
-                    product?.product_type ||
-                    (product?.garment_library_item_id ? "Apparel product" : "Standalone product");
 
                   console.info("[Products] Rendering customer catalog product card", {
                     index,
@@ -1577,12 +1611,12 @@ export default function Products() {
 
                         <div className="products-card-detail-grid">
                           <div className="products-card-detail">
-                            <span>Product Type</span>
-                            <strong>{merchandisingNote}</strong>
-                          </div>
-                          <div className="products-card-detail">
                             <span>Mode</span>
                             <strong>{productModeLabel}</strong>
+                          </div>
+                          <div className="products-card-detail">
+                            <span>Visibility</span>
+                            <strong>{statusIsActive ? "Live" : "Hidden"}</strong>
                           </div>
                         </div>
                       </div>
@@ -1660,219 +1694,300 @@ export default function Products() {
             {saveError ? <div className="products-error-banner">{saveError}</div> : null}
             {creationNotice ? <div className="products-callout">{creationNotice}</div> : null}
 
-            <div className="products-editor-glance-grid">
-              <div className="products-summary-card">
-                <span className="products-summary-label">Mode</span>
-                <strong>{editorModeLabel}</strong>
-                <div className="products-summary-details">
-                  <span>{isManualProductMode ? "No garment link required" : "Built from reusable inventory"}</span>
-                </div>
-              </div>
-
-              <div className="products-summary-card">
-                <span className="products-summary-label">Source</span>
-                <strong>{editorSourceLabel}</strong>
-                <div className="products-summary-details">
-                  <span>{isManualProductMode ? "Standalone storefront item" : "Template selected in catalog flow"}</span>
-                </div>
-              </div>
-
-              <div className="products-summary-card">
-                <span className="products-summary-label">Merchandising</span>
-                <strong>{form.flat_price ? formatMoney(form.flat_price) : "Add sale price"}</strong>
-                <div className="products-summary-details">
-                  <span>{form.storefront_category || "Choose storefront category"}</span>
-                </div>
-              </div>
-            </div>
-
             <section className="products-editor-section">
-            <div className="products-section-header">
-              <div>
-                <p className="products-section-step">Core</p>
-                <h2>Product Basics</h2>
+              <div className="products-section-header">
+                <div>
+                  <p className="products-section-step">Storefront</p>
+                  <h2>Product Header</h2>
+                </div>
+                <p>Lead with the storefront presentation: image, title, category, price, and visibility.</p>
               </div>
-              <p>Set the customer-facing essentials first.</p>
-            </div>
 
-            <div className="garment-model-workflow-panel">
-              <div className="garment-model-workflow-header">
-                <strong>Product Type</strong>
-                <p>Choose whether this item stays linked to a garment template.</p>
-              </div>
-              <div className="garment-model-workflow-options">
-                <button
-                  type="button"
-                  className={`garment-model-workflow-option ${
-                    !isManualProductMode ? "is-active" : ""
-                  }`}
-                  onClick={() => handleProductModeChange(PRODUCT_MODES.APPAREL)}
-                >
-                  <span className="garment-model-workflow-radio" aria-hidden="true" />
-                  <div>
-                    <strong>Apparel Product</strong>
-                    <p>Uses a garment template, imported variants, sizes, and production defaults.</p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  className={`garment-model-workflow-option ${
-                    isManualProductMode ? "is-active" : ""
-                  }`}
-                  onClick={() => handleProductModeChange(PRODUCT_MODES.MANUAL)}
-                >
-                  <span className="garment-model-workflow-radio" aria-hidden="true" />
-                  <div>
-                    <strong>Manual Product</strong>
-                    <p>Creates a standalone storefront item for mugs, tumblers, stickers, bundles, and more.</p>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            <div className="products-pricing-grid">
-            <label style={labelStyle}>
-              Customer Product Name
-              <input
-                ref={nameInputRef}
-                name="name"
-                value={form.name}
-                onChange={updateField}
-                placeholder="Premium Trucker Hat"
-                required
-                style={fieldStyle}
-              />
-            </label>
-
-            <label style={labelStyle}>
-              Customer Sale Price
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                name="flat_price"
-                value={form.flat_price}
-                onChange={updateField}
-                placeholder="24.00"
-                required
-                style={fieldStyle}
-              />
-            </label>
-            </div>
-
-            <div className="products-editor-grid">
-              <label style={labelStyle}>
-                Storefront Category
-                <select
-                  name="storefront_category_lookup_id"
-                  value={form.storefront_category_lookup_id}
-                  onChange={handleStorefrontCategorySelect}
-                  style={fieldStyle}
-                >
-                  <option value="">Select storefront category</option>
-                  {activeStorefrontCategories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                  <option value={CREATE_STOREFRONT_CATEGORY_VALUE}>+ Create New Category</option>
-                </select>
-              </label>
-
-              <label style={labelStyle}>
-                Brand
-                <select
-                  name="brand_lookup_id"
-                  value={form.brand_lookup_id}
-                  onChange={updateField}
-                  style={fieldStyle}
-                >
-                  <option value="">No brand</option>
-                  {brandSelectOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="products-editor-grid">
-              <label style={labelStyle}>
-                Supplier Category
-                <select
-                  name="category_lookup_id"
-                  value={form.category_lookup_id}
-                  onChange={updateField}
-                  style={fieldStyle}
-                >
-                  <option value="">Catalog</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label style={labelStyle}>
-                Product Type
-                <input
-                  name="product_type"
-                  value={form.product_type}
-                  onChange={updateField}
-                  placeholder={isManualProductMode ? "Tumbler" : "Pullover Hoodie"}
-                  style={fieldStyle}
+              <div className="products-storefront-header">
+                <ProductImageUploader
+                  image={form.image}
+                  onImageChange={(image) => setForm((current) => ({ ...current, image }))}
                 />
-              </label>
-            </div>
 
-            {isCreatingStorefrontCategory ? (
-              <div className="products-inline-category-create">
-                <label style={{ ...labelStyle, margin: 0 }}>
-                  New Storefront Category
-                  <input
-                    ref={storefrontCategoryInputRef}
-                    value={newStorefrontCategoryName}
-                    onChange={(event) => setNewStorefrontCategoryName(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        handleCreateStorefrontCategory();
-                      }
-                    }}
-                    placeholder="Drinkware"
-                    style={fieldStyle}
-                  />
-                </label>
-                <div className="products-inline-category-create-actions">
+                <div className="products-storefront-header-main">
+                  <div className="products-storefront-header-topline">
+                    <span className="products-summary-label">
+                      {isManualProductMode ? "Manual storefront item" : "Garment-linked storefront item"}
+                    </span>
+                    <div className="products-storefront-status-group">
+                      <div className="products-segmented-toggle" role="group" aria-label="Storefront status">
+                        <button
+                          type="button"
+                          className={`products-segmented-toggle-button ${
+                            normalizeStatusValue(form.status) === "active" ? "is-active" : ""
+                          }`}
+                          onClick={() => setForm((current) => ({ ...current, status: "Active" }))}
+                        >
+                          Active
+                        </button>
+                        <button
+                          type="button"
+                          className={`products-segmented-toggle-button ${
+                            normalizeStatusValue(form.status) !== "active" ? "is-active" : ""
+                          }`}
+                          onClick={() => setForm((current) => ({ ...current, status: "Inactive" }))}
+                        >
+                          Inactive
+                        </button>
+                      </div>
+                      <span
+                        className={`products-status products-status-${
+                          normalizeStatusValue(form.status) === "active" ? "active" : "archived"
+                        }`}
+                      >
+                        {storefrontVisibilityLabel}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="products-pricing-grid">
+                    <label style={labelStyle}>
+                      Product Name
+                      <input
+                        ref={nameInputRef}
+                        name="name"
+                        value={form.name}
+                        onChange={updateField}
+                        placeholder="Premium Trucker Hat"
+                        required
+                        style={fieldStyle}
+                      />
+                    </label>
+
+                    <label style={labelStyle}>
+                      Price
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        name="flat_price"
+                        value={form.flat_price}
+                        onChange={updateField}
+                        placeholder="24.00"
+                        required
+                        style={fieldStyle}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="products-editor-grid">
+                    <div className="products-inline-field-stack">
+                      <label style={labelStyle}>
+                        Storefront Category
+                        <select
+                          name="storefront_category_lookup_id"
+                          value={form.storefront_category_lookup_id}
+                          onChange={handleStorefrontCategorySelect}
+                          style={fieldStyle}
+                        >
+                          <option value="">Select storefront category</option>
+                          {activeStorefrontCategories.map((category) => (
+                            <option key={category.id} value={category.id}>
+                              {category.name}
+                            </option>
+                          ))}
+                          <option value={CREATE_STOREFRONT_CATEGORY_VALUE}>+ Create New Category</option>
+                        </select>
+                      </label>
+
+                      {isCreatingStorefrontCategory ? (
+                        <div className="products-inline-category-create">
+                          <label style={{ ...labelStyle, margin: 0 }}>
+                            New Storefront Category
+                            <input
+                              ref={storefrontCategoryInputRef}
+                              value={newStorefrontCategoryName}
+                              onChange={(event) => setNewStorefrontCategoryName(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  handleCreateStorefrontCategory();
+                                }
+                              }}
+                              placeholder="Drinkware"
+                              style={fieldStyle}
+                            />
+                          </label>
+                          <div className="products-inline-category-create-actions">
+                            <button
+                              type="button"
+                              className="products-inline-save"
+                              onClick={handleCreateStorefrontCategory}
+                              disabled={isSavingCategory || !normalizeText(newStorefrontCategoryName)}
+                            >
+                              {isSavingCategory ? "Saving..." : "Create Category"}
+                            </button>
+                            <button
+                              type="button"
+                              className="products-inline-cancel"
+                              onClick={() => {
+                                setIsCreatingStorefrontCategory(false);
+                                setNewStorefrontCategoryName("");
+                                setCategorySaveError("");
+                              }}
+                              disabled={isSavingCategory}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {categorySaveError ? <div className="products-error-banner">{categorySaveError}</div> : null}
+                    </div>
+
+                    <div className="products-inline-field-stack">
+                      <label style={labelStyle}>
+                        Brand
+                        <select
+                          name="brand_lookup_id"
+                          value={form.brand_lookup_id}
+                          onChange={handleBrandSelect}
+                          style={fieldStyle}
+                        >
+                          <option value="">No brand</option>
+                          {brandSelectOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                          <option value={CREATE_BRAND_VALUE}>+ Create New Brand</option>
+                        </select>
+                      </label>
+
+                      {isCreatingBrand ? (
+                        <div className="products-inline-category-create">
+                          <label style={{ ...labelStyle, margin: 0 }}>
+                            New Brand
+                            <input
+                              ref={brandInputRef}
+                              value={newBrandName}
+                              onChange={(event) => setNewBrandName(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  handleCreateBrand();
+                                }
+                              }}
+                              placeholder="Stanley"
+                              style={fieldStyle}
+                            />
+                          </label>
+                          <div className="products-inline-category-create-actions">
+                            <button
+                              type="button"
+                              className="products-inline-save"
+                              onClick={handleCreateBrand}
+                              disabled={isSavingBrand || !normalizeText(newBrandName)}
+                            >
+                              {isSavingBrand ? "Saving..." : "Create Brand"}
+                            </button>
+                            <button
+                              type="button"
+                              className="products-inline-cancel"
+                              onClick={() => {
+                                setIsCreatingBrand(false);
+                                setNewBrandName("");
+                                setBrandSaveError("");
+                              }}
+                              disabled={isSavingBrand}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {brandSaveError ? <div className="products-error-banner">{brandSaveError}</div> : null}
+                    </div>
+                  </div>
+
+                  <div className="products-storefront-header-glance">
+                    <div className="products-summary-card">
+                      <span className="products-summary-label">Category</span>
+                      <strong>{form.storefront_category || "Choose storefront category"}</strong>
+                    </div>
+                    <div className="products-summary-card">
+                      <span className="products-summary-label">Price</span>
+                      <strong>{form.flat_price ? formatMoney(form.flat_price) : "Add sale price"}</strong>
+                    </div>
+                    <div className="products-summary-card">
+                      <span className="products-summary-label">Storefront</span>
+                      <strong>{storefrontVisibilityLabel}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="garment-model-workflow-panel">
+                <div className="garment-model-workflow-header">
+                  <strong>Creation Flow</strong>
+                  <p>Choose whether this item stays linked to a garment template.</p>
+                </div>
+                <div className="garment-model-workflow-options">
                   <button
                     type="button"
-                    className="products-inline-save"
-                    onClick={handleCreateStorefrontCategory}
-                    disabled={isSavingCategory || !normalizeText(newStorefrontCategoryName)}
+                    className={`garment-model-workflow-option ${
+                      !isManualProductMode ? "is-active" : ""
+                    }`}
+                    onClick={() => handleProductModeChange(PRODUCT_MODES.APPAREL)}
                   >
-                    {isSavingCategory ? "Saving..." : "Create Category"}
+                    <span className="garment-model-workflow-radio" aria-hidden="true" />
+                    <div>
+                      <strong>Apparel Product</strong>
+                      <p>Uses a garment template, imported variants, sizes, and production defaults.</p>
+                    </div>
                   </button>
                   <button
                     type="button"
-                    className="products-inline-cancel"
-                    onClick={() => {
-                      setIsCreatingStorefrontCategory(false);
-                      setNewStorefrontCategoryName("");
-                      setCategorySaveError("");
-                    }}
-                    disabled={isSavingCategory}
+                    className={`garment-model-workflow-option ${
+                      isManualProductMode ? "is-active" : ""
+                    }`}
+                    onClick={() => handleProductModeChange(PRODUCT_MODES.MANUAL)}
                   >
-                    Cancel
+                    <span className="garment-model-workflow-radio" aria-hidden="true" />
+                    <div>
+                      <strong>Manual Product</strong>
+                      <p>Creates a standalone storefront item for mugs, tumblers, stickers, bundles, and more.</p>
+                    </div>
                   </button>
                 </div>
               </div>
-            ) : null}
 
-            {categorySaveError ? <div className="products-error-banner">{categorySaveError}</div> : null}
-
-          </section>
+              {!isManualProductMode ? (
+                <div className="products-editor-grid">
+                  <label style={labelStyle}>
+                    Supplier Category
+                    <select
+                      name="category_lookup_id"
+                      value={form.category_lookup_id}
+                      onChange={updateField}
+                      style={fieldStyle}
+                    >
+                      <option value="">Catalog</option>
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              ) : (
+                <div className="products-summary-card">
+                  <span className="products-summary-label">Supplier Category</span>
+                  <strong>Handled automatically</strong>
+                  <div className="products-summary-details">
+                    <span>Manual storefront items do not require supplier categorization.</span>
+                  </div>
+                </div>
+              )}
+            </section>
 
           {!isManualProductMode ? (
           <section className="products-editor-section">
@@ -1980,24 +2095,11 @@ export default function Products() {
                 <p className="products-section-step">Preview</p>
                 <h2>Merchandising</h2>
               </div>
-              <p>Set the image, status, and publish-ready storefront presentation.</p>
+              <p>Use this space for readiness and copy instead of core product controls.</p>
             </div>
 
             <div className="products-config-grid">
-              <ProductImageUploader
-                image={form.image}
-                onImageChange={(image) => setForm((current) => ({ ...current, image }))}
-              />
-
               <div className="products-config-sidebar">
-                <label style={labelStyle}>
-                  Status
-                  <select name="status" value={form.status} onChange={updateField} style={fieldStyle}>
-                    <option>Active</option>
-                    <option>Inactive</option>
-                  </select>
-                </label>
-
                 <div className="products-summary-card">
                   <span className="products-summary-label">Catalog Readiness</span>
                   <strong>{form.flat_price ? formatMoney(form.flat_price) : "Add sale price"}</strong>
@@ -2010,6 +2112,18 @@ export default function Products() {
                     </span>
                   </div>
                 </div>
+
+                <label style={labelStyle}>
+                  Storefront Description
+                  <textarea
+                    name="notes"
+                    value={form.notes}
+                    onChange={updateField}
+                    rows={5}
+                    placeholder="Add a short storefront-ready description, selling note, or internal merchandising reminder."
+                    style={{ ...fieldStyle, resize: "vertical", minHeight: "132px" }}
+                  />
+                </label>
               </div>
             </div>
           </section>
@@ -2092,21 +2206,6 @@ export default function Products() {
                   })}
                 </div>
               </div>
-
-              <label style={labelStyle}>
-                Description
-                <textarea
-                  name="notes"
-                  value={form.notes}
-                  onChange={updateField}
-                  placeholder={
-                    isManualProductMode
-                      ? "Customer-facing description for this manual product."
-                      : "Customer-facing description or internal merchandising notes."
-                  }
-                  style={{ ...fieldStyle, minHeight: "96px", resize: "vertical" }}
-                />
-              </label>
 
               <div className="products-editor-grid">
                 <label style={labelStyle}>

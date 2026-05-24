@@ -224,6 +224,14 @@
   gap: 12px;
 }
 
+.products-inline-field-stack,
+.products-storefront-header-main,
+.products-storefront-header,
+.products-storefront-status-group {
+  display: grid;
+  gap: 12px;
+}
+
 .products-editor-glance-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -358,6 +366,58 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.products-storefront-header {
+  grid-template-columns: minmax(220px, 0.64fr) minmax(0, 1.36fr);
+  align-items: start;
+  gap: 18px;
+}
+
+.products-storefront-header-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.products-storefront-status-group {
+  grid-auto-flow: column;
+  align-items: center;
+  justify-content: end;
+  gap: 10px;
+}
+
+.products-segmented-toggle {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 4px;
+  border: 1px solid #dbe4ee;
+  border-radius: 999px;
+  background: #ffffff;
+}
+
+.products-segmented-toggle-button {
+  border: none;
+  background: transparent;
+  color: #475569;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.products-segmented-toggle-button.is-active {
+  background: #171717;
+  color: #ffffff;
+}
+
+.products-storefront-header-glance {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .products-inline-model-panel {
@@ -1529,7 +1589,7 @@
 }
 
 .products-config-grid {
-  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
 }
 
@@ -2411,6 +2471,7 @@
   .products-editor-topbar,
   .products-editor-utility-row,
   .products-catalog-action-row,
+  .products-storefront-header-topline,
   .garment-library-detail-title-row,
   .garment-library-detail-action-row {
     flex-direction: column;
@@ -2435,7 +2496,9 @@
 
   .garment-library-card-detail-grid,
   .garment-library-card-preview-grid,
-  .products-inline-category-create {
+  .products-inline-category-create,
+  .products-storefront-header,
+  .products-storefront-header-glance {
     grid-template-columns: 1fr;
   }
 
@@ -2471,6 +2534,7 @@
   .products-category-manager-header,
   .products-inline-create-panel,
   .products-inline-meta,
+  .products-storefront-status-group,
   .products-import-toolbar-actions,
   .products-import-group-actions,
   .products-import-group-meta,
