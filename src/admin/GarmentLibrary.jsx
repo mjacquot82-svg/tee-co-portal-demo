@@ -18,9 +18,8 @@ import {
   useGarmentLibraryStatus,
 } from "../lib/garmentLibraryStore";
 import { buildGarmentUsageMap } from "../lib/productGarmentLinks";
-import { createStoredProduct, getStoredProducts, useStoredProducts } from "../lib/productsStore";
+import { useStoredProducts } from "../lib/productsStore";
 import { parseTeeCoGarmentSpreadsheet } from "../lib/teeCoGarmentSpreadsheet";
-import { getStorefrontProducts } from "../lib/storefrontCatalog";
 import {
   buildLegacyBrandModelValue,
   buildGarmentLibraryLabel,
@@ -376,8 +375,7 @@ function buildStorefrontProductPayloadFromGarment(item, context = {}) {
   );
   const placements = uniqueList(item?.default_placements || []);
   const productionMethods = uniqueList(item?.default_production_methods || []);
-
-  return {
+  const storefrontProductDraft = {
     name: normalizeText(item?.title),
     garment_library_item_id: item?.id || null,
     category: category?.name || "Catalog",
@@ -402,8 +400,25 @@ function buildStorefrontProductPayloadFromGarment(item, context = {}) {
     markup_percentage: 0,
     base_garment_price: null,
     unit_price: null,
-    notes: item?.notes || "",
+    // Storefront products must start with their own blank notes instead of reusing garment template notes.
+    notes: "",
   };
+
+  console.info("[StorefrontCreateVerification] storefront payload cloned from garment template", {
+    garmentId: item?.id || null,
+    garmentNotes: item?.notes || "",
+    productNotes: storefrontProductDraft.notes,
+    sharedReferenceChecks: {
+      colorsShared: storefrontProductDraft.colors === item?.colors,
+      sizesShared: storefrontProductDraft.sizes === item?.sizes,
+      placementsShared: storefrontProductDraft.placements === item?.default_placements,
+      productionMethodsShared:
+        storefrontProductDraft.production_methods === item?.default_production_methods,
+    },
+    storefrontProductDraft,
+  });
+
+  return storefrontProductDraft;
 }
 
 function buildImportedGarmentOptionLabel(item, model) {
@@ -1185,7 +1200,7 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
             }}
             className="products-card-button"
           >
-            {isSelected ? "Editing" : "Edit"}
+            {isSelected ? "Editing Template" : "Edit Template"}
           </button>
           <button
             type="button"
@@ -1196,7 +1211,7 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
             className="products-card-button"
             disabled={isCreatingStorefrontProduct}
           >
-            {isCreatingStorefrontProduct ? "Creating..." : "Create Storefront Product"}
+            {isCreatingStorefrontProduct ? "Opening..." : "Create Storefront Product"}
           </button>
           <button
             type="button"
@@ -2483,68 +2498,23 @@ export default function GarmentLibrary() {
     try {
       setIsCreatingStorefrontProduct(true);
       setSaveError("");
-      const storefrontProductPayload = buildStorefrontProductPayloadFromGarment(item, {
-        brands,
-        categories,
-        garmentModels,
-        garmentModelMap,
-        sizeLookups: sizes,
-      });
-      const requiredFieldSummary = {
-        hasName: Boolean(normalizeText(storefrontProductPayload?.name)),
-        hasStatus: Boolean(normalizeText(storefrontProductPayload?.status)),
-        hasCategory: Boolean(normalizeText(storefrontProductPayload?.category)),
-        hasGarmentLibraryItemId: Boolean(storefrontProductPayload?.garment_library_item_id),
-      };
-      console.info("[StorefrontCreateVerification] step-1 button click fired", {
+      console.info("[StorefrontCreateVerification] storefront draft handoff starting", {
         garmentId: item?.id || null,
         garmentTitle: item?.title || "",
-        currentProductCountBeforeCreate: products.length,
-        currentProductsBeforeCreate: products.map((product) => ({
-          id: product?.id || null,
-          name: product?.name || "",
-          status: product?.status || "",
-        })),
-        productPayload: storefrontProductPayload,
-        requiredFieldSummary,
-      });
-      console.info("[StorefrontCreateVerification] step-2 createStoredProduct about to be called", {
-        garmentId: item?.id || null,
-        garmentTitle: item?.title || "",
-      });
-      const createdProduct = await createStoredProduct(storefrontProductPayload);
-      const storedProductsSnapshot = getStoredProducts();
-      const storefrontProductsSnapshot = getStorefrontProducts(storedProductsSnapshot);
-      const createdProductFoundInStore = storedProductsSnapshot.find(
-        (product) => product?.id === createdProduct?.id
-      ) || null;
-      const createdProductFoundInCatalog = storefrontProductsSnapshot.find(
-        (product) => product?.id === createdProduct?.id
-      ) || null;
-      console.info("[StorefrontCreateVerification] step-6 customer catalog read from same store", {
-        garmentId: item?.id || null,
-        garmentTitle: item?.title || "",
-        createdProduct,
-        storedProductsCount: storedProductsSnapshot.length,
-        storefrontProductsCount: storefrontProductsSnapshot.length,
-        createdProductFoundInStore,
-        createdProductFoundInCatalog,
-        catalogFilterReason: createdProductFoundInCatalog
-          ? "included"
-          : normalizeText(createdProductFoundInStore?.status).toLowerCase() === "active"
-            ? "excluded-despite-active-status"
-            : "inactive-status",
+        destination: "/admin/products",
+        createFromGarmentId: item.id,
       });
 
       navigate("/admin/products", {
         state: {
-          focusProductIds: createdProduct?.id ? [createdProduct.id] : [],
-          focusGarmentTitle: item.title || "",
+          createFromGarmentId: item.id,
         },
       });
     } catch (error) {
-      console.error("Unable to create storefront product from garment", error);
-      setSaveError(error?.message || "Unable to create a storefront product from this garment right now.");
+      console.error("Unable to open storefront product draft from garment template", error);
+      setSaveError(
+        error?.message || "Unable to open a storefront product draft from this garment template right now."
+      );
     } finally {
       setIsCreatingStorefrontProduct(false);
     }
@@ -3375,15 +3345,16 @@ export default function GarmentLibrary() {
           <div className="garment-library-hero">
             <div className="garment-library-hero-copy">
               <p className="products-eyebrow">Garment Library</p>
-              <h1 className="garment-library-title">Browse and manage reusable garments</h1>
+              <h1 className="garment-library-title">Browse and manage reusable garment templates</h1>
               <p className="garment-library-description">
-                Search the supplier library, filter the list, then open a garment only when you need to edit it.
+                Garment templates store supplier-facing setup. Create storefront products from them separately when
+                you are ready to build a customer-facing draft.
               </p>
             </div>
 
             <div className="garment-library-hero-actions">
               <button type="button" className="products-primary-button" onClick={startCreatingGarment}>
-                + New Garment
+                + New Garment Template
               </button>
               <button
                 type="button"
@@ -3945,12 +3916,12 @@ export default function GarmentLibrary() {
               <form onSubmit={handleSubmit} className={`products-editor garment-library-panel-card ${editingId ? "is-editing" : ""}`}>
                 <div className="garment-library-panel-header">
                   <div>
-                    <p className="products-eyebrow">{isEditMode ? "Edit Garment" : "Garment Setup"}</p>
-                    <h2 style={{ margin: "6px 0 0" }}>{isEditMode ? selectedGarmentLabel : "New Garment"}</h2>
+                    <p className="products-eyebrow">{isEditMode ? "Edit Garment Template" : "Garment Template Setup"}</p>
+                    <h2 style={{ margin: "6px 0 0" }}>{isEditMode ? selectedGarmentLabel : "New Garment Template"}</h2>
                     <p className="garment-library-panel-copy">
                       {isEditMode
-                        ? "You are editing an existing garment. Update the details below, then save your changes."
-                        : "Build the garment manually or start from an imported supplier model, then save the version you want in the library."}
+                        ? "Update this reusable garment template here. Saving keeps the supplier template up to date and does not publish a storefront product."
+                        : "Build the garment template manually or start from an imported supplier model, then save it to the library for reuse."}
                     </p>
                   </div>
                   <button type="button" className="products-secondary-button" onClick={closeWorkspace}>
@@ -3971,8 +3942,8 @@ export default function GarmentLibrary() {
                     }}
                   >
                     <span>
-                      This reusable garment is ready to become a customer-facing catalog product
-                      without rebuilding its colors, sizes, or defaults.
+                      This garment template is reusable supplier setup. Use a separate storefront draft when you are
+                      ready to create a customer-facing catalog product.
                     </span>
                     <button
                       type="button"
@@ -3980,7 +3951,7 @@ export default function GarmentLibrary() {
                       onClick={() => startCreatingStorefrontProduct(editingGarment)}
                       disabled={isCreatingStorefrontProduct}
                     >
-                      {isCreatingStorefrontProduct ? "Creating..." : "Create Storefront Product"}
+                      {isCreatingStorefrontProduct ? "Opening..." : "Create Storefront Product"}
                     </button>
                   </div>
                 ) : null}
@@ -4486,7 +4457,7 @@ export default function GarmentLibrary() {
 
           <div style={{ display: "grid", gridTemplateColumns: editingId ? "1fr 1fr" : "1fr", gap: "10px" }}>
             <button type="submit" disabled={isSaving} className="products-primary-button">
-              {isSaving ? "Saving..." : isEditMode ? "Save Changes" : "Create Garment"}
+              {isSaving ? "Saving..." : isEditMode ? "Save Garment Template" : "Create Garment Template"}
             </button>
 
             {editingId ? (

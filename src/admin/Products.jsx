@@ -388,7 +388,7 @@ export default function Products() {
     setSearchTerm("");
     setSelectedStatus("all");
     setCreationNotice(
-      `Storefront product draft loaded from ${matchedGarment.title}. Review pricing and publish when ready.`
+      `Storefront product draft loaded from garment template ${matchedGarment.title}. Review storefront details and publish when ready.`
     );
     setForm(
       buildFormFromGarmentDraft(
@@ -676,11 +676,11 @@ export default function Products() {
               {editingProduct ? `Edit ${editingProduct.name}` : "Publish Storefront Product"}
             </h1>
             <p style={{ margin: 0, color: "#64748b" }}>
-              Choose a garment, enable the customer-facing variants, set a flat price, and publish.
+              Start from a garment template, configure the customer-facing details, then publish the storefront product.
             </p>
             <div className="products-callout">
-              Supplier models, long color runs, and SKU setup live in the{" "}
-              <Link to="/admin/garments">Garment Library</Link>.
+              Garment templates live in the <Link to="/admin/garments">Garment Library</Link>. Published storefront
+              products appear in the customer catalog after you publish them here.
             </div>
           </div>
 
