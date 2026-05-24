@@ -737,10 +737,12 @@ export default function Products() {
     if (value === CREATE_STOREFRONT_CATEGORY_VALUE) {
       setIsCreatingStorefrontCategory(true);
       setCategorySaveError("");
+      setNewStorefrontCategoryName("");
       return;
     }
 
     setIsCreatingStorefrontCategory(false);
+    setNewStorefrontCategoryName("");
     setCategorySaveError("");
     setForm((current) => {
       const selectedStorefrontCategory = findLookupById(storefrontCategories, value);
@@ -1158,6 +1160,22 @@ export default function Products() {
   async function handleCreateStorefrontCategory() {
     const nextName = normalizeText(newStorefrontCategoryName);
     if (!nextName) return;
+
+    const existingCategory = storefrontCategories.find(
+      (category) => normalizeText(category?.name).toLowerCase() === nextName.toLowerCase()
+    );
+
+    if (existingCategory) {
+      setForm((current) => ({
+        ...current,
+        storefront_category_lookup_id: existingCategory.id,
+        storefront_category: existingCategory.name,
+      }));
+      setNewStorefrontCategoryName("");
+      setIsCreatingStorefrontCategory(false);
+      setCategorySaveError("");
+      return;
+    }
 
     try {
       setIsSavingCategory(true);
@@ -1811,7 +1829,11 @@ export default function Products() {
                   </div>
 
                   <div className="products-editor-grid">
-                    <div className="products-inline-field-stack">
+                    <div
+                      className={`products-inline-field-stack ${
+                        isManualProductMode ? "" : "products-inline-field-stack-wide"
+                      }`}
+                    >
                       <label style={labelStyle}>
                         Storefront Category
                         <select
@@ -1831,128 +1853,131 @@ export default function Products() {
                       </label>
 
                       {isCreatingStorefrontCategory ? (
-                        <div className="products-inline-category-create">
-                          <label style={{ ...labelStyle, margin: 0 }}>
-                            New Storefront Category
+                        <div className="products-inline-create-panel">
+                          <input
+                            ref={storefrontCategoryInputRef}
+                            value={newStorefrontCategoryName}
+                            onChange={(event) => setNewStorefrontCategoryName(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                handleCreateStorefrontCategory();
+                              }
+                              if (event.key === "Escape") {
+                                event.preventDefault();
+                                setIsCreatingStorefrontCategory(false);
+                                setNewStorefrontCategoryName("");
+                                setCategorySaveError("");
+                              }
+                            }}
+                            placeholder="Create a storefront category"
+                            style={fieldStyle}
+                            className="products-inline-create-input"
+                            aria-label="New storefront category"
+                          />
+                          <button
+                            type="button"
+                            className="products-inline-save"
+                            onClick={handleCreateStorefrontCategory}
+                            disabled={isSavingCategory || !normalizeText(newStorefrontCategoryName)}
+                          >
+                            {isSavingCategory ? "Creating..." : "Add"}
+                          </button>
+                          <button
+                            type="button"
+                            className="products-inline-cancel"
+                            onClick={() => {
+                              setIsCreatingStorefrontCategory(false);
+                              setNewStorefrontCategoryName("");
+                              setCategorySaveError("");
+                            }}
+                            disabled={isSavingCategory}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : null}
+
+                      <div className="products-field-footer">
+                        <span>
+                          {form.storefront_category
+                            ? `Selected: ${form.storefront_category}`
+                            : "Keeps the product uncategorized until you assign one."}
+                        </span>
+                      </div>
+
+                      {categorySaveError ? <div className="products-error-banner">{categorySaveError}</div> : null}
+                    </div>
+
+                    {isManualProductMode ? (
+                      <div className="products-inline-field-stack">
+                        <label style={labelStyle}>
+                          Brand
+                          <select
+                            name="brand_lookup_id"
+                            value={form.brand_lookup_id}
+                            onChange={handleBrandSelect}
+                            style={fieldStyle}
+                          >
+                            <option value="">No brand</option>
+                            {brandSelectOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                            <option value={CREATE_BRAND_VALUE}>+ Create New Brand</option>
+                          </select>
+                        </label>
+
+                        {isCreatingBrand ? (
+                          <div className="products-inline-create-panel">
                             <input
-                              ref={storefrontCategoryInputRef}
-                              value={newStorefrontCategoryName}
-                              onChange={(event) => setNewStorefrontCategoryName(event.target.value)}
+                              ref={brandInputRef}
+                              value={newBrandName}
+                              onChange={(event) => setNewBrandName(event.target.value)}
                               onKeyDown={(event) => {
                                 if (event.key === "Enter") {
                                   event.preventDefault();
-                                  handleCreateStorefrontCategory();
+                                  handleCreateBrand();
+                                }
+                                if (event.key === "Escape") {
+                                  event.preventDefault();
+                                  setIsCreatingBrand(false);
+                                  setNewBrandName("");
+                                  setBrandSaveError("");
                                 }
                               }}
-                              placeholder="Drinkware"
+                              placeholder="Create a brand"
                               style={fieldStyle}
+                              className="products-inline-create-input"
+                              aria-label="New brand"
                             />
-                          </label>
-                          <div className="products-inline-category-create-actions">
                             <button
                               type="button"
                               className="products-inline-save"
-                              onClick={handleCreateStorefrontCategory}
-                              disabled={isSavingCategory || !normalizeText(newStorefrontCategoryName)}
+                              onClick={handleCreateBrand}
+                              disabled={isSavingBrand || !normalizeText(newBrandName)}
                             >
-                              {isSavingCategory ? "Saving..." : "Create Category"}
+                              {isSavingBrand ? "Creating..." : "Add"}
                             </button>
                             <button
                               type="button"
                               className="products-inline-cancel"
                               onClick={() => {
-                                setIsCreatingStorefrontCategory(false);
-                                setNewStorefrontCategoryName("");
-                                setCategorySaveError("");
+                                setIsCreatingBrand(false);
+                                setNewBrandName("");
+                                setBrandSaveError("");
                               }}
-                              disabled={isSavingCategory}
+                              disabled={isSavingBrand}
                             >
                               Cancel
                             </button>
                           </div>
-                        </div>
-                      ) : null}
+                        ) : null}
 
-                      {categorySaveError ? <div className="products-error-banner">{categorySaveError}</div> : null}
-                    </div>
-
-                    <div className="products-inline-field-stack">
-                      {isManualProductMode ? (
-                        <>
-                          <label style={labelStyle}>
-                            Brand
-                            <select
-                              name="brand_lookup_id"
-                              value={form.brand_lookup_id}
-                              onChange={handleBrandSelect}
-                              style={fieldStyle}
-                            >
-                              <option value="">No brand</option>
-                              {brandSelectOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                              <option value={CREATE_BRAND_VALUE}>+ Create New Brand</option>
-                            </select>
-                          </label>
-
-                          {isCreatingBrand ? (
-                            <div className="products-inline-category-create">
-                              <label style={{ ...labelStyle, margin: 0 }}>
-                                New Brand
-                                <input
-                                  ref={brandInputRef}
-                                  value={newBrandName}
-                                  onChange={(event) => setNewBrandName(event.target.value)}
-                                  onKeyDown={(event) => {
-                                    if (event.key === "Enter") {
-                                      event.preventDefault();
-                                      handleCreateBrand();
-                                    }
-                                  }}
-                                  placeholder="Stanley"
-                                  style={fieldStyle}
-                                />
-                              </label>
-                              <div className="products-inline-category-create-actions">
-                                <button
-                                  type="button"
-                                  className="products-inline-save"
-                                  onClick={handleCreateBrand}
-                                  disabled={isSavingBrand || !normalizeText(newBrandName)}
-                                >
-                                  {isSavingBrand ? "Saving..." : "Create Brand"}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="products-inline-cancel"
-                                  onClick={() => {
-                                    setIsCreatingBrand(false);
-                                    setNewBrandName("");
-                                    setBrandSaveError("");
-                                  }}
-                                  disabled={isSavingBrand}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          ) : null}
-
-                          {brandSaveError ? <div className="products-error-banner">{brandSaveError}</div> : null}
-                        </>
-                      ) : (
-                        <div className="products-summary-card products-inherited-card">
-                          <span className="products-summary-label">Inherited Brand</span>
-                          <strong>{inheritedBrandLabel || "No brand assigned"}</strong>
-                          <div className="products-summary-details">
-                            <span>{inheritedCategoryLabel}</span>
-                            <span>From garment template</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                        {brandSaveError ? <div className="products-error-banner">{brandSaveError}</div> : null}
+                      </div>
+                    ) : null}
                   </div>
 
                   {!isManualProductMode ? (

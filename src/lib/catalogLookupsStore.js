@@ -602,7 +602,14 @@ export async function createCatalogLookup(table, values) {
       );
     }
 
-    throw error;
+    console.warn("[catalogLookupsStore] createCatalogLookup falling back to local snapshot after remote failure", {
+      table,
+      values: normalizedRecord,
+      message: error?.message,
+    });
+    const nextLookups = appendLookupRecord(getCatalogLookups(), table, normalizedRecord);
+    saveLocalLookupsSnapshot(nextLookups);
+    return normalizedRecord;
   }
 }
 
