@@ -72,6 +72,124 @@
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
 }
 
+.products-confirmation-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(6px);
+  animation: productsDialogBackdropIn 0.18s ease-out;
+}
+
+.products-confirmation-dialog {
+  width: min(100%, 460px);
+  border-radius: 26px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, #ffffff 100%);
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.22);
+  padding: 28px;
+  display: grid;
+  gap: 22px;
+  animation: productsDialogIn 0.22s cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+.products-confirmation-copy {
+  display: grid;
+  gap: 12px;
+}
+
+.products-confirmation-kicker {
+  margin: 0;
+  color: #78716c;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.products-confirmation-copy h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 28px;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.products-confirmation-copy p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.55;
+}
+
+.products-confirmation-secondary {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.products-confirmation-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.products-confirmation-cancel {
+  min-height: 48px;
+}
+
+.products-confirmation-remove {
+  border: 1px solid #ef4444;
+  background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+  color: #ffffff;
+  border-radius: 12px;
+  min-height: 48px;
+  padding: 12px 16px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease, opacity 0.18s ease;
+}
+
+.products-confirmation-remove:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 30px rgba(220, 38, 38, 0.22);
+  filter: saturate(1.02);
+}
+
+.products-confirmation-remove:focus-visible {
+  outline: 3px solid rgba(248, 113, 113, 0.3);
+  outline-offset: 2px;
+}
+
+.products-confirmation-remove:disabled {
+  cursor: wait;
+  opacity: 0.72;
+  box-shadow: none;
+  transform: none;
+}
+
+@keyframes productsDialogBackdropIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes productsDialogIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .products-editor.is-editing {
   background: linear-gradient(180deg, #f8fbff 0%, #ffffff 22%);
   border: 1px solid #93c5fd;
@@ -1552,12 +1670,19 @@
   padding: 12px 14px;
   font-weight: 800;
   cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease,
+    background 0.18s ease, color 0.18s ease, opacity 0.18s ease;
 }
 
 .products-primary-button {
   border: none;
   background: #171717;
   color: #ffffff;
+}
+
+.products-primary-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 24px rgba(15, 23, 42, 0.14);
 }
 
 .products-primary-button-large {
@@ -1573,6 +1698,13 @@
   color: #171717;
 }
 
+.products-secondary-button:hover:not(:disabled),
+.products-card-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: #94a3b8;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+}
+
 .products-card-button-primary {
   border-color: #171717;
   background: #171717;
@@ -1583,6 +1715,12 @@
   border-color: #fecaca;
   background: #fff1f2;
   color: #be123c;
+}
+
+.products-card-button-danger:hover:not(:disabled) {
+  border-color: #fda4af;
+  background: #ffe4e6;
+  color: #9f1239;
 }
 
 .products-advanced-stack {
@@ -2214,6 +2352,23 @@
 }
 
 @media (max-width: 720px) {
+  .products-confirmation-backdrop {
+    padding: 16px;
+  }
+
+  .products-confirmation-dialog {
+    padding: 22px;
+    border-radius: 22px;
+  }
+
+  .products-confirmation-copy h2 {
+    font-size: 24px;
+  }
+
+  .products-confirmation-actions {
+    grid-template-columns: 1fr;
+  }
+
   .products-editor-grid,
   .products-editor-glance-grid,
   .products-library-grid,

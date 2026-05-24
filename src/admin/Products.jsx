@@ -327,6 +327,10 @@ function buildProductRenderIdentity(product, index) {
 export default function Products() {
   const pageRef = useRef(null);
   const editorRef = useRef(null);
+  const removeDialogRef = useRef(null);
+  const removeDialogCancelRef = useRef(null);
+  const removeDialogConfirmRef = useRef(null);
+  const removeDialogTriggerRef = useRef(null);
   const catalogPanelRef = useRef(null);
   const nameInputRef = useRef(null);
   const storefrontCategoryInputRef = useRef(null);
@@ -363,6 +367,8 @@ export default function Products() {
   const [creationNotice, setCreationNotice] = useState("");
   const [highlightedProductIds, setHighlightedProductIds] = useState([]);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [productPendingRemoval, setProductPendingRemoval] = useState(null);
+  const [isRemovingProduct, setIsRemovingProduct] = useState(false);
 
   const editingProduct = editingProductId
     ? products.find((product) => product.id === editingProductId) || null
@@ -501,6 +507,7 @@ export default function Products() {
   const editorSourceLabel = isManualProductMode
     ? "Standalone storefront item"
     : selectedGarmentItem?.title || "Choose garment template";
+  const isRemoveDialogOpen = Boolean(productPendingRemoval);
 
   useEffect(() => {
     const duplicateProductIds = products.reduce((summary, product, index) => {
@@ -624,6 +631,50 @@ export default function Products() {
     });
   }, [isCreatingStorefrontCategory]);
 
+  useEffect(() => {
+    if (!isRemoveDialogOpen) return undefined;
+
+    window.requestAnimationFrame(() => {
+      removeDialogCancelRef.current?.focus();
+    });
+
+    function handleRemoveDialogKeyDown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (!isRemovingProduct) {
+          closeRemoveDialog();
+        }
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+
+      const focusableElements = [
+        removeDialogCancelRef.current,
+        removeDialogConfirmRef.current,
+      ].filter(Boolean);
+
+      if (!focusableElements.length) return;
+
+      const currentIndex = focusableElements.indexOf(document.activeElement);
+      const nextIndex = event.shiftKey
+        ? currentIndex <= 0
+          ? focusableElements.length - 1
+          : currentIndex - 1
+        : currentIndex === -1 || currentIndex === focusableElements.length - 1
+          ? 0
+          : currentIndex + 1;
+
+      event.preventDefault();
+      focusableElements[nextIndex]?.focus();
+    }
+
+    document.addEventListener("keydown", handleRemoveDialogKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleRemoveDialogKeyDown);
+    };
+  }, [isRemoveDialogOpen, isRemovingProduct]);
+
   function updateField(event) {
     const { name, value } = event.target;
     setForm((current) => {
@@ -692,6 +743,7 @@ export default function Products() {
     setNewStorefrontCategoryName("");
     setSaveError("");
     setIsEditorOpen(false);
+    setProductPendingRemoval(null);
   }
 
   function focusEditorNameField() {
@@ -721,6 +773,23 @@ export default function Products() {
 
   function closeEditor() {
     resetForm();
+  }
+
+  function openRemoveDialog(product, triggerNode = null) {
+    if (!product || isRemovingProduct) return;
+
+    removeDialogTriggerRef.current = triggerNode;
+    setSaveError("");
+    setProductPendingRemoval(product);
+  }
+
+  function closeRemoveDialog() {
+    if (isRemovingProduct) return;
+
+    setProductPendingRemoval(null);
+    window.requestAnimationFrame(() => {
+      removeDialogTriggerRef.current?.focus?.();
+    });
   }
 
   function handleProductModeChange(productMode) {
@@ -1179,13 +1248,23 @@ export default function Products() {
 
   async function handleDelete(productId) {
     try {
+      if (!productId) return;
+
+      setIsRemovingProduct(true);
       await deleteStoredProduct(productId);
       if (editingProductId === productId) {
         resetForm();
+      } else {
+        setProductPendingRemoval(null);
       }
     } catch (error) {
       console.error("Unable to delete product", error);
       setSaveError("Unable to delete this product right now. Please try again.");
+    } finally {
+      setIsRemovingProduct(false);
+      window.requestAnimationFrame(() => {
+        removeDialogTriggerRef.current?.focus?.();
+      });
     }
   }
 
@@ -1514,7 +1593,7 @@ export default function Products() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDelete(product.id)}
+                          onClick={(event) => openRemoveDialog(product, event.currentTarget)}
                           className="products-card-button products-card-button-danger"
                         >
                           Remove
@@ -2104,6 +2183,59 @@ export default function Products() {
             ) : null}
             </section>
           </form>
+        </div>
+      ) : null}
+
+      {isRemoveDialogOpen ? (
+        <div
+          className="products-confirmation-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              closeRemoveDialog();
+            }
+          }}
+        >
+          <div
+            ref={removeDialogRef}
+            className="products-confirmation-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="remove-product-dialog-title"
+            aria-describedby="remove-product-dialog-description"
+          >
+            <div className="products-confirmation-copy">
+              <p className="products-confirmation-kicker">Storefront Catalog</p>
+              <h2 id="remove-product-dialog-title">Remove Product?</h2>
+              <p id="remove-product-dialog-description">
+                Are you sure you want to remove this product from the customer catalog?
+              </p>
+              <p className="products-confirmation-secondary">
+                This will remove the storefront product but will NOT delete the original garment
+                template.
+              </p>
+            </div>
+
+            <div className="products-confirmation-actions">
+              <button
+                ref={removeDialogCancelRef}
+                type="button"
+                className="products-secondary-button products-confirmation-cancel"
+                onClick={closeRemoveDialog}
+                disabled={isRemovingProduct}
+              >
+                Cancel
+              </button>
+              <button
+                ref={removeDialogConfirmRef}
+                type="button"
+                className="products-confirmation-remove"
+                onClick={() => handleDelete(productPendingRemoval?.id)}
+                disabled={isRemovingProduct}
+              >
+                {isRemovingProduct ? "Removing..." : "Remove Product"}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>
