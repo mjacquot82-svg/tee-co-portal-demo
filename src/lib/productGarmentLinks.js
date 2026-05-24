@@ -2,6 +2,30 @@ function normalizeId(value) {
   return String(value || "").trim();
 }
 
+function appendLinkedProduct(usageMap, garmentId, productId) {
+  const normalizedGarmentId = normalizeId(garmentId);
+  const normalizedProductId = normalizeId(productId);
+  if (!normalizedGarmentId || !normalizedProductId) return;
+
+  const currentUsage = usageMap.get(normalizedGarmentId) || {
+    linkedProductCount: 0,
+    linkedProductIds: [],
+  };
+  const linkedProductIds = Array.isArray(currentUsage.linkedProductIds)
+    ? currentUsage.linkedProductIds
+    : [];
+
+  if (linkedProductIds.includes(normalizedProductId)) {
+    return;
+  }
+
+  const nextLinkedProductIds = [...linkedProductIds, normalizedProductId];
+  usageMap.set(normalizedGarmentId, {
+    linkedProductCount: nextLinkedProductIds.length,
+    linkedProductIds: nextLinkedProductIds,
+  });
+}
+
 function buildGarmentIndexes(garments = []) {
   const byId = new Map();
   const byModelId = new Map();
@@ -57,13 +81,11 @@ export function buildGarmentUsageMap(products = [], garments = []) {
   const { byId, byModelId } = buildGarmentIndexes(garments);
 
   (Array.isArray(products) ? products : []).forEach((product) => {
+    const productId = normalizeId(product?.id);
     const garmentLibraryItemId = getProductGarmentLibraryItemId(product);
 
     if (garmentLibraryItemId && byId.has(garmentLibraryItemId)) {
-      const currentUsage = usageMap.get(garmentLibraryItemId) || { linkedProductCount: 0 };
-      usageMap.set(garmentLibraryItemId, {
-        linkedProductCount: currentUsage.linkedProductCount + 1,
-      });
+      appendLinkedProduct(usageMap, garmentLibraryItemId, productId);
       return;
     }
 
@@ -74,11 +96,7 @@ export function buildGarmentUsageMap(products = [], garments = []) {
     matchedGarments.forEach((garment) => {
       const garmentId = normalizeId(garment?.id);
       if (!garmentId) return;
-
-      const currentUsage = usageMap.get(garmentId) || { linkedProductCount: 0 };
-      usageMap.set(garmentId, {
-        linkedProductCount: currentUsage.linkedProductCount + 1,
-      });
+      appendLinkedProduct(usageMap, garmentId, productId);
     });
   });
 

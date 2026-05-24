@@ -120,6 +120,7 @@ create table if not exists public.garment_library_items (
   sizes jsonb not null default '[]'::jsonb,
   default_placements jsonb not null default '[]'::jsonb,
   default_production_methods jsonb not null default '[]'::jsonb,
+  linked_storefront_product_ids jsonb not null default '[]'::jsonb,
   notes text default '',
   active boolean not null default true,
   created_at timestamptz not null default timezone('utc', now()),

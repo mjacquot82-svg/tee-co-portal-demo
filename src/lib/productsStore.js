@@ -527,32 +527,6 @@ function omitGarmentLibraryItemId(record = {}) {
   return legacyRecord;
 }
 
-function mergeProductCollections(primaryProducts = [], secondaryProducts = []) {
-  const mergedById = new Map();
-
-  [...(Array.isArray(primaryProducts) ? primaryProducts : []), ...(Array.isArray(secondaryProducts) ? secondaryProducts : [])]
-    .filter(Boolean)
-    .forEach((product) => {
-      const productId = String(product?.id || "").trim();
-      const mapKey = productId || `fallback::${product?.legacy_product_id || ""}::${product?.name || ""}`;
-      if (!mapKey) return;
-      if (!mergedById.has(mapKey)) {
-        mergedById.set(mapKey, product);
-      }
-    });
-
-  return Array.from(mergedById.values()).sort((left, right) => {
-    const leftTimestamp = Date.parse(left?.created_at || "") || 0;
-    const rightTimestamp = Date.parse(right?.created_at || "") || 0;
-
-    if (leftTimestamp !== rightTimestamp) {
-      return rightTimestamp - leftTimestamp;
-    }
-
-    return String(right?.id || "").localeCompare(String(left?.id || ""));
-  });
-}
-
 async function fetchProductsFromSupabase() {
   if (!isSupabaseConfigured || !supabase) {
     return null;
@@ -622,24 +596,12 @@ export async function refreshStoredProducts() {
   }
 
   hasLoadedProductsFromSupabase = true;
-  const localProductsAtPublishTime = getLocalProductsSnapshot();
-  const snapshot = setProductsSnapshot(
-    mergeProductCollections(remoteProducts, localProductsAtPublishTime)
-  );
-  const localOnlyProducts = localProductsAtPublishTime.filter(
-    (localProduct) =>
-      localProduct?.id &&
-      !remoteProducts.some((remoteProduct) => remoteProduct?.id === localProduct.id)
-  );
+  const snapshot = setProductsSnapshot(remoteProducts);
   console.info("[productsStore] Published storefront product snapshot after refresh", {
     refreshId,
     remoteCount: remoteProducts.length,
     localCountBeforeRefresh: localProductsBeforeRefresh.length,
-    localCountAtPublishTime: localProductsAtPublishTime.length,
-    staleLocalSnapshotDetected:
-      localProductsAtPublishTime.length !== localProductsBeforeRefresh.length,
     publishedCount: snapshot.length,
-    localOnlyProducts: localOnlyProducts.map((product) => buildProductDebugSummary(product)),
     publishedProducts: snapshot.map((product) => buildProductDebugSummary(product)),
   });
   await syncGarmentLinks(snapshot);
@@ -735,6 +697,7 @@ export function useStoredProducts() {
 
 export async function createStoredProduct(productInput) {
   console.info("[productsStore] createStoredProduct called", {
+    verificationStep: "step-2 createStoredProduct called",
     rawInput: productInput,
     rawInputSummary: buildProductDebugSummary(productInput),
     currentStoredProductCountBeforeCreate: getStoredProducts().length,
@@ -759,25 +722,47 @@ export async function createStoredProduct(productInput) {
     decoration_types: normalizeList(productInput.decoration_types),
   });
   console.info("[productsStore] Preparing storefront product for creation", {
+    verificationStep: "step-3 normalized product payload",
     input: buildProductDebugSummary(productInput),
     normalizedProduct: buildProductDebugSummary(product),
     normalizedProductSnapshot: product,
+    requiredFieldSummary: {
+      hasName: Boolean(String(product?.name || "").trim()),
+      hasStatus: Boolean(String(product?.status || "").trim()),
+      hasCategory: Boolean(String(product?.category || "").trim()),
+      hasGarmentLibraryItemId: Boolean(product?.garment_library_item_id),
+    },
   });
 
   if (!isSupabaseConfigured || !supabase) {
+    const previousProducts = getStoredProducts();
     const localProduct = {
       ...product,
       id: `product-${Date.now()}`,
     };
-    const nextProducts = [localProduct, ...getStoredProducts()];
+    const nextProducts = [localProduct, ...previousProducts];
     hasLoadedProductsFromSupabase = true;
     saveStoredProducts(nextProducts);
-    console.info("[productsStore] Created local-only storefront product", {
+    console.info("[StorefrontCreateVerification] step-4 product added to products store", {
       createdProduct: buildProductDebugSummary(localProduct),
       createStoredProductReturnValue: localProduct,
       addedToLocalProductsArray: nextProducts.some((entry) => entry.id === localProduct.id),
-      persistedSnapshotCount: nextProducts.length,
+      productCounts: {
+        beforeCreate: previousProducts.length,
+        afterCreate: nextProducts.length,
+        increased: nextProducts.length > previousProducts.length,
+      },
       persistedSnapshot: nextProducts.map((entry) => buildProductDebugSummary(entry)),
+    });
+    console.info("[StorefrontCreateVerification] step-5 products store count increased", {
+      createdProductId: localProduct.id,
+      createdProductName: localProduct.name,
+      createdProductPresentInStore: nextProducts.some((entry) => entry.id === localProduct.id),
+      productCounts: {
+        beforeCreate: previousProducts.length,
+        afterCreate: nextProducts.length,
+        increased: nextProducts.length > previousProducts.length,
+      },
     });
     await syncGarmentLinks(nextProducts);
     return localProduct;
@@ -821,34 +806,32 @@ export async function createStoredProduct(productInput) {
       (existingProduct) => existingProduct.id !== createdProduct.id
     ),
   ];
+  const previousProducts = getStoredProducts();
   hasLoadedProductsFromSupabase = true;
   saveStoredProducts(nextProducts);
-  console.info("[productsStore] Storefront product created and persisted", {
+  console.info("[StorefrontCreateVerification] step-4 product added to products store", {
     createdProduct: buildProductDebugSummary(createdProduct),
     createdProductSnapshot: createdProduct,
     createStoredProductReturnValue: createdProduct,
     addedToLocalProductsArray: nextProducts.some((entry) => entry.id === createdProduct.id),
-    persistedSnapshotCount: nextProducts.length,
+    productCounts: {
+      beforeCreate: previousProducts.length,
+      afterCreate: nextProducts.length,
+      increased: nextProducts.length > previousProducts.length,
+    },
     persistedSnapshot: nextProducts.map((entry) => buildProductDebugSummary(entry)),
   });
-  const refreshedSnapshot = await refreshStoredProducts();
-  console.info("[productsStore] Storefront product post-create refresh verification", {
+  console.info("[StorefrontCreateVerification] step-5 products store count increased", {
     createdProductId: createdProduct.id,
     createdProductName: createdProduct.name,
-    currentStoreContentsImmediatelyAfterCreation: safeProductsSnapshot(nextProducts),
-    currentStoreContentsAfterRefreshStoredProducts: safeProductsSnapshot(refreshedSnapshot),
-    createdProductPresentImmediatelyAfterCreation: nextProducts.some(
-      (entry) => entry.id === createdProduct.id
-    ),
-    createdProductPresentAfterRefreshStoredProducts: refreshedSnapshot.some(
-      (entry) => entry.id === createdProduct.id
-    ),
+    createdProductPresentInStore: nextProducts.some((entry) => entry.id === createdProduct.id),
     productCounts: {
-      immediatelyAfterCreation: nextProducts.length,
-      afterRefreshStoredProducts: refreshedSnapshot.length,
+      beforeCreate: previousProducts.length,
+      afterCreate: nextProducts.length,
+      increased: nextProducts.length > previousProducts.length,
     },
   });
-  await syncGarmentLinks(refreshedSnapshot);
+  await syncGarmentLinks(nextProducts);
   return createdProduct;
 }
 
