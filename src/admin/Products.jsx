@@ -9,6 +9,7 @@ import { useGarmentLibraryItems } from "../lib/garmentLibraryStore";
 import { findLinkedGarmentLibraryItem } from "../lib/productGarmentLinks";
 import {
   buildPlacementConfig,
+  areStoredProductsReady,
   createStoredProduct,
   deleteStoredProduct,
   getProductPlacementConfig,
@@ -184,6 +185,7 @@ export default function Products() {
   const location = useLocation();
   const navigate = useNavigate();
   const products = useStoredProducts();
+  const productsReady = areStoredProductsReady();
   const libraryItems = useGarmentLibraryItems();
   const lookups = useCatalogLookups();
   const categories = useMemo(() => lookups.categories || [], [lookups.categories]);
@@ -255,6 +257,62 @@ export default function Products() {
   }, [focusedProductIds, products, searchTerm, selectedStatus]);
 
   const activeCount = products.filter((product) => normalizeStatusValue(product?.status) === "active").length;
+
+  useEffect(() => {
+    const exclusionDiagnostics = products.reduce(
+      (summary, product) => {
+        const normalizedStatus = normalizeStatusValue(product?.status);
+
+        if (selectedStatus === "active" && normalizedStatus !== "active") {
+          summary.statusFilteredOut.push({
+            id: product?.id || null,
+            name: product?.name || "",
+            status: product?.status || "",
+            reason: "status-not-active",
+          });
+        }
+
+        if (
+          searchTerm.trim() &&
+          ![product?.name, product?.brand_model, product?.category, product?.notes]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(searchTerm.trim().toLowerCase()))
+        ) {
+          summary.searchFilteredOut.push({
+            id: product?.id || null,
+            name: product?.name || "",
+            reason: "search-miss",
+          });
+        }
+
+        return summary;
+      },
+      {
+        statusFilteredOut: [],
+        searchFilteredOut: [],
+      }
+    );
+
+    console.info("[Products] Customer catalog rendering source", {
+      productsReady,
+      currentProductCountInsideRender: products.length,
+      activeProducts: activeCount,
+      filteredProducts: filteredProducts.length,
+      selectedStatus,
+      searchTerm,
+      focusedProductIds,
+      products: products.map((product) => ({
+        id: product?.id || null,
+        name: product?.name || "",
+        status: product?.status || "",
+        category: product?.category || "",
+        garment_library_item_id: product?.garment_library_item_id || null,
+        colors: Array.isArray(product?.colors) ? product.colors : [],
+        sizes: Array.isArray(product?.sizes) ? product.sizes : [],
+      })),
+      exclusionDiagnostics,
+    });
+  }, [activeCount, filteredProducts.length, focusedProductIds, products, productsReady, searchTerm, selectedStatus]);
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -551,14 +609,36 @@ export default function Products() {
       unit_price: flatPrice,
       notes: form.notes,
     };
+    console.info("[Products] Publish storefront product submit", {
+      editingProductId,
+      productPayload,
+      currentProductCountBeforeSubmit: products.length,
+      currentProductsBeforeSubmit: products.map((product) => ({
+        id: product?.id || null,
+        name: product?.name || "",
+        status: product?.status || "",
+      })),
+    });
 
     try {
       setIsSaving(true);
 
       if (editingProductId) {
-        await updateStoredProduct(editingProductId, productPayload);
+        const updatedProduct = await updateStoredProduct(editingProductId, productPayload);
+        console.info("[Products] updateStoredProduct resolved", {
+          editingProductId,
+          updatedProduct,
+          currentProductCountAfterSubmit: products.length,
+        });
       } else {
-        await createStoredProduct(productPayload);
+        const createdProduct = await createStoredProduct(productPayload);
+        console.info("[Products] createStoredProduct resolved", {
+          createdProduct,
+          currentProductCountAfterSubmit: products.length,
+          createdProductPresentInCurrentProductsArray: products.some(
+            (product) => product?.id && product.id === createdProduct?.id
+          ),
+        });
       }
 
       resetForm();

@@ -2,6 +2,33 @@ function normalizeText(value) {
   return String(value || "").trim();
 }
 
+function buildCatalogFieldDiagnostics(product = {}) {
+  const resolvedPrice =
+    product?.unit_price ??
+    product?.base_garment_price ??
+    product?.calculated_base_price ??
+    product?.price ??
+    null;
+
+  return {
+    id: product?.id || null,
+    name: normalizeText(product?.name),
+    category: normalizeText(product?.category),
+    status: product?.status || "",
+    normalizedStatus: normalizeProductStatus(product?.status || "Active"),
+    garment_library_item_id: product?.garment_library_item_id || null,
+    hasName: Boolean(normalizeText(product?.name)),
+    hasCategory: Boolean(normalizeText(product?.category)),
+    hasStatus: Boolean(normalizeText(product?.status)),
+    hasImage: Boolean(normalizeText(product?.image)),
+    hasPrice: Number.isFinite(Number(resolvedPrice)) && Number(resolvedPrice) > 0,
+    hasVariants: Array.isArray(product?.colors) ? product.colors.length > 0 : false,
+    hasSizes: Array.isArray(product?.sizes) ? product.sizes.length > 0 : false,
+    hasGarmentReference: Boolean(product?.garment_library_item_id),
+    resolvedPrice,
+  };
+}
+
 export function normalizeCategorySlug(value) {
   return normalizeText(value)
     .toLowerCase()
@@ -14,9 +41,42 @@ export function normalizeProductStatus(value) {
 }
 
 export function getStorefrontProducts(products = []) {
-  return (Array.isArray(products) ? products : []).filter(
-    (product) => normalizeProductStatus(product?.status || "Active") === "active"
-  );
+  const sourceProducts = Array.isArray(products) ? products : [];
+  const includedProducts = [];
+  const excludedProducts = [];
+
+  sourceProducts.forEach((product) => {
+    const normalizedStatus = normalizeProductStatus(product?.status || "Active");
+    const include = normalizedStatus === "active";
+    const fieldDiagnostics = buildCatalogFieldDiagnostics(product);
+
+    if (include) {
+      console.info("[storefrontCatalog] Included storefront product", {
+        product: fieldDiagnostics,
+      });
+      includedProducts.push(product);
+      return;
+    }
+
+    excludedProducts.push({
+      ...fieldDiagnostics,
+      exclusionReason: normalizedStatus ? "inactive-status" : "missing-status",
+    });
+  });
+
+  console.info("[storefrontCatalog] Storefront product filter results", {
+    sourceCount: sourceProducts.length,
+    includedCount: includedProducts.length,
+    excludedCount: excludedProducts.length,
+    includedProducts: includedProducts.map((product) => ({
+      id: product?.id || null,
+      name: normalizeText(product?.name),
+      status: product?.status || "",
+    })),
+    excludedProducts,
+  });
+
+  return includedProducts;
 }
 
 export function getStorefrontProductImage(product) {
