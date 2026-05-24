@@ -6,7 +6,6 @@ import ProductImageUploader from "../components/ProductImageUploader";
 import { PRODUCTION_TYPES } from "../constants/productionTypes";
 import {
   createCatalogLookup,
-  updateCatalogLookup,
   useCatalogLookups,
 } from "../lib/catalogLookupsStore";
 import { useGarmentLibraryItems } from "../lib/garmentLibraryStore";
@@ -60,6 +59,8 @@ const PRODUCT_MODES = {
   APPAREL: "apparel",
   MANUAL: "manual",
 };
+
+const CREATE_STOREFRONT_CATEGORY_VALUE = "__create_storefront_category__";
 
 const emptyProduct = {
   productMode: PRODUCT_MODES.APPAREL,
@@ -328,6 +329,7 @@ export default function Products() {
   const editorRef = useRef(null);
   const catalogPanelRef = useRef(null);
   const nameInputRef = useRef(null);
+  const storefrontCategoryInputRef = useRef(null);
   const productCardRefs = useRef(new Map());
   const prefilledLocationKeyRef = useRef("");
   const location = useLocation();
@@ -355,8 +357,7 @@ export default function Products() {
   const [newStorefrontCategoryName, setNewStorefrontCategoryName] = useState("");
   const [categorySaveError, setCategorySaveError] = useState("");
   const [isSavingCategory, setIsSavingCategory] = useState(false);
-  const [editingStorefrontCategoryId, setEditingStorefrontCategoryId] = useState("");
-  const [editingStorefrontCategoryName, setEditingStorefrontCategoryName] = useState("");
+  const [isCreatingStorefrontCategory, setIsCreatingStorefrontCategory] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [creationNotice, setCreationNotice] = useState("");
@@ -609,6 +610,15 @@ export default function Products() {
     });
   }, [filteredProducts, products.length]);
 
+  useEffect(() => {
+    if (!isCreatingStorefrontCategory) return;
+
+    window.requestAnimationFrame(() => {
+      storefrontCategoryInputRef.current?.focus();
+      storefrontCategoryInputRef.current?.select();
+    });
+  }, [isCreatingStorefrontCategory]);
+
   function updateField(event) {
     const { name, value } = event.target;
     setForm((current) => {
@@ -646,12 +656,35 @@ export default function Products() {
     });
   }
 
+  function handleStorefrontCategorySelect(event) {
+    const { value } = event.target;
+
+    if (value === CREATE_STOREFRONT_CATEGORY_VALUE) {
+      setIsCreatingStorefrontCategory(true);
+      setCategorySaveError("");
+      return;
+    }
+
+    setIsCreatingStorefrontCategory(false);
+    setCategorySaveError("");
+    setForm((current) => {
+      const selectedStorefrontCategory = findLookupById(storefrontCategories, value);
+      return {
+        ...current,
+        storefront_category_lookup_id: value,
+        storefront_category: selectedStorefrontCategory?.name || "",
+      };
+    });
+  }
+
   function resetForm() {
     setForm(emptyProduct);
     setEditingProductId(null);
     setCreationNotice("");
     setHighlightedProductIds([]);
     setCategorySaveError("");
+    setIsCreatingStorefrontCategory(false);
+    setNewStorefrontCategoryName("");
     setSaveError("");
   }
 
@@ -975,6 +1008,7 @@ export default function Products() {
         active: true,
       });
       setNewStorefrontCategoryName("");
+      setIsCreatingStorefrontCategory(false);
       setForm((current) => ({
         ...current,
         storefront_category_lookup_id: createdCategory.id,
@@ -983,59 +1017,6 @@ export default function Products() {
     } catch (error) {
       console.error("Unable to create storefront category", error);
       setCategorySaveError("Unable to create storefront category right now.");
-    } finally {
-      setIsSavingCategory(false);
-    }
-  }
-
-  async function handleSaveStorefrontCategoryEdits(categoryId) {
-    const nextName = normalizeText(editingStorefrontCategoryName);
-    if (!categoryId || !nextName) return;
-
-    try {
-      setIsSavingCategory(true);
-      setCategorySaveError("");
-      const updatedCategory = await updateCatalogLookup("storefront_categories", categoryId, {
-        name: nextName,
-      });
-      if (form.storefront_category_lookup_id === categoryId) {
-        setForm((current) => ({
-          ...current,
-          storefront_category: updatedCategory.name,
-        }));
-      }
-      setEditingStorefrontCategoryId("");
-      setEditingStorefrontCategoryName("");
-    } catch (error) {
-      console.error("Unable to update storefront category", error);
-      setCategorySaveError("Unable to save storefront category changes right now.");
-    } finally {
-      setIsSavingCategory(false);
-    }
-  }
-
-  async function handleToggleStorefrontCategoryActive(category) {
-    if (!category?.id) return;
-
-    try {
-      setIsSavingCategory(true);
-      setCategorySaveError("");
-      await updateCatalogLookup("storefront_categories", category.id, {
-        active: category.active === false,
-      });
-      if (
-        category.active !== false &&
-        form.storefront_category_lookup_id === category.id
-      ) {
-        setForm((current) => ({
-          ...current,
-          storefront_category_lookup_id: "",
-          storefront_category: "",
-        }));
-      }
-    } catch (error) {
-      console.error("Unable to update storefront category status", error);
-      setCategorySaveError("Unable to update storefront category status right now.");
     } finally {
       setIsSavingCategory(false);
     }
@@ -1331,7 +1312,7 @@ export default function Products() {
                 <select
                   name="storefront_category_lookup_id"
                   value={form.storefront_category_lookup_id}
-                  onChange={updateField}
+                  onChange={handleStorefrontCategorySelect}
                   style={fieldStyle}
                 >
                   <option value="">Select storefront category</option>
@@ -1340,6 +1321,7 @@ export default function Products() {
                       {category.name}
                     </option>
                   ))}
+                  <option value={CREATE_STOREFRONT_CATEGORY_VALUE}>+ Create New Category</option>
                 </select>
               </label>
 
@@ -1391,117 +1373,52 @@ export default function Products() {
               </label>
             </div>
 
+            {isCreatingStorefrontCategory ? (
+              <div className="products-inline-category-create">
+                <label style={{ ...labelStyle, margin: 0 }}>
+                  New Storefront Category
+                  <input
+                    ref={storefrontCategoryInputRef}
+                    value={newStorefrontCategoryName}
+                    onChange={(event) => setNewStorefrontCategoryName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        handleCreateStorefrontCategory();
+                      }
+                    }}
+                    placeholder="Drinkware"
+                    style={fieldStyle}
+                  />
+                </label>
+                <div className="products-inline-category-create-actions">
+                  <button
+                    type="button"
+                    className="products-inline-save"
+                    onClick={handleCreateStorefrontCategory}
+                    disabled={isSavingCategory || !normalizeText(newStorefrontCategoryName)}
+                  >
+                    {isSavingCategory ? "Saving..." : "Create Category"}
+                  </button>
+                  <button
+                    type="button"
+                    className="products-inline-cancel"
+                    onClick={() => {
+                      setIsCreatingStorefrontCategory(false);
+                      setNewStorefrontCategoryName("");
+                      setCategorySaveError("");
+                    }}
+                    disabled={isSavingCategory}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {categorySaveError ? <div className="products-error-banner">{categorySaveError}</div> : null}
+
           </section>
-
-          <details className="products-editor-section products-utility-section">
-            <summary className="products-advanced-summary">
-              <div>
-                <strong>Storefront Categories</strong>
-                <span>Manage browse categories without crowding the main editor.</span>
-              </div>
-            </summary>
-
-            <div className="products-advanced-stack">
-              <div className="products-inline-create-panel">
-                <input
-                  value={newStorefrontCategoryName}
-                  onChange={(event) => setNewStorefrontCategoryName(event.target.value)}
-                  placeholder="Create storefront category like Drinkware"
-                  style={{ ...fieldStyle, flex: "1 1 220px" }}
-                />
-                <button
-                  type="button"
-                  className="products-inline-save"
-                  onClick={handleCreateStorefrontCategory}
-                  disabled={isSavingCategory || !normalizeText(newStorefrontCategoryName)}
-                >
-                  {isSavingCategory ? "Saving..." : "Create Category"}
-                </button>
-              </div>
-
-              {categorySaveError ? <div className="products-error-banner">{categorySaveError}</div> : null}
-
-              <div className="products-category-manager">
-                <div className="products-category-manager-header">
-                  <div>
-                    <strong>Storefront Category Manager</strong>
-                    <p>Create, rename, or deactivate customer-facing browse categories.</p>
-                  </div>
-                </div>
-
-                <div className="products-category-manager-list">
-                  {storefrontCategories.map((category) => {
-                    const isEditingCategory = editingStorefrontCategoryId === category.id;
-                    return (
-                      <div key={category.id} className="products-category-manager-item">
-                        {isEditingCategory ? (
-                          <input
-                            value={editingStorefrontCategoryName}
-                            onChange={(event) => setEditingStorefrontCategoryName(event.target.value)}
-                            style={fieldStyle}
-                          />
-                        ) : (
-                          <div>
-                            <strong>{category.name}</strong>
-                            <div className="products-category-manager-meta">
-                              <span>{category.active === false ? "Inactive" : "Active"}</span>
-                              <span>{category.id}</span>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="products-category-manager-actions">
-                          {isEditingCategory ? (
-                            <>
-                              <button
-                                type="button"
-                                className="products-inline-save"
-                                onClick={() => handleSaveStorefrontCategoryEdits(category.id)}
-                                disabled={isSavingCategory || !normalizeText(editingStorefrontCategoryName)}
-                              >
-                                Save
-                              </button>
-                              <button
-                                type="button"
-                                className="products-inline-cancel"
-                                onClick={() => {
-                                  setEditingStorefrontCategoryId("");
-                                  setEditingStorefrontCategoryName("");
-                                }}
-                              >
-                                Cancel
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                className="products-inline-action"
-                                onClick={() => {
-                                  setEditingStorefrontCategoryId(category.id);
-                                  setEditingStorefrontCategoryName(category.name);
-                                }}
-                              >
-                                Rename
-                              </button>
-                              <button
-                                type="button"
-                                className="products-inline-action"
-                                onClick={() => handleToggleStorefrontCategoryActive(category)}
-                                disabled={isSavingCategory}
-                              >
-                                {category.active === false ? "Activate" : "Deactivate"}
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </details>
 
           {!isManualProductMode ? (
           <section className="products-editor-section">

@@ -36,6 +36,7 @@
   grid-template-columns: minmax(620px, 1.1fr) minmax(380px, 0.9fr);
   gap: 20px;
   align-items: start;
+  min-width: 0;
 }
 
 .products-editor {
@@ -700,12 +701,16 @@
   border-radius: 24px;
   padding: 20px;
   display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 16px;
   position: sticky;
   top: 18px;
+  height: calc(100vh - 36px);
   max-height: calc(100vh - 36px);
+  min-height: calc(100vh - 36px);
   overflow: hidden;
   align-content: start;
+  min-width: 0;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
 }
 
@@ -848,8 +853,10 @@
 
 .products-list-scroll {
   min-height: 0;
+  height: 100%;
   overflow: auto;
   padding-right: 4px;
+  overscroll-behavior: contain;
 }
 
 .products-list-grid {
@@ -1017,14 +1024,73 @@
   font-weight: 700;
 }
 
+.garment-library-card {
+  grid-template-columns: 120px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: stretch;
+  padding: 14px;
+}
+
+.garment-library-card .products-card-body {
+  gap: 8px;
+}
+
+.garment-library-card-media {
+  width: 120px;
+}
+
+.garment-library-card .products-card-image,
+.garment-library-card .products-card-image-placeholder {
+  width: 120px;
+  height: 138px;
+  border-radius: 16px;
+}
+
+.garment-library-card-title-block {
+  min-width: 0;
+}
+
+.garment-library-card-top-metrics {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.garment-library-metric-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid #dbe4ee;
+  background: #f8fafc;
+  color: #334155;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.garment-library-card-detail-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.garment-library-card .products-card-detail {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 8px 10px;
+}
+
 .garment-library-card-preview-grid {
   display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .garment-library-card-preview-block {
   display: grid;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
 }
 
@@ -1051,8 +1117,8 @@
   min-width: 0;
   max-width: 100%;
   border-radius: 999px;
-  padding: 6px 10px;
-  font-size: 12px;
+  padding: 5px 9px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1.2;
 }
@@ -1071,6 +1137,36 @@
   border: 1px solid #e2e8f0;
   background: #ffffff;
   color: #475569;
+}
+
+.garment-library-card-metadata {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 6px;
+}
+
+.garment-library-card .products-card-actions {
+  width: 100%;
+  justify-content: flex-end;
+  align-content: start;
+}
+
+.products-inline-category-create {
+  border: 1px solid #dbe4ee;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 12px;
+  align-items: end;
+}
+
+.products-inline-category-create-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .garment-library-inline-empty {
@@ -1800,6 +1896,8 @@
 
   .products-catalog-panel {
     position: static;
+    height: auto;
+    min-height: 0;
     max-height: none;
     overflow: visible;
     box-shadow: none;
@@ -1847,6 +1945,10 @@
     align-items: start;
   }
 
+  .garment-library-card {
+    grid-template-columns: 1fr;
+  }
+
   .products-page-hero,
   .products-page-hero-actions,
   .products-editor-topbar,
@@ -1863,6 +1965,22 @@
   .products-card-image-placeholder {
     width: 100%;
     height: 180px;
+  }
+
+  .garment-library-card-media,
+  .garment-library-card .products-card-image,
+  .garment-library-card .products-card-image-placeholder {
+    width: 100%;
+  }
+
+  .garment-library-card-detail-grid,
+  .garment-library-card-preview-grid,
+  .products-inline-category-create {
+    grid-template-columns: 1fr;
+  }
+
+  .garment-library-card-top-metrics {
+    justify-content: flex-start;
   }
 
   .products-variant-catalog {

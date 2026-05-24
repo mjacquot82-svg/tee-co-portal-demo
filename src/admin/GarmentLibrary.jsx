@@ -1108,7 +1108,7 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
 
     return (
       <article
-        className={`products-card ${isSelected ? "is-active" : ""}`}
+        className={`products-card garment-library-card ${isSelected ? "is-active" : ""}`}
         onClick={onSelect}
         onKeyDown={handleKeyDown}
         role="button"
@@ -1133,16 +1133,22 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
 
         <div className="products-card-body">
           <div className="products-card-topline">
-            <div style={{ minWidth: 0 }}>
+            <div className="garment-library-card-title-block">
               <div className="products-card-title-row">
                 <h3 style={{ margin: 0 }}>{renderedTitle}</h3>
                 {isSelected ? <span className="products-card-editing-pill">Selected</span> : null}
               </div>
               <p className="products-card-subtitle">{subtitle}</p>
             </div>
+
+            <div className="garment-library-card-top-metrics">
+              <span className="garment-library-metric-pill">{summary.totalColors} colors</span>
+              <span className="garment-library-metric-pill">{summary.totalSizes} sizes</span>
+              <span className="garment-library-metric-pill">{summary.activeVariants} active variants</span>
+            </div>
           </div>
 
-          <div className="products-card-detail-grid">
+          <div className="products-card-detail-grid garment-library-card-detail-grid">
             <div className="products-card-detail">
               <span>Colors</span>
               <strong>{summary.totalColors}</strong>
