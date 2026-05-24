@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { hasBrowserStorage } from "./browserStorage";
 import { normalizeGarmentText } from "./garmentTextNormalization";
+import { buildGarmentUsageMap } from "./productGarmentLinks";
 import {
   isSupabaseConfigured,
   supabase,
@@ -42,11 +43,17 @@ const GARMENT_LIBRARY_SELECT_FIELDS = [
   "sizes",
   "default_placements",
   "default_production_methods",
+  "linked_storefront_product_ids",
   "notes",
   "active",
   "created_at",
   "updated_at",
 ].join(", ");
+
+const LEGACY_GARMENT_LIBRARY_SELECT_FIELDS = GARMENT_LIBRARY_SELECT_FIELDS.replace(
+  "linked_storefront_product_ids, ",
+  ""
+);
 
 function getSupabaseUnavailableDiagnostics() {
   return {
@@ -153,6 +160,62 @@ function normalizeTextKey(value) {
   return normalizeText(value).toLowerCase();
 }
 
+const COLOR_SUFFIX_TOKENS = new Set([
+  "ash",
+  "azalea",
+  "beige",
+  "black",
+  "blue",
+  "blush",
+  "bronze",
+  "brown",
+  "camo",
+  "camouflage",
+  "cardinal",
+  "charcoal",
+  "chocolate",
+  "coral",
+  "cream",
+  "crimson",
+  "denim",
+  "gold",
+  "granite",
+  "gray",
+  "green",
+  "grey",
+  "heather",
+  "ice",
+  "jade",
+  "khaki",
+  "lavender",
+  "lime",
+  "maroon",
+  "mint",
+  "natural",
+  "navy",
+  "olive",
+  "orange",
+  "orchid",
+  "peach",
+  "pink",
+  "purple",
+  "red",
+  "royal",
+  "sand",
+  "sapphire",
+  "scarlet",
+  "silver",
+  "smoke",
+  "stone",
+  "tan",
+  "teal",
+  "turquoise",
+  "violet",
+  "white",
+  "wine",
+  "yellow",
+]);
+
 function normalizeStringList(value) {
   if (Array.isArray(value)) {
     return Array.from(
@@ -169,6 +232,68 @@ function normalizeStringList(value) {
     .split(/[\n,;|]+/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function splitFlattenedColorSequence(value) {
+  const normalizedValue = normalizeText(value);
+  if (!normalizedValue || /[\n,;|]/.test(String(value || ""))) {
+    return [];
+  }
+
+  const tokens = normalizedValue.split(/\s+/).filter(Boolean);
+  if (tokens.length < 4) {
+    return [];
+  }
+
+  const parsedItems = [];
+  let currentTokens = [];
+
+  tokens.forEach((token, index) => {
+    currentTokens.push(token);
+
+    const normalizedToken = token.toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const isKnownColorBoundary = COLOR_SUFFIX_TOKENS.has(normalizedToken);
+    const isLastToken = index === tokens.length - 1;
+
+    if (!isKnownColorBoundary && !isLastToken) {
+      return;
+    }
+
+    parsedItems.push(normalizeText(currentTokens.join(" ")));
+    currentTokens = [];
+  });
+
+  if (currentTokens.length) {
+    parsedItems.push(normalizeText(currentTokens.join(" ")));
+  }
+
+  const filteredItems = parsedItems.filter(Boolean);
+  if (
+    filteredItems.length < 2 ||
+    filteredItems.some((item) => item.split(/\s+/).filter(Boolean).length > 4)
+  ) {
+    return [];
+  }
+
+  return filteredItems;
+}
+
+function areStringListsEqual(left = [], right = []) {
+  if (left.length !== right.length) return false;
+
+  return left.every((value, index) => value === right[index]);
+}
+
+function omitLinkedStorefrontProductIds(record = {}) {
+  const { linked_storefront_product_ids: _linkedStorefrontProductIds, ...legacyRecord } = record;
+  return legacyRecord;
+}
+
+function isMissingLinkedStorefrontProductIdsColumnError(error) {
+  const message = String(error?.message || "");
+  const details = String(error?.details || "");
+  const hint = String(error?.hint || "");
+  return [message, details, hint].some((value) => value.includes("linked_storefront_product_ids"));
 }
 
 function splitCollapsedColorTokens(value) {
@@ -191,7 +316,52 @@ function normalizeColorList(value) {
     return normalizedValues;
   }
 
+  const flattenedSequenceValues = normalizedValues.flatMap((item) => splitFlattenedColorSequence(item));
+  if (flattenedSequenceValues.length > 1) {
+    return flattenedSequenceValues;
+  }
+
   return normalizedValues.flatMap((item) => splitCollapsedColorTokens(item));
+}
+
+function expandVariantColorways(variant = {}, context = {}) {
+  const colorCandidates = Array.from(
+    new Set(
+      [
+        ...normalizeColorList(
+          variant?.color || variant?.color_name || variant?.colorName || variant?.variant_color
+        ),
+        ...normalizeColorList(
+          variant?.colors ||
+            variant?.variant_colors ||
+            variant?.supplier_variant ||
+            variant?.supplierVariant ||
+            variant?.variant_name ||
+            variant?.name
+        ),
+      ].filter(Boolean)
+    )
+  );
+
+  if (colorCandidates.length <= 1) {
+    return [variant];
+  }
+
+  console.info("[garmentLibraryStore] expanding multi-color variant during hydration", {
+    ...context,
+    colorCandidates,
+    rawVariant: summarizeVariantForDebug(variant),
+    rawVariantJson: safeStringify(variant),
+  });
+
+  return colorCandidates.map((colorName, colorIndex) => ({
+    ...variant,
+    id: `${variant.id || "variant"}-${colorIndex + 1}`,
+    name: colorName,
+    color: colorName,
+    colors: [colorName],
+    supplier_variant: colorName,
+  }));
 }
 
 function normalizeVariant(variant = {}, context = {}) {
@@ -306,14 +476,21 @@ function normalizeGarmentLibraryItem(item = {}) {
   if (!title) return null;
 
   const rawVariants = Array.isArray(item.variants) ? item.variants : [];
-  const variantNormalizationResults = rawVariants.map((variant, variantIndex) =>
+  const explodedRawVariants = rawVariants.flatMap((variant, variantIndex) =>
+    expandVariantColorways(variant, {
+      garmentTitle: title,
+      variantIndex,
+      source: "normalizeGarmentLibraryItem",
+    })
+  );
+  const variantNormalizationResults = explodedRawVariants.map((variant, variantIndex) =>
     normalizeVariant(variant, {
       garmentTitle: title,
       variantIndex,
       source: "normalizeGarmentLibraryItem",
     })
   );
-  const rejectedVariants = rawVariants
+  const rejectedVariants = explodedRawVariants
     .map((variant, variantIndex) => ({
       variantIndex,
       variant,
@@ -326,7 +503,24 @@ function normalizeGarmentLibraryItem(item = {}) {
       rawVariant: summarizeVariantForDebug(entry.variant),
       rawVariantJson: safeStringify(entry.variant),
     }));
-  const variants = variantNormalizationResults.filter(Boolean);
+  const variants = Array.from(
+    variantNormalizationResults
+      .filter(Boolean)
+      .reduce((dedupedVariants, variant) => {
+        const dedupKey = [
+          normalizeTextKey(variant?.name),
+          normalizeTextKey(variant?.supplier_sku),
+        ].join("::");
+
+        if (dedupedVariants.has(dedupKey)) {
+          return dedupedVariants;
+        }
+
+        dedupedVariants.set(dedupKey, variant);
+        return dedupedVariants;
+      }, new Map())
+      .values()
+  );
   const derivedVariantSizes = variants.flatMap((variant) => normalizeStringList(variant.sizes));
   const sizes = normalizeStringList([...(Array.isArray(item.sizes) ? item.sizes : []), ...derivedVariantSizes]);
   const placeholderVariantCount = rawVariants.filter((variant) => {
@@ -337,12 +531,16 @@ function normalizeGarmentLibraryItem(item = {}) {
   console.info("[garmentLibraryStore] normalized garment library item", {
     title,
     rawVariantCount: rawVariants.length,
+    explodedVariantCount: explodedRawVariants.length,
     rawVariantsWereArray: Array.isArray(item.variants),
     rawVariantsJson: safeStringify(rawVariants),
     placeholderVariantCount,
     rejectedVariantCount: rejectedVariants.length,
     rejectedVariants,
     parsedVariantArrayBeforeNormalization: rawVariants.map((variant) => summarizeVariantForDebug(variant)),
+    explodedVariantArrayBeforeNormalization: explodedRawVariants.map((variant) =>
+      summarizeVariantForDebug(variant)
+    ),
     parsedSizesBeforeNormalization: Array.isArray(item.sizes) ? item.sizes : item.sizes || [],
     parsedColors: variants.map((variant) => variant.color || variant.name).filter(Boolean),
     parsedSizes: sizes,
@@ -368,6 +566,7 @@ function normalizeGarmentLibraryItem(item = {}) {
     sizes,
     default_placements: normalizeStringList(item.default_placements),
     default_production_methods: normalizeStringList(item.default_production_methods),
+    linked_storefront_product_ids: normalizeStringList(item.linked_storefront_product_ids),
     notes: normalizeText(item.notes),
     active: item.active !== false,
     created_at: item.created_at || new Date().toISOString(),
@@ -489,6 +688,13 @@ async function fetchLibraryFromSupabase() {
       queryError,
     });
     return null;
+  }
+
+  if (error && isMissingLinkedStorefrontProductIdsColumnError(error)) {
+    ({ data, error } = await supabase
+      .from(GARMENT_LIBRARY_TABLE)
+      .select(LEGACY_GARMENT_LIBRARY_SELECT_FIELDS)
+      .order("title", { ascending: true }));
   }
 
   console.log("[garmentLibraryStore] raw Supabase garment query response", {
@@ -816,11 +1022,21 @@ export async function createGarmentLibraryItem(values) {
       payload: insertPayload,
       payloadJson: safeStringify(insertPayload),
     });
-    const { data, error } = await supabase
+    let query = supabase
       .from(GARMENT_LIBRARY_TABLE)
       .insert(insertPayload)
       .select(GARMENT_LIBRARY_SELECT_FIELDS)
       .single();
+    let { data, error } = await query;
+
+    if (error && isMissingLinkedStorefrontProductIdsColumnError(error)) {
+      query = supabase
+        .from(GARMENT_LIBRARY_TABLE)
+        .insert(omitLinkedStorefrontProductIds(insertPayload))
+        .select(LEGACY_GARMENT_LIBRARY_SELECT_FIELDS)
+        .single();
+      ({ data, error } = await query);
+    }
 
     if (error) throw error;
 
@@ -897,6 +1113,7 @@ export async function updateGarmentLibraryItem(itemId, updates) {
       sizes: updated.sizes,
       default_placements: updated.default_placements,
       default_production_methods: updated.default_production_methods,
+      linked_storefront_product_ids: updated.linked_storefront_product_ids,
       notes: updated.notes,
       active: updated.active,
     };
@@ -909,12 +1126,23 @@ export async function updateGarmentLibraryItem(itemId, updates) {
       payload: updatePayload,
       payloadJson: safeStringify(updatePayload),
     });
-    const { data, error } = await supabase
+    let query = supabase
       .from(GARMENT_LIBRARY_TABLE)
       .update(updatePayload)
       .eq("id", itemId)
       .select(GARMENT_LIBRARY_SELECT_FIELDS)
       .single();
+    let { data, error } = await query;
+
+    if (error && isMissingLinkedStorefrontProductIdsColumnError(error)) {
+      query = supabase
+        .from(GARMENT_LIBRARY_TABLE)
+        .update(omitLinkedStorefrontProductIds(updatePayload))
+        .eq("id", itemId)
+        .select(LEGACY_GARMENT_LIBRARY_SELECT_FIELDS)
+        .single();
+      ({ data, error } = await query);
+    }
 
     if (error) throw error;
 
@@ -951,4 +1179,69 @@ export async function deleteGarmentLibraryItem(itemId) {
   }
 
   saveSnapshot(getGarmentLibraryItems().filter((item) => item.id !== itemId));
+}
+
+export async function syncGarmentLibraryProductLinks(products = []) {
+  const garments = getGarmentLibraryItems();
+  if (!Array.isArray(garments) || garments.length === 0) {
+    return garments;
+  }
+
+  const usageMap = buildGarmentUsageMap(products, garments);
+  const changedGarments = [];
+  const nextGarments = garments.map((garment) => {
+    const linkedProductIds = usageMap.get(garment.id)?.linkedProductIds || [];
+    const currentLinkedProductIds = Array.isArray(garment?.linked_storefront_product_ids)
+      ? garment.linked_storefront_product_ids
+      : [];
+
+    if (areStringListsEqual(currentLinkedProductIds, linkedProductIds)) {
+      return garment;
+    }
+
+    const updatedGarment = {
+      ...garment,
+      linked_storefront_product_ids: linkedProductIds,
+      updated_at: new Date().toISOString(),
+    };
+    changedGarments.push(updatedGarment);
+    return updatedGarment;
+  });
+
+  if (!changedGarments.length) {
+    return garments;
+  }
+
+  saveSnapshot(nextGarments);
+
+  if (!isSupabaseConfigured || !supabase) {
+    return nextGarments;
+  }
+
+  try {
+    await Promise.all(
+      changedGarments.map(async (garment) => {
+        const { error } = await supabase
+          .from(GARMENT_LIBRARY_TABLE)
+          .update({
+            linked_storefront_product_ids: garment.linked_storefront_product_ids,
+          })
+          .eq("id", garment.id);
+
+        if (error && isMissingLinkedStorefrontProductIdsColumnError(error)) {
+          return;
+        }
+
+        if (error) throw error;
+      })
+    );
+  } catch (error) {
+    console.warn("[garmentLibraryStore] Unable to persist linked storefront product ids", {
+      changedGarmentCount: changedGarments.length,
+      message: error?.message,
+      error,
+    });
+  }
+
+  return nextGarments;
 }

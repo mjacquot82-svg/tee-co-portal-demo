@@ -881,6 +881,7 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
   sizeLookups,
   onSelect,
   onCreateStorefrontProduct,
+  onViewLinkedProducts,
   onRemove,
 }) {
   const [hasImageError, setHasImageError] = useState(false);
@@ -1068,9 +1069,22 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
             <span className="garment-library-metadata-chip">
               {sizeCount} size option{sizeCount === 1 ? "" : "s"}
             </span>
-            <span className="garment-library-metadata-chip">
-              {linkedProductCount} linked product{linkedProductCount === 1 ? "" : "s"}
-            </span>
+            {linkedProductCount > 0 ? (
+              <button
+                type="button"
+                className="garment-library-metadata-chip"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onViewLinkedProducts();
+                }}
+              >
+                {linkedProductCount} linked product{linkedProductCount === 1 ? "" : "s"}
+              </button>
+            ) : (
+              <span className="garment-library-metadata-chip">
+                {linkedProductCount} linked product{linkedProductCount === 1 ? "" : "s"}
+              </span>
+            )}
             <span className="garment-library-metadata-chip">
               Methods: {defaultsLabel}
             </span>
@@ -1834,6 +1848,9 @@ export default function GarmentLibrary() {
               onCreateStorefrontProduct={() => {
                 startCreatingStorefrontProduct(item);
               }}
+              onViewLinkedProducts={() => {
+                startViewingLinkedStorefrontProducts(item, usage);
+              }}
               onRemove={() => {
                 if (editingId === item.id) {
                   resetForm();
@@ -2330,6 +2347,20 @@ export default function GarmentLibrary() {
     navigate("/admin/products", {
       state: {
         createFromGarmentId: item.id,
+      },
+    });
+  }
+
+  function startViewingLinkedStorefrontProducts(item, usage) {
+    const linkedProductIds = Array.isArray(usage?.linkedProductIds)
+      ? usage.linkedProductIds.filter(Boolean)
+      : [];
+    if (!linkedProductIds.length) return;
+
+    navigate("/admin/products", {
+      state: {
+        focusProductIds: linkedProductIds,
+        focusGarmentTitle: item?.title || "",
       },
     });
   }

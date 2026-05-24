@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import "./Products.css";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import ProductImageUploader from "../components/ProductImageUploader";
@@ -100,6 +100,39 @@ function buildPlacementLibrary(products = [], libraryItems = []) {
   return Array.from(placementNames).sort((left, right) => left.localeCompare(right));
 }
 
+function buildFormFromGarmentDraft(item, sizeLookups, brands, categories, garmentModels) {
+  const garmentModel = findLookupById(garmentModels, item?.garment_model_lookup_id);
+  const brand = findLookupById(brands, item?.brand_lookup_id);
+  const category = findLookupById(categories, item?.category_lookup_id);
+  const defaultProductionMethods =
+    Array.isArray(item?.default_production_methods) && item.default_production_methods.length
+      ? item.default_production_methods
+      : ["Screen Print"];
+  const defaultPlacements = Array.isArray(item?.default_placements)
+    ? item.default_placements
+    : [];
+
+  return {
+    ...emptyProduct,
+    name: item?.title || "",
+    selectedGarmentLibraryId: item?.id || "",
+    garmentSearch: buildGarmentLibraryLabel(item, brands, categories, garmentModels),
+    image: item?.image || "",
+    visibleVariants: getVariantOptions(item).map((variant) => variant.name),
+    sizes: sortSizesByLookup(item?.sizes || [], sizeLookups),
+    placementsText: defaultPlacements.join(", "),
+    placementPriceMap: buildPlacementPriceMap(defaultPlacements, {}),
+    production_methods: defaultProductionMethods,
+    production_method_prices: buildMethodPriceMap(defaultProductionMethods, {}),
+    category: category?.name || "",
+    category_lookup_id: item?.category_lookup_id || "",
+    brand_lookup_id: item?.brand_lookup_id || "",
+    garment_model_lookup_id: item?.garment_model_lookup_id || "",
+    product_type: resolveStructuredProductType(garmentModel, "", item?.title || ""),
+    brand_model: buildLegacyBrandModelValue(brand, garmentModel, ""),
+  };
+}
+
 function buildFormFromProduct(product, libraryItems, sizeLookups, brands, categories, garmentModels) {
   const matchedItem = findLinkedGarmentLibraryItem(product, libraryItems);
   const placements = getProductPlacementConfig(product).map((placement) => placement.label);
@@ -147,6 +180,9 @@ export default function Products() {
   const pageRef = useRef(null);
   const editorRef = useRef(null);
   const nameInputRef = useRef(null);
+  const prefilledLocationKeyRef = useRef("");
+  const location = useLocation();
+  const navigate = useNavigate();
   const products = useStoredProducts();
   const libraryItems = useGarmentLibraryItems();
   const lookups = useCatalogLookups();
@@ -160,6 +196,8 @@ export default function Products() {
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [creationNotice, setCreationNotice] = useState("");
+  const [focusedProductIds, setFocusedProductIds] = useState([]);
 
   const editingProduct = editingProductId
     ? products.find((product) => product.id === editingProductId) || null
@@ -193,8 +231,15 @@ export default function Products() {
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
+    const focusedProductIdSet = new Set(
+      (Array.isArray(focusedProductIds) ? focusedProductIds : [])
+        .map((value) => normalizeText(value))
+        .filter(Boolean)
+    );
 
     return products.filter((product) => {
+      const matchesFocusedProducts =
+        focusedProductIdSet.size === 0 || focusedProductIdSet.has(normalizeText(product?.id));
       const matchesSearch =
         !normalizedSearch ||
         [product?.name, product?.brand_model, product?.category, product?.notes]
@@ -205,9 +250,9 @@ export default function Products() {
         (selectedStatus === "active"
           ? normalizeStatusValue(product?.status) === "active"
           : normalizeStatusValue(product?.status) !== "active");
-      return matchesSearch && matchesStatus;
+      return matchesFocusedProducts && matchesSearch && matchesStatus;
     });
-  }, [products, searchTerm, selectedStatus]);
+  }, [focusedProductIds, products, searchTerm, selectedStatus]);
 
   const activeCount = products.filter((product) => normalizeStatusValue(product?.status) === "active").length;
 
@@ -219,11 +264,15 @@ export default function Products() {
   function resetForm() {
     setForm(emptyProduct);
     setEditingProductId(null);
+    setCreationNotice("");
+    setFocusedProductIds([]);
   }
 
   function handleGarmentSelect(item) {
     const garmentModel = findLookupById(garmentModels, item.garment_model_lookup_id);
     const brand = findLookupById(brands, item.brand_lookup_id);
+    setCreationNotice("");
+    setFocusedProductIds([]);
 
     setForm((current) => ({
       ...current,
@@ -260,8 +309,83 @@ export default function Products() {
     }));
   }
 
+  useEffect(() => {
+    const createFromGarmentId = normalizeText(location.state?.createFromGarmentId);
+    if (!createFromGarmentId || !libraryItems.length) {
+      return;
+    }
+
+    const locationStateKey = `${location.key}:${createFromGarmentId}`;
+    if (prefilledLocationKeyRef.current === locationStateKey) {
+      return;
+    }
+
+    const matchedGarment = libraryItems.find((item) => item.id === createFromGarmentId);
+    if (!matchedGarment) {
+      return;
+    }
+
+    prefilledLocationKeyRef.current = locationStateKey;
+    setEditingProductId(null);
+    setSaveError("");
+    setSearchTerm("");
+    setSelectedStatus("all");
+    setCreationNotice(
+      `Storefront product draft loaded from ${matchedGarment.title}. Review pricing and publish when ready.`
+    );
+    setForm(
+      buildFormFromGarmentDraft(
+        matchedGarment,
+        sizes,
+        brands,
+        categories,
+        garmentModels
+      )
+    );
+    navigate(location.pathname, { replace: true, state: {} });
+
+    window.requestAnimationFrame(() => {
+      editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      nameInputRef.current?.focus();
+      nameInputRef.current?.select();
+    });
+  }, [
+    brands,
+    categories,
+    garmentModels,
+    libraryItems,
+    location.key,
+    location.pathname,
+    location.state,
+    navigate,
+    sizes,
+  ]);
+
+  useEffect(() => {
+    const focusProductIds = Array.isArray(location.state?.focusProductIds)
+      ? location.state.focusProductIds.map((value) => normalizeText(value)).filter(Boolean)
+      : [];
+    if (!focusProductIds.length) {
+      return;
+    }
+
+    const focusGarmentTitle = normalizeText(location.state?.focusGarmentTitle);
+    setEditingProductId(null);
+    setFocusedProductIds(focusProductIds);
+    setSaveError("");
+    setSearchTerm("");
+    setSelectedStatus("all");
+    setCreationNotice(
+      focusGarmentTitle
+        ? `Showing storefront products linked to ${focusGarmentTitle}.`
+        : "Showing linked storefront products."
+    );
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.pathname, location.state, navigate]);
+
   function handleGarmentSearchChange(event) {
     const nextValue = event.target.value;
+    setFocusedProductIds([]);
     setForm((current) => ({
       ...current,
       selectedGarmentLibraryId: "",
@@ -482,6 +606,7 @@ export default function Products() {
           </div>
 
           {saveError ? <div className="products-error-banner">{saveError}</div> : null}
+          {creationNotice ? <div className="products-callout">{creationNotice}</div> : null}
 
           <div className="products-editor-grid">
             <label style={labelStyle}>
@@ -792,6 +917,18 @@ export default function Products() {
             <span>
               Showing <strong>{filteredProducts.length}</strong> of <strong>{products.length}</strong> products
             </span>
+            {focusedProductIds.length ? (
+              <button
+                type="button"
+                className="products-clear-filters"
+                onClick={() => {
+                  setFocusedProductIds([]);
+                  setCreationNotice("");
+                }}
+              >
+                Show All Products
+              </button>
+            ) : null}
           </div>
 
           <div className="products-list-scroll">

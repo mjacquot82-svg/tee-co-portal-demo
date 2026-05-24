@@ -10,6 +10,61 @@ const EXPECTED_TEE_CO_COLUMNS = [
 ];
 
 const OPTIONAL_SIZE_COLUMNS = ["Sizes", "Size", "Available Sizes", "Size Run", "Available Sizes / Size Run"];
+const COLOR_SUFFIX_TOKENS = new Set([
+  "ash",
+  "azalea",
+  "beige",
+  "black",
+  "blue",
+  "blush",
+  "bronze",
+  "brown",
+  "camo",
+  "camouflage",
+  "cardinal",
+  "charcoal",
+  "chocolate",
+  "coral",
+  "cream",
+  "crimson",
+  "denim",
+  "gold",
+  "granite",
+  "gray",
+  "green",
+  "grey",
+  "heather",
+  "ice",
+  "jade",
+  "khaki",
+  "lavender",
+  "lime",
+  "maroon",
+  "mint",
+  "natural",
+  "navy",
+  "olive",
+  "orange",
+  "orchid",
+  "peach",
+  "pink",
+  "purple",
+  "red",
+  "royal",
+  "sand",
+  "sapphire",
+  "scarlet",
+  "silver",
+  "smoke",
+  "stone",
+  "tan",
+  "teal",
+  "turquoise",
+  "violet",
+  "white",
+  "wine",
+  "yellow",
+]);
 
 function safeStringify(value) {
   try {
@@ -25,6 +80,26 @@ function normalizeText(value) {
 
 function normalizeKey(value) {
   return normalizeGarmentTextKey(value);
+}
+
+function stripWrappingQuotes(value) {
+  const rawValue = String(value ?? "");
+  const trimmedValue = rawValue.trim();
+  if (
+    trimmedValue.length >= 2 &&
+    ((trimmedValue.startsWith('"') && trimmedValue.endsWith('"')) ||
+      (trimmedValue.startsWith("'") && trimmedValue.endsWith("'")))
+  ) {
+    return trimmedValue.slice(1, -1);
+  }
+  return rawValue;
+}
+
+function normalizeListBlock(value) {
+  return stripWrappingQuotes(String(value ?? ""))
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\u2028|\u2029/g, "\n");
 }
 
 function buildRowError(rowNumber, message) {
@@ -142,16 +217,112 @@ function validateHeader(headerRow) {
   };
 }
 
-function splitMultilineList(value) {
-  return String(value || "")
-    .split(/\r?\n+/)
+function splitFlattenedColorSequence(value) {
+  const normalizedValue = normalizeText(value);
+  if (!normalizedValue || /[\n,;|]/.test(String(value || ""))) {
+    return [];
+  }
+
+  const tokens = normalizedValue.split(/\s+/).filter(Boolean);
+  if (tokens.length < 4) {
+    return [];
+  }
+
+  const parsedItems = [];
+  let currentTokens = [];
+
+  tokens.forEach((token, index) => {
+    currentTokens.push(token);
+
+    const normalizedToken = token.toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const isKnownColorBoundary = COLOR_SUFFIX_TOKENS.has(normalizedToken);
+    const isLastToken = index === tokens.length - 1;
+
+    if (!isKnownColorBoundary && !isLastToken) {
+      return;
+    }
+
+    parsedItems.push(normalizeText(currentTokens.join(" ")));
+    currentTokens = [];
+  });
+
+  if (currentTokens.length) {
+    parsedItems.push(normalizeText(currentTokens.join(" ")));
+  }
+
+  const filteredItems = parsedItems.filter(Boolean);
+  if (
+    filteredItems.length < 2 ||
+    filteredItems.some((item) => item.split(/\s+/).filter(Boolean).length > 4)
+  ) {
+    return [];
+  }
+
+  return filteredItems;
+}
+
+function splitMultilineList(value, diagnosticsContext = {}) {
+  const rawBlock = String(value ?? "");
+  const normalizedBlock = normalizeListBlock(value);
+  const hadTrailingNewline = /\r?\n\s*$/.test(rawBlock);
+  const hadWrappingQuotes = rawBlock.trim() !== normalizedBlock.trim();
+  const directLineItems = normalizedBlock
+    .split(/\n+/)
     .map((item) => normalizeText(item))
     .filter(Boolean);
+  const delimiterFallbackItems = normalizedBlock
+    .split(/[;,|]+/)
+    .map((item) => normalizeText(item))
+    .filter(Boolean);
+  const flattenedSequenceItems = splitFlattenedColorSequence(normalizedBlock);
+
+  let items = directLineItems;
+  let splitStrategy = "linebreak";
+
+  if (items.length <= 1 && delimiterFallbackItems.length > 1) {
+    items = delimiterFallbackItems;
+    splitStrategy = "inline-delimiter";
+  }
+
+  if (items.length <= 1 && flattenedSequenceItems.length > 1) {
+    items = flattenedSequenceItems;
+    splitStrategy = "flattened-color-sequence";
+  }
+
+  console.info("[teeCoGarmentSpreadsheet] splitMultilineList diagnostics", {
+    ...diagnosticsContext,
+    rawBlockBeforeSplit: rawBlock,
+    rawBlockVisible: previewCsvWhitespace(rawBlock),
+    delimiterNormalization: {
+      hadWrappingQuotes,
+      containsLf: rawBlock.includes("\n"),
+      containsCr: rawBlock.includes("\r"),
+      containsCrLf: rawBlock.includes("\r\n"),
+      normalizedLineCount: normalizedBlock ? normalizedBlock.split("\n").length : 0,
+      normalizedBlockVisible: previewCsvWhitespace(normalizedBlock),
+    },
+    trailingNewlineHandling: {
+      hadTrailingNewline,
+      endsWithBlankLineAfterNormalization: /\n\s*$/.test(normalizedBlock),
+    },
+    quotedCsvEdgeCase: {
+      startsWithQuote: rawBlock.trim().startsWith('"') || rawBlock.trim().startsWith("'"),
+      endsWithQuote: rawBlock.trim().endsWith('"') || rawBlock.trim().endsWith("'"),
+    },
+    directLineItems,
+    delimiterFallbackItems,
+    flattenedSequenceItems,
+    splitStrategy,
+    parsedEntryCount: items.length,
+    finalParsedVariantEntry: items.length ? items[items.length - 1] : null,
+  });
+
+  return items;
 }
 
 function splitCommaList(value) {
-  return String(value || "")
-    .split(/[\r?\n,;|]+/)
+  return normalizeListBlock(value)
+    .split(/[\n,;|]+/)
     .map((item) => normalizeText(item))
     .filter(Boolean);
 }
@@ -305,8 +476,17 @@ export function parseTeeCoGarmentSpreadsheet(text) {
 
     const [category, brand, supplierSku, productName, variantName] = normalizedRow;
     const normalizedProductName = stripRepeatedBrandPrefix(productName, brand);
-    const parsedColors = Array.from(new Set(splitMultilineList(variantName)));
-    const parsedSizes = Array.from(new Set(splitCommaList(sizesCell)));
+    const parsedColors = Array.from(
+      new Set(
+        splitMultilineList(rawVariantCell, {
+          rowNumber,
+          supplierSku,
+          productName,
+          normalizedVariantCell: variantName,
+        })
+      )
+    );
+    const parsedSizes = Array.from(new Set(splitCommaList(rawSizesCell)));
     const csvContextSnippet = buildCsvContextSnippet(normalizedText, [
       supplierSku,
       productName,
@@ -344,6 +524,7 @@ export function parseTeeCoGarmentSpreadsheet(text) {
       normalizedRow,
       normalizedVariantCell: variantName,
       normalizedSizesCell: sizesCell,
+      finalParsedVariantEntry: parsedColors.length ? parsedColors[parsedColors.length - 1] : null,
       rawCsvContextAnchor: csvContextSnippet.anchor,
       rawCsvContextOffsets: {
         start: csvContextSnippet.start,
@@ -449,6 +630,7 @@ export function parseTeeCoGarmentSpreadsheet(text) {
       normalizedSizesCell: sizesCell,
       parsedColors,
       parsedSizes,
+      finalParsedVariantEntry: parsedColors.length ? parsedColors[parsedColors.length - 1] : null,
       groupedVariantSourceMode: parsedColors.length > 1 ? "single_row_multi_color_cell" : "one_color_per_row",
       multilineVariantCellSurvivedParsing:
         typeof rawVariantCell === "string" && rawVariantCell.includes("\n") && parsedColors.length > 1,
