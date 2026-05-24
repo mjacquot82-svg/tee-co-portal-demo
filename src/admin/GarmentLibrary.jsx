@@ -995,6 +995,9 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
   isSelected,
   isCreatingStorefrontProduct,
   subtitle,
+  brandName,
+  categoryName,
+  modelLabel,
   usage,
   sizeLookups,
   onSelect,
@@ -1052,6 +1055,12 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
     const cardKey = readCardField("item.id/item.title", () => `${safeItem.id || safeItem.title}-${imageSrc}`);
     const altText = readCardField("item.title", () => safeItem.title || "Untitled Garment");
     const renderedTitle = readCardField("item.title", () => safeItem.title || "Untitled Garment");
+    const renderedBrandName = readCardField("brandName", () => normalizeText(brandName) || "No brand");
+    const renderedCategoryName = readCardField(
+      "categoryName",
+      () => normalizeText(categoryName) || "No category"
+    );
+    const renderedModelLabel = readCardField("modelLabel", () => normalizeText(modelLabel));
     const variants = readCardField("item.variants", () => {
       if (safeItem.variants == null) return [];
       if (!Array.isArray(safeItem.variants)) {
@@ -1132,42 +1141,46 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
         </div>
 
         <div className="products-card-body">
-          <div className="products-card-topline">
+          <div className="garment-library-card-header">
             <div className="garment-library-card-title-block">
               <div className="products-card-title-row">
                 <h3 style={{ margin: 0 }}>{renderedTitle}</h3>
                 {isSelected ? <span className="products-card-editing-pill">Selected</span> : null}
               </div>
-              <p className="products-card-subtitle">{subtitle}</p>
-            </div>
-
-            <div className="garment-library-card-top-metrics">
-              <span className="garment-library-metric-pill">{summary.totalColors} colors</span>
-              <span className="garment-library-metric-pill">{summary.totalSizes} sizes</span>
-              <span className="garment-library-metric-pill">{summary.activeVariants} active variants</span>
+              <div className="garment-library-card-primary-meta">
+                <span className="garment-library-card-primary-pill">{renderedCategoryName}</span>
+                <span className="garment-library-card-primary-pill">{renderedBrandName}</span>
+                {renderedModelLabel ? (
+                  <span className="garment-library-card-primary-pill garment-library-card-primary-pill-subtle">
+                    {renderedModelLabel}
+                  </span>
+                ) : null}
+              </div>
             </div>
           </div>
 
-          <div className="products-card-detail-grid garment-library-card-detail-grid">
-            <div className="products-card-detail">
-              <span>Colors</span>
-              <strong>{summary.totalColors}</strong>
-            </div>
-            <div className="products-card-detail">
-              <span>Sizes</span>
-              <strong>{summary.totalSizes}</strong>
-            </div>
-            <div className="products-card-detail">
-              <span>Variants</span>
-              <strong>
-                {summary.activeVariants} active
-                {summary.inactiveVariants ? ` • ${summary.inactiveVariants} inactive` : ""}
-              </strong>
-            </div>
-            <div className="products-card-detail">
-              <span>Supplier SKUs</span>
-              <strong>{summary.supplierSkuCount || 0}</strong>
-            </div>
+          <div className="garment-library-card-top-metrics">
+            <span className="garment-library-metric-pill">{formatCountLabel(summary.totalColors, "color")}</span>
+            <span className="garment-library-metric-pill">{formatCountLabel(summary.totalSizes, "size")}</span>
+            <span className="garment-library-metric-pill">
+              {formatCountLabel(summary.activeVariants, "variant")}
+            </span>
+            {linkedProductCount > 0 ? (
+              <button
+                type="button"
+                className="garment-library-metric-pill garment-library-metric-pill-action"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onViewLinkedProducts();
+                }}
+              >
+                {formatCountLabel(linkedProductCount, "storefront use", "storefront uses")}
+              </button>
+            ) : (
+              <span className="garment-library-metric-pill garment-library-metric-pill-muted">
+                No storefront use
+              </span>
+            )}
           </div>
 
           <div className="garment-library-card-preview-grid">
@@ -1186,36 +1199,33 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
             </div>
           </div>
 
-          <div className="garment-library-card-metadata">
-            <span className="garment-library-metadata-chip">
-              {variantCount} supplier variant{variantCount === 1 ? "" : "s"}
-            </span>
-            <span className="garment-library-metadata-chip">
-              {sizeCount} size option{sizeCount === 1 ? "" : "s"}
-            </span>
-            {linkedProductCount > 0 ? (
-              <button
-                type="button"
-                className="garment-library-metadata-chip"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onViewLinkedProducts();
-                }}
-              >
-                {linkedProductCount} linked product{linkedProductCount === 1 ? "" : "s"}
-              </button>
-            ) : (
-              <span className="garment-library-metadata-chip">
-                {linkedProductCount} linked product{linkedProductCount === 1 ? "" : "s"}
+          <details
+            className="garment-library-card-details"
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <summary className="garment-library-card-details-summary">
+              <span>More details</span>
+              <span className="garment-library-card-details-summary-meta">
+                {summary.supplierSkuCount || 0} SKUs
+                {summary.inactiveVariants ? ` • ${summary.inactiveVariants} inactive` : ""}
               </span>
-            )}
-            <span className="garment-library-metadata-chip">
-              Methods: {defaultsLabel}
-            </span>
-            <span className="garment-library-metadata-chip">
-              Placements: {summary.defaultPlacements.length ? summary.defaultPlacements.join(", ") : "None"}
-            </span>
-          </div>
+            </summary>
+            <div className="garment-library-card-metadata">
+              <span className="garment-library-metadata-chip">
+                {formatCountLabel(variantCount, "supplier variant")}
+              </span>
+              <span className="garment-library-metadata-chip">
+                {formatCountLabel(sizeCount, "size option")}
+              </span>
+              <span className="garment-library-metadata-chip">Methods: {defaultsLabel}</span>
+              <span className="garment-library-metadata-chip">
+                Placements: {summary.defaultPlacements.length ? summary.defaultPlacements.join(", ") : "None"}
+              </span>
+              {subtitle ? <span className="garment-library-metadata-chip">{subtitle}</span> : null}
+            </div>
+          </details>
         </div>
 
         <div className="products-card-actions">
@@ -1956,7 +1966,8 @@ export default function GarmentLibrary() {
         activeWorkspace,
       });
 
-      const mappedCards = garmentEntriesForRender.map(({ item, subtitle, usage }, index) => {
+      const mappedCards = garmentEntriesForRender.map(
+        ({ item, subtitle, usage, brandName, categoryName, modelLabel }, index) => {
         try {
           console.log("[GarmentLibrary] mapping garment card node", {
             index,
@@ -1969,6 +1980,9 @@ export default function GarmentLibrary() {
               item={item}
               isSelected={editingId === item.id && activeWorkspace === "edit"}
               subtitle={subtitle}
+              brandName={brandName}
+              categoryName={categoryName}
+              modelLabel={modelLabel}
               usage={usage}
               sizeLookups={sizes}
               isCreatingStorefrontProduct={isCreatingStorefrontProduct}
@@ -1992,7 +2006,7 @@ export default function GarmentLibrary() {
               }}
             />
           );
-        } catch (error) {
+          } catch (error) {
           renderMetrics.failedCount += 1;
           console.error("[GarmentLibrary] garment card render failure", {
             garment: item,
@@ -2025,8 +2039,9 @@ export default function GarmentLibrary() {
               </div>
             </article>
           );
+          }
         }
-      });
+      );
 
       renderMetrics.nullCount = mappedCards.filter((card) => card == null).length;
       renderMetrics.renderedCount = mappedCards.length - renderMetrics.nullCount;
@@ -3549,7 +3564,7 @@ export default function GarmentLibrary() {
           </div>
 
           <div className="products-list-scroll garment-library-list-scroll">
-            <div className="products-list-grid">
+            <div className="products-list-grid garment-library-grid">
               {(() => {
                 try {
                   console.log("[GarmentLibrary] evaluating garment list branch", {
