@@ -39,6 +39,10 @@
   min-width: 0;
 }
 
+.products-workspace-catalog-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .products-editor {
   background: #ffffff;
   border-radius: 22px;
@@ -48,6 +52,24 @@
   gap: 16px;
   scroll-margin-top: 18px;
   min-width: 0;
+}
+
+.products-editor-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: flex-end;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.24);
+  backdrop-filter: blur(10px);
+}
+
+.products-editor-sheet {
+  width: min(760px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
 }
 
 .products-editor.is-editing {
@@ -81,6 +103,12 @@
 .products-editor-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.products-editor-glance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -661,6 +689,12 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: end;
+}
+
+.products-catalog-action-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .products-filter-panel {
@@ -1951,6 +1985,98 @@
   flex-wrap: wrap;
 }
 
+.garment-library-detail-hero {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.72fr) minmax(0, 1.28fr);
+  gap: 18px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+}
+
+.garment-library-detail-media {
+  min-width: 0;
+}
+
+.garment-library-detail-image {
+  width: 100%;
+  height: 100%;
+  min-height: 260px;
+  max-height: 360px;
+  object-fit: cover;
+  border-radius: 18px;
+  display: block;
+}
+
+.garment-library-detail-placeholder {
+  border: 1px solid #dbe4ee;
+}
+
+.garment-library-detail-content,
+.garment-library-template-editing-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.garment-library-detail-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.garment-library-detail-title {
+  margin: 6px 0 0;
+  color: #0f172a;
+}
+
+.garment-library-detail-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #ecfeff;
+  color: #155e75;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.garment-library-detail-pill-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.garment-library-detail-glance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.garment-library-detail-summary-card {
+  border: 1px solid #dbe4ee;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.garment-library-detail-summary-card p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.55;
+}
+
+.garment-library-detail-action-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.garment-library-template-editing-shell[open] {
+  background: #f8fafc;
+}
+
 @media (max-width: 1280px) {
   .products-workspace {
     grid-template-columns: minmax(0, 1fr) minmax(340px, 0.82fr);
@@ -1980,6 +2106,10 @@
     padding: 18px;
   }
 
+  .products-editor-modal {
+    padding: 12px;
+  }
+
   .products-workspace {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -2006,11 +2136,14 @@
 
 @media (max-width: 720px) {
   .products-editor-grid,
+  .products-editor-glance-grid,
   .products-library-grid,
   .products-pricing-grid,
   .products-config-grid,
   .products-completion-row,
   .products-catalog-search-row,
+  .garment-library-detail-hero,
+  .garment-library-detail-glance-grid,
   .garment-library-completion-grid,
   .garment-library-completion-actions,
   .products-imported-suggestion-grid,
@@ -2042,7 +2175,10 @@
   .products-page-hero,
   .products-page-hero-actions,
   .products-editor-topbar,
-  .products-editor-utility-row {
+  .products-editor-utility-row,
+  .products-catalog-action-row,
+  .garment-library-detail-title-row,
+  .garment-library-detail-action-row {
     flex-direction: column;
     align-items: stretch;
   }
@@ -2147,5 +2283,16 @@
     max-width: none;
     height: 100%;
     border-radius: 0;
+  }
+
+  .products-editor-modal {
+    padding: 0;
+    justify-content: stretch;
+  }
+
+  .products-editor-sheet {
+    width: 100%;
+    border-radius: 0;
+    max-height: 100%;
   }
 }

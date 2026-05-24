@@ -2391,6 +2391,18 @@ export default function GarmentLibrary() {
     sizes,
   ]);
   const selectedGarmentLabel = getGarmentModeLabel(form.title || selectedGarment?.title);
+  const selectedGarmentBrand = findLookupById(brands, form.brand_lookup_id || selectedGarment?.brand_lookup_id);
+  const selectedGarmentCategory = findLookupById(
+    categories,
+    form.category_lookup_id || selectedGarment?.category_lookup_id
+  );
+  const selectedGarmentModel = findLookupById(
+    garmentModels,
+    form.garment_model_lookup_id || selectedGarment?.garment_model_lookup_id
+  );
+  const selectedGarmentUsage =
+    (selectedGarment?.id && garmentUsageMap.get(selectedGarment.id)) || EMPTY_GARMENT_USAGE;
+  const selectedGarmentSummary = summarizeGarmentCardData(selectedGarment || form, sizes);
   const placementSuggestionContext = useMemo(() => {
     const selectedCategory = categoryMap.get(form.category_lookup_id);
 
@@ -3999,11 +4011,11 @@ export default function GarmentLibrary() {
               <form onSubmit={handleSubmit} className={`products-editor garment-library-panel-card ${editingId ? "is-editing" : ""}`}>
                 <div className="garment-library-panel-header">
                   <div>
-                    <p className="products-eyebrow">{isEditMode ? "Edit Garment Template" : "Garment Template Setup"}</p>
+                    <p className="products-eyebrow">{isEditMode ? "Garment Template Detail" : "Garment Template Setup"}</p>
                     <h2 style={{ margin: "6px 0 0" }}>{isEditMode ? selectedGarmentLabel : "New Garment Template"}</h2>
                     <p className="garment-library-panel-copy">
                       {isEditMode
-                        ? "Update this reusable garment template here. Saving keeps the supplier template up to date and does not publish a storefront product."
+                        ? "Browse this garment like reusable inventory first. Template editing stays available below when you need to maintain supplier data."
                         : "Build the garment template manually or start from an imported supplier model, then save it to the library for reuse."}
                     </p>
                   </div>
@@ -4013,6 +4025,117 @@ export default function GarmentLibrary() {
                 </div>
 
                 {saveError ? <div className="products-error-banner">{saveError}</div> : null}
+
+                {isEditMode ? (
+                  <section className="products-editor-section garment-library-detail-hero">
+                    <div className="garment-library-detail-media">
+                      {selectedGarment?.image ? (
+                        <img
+                          src={selectedGarment.image}
+                          alt={selectedGarment.title || "Garment template"}
+                          className="garment-library-detail-image"
+                        />
+                      ) : (
+                        <NoImagePlaceholder className="garment-library-detail-image garment-library-detail-placeholder" />
+                      )}
+                    </div>
+
+                    <div className="garment-library-detail-content">
+                      <div className="garment-library-detail-title-row">
+                        <div>
+                          <span className="products-summary-label">Reusable Garment Template</span>
+                          <h2 className="garment-library-detail-title">{selectedGarmentLabel}</h2>
+                        </div>
+                        <span className="garment-library-detail-status">
+                          {selectedGarment?.active === false ? "Inactive" : "Active"}
+                        </span>
+                      </div>
+
+                      <div className="garment-library-detail-pill-row">
+                        <span className="garment-library-card-primary-pill">
+                          {selectedGarmentCategory?.name || "No category"}
+                        </span>
+                        <span className="garment-library-card-primary-pill">
+                          {selectedGarmentBrand?.name || "No brand"}
+                        </span>
+                        {selectedGarmentModel?.display_name || selectedGarmentModel?.model_code ? (
+                          <span className="garment-library-card-primary-pill garment-library-card-primary-pill-subtle">
+                            {selectedGarmentModel?.display_name || selectedGarmentModel?.model_code}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="garment-library-detail-glance-grid">
+                        <div className="products-summary-card">
+                          <span className="products-summary-label">Colors</span>
+                          <strong>{selectedGarmentSummary.totalColors || 0}</strong>
+                          <div className="products-summary-details">
+                            {renderPreviewChips(selectedGarmentSummary.colorPreview, "No colors")}
+                          </div>
+                        </div>
+
+                        <div className="products-summary-card">
+                          <span className="products-summary-label">Sizes</span>
+                          <strong>{selectedGarmentSummary.totalSizes || 0}</strong>
+                          <div className="products-summary-details">
+                            {renderPreviewChips(selectedGarmentSummary.sizePreview, "No sizes")}
+                          </div>
+                        </div>
+
+                        <div className="products-summary-card">
+                          <span className="products-summary-label">Storefront Usage</span>
+                          <strong>{selectedGarmentUsage.linkedProductCount || 0}</strong>
+                          <div className="products-summary-details">
+                            <span>
+                              {(selectedGarmentUsage.linkedProductCount || 0) === 1
+                                ? "linked product"
+                                : "linked products"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="garment-library-detail-summary-card">
+                        <span className="products-summary-label">Quick Summary</span>
+                        <p>
+                          This template exposes {formatCountLabel(selectedGarmentSummary.activeVariants || 0, "active variant")} across{" "}
+                          {formatCountLabel(selectedGarmentSummary.totalColors || 0, "color")} and{" "}
+                          {formatCountLabel(selectedGarmentSummary.totalSizes || 0, "size")}. Use it to spin up storefront products
+                          without reopening full supplier setup.
+                        </p>
+                      </div>
+
+                      <div className="garment-library-detail-action-row">
+                        <button
+                          type="button"
+                          className="products-primary-button products-primary-button-large"
+                          onClick={() => startCreatingStorefrontProduct(editingGarment)}
+                          disabled={isCreatingStorefrontProduct}
+                        >
+                          {isCreatingStorefrontProduct ? "Creating..." : "Create Storefront Product"}
+                        </button>
+                        <button type="submit" disabled={isSaving} className="products-secondary-button">
+                          {isSaving ? "Saving..." : "Save Template Changes"}
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+                ) : null}
+
+                <details className="products-editor-section garment-library-template-editing-shell" open={!isEditMode}>
+                  <summary className="products-advanced-summary">
+                    <div>
+                      <p className="products-section-step">{isEditMode ? "Secondary" : "Template Setup"}</p>
+                      <strong>{isEditMode ? "Template Editing" : "Build Template Details"}</strong>
+                      <span>
+                        {isEditMode
+                          ? "Expand only when you need to adjust garment template data, imported model mapping, or supplier-facing defaults."
+                          : "Fill in the reusable garment template details here."}
+                      </span>
+                    </div>
+                  </summary>
+
+                  <div className="garment-library-template-editing-stack">
                 <section className="products-editor-section">
                   <div className="products-section-header">
                     <div>
@@ -4511,6 +4634,8 @@ export default function GarmentLibrary() {
               <input type="checkbox" name="active" checked={form.active} onChange={updateField} />
             </label>
           </section>
+                  </div>
+                </details>
 
           {isEditMode && editingGarment ? (
             <section className="products-editor-section garment-library-completion-card">
