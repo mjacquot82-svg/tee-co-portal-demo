@@ -790,11 +790,18 @@ function buildBrandSelectOptionsFromVisibleGarments(
   visibleGarmentEntries = [],
   garmentBrowseItems = [],
   brands = [],
-  selectedBrandId = ""
+  selectedBrandId = "",
+  selectedCategoryId = ""
 ) {
   const optionsByBrandName = new Map();
+  const normalizedSelectedCategoryId = normalizeText(selectedCategoryId);
+  const sourceEntries = normalizedSelectedCategoryId
+    ? garmentBrowseItems.filter(
+        (entry) => normalizeText(entry?.item?.category_lookup_id) === normalizedSelectedCategoryId
+      )
+    : visibleGarmentEntries;
 
-  visibleGarmentEntries.forEach((entry) => {
+  sourceEntries.forEach((entry) => {
     if (entry?.item?.active === false) return;
 
     const label = normalizeText(entry?.brandName);
@@ -1777,19 +1784,21 @@ export default function GarmentLibrary() {
           garmentEntriesForRender,
           garmentBrowseItems,
           brands,
-          form.brand_lookup_id
+          form.brand_lookup_id,
+          form.category_lookup_id
         );
       } catch (error) {
         logGarmentDerivationError("brand select options useMemo", error, {
           garmentEntriesForRender,
           garmentBrowseItems,
           brands,
+          selectedCategoryId: form.category_lookup_id,
           selectedBrandId: form.brand_lookup_id,
         });
         return EMPTY_LIST;
       }
     },
-    [brands, form.brand_lookup_id, garmentBrowseItems, garmentEntriesForRender]
+    [brands, form.brand_lookup_id, form.category_lookup_id, garmentBrowseItems, garmentEntriesForRender]
   );
   useEffect(() => {
     try {
@@ -2688,14 +2697,24 @@ export default function GarmentLibrary() {
     const { name, value, type, checked } = event.target;
     setForm((current) => {
       const nextValue = type === "checkbox" ? checked : value;
-      return {
+      const nextForm = {
         ...current,
         [name]: nextValue,
       };
+
+      if (name === "category_lookup_id") {
+        nextForm.brand_lookup_id = "";
+      }
+
+      return nextForm;
     });
 
     if (name === "brand_lookup_id") {
       setModelDraft((current) => ({ ...current, brand_id: value }));
+    }
+
+    if (name === "category_lookup_id") {
+      setModelDraft((current) => ({ ...current, brand_id: "" }));
     }
 
     if (

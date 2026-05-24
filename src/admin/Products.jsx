@@ -52,7 +52,13 @@ const COMMON_PLACEMENT_OPTIONS = [
   "Yoke",
 ];
 
+const PRODUCT_MODES = {
+  APPAREL: "apparel",
+  MANUAL: "manual",
+};
+
 const emptyProduct = {
+  productMode: PRODUCT_MODES.APPAREL,
   name: "",
   selectedGarmentLibraryId: "",
   garmentSearch: "",
@@ -68,6 +74,12 @@ const emptyProduct = {
   production_method_prices: {},
   cost_price: "",
   markup_percentage: "",
+  category: "",
+  category_lookup_id: "",
+  brand_lookup_id: "",
+  garment_model_lookup_id: "",
+  product_type: "",
+  brand_model: "",
 };
 
 function isOneSizeOnly(values = []) {
@@ -102,6 +114,56 @@ function buildPlacementLibrary(products = [], libraryItems = []) {
   return Array.from(placementNames).sort((left, right) => left.localeCompare(right));
 }
 
+function resolveProductMode(product = {}, matchedItem = null) {
+  return matchedItem || product?.garment_library_item_id
+    ? PRODUCT_MODES.APPAREL
+    : PRODUCT_MODES.MANUAL;
+}
+
+function buildCategoryScopedBrandOptions(
+  libraryItems = [],
+  brands = [],
+  selectedCategoryId = "",
+  selectedBrandId = ""
+) {
+  const normalizedCategoryId = normalizeText(selectedCategoryId);
+  const scopedItems = normalizedCategoryId
+    ? libraryItems.filter(
+        (item) =>
+          item?.active !== false &&
+          normalizeText(item?.category_lookup_id) === normalizedCategoryId
+      )
+    : libraryItems.filter((item) => item?.active !== false);
+  const optionsById = new Map();
+
+  scopedItems.forEach((item) => {
+    const brandId = normalizeText(item?.brand_lookup_id);
+    if (!brandId || optionsById.has(brandId)) return;
+
+    const brand = brands.find((entry) => entry.id === brandId);
+    const label = normalizeText(brand?.name);
+    if (!label) return;
+
+    optionsById.set(brandId, {
+      value: brandId,
+      label,
+    });
+  });
+
+  if (selectedBrandId && !optionsById.has(selectedBrandId)) {
+    const selectedBrand = brands.find((brand) => brand.id === selectedBrandId);
+    const selectedLabel = normalizeText(selectedBrand?.name);
+    if (selectedLabel) {
+      optionsById.set(selectedBrandId, {
+        value: selectedBrandId,
+        label: selectedLabel,
+      });
+    }
+  }
+
+  return Array.from(optionsById.values()).sort((left, right) => left.label.localeCompare(right.label));
+}
+
 function buildFormFromGarmentDraft(item, sizeLookups, brands, categories, garmentModels) {
   const garmentModel = findLookupById(garmentModels, item?.garment_model_lookup_id);
   const brand = findLookupById(brands, item?.brand_lookup_id);
@@ -116,6 +178,7 @@ function buildFormFromGarmentDraft(item, sizeLookups, brands, categories, garmen
 
   return {
     ...emptyProduct,
+    productMode: PRODUCT_MODES.APPAREL,
     name: item?.title || "",
     selectedGarmentLibraryId: item?.id || "",
     garmentSearch: buildGarmentLibraryLabel(item, brands, categories, garmentModels),
@@ -148,6 +211,7 @@ function buildFormFromProduct(product, libraryItems, sizeLookups, brands, catego
   return {
     ...emptyProduct,
     ...product,
+    productMode: resolveProductMode(product, matchedItem),
     selectedGarmentLibraryId: matchedItem?.id || "",
     garmentSearch: matchedItem
       ? buildGarmentLibraryLabel(matchedItem, brands, categories, garmentModels)
@@ -238,6 +302,17 @@ export default function Products() {
   );
   const garmentBrand = findLookupById(brands, selectedGarmentItem?.brand_lookup_id);
   const garmentCategory = findLookupById(categories, selectedGarmentItem?.category_lookup_id);
+  const isManualProductMode = form.productMode === PRODUCT_MODES.MANUAL;
+  const brandSelectOptions = useMemo(
+    () =>
+      buildCategoryScopedBrandOptions(
+        libraryItems,
+        brands,
+        form.category_lookup_id,
+        form.brand_lookup_id
+      ),
+    [brands, form.brand_lookup_id, form.category_lookup_id, libraryItems]
+  );
   const selectedGarmentVariantCount = garmentVariants.length;
   const showVariantSelection = Boolean(selectedGarmentItem) && selectedGarmentVariantCount > 0;
   const showSizeSelection = Boolean(selectedGarmentItem) && garmentSizeOptions.length > 0;
@@ -383,7 +458,34 @@ export default function Products() {
 
   function updateField(event) {
     const { name, value } = event.target;
-    setForm((current) => ({ ...current, [name]: value }));
+    setForm((current) => {
+      const nextForm = { ...current, [name]: value };
+
+      if (name === "category_lookup_id") {
+        const selectedCategory = findLookupById(categories, value);
+        const nextBrandOptions = buildCategoryScopedBrandOptions(
+          libraryItems,
+          brands,
+          value,
+          current.brand_lookup_id
+        );
+        const brandStillValid = nextBrandOptions.some(
+          (option) => option.value === current.brand_lookup_id
+        );
+        nextForm.category = selectedCategory?.name || "";
+        if (!brandStillValid) {
+          nextForm.brand_lookup_id = "";
+          nextForm.brand_model = "";
+        }
+      }
+
+      if (name === "brand_lookup_id") {
+        const selectedBrand = findLookupById(brands, value);
+        nextForm.brand_model = selectedBrand?.name || "";
+      }
+
+      return nextForm;
+    });
   }
 
   function resetForm() {
@@ -391,6 +493,36 @@ export default function Products() {
     setEditingProductId(null);
     setCreationNotice("");
     setHighlightedProductIds([]);
+  }
+
+  function handleProductModeChange(productMode) {
+    setSaveError("");
+    setCreationNotice("");
+    setHighlightedProductIds([]);
+    setForm((current) => {
+      if (productMode === current.productMode) {
+        return current;
+      }
+
+      if (productMode === PRODUCT_MODES.MANUAL) {
+        return {
+          ...current,
+          productMode,
+          selectedGarmentLibraryId: "",
+          garmentSearch: "",
+          visibleVariants: [],
+          sizes: [],
+          garment_model_lookup_id: "",
+          product_type: current.product_type || "Manual Product",
+        };
+      }
+
+      return {
+        ...current,
+        productMode,
+        product_type: current.product_type === "Manual Product" ? "" : current.product_type,
+      };
+    });
   }
 
   function handleGarmentSelect(item) {
@@ -538,7 +670,7 @@ export default function Products() {
 
   function handleGarmentSearchChange(event) {
     const nextValue = event.target.value;
-    setFocusedProductIds([]);
+    setHighlightedProductIds([]);
     setForm((current) => ({
       ...current,
       selectedGarmentLibraryId: "",
@@ -647,7 +779,7 @@ export default function Products() {
     event.preventDefault();
     setSaveError("");
 
-    if (!editingProductId && !selectedGarmentItem) {
+    if (!editingProductId && !isManualProductMode && !selectedGarmentItem) {
       setSaveError("Choose a garment from the Garment Library before creating a storefront product.");
       return;
     }
@@ -675,22 +807,33 @@ export default function Products() {
     );
     const flatPrice = Number(form.flat_price || 0);
     const selectedSizes =
-      selectedGarmentItem && isOneSizeOnly(selectedGarmentItem.sizes || [])
+      !isManualProductMode && selectedGarmentItem && isOneSizeOnly(selectedGarmentItem.sizes || [])
         ? sortSizesByLookup(selectedGarmentItem.sizes || [], sizes)
-        : sortSizesByLookup(form.sizes, sizes);
+        : isManualProductMode
+          ? []
+          : sortSizesByLookup(form.sizes, sizes);
+    const resolvedProductType = isManualProductMode
+      ? form.product_type || "Manual Product"
+      : resolveStructuredProductType(garmentModel, form.product_type, form.name);
 
     const productPayload = {
       name: normalizeText(form.name),
-      garment_library_item_id: selectedGarmentItem?.id || form.selectedGarmentLibraryId || null,
+      garment_library_item_id: isManualProductMode
+        ? null
+        : selectedGarmentItem?.id || form.selectedGarmentLibraryId || null,
       category: category?.name || form.category || "Catalog",
       category_lookup_id: category?.id || form.category_lookup_id || null,
-      product_type: resolveStructuredProductType(garmentModel, form.product_type, form.name),
-      brand_model: buildLegacyBrandModelValue(brand, garmentModel, form.brand_model),
+      product_type: resolvedProductType,
+      brand_model: isManualProductMode
+        ? buildLegacyBrandModelValue(brand, null, form.brand_model)
+        : buildLegacyBrandModelValue(brand, garmentModel, form.brand_model),
       brand_lookup_id: brand?.id || form.brand_lookup_id || null,
-      garment_model_lookup_id: garmentModel?.id || form.garment_model_lookup_id || null,
+      garment_model_lookup_id: isManualProductMode
+        ? null
+        : garmentModel?.id || form.garment_model_lookup_id || null,
       image: form.image,
       status: form.status,
-      colors: uniqueList(form.visibleVariants),
+      colors: isManualProductMode ? [] : uniqueList(form.visibleVariants),
       sizes: selectedSizes,
       placements,
       placement_prices: placementPrices,
@@ -774,12 +917,12 @@ export default function Products() {
             <p style={{ margin: 0, color: "#64748b" }}>
               {editingProduct
                 ? "Update the customer-facing product details here."
-                : "Configure a storefront product from a garment template, confirm customer pricing, and publish it into the catalog."}
+                : "Choose whether this storefront item is apparel tied to a garment template or a standalone manual catalog product."}
             </p>
             <div className="products-callout">
               Garment templates live in the <Link to="/admin/garments">Garment Library</Link>. The normal workflow is
-              template to storefront product to catalog card. This workspace is for storefront configuration and
-              catalog maintenance.
+              template to storefront product to catalog card, but manual catalog products can also be created here
+              without garment linkage.
             </div>
           </div>
 
@@ -792,7 +935,42 @@ export default function Products() {
                 <p className="products-section-step">Step 1</p>
                 <h2>Customer Product Basics</h2>
               </div>
-              <p>Name the product and set the base customer-facing sale price before publishing it.</p>
+              <p>Choose the product mode, then set the customer-facing details needed to publish it.</p>
+            </div>
+
+            <div className="garment-model-workflow-panel">
+              <div className="garment-model-workflow-header">
+                <strong>Product Type</strong>
+                <p>Apparel products stay linked to a garment template. Manual products stand alone.</p>
+              </div>
+              <div className="garment-model-workflow-options">
+                <button
+                  type="button"
+                  className={`garment-model-workflow-option ${
+                    !isManualProductMode ? "is-active" : ""
+                  }`}
+                  onClick={() => handleProductModeChange(PRODUCT_MODES.APPAREL)}
+                >
+                  <span className="garment-model-workflow-radio" aria-hidden="true" />
+                  <div>
+                    <strong>Apparel Product</strong>
+                    <p>Uses a garment template, imported variants, sizes, and production defaults.</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  className={`garment-model-workflow-option ${
+                    isManualProductMode ? "is-active" : ""
+                  }`}
+                  onClick={() => handleProductModeChange(PRODUCT_MODES.MANUAL)}
+                >
+                  <span className="garment-model-workflow-radio" aria-hidden="true" />
+                  <div>
+                    <strong>Manual Product</strong>
+                    <p>Creates a standalone storefront item for mugs, tumblers, stickers, bundles, and more.</p>
+                  </div>
+                </button>
+              </div>
             </div>
 
             <div className="products-pricing-grid">
@@ -824,8 +1002,47 @@ export default function Products() {
               />
             </label>
             </div>
+
+            {isManualProductMode ? (
+              <div className="products-editor-grid">
+                <label style={labelStyle}>
+                  Category
+                  <select
+                    name="category_lookup_id"
+                    value={form.category_lookup_id}
+                    onChange={updateField}
+                    style={fieldStyle}
+                  >
+                    <option value="">Catalog</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label style={labelStyle}>
+                  Brand
+                  <select
+                    name="brand_lookup_id"
+                    value={form.brand_lookup_id}
+                    onChange={updateField}
+                    style={fieldStyle}
+                  >
+                    <option value="">No brand</option>
+                    {brandSelectOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : null}
           </section>
 
+          {!isManualProductMode ? (
           <section className="products-editor-section">
             <div className="products-section-header">
               <div>
@@ -879,8 +1096,9 @@ export default function Products() {
               </div>
             ) : null}
           </section>
+          ) : null}
 
-          {selectedGarmentItem ? (
+          {!isManualProductMode && selectedGarmentItem ? (
             <section className="products-editor-section">
               <div className="products-section-header">
                 <div>
@@ -952,8 +1170,12 @@ export default function Products() {
                   <span className="products-summary-label">Catalog Readiness</span>
                   <strong>{form.flat_price ? formatMoney(form.flat_price) : "Add sale price"}</strong>
                   <div className="products-summary-details">
-                    <span>{form.visibleVariants.length || 0} color variants</span>
-                    <span>{form.sizes.length || 0} sizes enabled</span>
+                    <span>
+                      {isManualProductMode ? "Standalone manual product" : `${form.visibleVariants.length || 0} color variants`}
+                    </span>
+                    <span>
+                      {isManualProductMode ? "No garment template required" : `${form.sizes.length || 0} sizes enabled`}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1040,12 +1262,16 @@ export default function Products() {
               </div>
 
               <label style={labelStyle}>
-                Notes
+                Description
                 <textarea
                   name="notes"
                   value={form.notes}
                   onChange={updateField}
-                  placeholder="Optional internal notes."
+                  placeholder={
+                    isManualProductMode
+                      ? "Customer-facing description for this manual product."
+                      : "Customer-facing description or internal merchandising notes."
+                  }
                   style={{ ...fieldStyle, minHeight: "96px", resize: "vertical" }}
                 />
               </label>
@@ -1096,7 +1322,9 @@ export default function Products() {
                 <strong>{form.name || "Customer product name pending"}</strong>
                 <p>
                   Customer price: {form.flat_price ? formatMoney(form.flat_price) : "not set"}.
-                  Garment link: {selectedGarmentItem?.title || "required before create"}.
+                  {isManualProductMode
+                    ? " Manual product mode does not require a garment template."
+                    : ` Garment link: ${selectedGarmentItem?.title || "required before create"}.`}
                 </p>
               </div>
 
@@ -1220,7 +1448,9 @@ export default function Products() {
                               <h3 style={{ margin: 0 }}>{product.name}</h3>
                             </div>
                             <p className="products-card-subtitle">
-                              {linkedGarment?.title || product.brand_model || "Unlinked legacy garment"}
+                              {linkedGarment?.title ||
+                                product.brand_model ||
+                                (product?.garment_library_item_id ? "Linked apparel product" : "Manual catalog product")}
                             </p>
                           </div>
 
@@ -1230,12 +1460,20 @@ export default function Products() {
                         <div className="products-card-detail-grid">
                           <div className="products-card-detail">
                             <span>Variants</span>
-                            <strong>{(product?.colors || []).length} enabled</strong>
+                            <strong>
+                              {product?.garment_library_item_id
+                                ? `${(product?.colors || []).length} enabled`
+                                : "Not apparel-based"}
+                            </strong>
                           </div>
 
                           <div className="products-card-detail">
                             <span>Sizes</span>
-                            <strong>{(product?.sizes || []).join(", ") || "None"}</strong>
+                            <strong>
+                              {product?.garment_library_item_id
+                                ? (product?.sizes || []).join(", ") || "None"
+                                : "Not apparel-based"}
+                            </strong>
                           </div>
 
                           <div className="products-card-detail">
