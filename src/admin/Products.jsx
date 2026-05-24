@@ -1187,7 +1187,7 @@ export default function Products() {
           <p className="products-eyebrow">Customer Product Catalog</p>
           <h1 style={{ margin: 0 }}>Storefront Product Workspace</h1>
           <p style={{ margin: 0, color: "#64748b" }}>
-            Edit products in a wider, calmer workspace, then review the published catalog below.
+            Edit products with the live catalog beside you.
           </p>
         </div>
 
@@ -1200,14 +1200,14 @@ export default function Products() {
               window.requestAnimationFrame(() => nameInputRef.current?.focus());
             }}
           >
-            Jump To Editor
+            Focus Editor
           </button>
           <button
             type="button"
             className="products-secondary-button"
             onClick={() => catalogPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
           >
-            Jump To Catalog
+            Focus Catalog
           </button>
         </div>
       </section>
@@ -1218,15 +1218,15 @@ export default function Products() {
           onSubmit={handleSubmit}
           className={`products-editor ${editingProduct ? "is-editing" : ""}`}
         >
-          <div style={{ display: "grid", gap: "10px" }}>
-            <p className="products-eyebrow">Focused Editor</p>
+          <div className="products-editor-intro">
+            <p className="products-eyebrow">Product Editor</p>
             <h2 style={{ margin: 0 }}>
               {editingProduct ? `Edit ${editingProduct.name}` : "Create Storefront Product"}
             </h2>
             <p style={{ margin: 0, color: "#64748b" }}>
               {editingProduct
-                ? "Update the customer-facing product details here."
-                : "Start with the customer-facing basics, then add garment linkage and merchandising only where needed."}
+                ? "Update the storefront details and review the live card preview on the right."
+                : "Start with the customer-facing essentials, then open secondary settings only when needed."}
             </p>
             <div className="products-editor-topbar">
               <button
@@ -1242,8 +1242,9 @@ export default function Products() {
                 </button>
               ) : null}
             </div>
-            <div className="products-callout">
-              Garment templates live in the <Link to="/admin/garments">Garment Library</Link>. Most products should start there, but manual catalog items can still be created here.
+            <div className="products-editor-utility-row">
+              <span>Garment templates live in the <Link to="/admin/garments">Garment Library</Link>.</span>
+              <span>Manual products can still be created here.</span>
             </div>
           </div>
 
@@ -1253,16 +1254,16 @@ export default function Products() {
           <section className="products-editor-section">
             <div className="products-section-header">
               <div>
-                <p className="products-section-step">Step 1</p>
-                <h2>Customer Product Basics</h2>
+                <p className="products-section-step">Core</p>
+                <h2>Product Basics</h2>
               </div>
-              <p>Choose the product mode, then set the customer-facing details needed to publish it.</p>
+              <p>Set the product mode and core storefront details.</p>
             </div>
 
             <div className="garment-model-workflow-panel">
               <div className="garment-model-workflow-header">
                 <strong>Product Type</strong>
-                <p>Apparel products stay linked to a garment template. Manual products stand alone.</p>
+                <p>Choose whether this item stays linked to a garment template.</p>
               </div>
               <div className="garment-model-workflow-options">
                 <button
@@ -1396,7 +1397,7 @@ export default function Products() {
             <summary className="products-advanced-summary">
               <div>
                 <strong>Storefront Categories</strong>
-                <span>Create, rename, or deactivate browse categories without crowding the main editor.</span>
+                <span>Manage browse categories without crowding the main editor.</span>
               </div>
             </summary>
 
@@ -1506,10 +1507,10 @@ export default function Products() {
           <section className="products-editor-section">
             <div className="products-section-header">
               <div>
-                <p className="products-section-step">Step 2</p>
+                <p className="products-section-step">Link</p>
                 <h2>Choose Garment Source</h2>
               </div>
-              <p>Select the linked garment template first, then narrow which colors and sizes customers can buy.</p>
+              <p>Select the linked garment template, then narrow what customers can buy.</p>
             </div>
 
             <SearchableLookupField
@@ -1562,10 +1563,10 @@ export default function Products() {
             <section className="products-editor-section">
               <div className="products-section-header">
                 <div>
-                  <p className="products-section-step">Step 3</p>
+                  <p className="products-section-step">Variants</p>
                   <h2>Configure Variants</h2>
                 </div>
-                <p>Keep the catalog readable by enabling only the variants and sizes this storefront product should sell.</p>
+                <p>Keep the catalog clean by enabling only the variants and sizes you want to sell.</p>
               </div>
 
               <div className="products-library-grid products-library-grid-wide">
@@ -1605,10 +1606,10 @@ export default function Products() {
           <section className="products-editor-section">
             <div className="products-section-header">
               <div>
-                <p className="products-section-step">Step 4</p>
+                <p className="products-section-step">Preview</p>
                 <h2>Merchandising</h2>
               </div>
-              <p>Set the product image and catalog status without collapsing the editor into a narrow utility form.</p>
+              <p>Set the image, status, and publish-ready storefront presentation.</p>
             </div>
 
             <div className="products-config-grid">
@@ -1646,7 +1647,7 @@ export default function Products() {
             <summary className="products-advanced-summary">
               <div>
                 <strong>Advanced Settings</strong>
-                <span>Placements, production methods, and operational pricing stay available without crowding the main flow.</span>
+                <span>Placements, production methods, pricing, and description.</span>
               </div>
             </summary>
 
@@ -1771,10 +1772,10 @@ export default function Products() {
           <section className="products-editor-section products-completion-panel">
             <div className="products-section-header">
               <div>
-                <p className="products-section-step">Final Step</p>
+                <p className="products-section-step">Publish</p>
                 <h2>{editingProduct ? "Update Storefront Product" : "Create Storefront Product"}</h2>
               </div>
-              <p>Review the storefront setup, then publish the catalog-facing product as the primary completion action.</p>
+              <p>Review the essentials, then publish.</p>
             </div>
 
             <div className="products-completion-row">
@@ -1815,8 +1816,13 @@ export default function Products() {
         <section ref={catalogPanelRef} className="products-catalog-panel">
           <div className="products-catalog-header">
             <div>
-              <p className="products-eyebrow">Published Catalog</p>
+              <p className="products-eyebrow">Live Catalog</p>
               <h2 style={{ margin: "6px 0 0" }}>Customer-facing products</h2>
+              <p style={{ margin: "6px 0 0", color: "#64748b" }}>
+                {editingProduct
+                  ? "The product you are editing stays highlighted here."
+                  : "Use this live catalog to review storefront results while editing."}
+              </p>
             </div>
 
             <div className="products-stat-row">
