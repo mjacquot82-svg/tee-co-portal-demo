@@ -1407,6 +1407,12 @@ export default function Products() {
                   const isActiveCard =
                     product.id === editingProductId || highlightedProductIds.includes(product.id);
                   const statusIsActive = normalizeStatusValue(product?.status) === "active";
+                  const colorCount = Array.isArray(product?.colors) ? product.colors.length : 0;
+                  const sizeCount = Array.isArray(product?.sizes) ? product.sizes.length : 0;
+                  const productModeLabel = product?.garment_library_item_id ? "Garment-linked" : "Manual product";
+                  const merchandisingNote =
+                    product?.product_type ||
+                    (product?.garment_library_item_id ? "Apparel product" : "Standalone product");
 
                   console.info("[Products] Rendering customer catalog product card", {
                     index,
@@ -1444,12 +1450,14 @@ export default function Products() {
                           <span className="products-card-category-pill">
                             {product.storefront_category || product.category || "Catalog"}
                           </span>
-                          <strong className="products-card-price">{formatMoney(product?.base_garment_price)}</strong>
+                          <span className={`products-status products-status-${statusIsActive ? "active" : "archived"}`}>
+                            {statusIsActive ? "Active" : "Archived"}
+                          </span>
                         </div>
 
                         <div className="products-card-title-block">
                           <div className="products-card-title-row">
-                            <h3 style={{ margin: 0 }}>
+                            <h3 className="products-card-title">
                               {product.name || product.product_type || "Catalog Product"}
                             </h3>
                             {isActiveCard ? (
@@ -1458,29 +1466,45 @@ export default function Products() {
                               </span>
                             ) : null}
                           </div>
+                          <strong className="products-card-price">
+                            {formatMoney(product?.base_garment_price)}
+                          </strong>
                           <p className="products-card-subtitle">
                             {linkedGarment?.title ||
                               product.brand_model ||
-                              (product?.garment_library_item_id
-                                ? "Linked apparel product"
-                                : "Manual catalog product")}
+                              productModeLabel}
                           </p>
                           {product?.notes ? (
                             <p className="products-card-description">{product.notes}</p>
                           ) : null}
                         </div>
 
+                        <div className="products-card-detail-grid products-card-detail-grid-primary">
+                          <div className="products-card-detail">
+                            <span>Colors</span>
+                            <strong>{colorCount || (product?.garment_library_item_id ? "Template-driven" : "N/A")}</strong>
+                          </div>
+                          <div className="products-card-detail">
+                            <span>Sizes</span>
+                            <strong>{sizeCount || (product?.garment_library_item_id ? "Template-driven" : "N/A")}</strong>
+                          </div>
+                        </div>
+
                         <div className="products-card-meta-row">
-                          <span className="products-card-meta-pill">
-                            {product?.product_type ||
-                              (product?.garment_library_item_id ? "Apparel Product" : "Manual Product")}
+                          <span className="products-card-meta-pill products-card-meta-pill-emphasis">
+                            {linkedGarment?.title || "No linked garment template"}
                           </span>
-                          <span className="products-card-meta-pill">
-                            {product?.garment_library_item_id ? "Garment-linked" : "Manual"}
-                          </span>
-                          <span className={`products-status products-status-${statusIsActive ? "active" : "archived"}`}>
-                            {statusIsActive ? "Active" : "Archived"}
-                          </span>
+                        </div>
+
+                        <div className="products-card-detail-grid">
+                          <div className="products-card-detail">
+                            <span>Product Type</span>
+                            <strong>{merchandisingNote}</strong>
+                          </div>
+                          <div className="products-card-detail">
+                            <span>Mode</span>
+                            <strong>{productModeLabel}</strong>
+                          </div>
                         </div>
                       </div>
 

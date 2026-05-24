@@ -4042,9 +4042,13 @@ export default function GarmentLibrary() {
 
                     <div className="garment-library-detail-content">
                       <div className="garment-library-detail-title-row">
-                        <div>
+                        <div className="garment-library-detail-title-block">
                           <span className="products-summary-label">Reusable Garment Template</span>
                           <h2 className="garment-library-detail-title">{selectedGarmentLabel}</h2>
+                          <p className="garment-library-detail-subtitle">
+                            Browse the garment first, then create storefront products from this reusable template when
+                            you are ready.
+                          </p>
                         </div>
                         <span className="garment-library-detail-status">
                           {selectedGarment?.active === false ? "Inactive" : "Active"}
@@ -4065,34 +4069,18 @@ export default function GarmentLibrary() {
                         ) : null}
                       </div>
 
-                      <div className="garment-library-detail-glance-grid">
-                        <div className="products-summary-card">
-                          <span className="products-summary-label">Colors</span>
-                          <strong>{selectedGarmentSummary.totalColors || 0}</strong>
-                          <div className="products-summary-details">
-                            {renderPreviewChips(selectedGarmentSummary.colorPreview, "No colors")}
-                          </div>
-                        </div>
-
-                        <div className="products-summary-card">
-                          <span className="products-summary-label">Sizes</span>
-                          <strong>{selectedGarmentSummary.totalSizes || 0}</strong>
-                          <div className="products-summary-details">
-                            {renderPreviewChips(selectedGarmentSummary.sizePreview, "No sizes")}
-                          </div>
-                        </div>
-
-                        <div className="products-summary-card">
-                          <span className="products-summary-label">Storefront Usage</span>
-                          <strong>{selectedGarmentUsage.linkedProductCount || 0}</strong>
-                          <div className="products-summary-details">
-                            <span>
-                              {(selectedGarmentUsage.linkedProductCount || 0) === 1
-                                ? "linked product"
-                                : "linked products"}
-                            </span>
-                          </div>
-                        </div>
+                      <div className="garment-library-detail-action-row">
+                        <button
+                          type="button"
+                          className="products-primary-button products-primary-button-large"
+                          onClick={() => startCreatingStorefrontProduct(editingGarment)}
+                          disabled={isCreatingStorefrontProduct}
+                        >
+                          {isCreatingStorefrontProduct ? "Creating..." : "Create Storefront Product"}
+                        </button>
+                        <button type="submit" disabled={isSaving} className="products-secondary-button">
+                          {isSaving ? "Saving..." : "Edit Template"}
+                        </button>
                       </div>
 
                       <div className="garment-library-detail-summary-card">
@@ -4105,18 +4093,34 @@ export default function GarmentLibrary() {
                         </p>
                       </div>
 
-                      <div className="garment-library-detail-action-row">
-                        <button
-                          type="button"
-                          className="products-primary-button products-primary-button-large"
-                          onClick={() => startCreatingStorefrontProduct(editingGarment)}
-                          disabled={isCreatingStorefrontProduct}
-                        >
-                          {isCreatingStorefrontProduct ? "Creating..." : "Create Storefront Product"}
-                        </button>
-                        <button type="submit" disabled={isSaving} className="products-secondary-button">
-                          {isSaving ? "Saving..." : "Save Template Changes"}
-                        </button>
+                      <div className="garment-library-detail-glance-grid">
+                        <div className="garment-library-detail-stat">
+                          <span className="products-summary-label">Colors</span>
+                          <strong>{selectedGarmentSummary.totalColors || 0}</strong>
+                          <div className="garment-library-detail-stat-copy">
+                            {renderPreviewChips(selectedGarmentSummary.colorPreview, "No colors")}
+                          </div>
+                        </div>
+
+                        <div className="garment-library-detail-stat">
+                          <span className="products-summary-label">Sizes</span>
+                          <strong>{selectedGarmentSummary.totalSizes || 0}</strong>
+                          <div className="garment-library-detail-stat-copy">
+                            {renderPreviewChips(selectedGarmentSummary.sizePreview, "No sizes")}
+                          </div>
+                        </div>
+
+                        <div className="garment-library-detail-stat">
+                          <span className="products-summary-label">Storefront Usage</span>
+                          <strong>{selectedGarmentUsage.linkedProductCount || 0}</strong>
+                          <div className="garment-library-detail-stat-copy">
+                            <span>
+                              {(selectedGarmentUsage.linkedProductCount || 0) === 1
+                                ? "linked product"
+                                : "linked products"}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </section>
