@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
+import { useCatalogLookups } from "../lib/catalogLookupsStore";
 import {
+  buildStorefrontCategories,
   getStorefrontProductImage,
   getStorefrontProducts,
 } from "../lib/storefrontCatalog";
@@ -10,207 +12,334 @@ import { areStoredProductsReady, useStoredProducts } from "../lib/productsStore"
 function buildStorefrontRenderIdentity(product, index) {
   const normalizedId = String(product?.id || "").trim();
   const normalizedName = String(product?.name || "").trim() || "catalog-product";
-  const normalizedCategory = String(product?.category || "").trim() || "catalog";
+  const normalizedCategory =
+    String(product?.storefront_category || product?.category || "").trim() || "catalog";
 
   return {
     id: normalizedId || null,
     key: normalizedId || `${normalizedName}-${normalizedCategory}-${index}`,
-    fallbackKeyUsed: !normalizedId,
   };
+}
+
+function getCategoryHeroCopy(categoryCount) {
+  if (!categoryCount) return "Start with a featured product";
+  if (categoryCount === 1) return "Shop 1 category";
+  return `Shop ${categoryCount} categories`;
 }
 
 export default function Home() {
   const storedProducts = useStoredProducts();
   const productsReady = areStoredProductsReady();
+  const lookups = useCatalogLookups();
+  const storefrontCategoryLookups = useMemo(
+    () => lookups.storefront_categories || [],
+    [lookups.storefront_categories]
+  );
   const storefrontProducts = useMemo(
     () => getStorefrontProducts(storedProducts),
     [storedProducts]
   );
-  useEffect(() => {
-    const includedIds = new Set(storefrontProducts.map((product) => product?.id).filter(Boolean));
-    const duplicateIncludedIds = storefrontProducts.reduce((summary, product, index) => {
-      const normalizedId = String(product?.id || "").trim();
-      if (!normalizedId) {
-        summary.missingIds.push({
-          index,
-          name: product?.name || "",
-          status: product?.status || "",
-        });
-        return summary;
-      }
-      if (!summary.seenIds.has(normalizedId)) {
-        summary.seenIds.add(normalizedId);
-        return summary;
-      }
-      summary.duplicates.push({
-        index,
-        id: normalizedId,
-        name: product?.name || "",
-        status: product?.status || "",
-      });
-      return summary;
-    }, {
-      seenIds: new Set(),
-      duplicates: [],
-      missingIds: [],
-    });
-
-    console.info("[Home] Customer catalog render source", {
-      productsReady,
-      rawProductsArrayLength: storedProducts.length,
-      filteredProductsArrayLength: storefrontProducts.length,
-      renderedProductCardCount: storefrontProducts.length,
-      sourceProducts: storedProducts.map((product) => ({
-        id: product?.id || null,
-        name: product?.name || "",
-        status: product?.status || "",
-        category: product?.category || "",
-        garment_library_item_id: product?.garment_library_item_id || null,
-        sizeCount: Array.isArray(product?.sizes) ? product.sizes.length : 0,
-        colorCount: Array.isArray(product?.colors) ? product.colors.length : 0,
-      })),
-      excludedProducts: storedProducts
-        .filter((product) => !includedIds.has(product?.id))
-        .map((product) => ({
-          id: product?.id || null,
-          name: product?.name || "",
-          status: product?.status || "",
-          reason: String(product?.status || "").trim().toLowerCase() === "active"
-            ? "missing-id-during-catalog-filter"
-            : "inactive-status",
-        })),
-      duplicateIncludedIds: duplicateIncludedIds.duplicates,
-      missingIncludedIds: duplicateIncludedIds.missingIds,
-      productsBeforeRender: storefrontProducts.map((product, index) => {
-        const renderIdentity = buildStorefrontRenderIdentity(product, index);
-        return {
-          index,
-          id: product?.id || null,
-          name: product?.name || "",
-          status: product?.status || "",
-          category: product?.category || "",
-          renderKey: renderIdentity.key,
-          fallbackKeyUsed: renderIdentity.fallbackKeyUsed,
-        };
-      }),
-    });
-  }, [productsReady, storefrontProducts, storedProducts]);
-  const previewCardStyle = {
-    textDecoration: "none",
-    background: "#ffffff",
-    borderRadius: "16px",
-    padding: "14px",
-    border: "1px solid #e7e5e4",
-    boxShadow: "0 8px 18px rgba(0,0,0,0.05)",
-    color: "#171717",
-    display: "block",
-    width: "100%",
-    boxSizing: "border-box",
-    overflow: "hidden",
-  };
-
-  const previewBoxStyle = {
-    width: "100%",
-    aspectRatio: "1 / 1",
-    background: "#fafaf9",
-    borderRadius: "12px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: "10px",
-    padding: "10px",
-    overflow: "hidden",
-    minHeight: "220px",
-    maxHeight: "220px",
-  };
-
-  const previewImageStyle = {
-    width: "100%",
-    height: "100%",
-    minWidth: 0,
-    minHeight: 0,
-    objectFit: "contain",
-    display: "block",
-  };
-
-  const storefrontCards = useMemo(
-    () =>
-      storefrontProducts.map((product, index) => {
-        const renderIdentity = buildStorefrontRenderIdentity(product, index);
-        return {
-        id: renderIdentity.key,
-        title: product?.name || product?.product_type || "Catalog Product",
-        subtitle:
-          product?.notes || product?.category || "Available for custom orders.",
-        image: getStorefrontProductImage(product),
-        to: `/garment/${product.id}`,
-        rawId: product?.id || null,
-        status: product?.status || "",
-      };
-      }),
+  const storefrontCategories = useMemo(
+    () => buildStorefrontCategories(storedProducts, storefrontCategoryLookups),
+    [storedProducts, storefrontCategoryLookups]
+  );
+  const featuredProducts = useMemo(
+    () => storefrontProducts.slice(0, 6),
     [storefrontProducts]
   );
 
-  const primaryProductLink = storefrontProducts[0]
-    ? `/garment/${storefrontProducts[0].id}`
-    : "/";
-
-  function renderPreviewCard({ key, to, image, title, description }) {
-    return (
-      <Link key={key} to={to} style={previewCardStyle}>
-        <div style={previewBoxStyle}>
-          {image ? (
-            <img src={image} alt={title} width="220" height="220" loading="eager" decoding="async" style={previewImageStyle} />
-          ) : (
-            <NoImagePlaceholder
-              style={{ borderRadius: "12px" }}
-              titleStyle={{ fontSize: "13px" }}
-              subtitleStyle={{ fontSize: "11px" }}
-            />
-          )}
-        </div>
-        <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700 }}>{title}</h3>
-        <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#78716c" }}>{description}</p>
-      </Link>
-    );
-  }
+  const heroLink = storefrontCategories[0]
+    ? `/category/${storefrontCategories[0].id}`
+    : storefrontProducts[0]
+      ? `/garment/${storefrontProducts[0].id}`
+      : "/";
 
   return (
-    <div style={{ margin: "0 auto", padding: "12px 14px 26px", maxWidth: "1360px", fontFamily: 'Inter, system-ui, sans-serif' }}>
-      <div style={{ background: "#ffffff", borderRadius: "16px", padding: "18px", border: "1px solid #e7e5e4", boxShadow: "0 8px 18px rgba(0,0,0,0.05)", marginBottom: "18px" }}>
-        <p style={{ margin: "0 0 6px", fontSize: "12px", fontWeight: 700, letterSpacing: "0.08em", color: "#78716c", textTransform: "uppercase" }}>Custom Apparel Made Simple</p>
-        <h2 style={{ margin: "0 0 6px", fontSize: "24px" }}>Start Your Custom Order</h2>
-        <p style={{ margin: "0 0 14px", fontSize: "14px", color: "#78716c" }}>Upload artwork, choose garments, and request a quote in minutes.</p>
-        <Link to={primaryProductLink} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minHeight: "42px", padding: "0 16px", borderRadius: "12px", background: "#171717", color: "#ffffff", textDecoration: "none", fontSize: "14px", fontWeight: 700 }}>Start Order</Link>
-      </div>
+    <div
+      style={{
+        margin: "0 auto",
+        padding: "18px 14px 36px",
+        maxWidth: "1360px",
+        fontFamily: '"Avenir Next", "Segoe UI", sans-serif',
+        color: "#1f2937",
+      }}
+    >
+      <section
+        style={{
+          marginBottom: "24px",
+          borderRadius: "28px",
+          padding: "28px",
+          background:
+            "radial-gradient(circle at top left, rgba(241, 245, 249, 0.96) 0%, rgba(255, 255, 255, 0.98) 46%, rgba(254, 243, 199, 0.9) 100%)",
+          border: "1px solid #e5e7eb",
+          boxShadow: "0 24px 60px rgba(15, 23, 42, 0.08)",
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 10px",
+            fontSize: "12px",
+            fontWeight: 800,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            color: "#92400e",
+          }}
+        >
+          Tee & Co Storefront
+        </p>
+        <h1
+          style={{
+            margin: "0 0 10px",
+            fontSize: "clamp(2rem, 5vw, 3.5rem)",
+            lineHeight: 1,
+            letterSpacing: "-0.05em",
+            maxWidth: "9ch",
+          }}
+        >
+          Shop by category, not by product dump.
+        </h1>
+        <p
+          style={{
+            margin: "0 0 18px",
+            maxWidth: "640px",
+            fontSize: "15px",
+            lineHeight: 1.7,
+            color: "#4b5563",
+          }}
+        >
+          Browse apparel, drinkware, hats, accessories, and future merch collections through
+          cleaner storefront categories first, then drill into products.
+        </p>
+        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
+          <Link
+            to={heroLink}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: "46px",
+              padding: "0 18px",
+              borderRadius: "999px",
+              background: "#111827",
+              color: "#ffffff",
+              textDecoration: "none",
+              fontWeight: 800,
+            }}
+          >
+            {getCategoryHeroCopy(storefrontCategories.length)}
+          </Link>
+          <span style={{ color: "#6b7280", fontSize: "14px" }}>
+            {productsReady ? `${storefrontProducts.length} active products live` : "Loading catalog"}
+          </span>
+        </div>
+      </section>
 
-      <div style={{ marginBottom: "24px" }}>
-        <h2 style={{ marginBottom: "12px" }}>Shop Products</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "14px" }}>
-          {storefrontCards.map((item, index) => {
-            console.info("[Home] Rendering storefront product card", {
-              index,
-              id: item.rawId,
-              title: item.title,
-              status: item.status,
-              renderKey: item.id,
-            });
-            return renderPreviewCard({
-              key: item.id,
-              to: item.to,
-              image: item.image,
-              title: item.title,
-              description: item.subtitle,
-            });
+      <section style={{ marginBottom: "28px" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+            marginBottom: "14px",
+          }}
+        >
+          <div>
+            <p
+              style={{
+                margin: "0 0 4px",
+                fontSize: "12px",
+                fontWeight: 800,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "#6b7280",
+              }}
+            >
+              Browse Categories
+            </p>
+            <h2 style={{ margin: 0, fontSize: "28px", letterSpacing: "-0.04em" }}>
+              Start with a collection
+            </h2>
+          </div>
+          <span style={{ color: "#6b7280", fontSize: "14px" }}>
+            Category-first storefront browsing
+          </span>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: "14px",
+          }}
+        >
+          {storefrontCategories.map((category) => (
+            <Link
+              key={category.id}
+              to={`/category/${category.id}`}
+              style={{
+                textDecoration: "none",
+                color: "inherit",
+                borderRadius: "24px",
+                padding: "18px",
+                background: "#ffffff",
+                border: "1px solid #e5e7eb",
+                boxShadow: "0 16px 36px rgba(15, 23, 42, 0.05)",
+                display: "grid",
+                gap: "14px",
+                minHeight: "100%",
+              }}
+            >
+              <div
+                style={{
+                  aspectRatio: "1 / 1",
+                  borderRadius: "18px",
+                  background: "linear-gradient(180deg, #f8fafc 0%, #f3f4f6 100%)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  overflow: "hidden",
+                }}
+              >
+                {category.image ? (
+                  <img
+                    src={category.image}
+                    alt={category.name}
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                ) : (
+                  <NoImagePlaceholder
+                    style={{ borderRadius: "18px", width: "100%", height: "100%" }}
+                    titleStyle={{ fontSize: "14px" }}
+                    subtitleStyle={{ fontSize: "11px" }}
+                  />
+                )}
+              </div>
+              <div style={{ display: "grid", gap: "6px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                  <h3 style={{ margin: 0, fontSize: "18px" }}>{category.name}</h3>
+                  <span style={{ color: "#92400e", fontWeight: 800, fontSize: "13px" }}>
+                    {category.productCount}
+                  </span>
+                </div>
+                <p style={{ margin: 0, color: "#6b7280", fontSize: "14px", lineHeight: 1.5 }}>
+                  {category.description}
+                </p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+            marginBottom: "14px",
+          }}
+        >
+          <div>
+            <p
+              style={{
+                margin: "0 0 4px",
+                fontSize: "12px",
+                fontWeight: 800,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "#6b7280",
+              }}
+            >
+              Featured Products
+            </p>
+            <h2 style={{ margin: 0, fontSize: "28px", letterSpacing: "-0.04em" }}>
+              Product highlights
+            </h2>
+          </div>
+          <span style={{ color: "#6b7280", fontSize: "14px" }}>
+            A smaller curated grid under the category browse
+          </span>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: "14px",
+          }}
+        >
+          {featuredProducts.map((product, index) => {
+            const renderIdentity = buildStorefrontRenderIdentity(product, index);
+            const imageSrc = getStorefrontProductImage(product);
+            return (
+              <Link
+                key={renderIdentity.key}
+                to={`/garment/${product.id}`}
+                style={{
+                  textDecoration: "none",
+                  color: "inherit",
+                  borderRadius: "22px",
+                  padding: "16px",
+                  background: "#ffffff",
+                  border: "1px solid #e5e7eb",
+                  boxShadow: "0 14px 28px rgba(15, 23, 42, 0.05)",
+                  display: "grid",
+                  gap: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    aspectRatio: "1 / 1",
+                    borderRadius: "16px",
+                    background: "#f8fafc",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden",
+                  }}
+                >
+                  {imageSrc ? (
+                    <img
+                      src={imageSrc}
+                      alt={product?.name || "Catalog product"}
+                      style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                    />
+                  ) : (
+                    <NoImagePlaceholder
+                      style={{ borderRadius: "16px", width: "100%", height: "100%" }}
+                      titleStyle={{ fontSize: "13px" }}
+                      subtitleStyle={{ fontSize: "11px" }}
+                    />
+                  )}
+                </div>
+                <div style={{ display: "grid", gap: "5px" }}>
+                  <span
+                    style={{
+                      color: "#92400e",
+                      fontSize: "11px",
+                      fontWeight: 800,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {product?.storefront_category || product?.category || "Catalog"}
+                  </span>
+                  <h3 style={{ margin: 0, fontSize: "16px", lineHeight: 1.3 }}>
+                    {product?.name || product?.product_type || "Catalog Product"}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.5, color: "#6b7280" }}>
+                    {product?.notes || product?.product_type || "Available for custom orders."}
+                  </p>
+                </div>
+              </Link>
+            );
           })}
         </div>
-      </div>
-
-      <div style={{ background: "#ffffff", borderRadius: "16px", padding: "18px", border: "1px solid #e7e5e4", boxShadow: "0 8px 18px rgba(0,0,0,0.05)" }}>
-        <h2 style={{ marginTop: 0 }}>Need help choosing garments?</h2>
-        <p style={{ color: "#78716c" }}>Contact us and we&apos;ll help you select the best option for your order.</p>
-        <Link to="/login" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minHeight: "42px", padding: "0 16px", borderRadius: "12px", background: "#171717", color: "#ffffff", textDecoration: "none", fontSize: "14px", fontWeight: 700 }}>Contact Us</Link>
-      </div>
+      </section>
     </div>
   );
 }

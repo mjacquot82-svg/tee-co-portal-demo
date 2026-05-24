@@ -8,6 +8,7 @@ import {
   resolveProductBasePrice,
   useStoredProducts,
 } from "../lib/productsStore";
+import { useCatalogLookups } from "../lib/catalogLookupsStore";
 import {
   getStorefrontCategoryById,
   getStorefrontProductImage,
@@ -34,6 +35,11 @@ export default function GarmentView() {
   );
   const catalogProducts = useStoredProducts();
   const productsReady = areStoredProductsReady();
+  const lookups = useCatalogLookups();
+  const storefrontCategories = useMemo(
+    () => lookups.storefront_categories || [],
+    [lookups.storefront_categories]
+  );
   const productById = useMemo(
     () => catalogProducts.find((product) => product.id === garmentId) || null,
     [catalogProducts, garmentId]
@@ -50,9 +56,10 @@ export default function GarmentView() {
     () =>
       getStorefrontCategoryById(
         catalogProducts,
-        normalizeCategorySlug(selectedProduct?.category || garment?.category)
+        normalizeCategorySlug(selectedProduct?.storefront_category || selectedProduct?.category || garment?.category),
+        storefrontCategories
       ),
-    [catalogProducts, garment?.category, selectedProduct?.category]
+    [catalogProducts, garment?.category, selectedProduct?.category, selectedProduct?.storefront_category, storefrontCategories]
   );
   const detailTitle =
     garment?.display_name || selectedProduct?.name || "Catalog Product";
@@ -64,7 +71,11 @@ export default function GarmentView() {
     selectedProduct?.product_type ||
     "Custom garment configuration";
   const detailCategory =
-    garment?.category || selectedProduct?.category || "Catalog";
+    storefrontCategory?.name ||
+    selectedProduct?.storefront_category ||
+    garment?.category ||
+    selectedProduct?.category ||
+    "Catalog";
   const availableColors =
     garment?.available_colors?.length
       ? garment.available_colors

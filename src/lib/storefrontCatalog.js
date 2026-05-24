@@ -14,11 +14,15 @@ function buildCatalogFieldDiagnostics(product = {}) {
     id: product?.id || null,
     name: normalizeText(product?.name),
     category: normalizeText(product?.category),
+    storefront_category: normalizeText(product?.storefront_category || product?.category),
     status: product?.status || "",
     normalizedStatus: normalizeProductStatus(product?.status || "Active"),
     garment_library_item_id: product?.garment_library_item_id || null,
     hasName: Boolean(normalizeText(product?.name)),
     hasCategory: Boolean(normalizeText(product?.category)),
+    hasStorefrontCategory: Boolean(
+      normalizeText(product?.storefront_category || product?.category)
+    ),
     hasStatus: Boolean(normalizeText(product?.status)),
     hasImage: Boolean(normalizeText(product?.image)),
     hasPrice: Number.isFinite(Number(resolvedPrice)) && Number(resolvedPrice) > 0,
@@ -51,9 +55,6 @@ export function getStorefrontProducts(products = []) {
     const fieldDiagnostics = buildCatalogFieldDiagnostics(product);
 
     if (include) {
-      console.info("[storefrontCatalog] Included storefront product", {
-        product: fieldDiagnostics,
-      });
       includedProducts.push(product);
       return;
     }
@@ -71,6 +72,7 @@ export function getStorefrontProducts(products = []) {
     includedProducts: includedProducts.map((product) => ({
       id: product?.id || null,
       name: normalizeText(product?.name),
+      storefront_category: normalizeText(product?.storefront_category || product?.category),
       status: product?.status || "",
     })),
     excludedProducts,
@@ -89,12 +91,55 @@ function buildCategoryDescription(categoryName, productCount) {
   return `${productCount} products available`;
 }
 
-export function buildStorefrontCategories(products = []) {
+function buildStorefrontCategoryRecord(category = {}) {
+  const name = normalizeText(category?.name);
+  const id =
+    normalizeCategorySlug(category?.slug || category?.id || category?.name) || "catalog";
+
+  return {
+    id,
+    lookupId: category?.id || "",
+    name: name || "Catalog",
+    active: category?.active !== false,
+  };
+}
+
+function resolveProductStorefrontCategory(product, storefrontCategoryMap) {
+  const storefrontLookupId = normalizeText(product?.storefront_category_lookup_id);
+  const explicitStorefrontName = normalizeText(product?.storefront_category);
+
+  if (storefrontLookupId && storefrontCategoryMap.has(storefrontLookupId)) {
+    return storefrontCategoryMap.get(storefrontLookupId);
+  }
+
+  const normalizedExplicitName = explicitStorefrontName.toLowerCase();
+  if (normalizedExplicitName) {
+    for (const category of storefrontCategoryMap.values()) {
+      if (normalizeText(category.name).toLowerCase() === normalizedExplicitName) {
+        return category;
+      }
+    }
+  }
+
+  return buildStorefrontCategoryRecord({
+    id: normalizeCategorySlug(explicitStorefrontName || product?.category || "catalog"),
+    name: explicitStorefrontName || product?.category || "Catalog",
+    active: true,
+  });
+}
+
+export function buildStorefrontCategories(products = [], storefrontCategories = []) {
   const groupedCategories = new Map();
+  const categoryMap = new Map(
+    (Array.isArray(storefrontCategories) ? storefrontCategories : [])
+      .map(buildStorefrontCategoryRecord)
+      .filter((category) => category.active)
+      .map((category) => [category.lookupId || category.id, category])
+  );
 
   getStorefrontProducts(products).forEach((product) => {
-    const categoryName = normalizeText(product?.category) || "Catalog";
-    const categoryId = normalizeCategorySlug(categoryName) || "catalog";
+    const resolvedCategory = resolveProductStorefrontCategory(product, categoryMap);
+    const categoryId = resolvedCategory.id || "catalog";
     const existingCategory = groupedCategories.get(categoryId);
 
     if (existingCategory) {
@@ -106,8 +151,7 @@ export function buildStorefrontCategories(products = []) {
     }
 
     groupedCategories.set(categoryId, {
-      id: categoryId,
-      name: categoryName,
+      ...resolvedCategory,
       image: normalizeText(product?.image),
       products: [product],
     });
@@ -116,23 +160,32 @@ export function buildStorefrontCategories(products = []) {
   return Array.from(groupedCategories.values())
     .map((category) => ({
       id: category.id,
+      lookupId: category.lookupId || "",
       name: category.name,
       image: normalizeText(category.image),
-      description: buildCategoryDescription(
-        category.name,
-        category.products.length
-      ),
+      description: buildCategoryDescription(category.name, category.products.length),
       products: category.products,
+      productCount: category.products.length,
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
-export function getStorefrontCategoryById(products = [], categoryId = "") {
-  return buildStorefrontCategories(products).find(
-    (category) => category.id === categoryId
-  ) || null;
+export function getStorefrontCategoryById(
+  products = [],
+  categoryId = "",
+  storefrontCategories = []
+) {
+  return (
+    buildStorefrontCategories(products, storefrontCategories).find(
+      (category) => category.id === categoryId
+    ) || null
+  );
 }
 
-export function getStorefrontProductsByCategory(products = [], categoryId = "") {
-  return getStorefrontCategoryById(products, categoryId)?.products || [];
+export function getStorefrontProductsByCategory(
+  products = [],
+  categoryId = "",
+  storefrontCategories = []
+) {
+  return getStorefrontCategoryById(products, categoryId, storefrontCategories)?.products || [];
 }

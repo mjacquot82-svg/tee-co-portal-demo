@@ -29,7 +29,9 @@ const PRODUCTS_SELECT_FIELDS = [
   "sku",
   "name",
   "category",
+  "storefront_category",
   "category_lookup_id",
+  "storefront_category_lookup_id",
   "product_type",
   "brand_model",
   "brand_lookup_id",
@@ -52,10 +54,10 @@ const PRODUCTS_SELECT_FIELDS = [
   "notes",
 ].join(", ");
 
-const LEGACY_PRODUCTS_SELECT_FIELDS = PRODUCTS_SELECT_FIELDS.replace(
-  "garment_library_item_id, ",
-  ""
-);
+const LEGACY_PRODUCTS_SELECT_FIELDS = PRODUCTS_SELECT_FIELDS
+  .replace("storefront_category, ", "")
+  .replace("storefront_category_lookup_id, ", "")
+  .replace("garment_library_item_id, ", "");
 
 function buildSupabaseProductErrorDetails(error, extra = {}) {
   if (!error || typeof error !== "object") {
@@ -88,11 +90,19 @@ function sleep(ms) {
   });
 }
 
-function isMissingGarmentLibraryColumnError(error) {
+function isMissingProductColumnError(error, columnName) {
   const message = String(error?.message || "");
   const details = String(error?.details || "");
   const hint = String(error?.hint || "");
-  return [message, details, hint].some((value) => value.includes("garment_library_item_id"));
+  return [message, details, hint].some((value) => value.includes(columnName));
+}
+
+function isLegacyProductSchemaError(error) {
+  return [
+    "garment_library_item_id",
+    "storefront_category",
+    "storefront_category_lookup_id",
+  ].some((columnName) => isMissingProductColumnError(error, columnName));
 }
 
 function emitProductsUpdated() {
@@ -344,6 +354,9 @@ function normalizeProduct(product) {
     status: buildPersistentStatus(
       product?.status ?? (product?.active === false ? "Inactive" : "Active")
     ),
+    storefront_category: product.storefront_category || product.category || "Catalog",
+    storefront_category_lookup_id:
+      product.storefront_category_lookup_id || product.category_lookup_id || null,
     garment_library_item_id:
       product.garment_library_item_id || product.garment_library_id || null,
     product_type: product.product_type || product.type || product.name || "General",
@@ -393,6 +406,7 @@ function buildProductDebugSummary(product = {}) {
     name: product?.name || "",
     status: product?.status || "",
     category: product?.category || "",
+    storefront_category: product?.storefront_category || "",
     garment_library_item_id: product?.garment_library_item_id || null,
     colorCount: Array.isArray(product?.colors) ? product.colors.length : 0,
     sizeCount: Array.isArray(product?.sizes) ? product.sizes.length : 0,
@@ -467,7 +481,10 @@ function buildSupabaseProductRecord(product = {}, options = {}) {
     sku: product.sku || "",
     name: product.name || "",
     category: product.category || "Catalog",
+    storefront_category: product.storefront_category || product.category || "Catalog",
     category_lookup_id: product.category_lookup_id || null,
+    storefront_category_lookup_id:
+      product.storefront_category_lookup_id || product.category_lookup_id || null,
     product_type: product.product_type || product.type || product.name || "",
     brand_model: product.brand_model || "",
     brand_lookup_id: product.brand_lookup_id || null,
@@ -534,7 +551,12 @@ function normalizeSupabaseProduct(product = {}) {
 }
 
 function omitGarmentLibraryItemId(record = {}) {
-  const { garment_library_item_id: _GARMENT_LIBRARY_ITEM_ID, ...legacyRecord } = record;
+  const {
+    garment_library_item_id: _GARMENT_LIBRARY_ITEM_ID,
+    storefront_category: _STOREFRONT_CATEGORY,
+    storefront_category_lookup_id: _STOREFRONT_CATEGORY_LOOKUP_ID,
+    ...legacyRecord
+  } = record;
   return legacyRecord;
 }
 
@@ -559,7 +581,7 @@ async function queryInsertedProductRow(productId, options = {}) {
     .maybeSingle();
   let { data, error } = await query;
 
-  if (error && isMissingGarmentLibraryColumnError(error)) {
+  if (error && isLegacyProductSchemaError(error)) {
     usedLegacySelect = true;
     query = supabase
       .from("products")
@@ -569,7 +591,7 @@ async function queryInsertedProductRow(productId, options = {}) {
     ({ data, error } = await query);
   }
 
-  if (error && isMissingGarmentLibraryColumnError(error)) {
+  if (error && isLegacyProductSchemaError(error)) {
     usedLegacyFilter = true;
     query = supabase
       .from("products")
@@ -615,9 +637,9 @@ async function fetchProductsFromSupabase() {
   let query = supabase.from("products").select(PRODUCTS_SELECT_FIELDS);
   let { data, error } = await query;
 
-  if (error && isMissingGarmentLibraryColumnError(error)) {
+  if (error && isLegacyProductSchemaError(error)) {
     console.warn(
-      "[productsStore] products.garment_library_item_id is unavailable; falling back to legacy product schema"
+      "[productsStore] storefront product schema is unavailable; falling back to legacy product schema"
     );
     query = supabase.from("products").select(LEGACY_PRODUCTS_SELECT_FIELDS);
     ({ data, error } = await query);
@@ -872,9 +894,9 @@ export async function createStoredProduct(productInput) {
       : null,
   });
 
-  if (error && isMissingGarmentLibraryColumnError(error)) {
+  if (error && isLegacyProductSchemaError(error)) {
     console.warn(
-      "[StorefrontCreateVerification] insert fallback triggered because garment_library_item_id is unavailable"
+      "[StorefrontCreateVerification] insert fallback triggered because storefront category fields are unavailable"
     );
     query = supabase
       .from("products")
@@ -1050,7 +1072,7 @@ export async function updateStoredProduct(productId, updates) {
     .single();
   let { data, error } = await query;
 
-  if (error && isMissingGarmentLibraryColumnError(error)) {
+  if (error && isLegacyProductSchemaError(error)) {
     query = supabase
       .from("products")
       .update(omitGarmentLibraryItemId(payload))

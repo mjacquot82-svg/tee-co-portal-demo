@@ -6,6 +6,7 @@ import {
   resolveProductBasePrice,
   useStoredProducts,
 } from "../lib/productsStore";
+import { useCatalogLookups } from "../lib/catalogLookupsStore";
 import {
   getStorefrontCategoryById,
   getStorefrontProductImage,
@@ -34,13 +35,18 @@ export default function CategoryView() {
   const { categoryId } = useParams();
   const storedProducts = useStoredProducts();
   const productsReady = areStoredProductsReady();
+  const lookups = useCatalogLookups();
+  const storefrontCategories = useMemo(
+    () => lookups.storefront_categories || [],
+    [lookups.storefront_categories]
+  );
   const category = useMemo(
-    () => getStorefrontCategoryById(storedProducts, categoryId),
-    [categoryId, storedProducts]
+    () => getStorefrontCategoryById(storedProducts, categoryId, storefrontCategories),
+    [categoryId, storedProducts, storefrontCategories]
   );
   const categoryProducts = useMemo(
-    () => getStorefrontProductsByCategory(storedProducts, categoryId),
-    [categoryId, storedProducts]
+    () => getStorefrontProductsByCategory(storedProducts, categoryId, storefrontCategories),
+    [categoryId, storedProducts, storefrontCategories]
   );
 
   useEffect(() => {
@@ -85,7 +91,7 @@ export default function CategoryView() {
           id: product?.id || null,
           name: product?.name || "",
           status: product?.status || "",
-          category: product?.category || "",
+          category: product?.storefront_category || product?.category || "",
           renderKey: renderIdentity.key,
           fallbackKeyUsed: renderIdentity.fallbackKeyUsed,
         };
@@ -130,11 +136,11 @@ export default function CategoryView() {
   return (
     <div
       style={{
-        maxWidth: "720px",
+        maxWidth: "1240px",
         margin: "0 auto",
-        padding: "12px 14px 26px",
+        padding: "18px 14px 32px",
         fontFamily:
-          'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+          '"Avenir Next", "Segoe UI", sans-serif',
       }}
     >
       <div style={{ marginBottom: "14px" }}>
@@ -151,11 +157,20 @@ export default function CategoryView() {
         </Link>
       </div>
 
-      <div style={{ marginBottom: "18px" }}>
+      <div
+        style={{
+          marginBottom: "18px",
+          borderRadius: "24px",
+          padding: "22px",
+          background:
+            "linear-gradient(180deg, rgba(248,250,252,0.96) 0%, rgba(255,255,255,0.98) 100%)",
+          border: "1px solid #e5e7eb",
+        }}
+      >
         <h1
           style={{
             margin: "0 0 6px 0",
-            fontSize: "24px",
+            fontSize: "32px",
             letterSpacing: "-0.02em",
           }}
         >
@@ -176,7 +191,7 @@ export default function CategoryView() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
           gap: "16px",
         }}
       >
@@ -188,7 +203,7 @@ export default function CategoryView() {
             id: item?.id || null,
             name: item?.name || "",
             status: item?.status || "",
-            category: item?.category || "",
+            category: item?.storefront_category || item?.category || "",
             renderKey: renderIdentity.key,
             fallbackKeyUsed: renderIdentity.fallbackKeyUsed,
           });

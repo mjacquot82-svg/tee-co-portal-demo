@@ -3,8 +3,20 @@ import { getRawStorageItem, hasBrowserStorage, setRawStorageItem } from "./brows
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
 
 const STORAGE_KEY = "teeCoCatalogLookups";
-const LOOKUP_TABLES = ["categories", "brands", "colors", "sizes", "garment_models"];
-const UUID_LOOKUP_TABLES = new Set(["categories", "brands", "garment_models"]);
+const LOOKUP_TABLES = [
+  "categories",
+  "storefront_categories",
+  "brands",
+  "colors",
+  "sizes",
+  "garment_models",
+];
+const UUID_LOOKUP_TABLES = new Set([
+  "categories",
+  "storefront_categories",
+  "brands",
+  "garment_models",
+]);
 
 const DEFAULT_LOOKUPS = {
   categories: [
@@ -13,6 +25,15 @@ const DEFAULT_LOOKUPS = {
     { id: "category-hats", name: "Hats", active: true },
     { id: "category-workwear", name: "Workwear", active: true },
     { id: "category-teamwear", name: "Teamwear", active: true },
+  ],
+  storefront_categories: [
+    { id: "storefront-category-apparel", name: "Apparel", active: true },
+    { id: "storefront-category-hoodies", name: "Hoodies", active: true },
+    { id: "storefront-category-hats", name: "Hats", active: true },
+    { id: "storefront-category-drinkware", name: "Drinkware", active: true },
+    { id: "storefront-category-accessories", name: "Accessories", active: true },
+    { id: "storefront-category-featured", name: "Featured", active: true },
+    { id: "storefront-category-clearance", name: "Clearance", active: true },
   ],
   brands: [],
   colors: [
@@ -71,6 +92,21 @@ function normalizeText(value) {
 function isUuidLike(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     normalizeText(value)
+  );
+}
+
+function isMissingLookupTableError(error, table) {
+  const message = normalizeText(error?.message).toLowerCase();
+  const details = normalizeText(error?.details).toLowerCase();
+  const hint = normalizeText(error?.hint).toLowerCase();
+  const patterns = [
+    `relation "${table}" does not exist`,
+    `table "${table}" does not exist`,
+    `could not find the table '${table}'`,
+  ];
+
+  return patterns.some(
+    (pattern) => message.includes(pattern) || details.includes(pattern) || hint.includes(pattern)
   );
 }
 
@@ -533,6 +569,12 @@ export async function createCatalogLookup(table, values) {
     saveLocalLookupsSnapshot(nextLookups);
     return remoteRecord;
   } catch (error) {
+    if (isMissingLookupTableError(error, table)) {
+      const nextLookups = appendLookupRecord(getCatalogLookups(), table, normalizedRecord);
+      saveLocalLookupsSnapshot(nextLookups);
+      return normalizedRecord;
+    }
+
     console.error("[catalogLookupsStore] remote lookup insert failed", {
       table,
       insertCount: 1,
@@ -562,4 +604,54 @@ export async function createCatalogLookup(table, values) {
 
     throw error;
   }
+}
+
+export async function updateCatalogLookup(table, lookupId, values = {}) {
+  if (!LOOKUP_TABLES.includes(table)) {
+    throw new Error(`Unsupported catalog lookup table: ${table}`);
+  }
+
+  const existingRecord = (getCatalogLookups()?.[table] || []).find((item) => item.id === lookupId);
+  if (!existingRecord) {
+    throw new Error(`Unable to find ${table} lookup: ${lookupId}`);
+  }
+
+  const normalizedRecord = normalizeLookupItem(table, {
+    ...existingRecord,
+    ...values,
+    id: existingRecord.id,
+  });
+
+  if (!normalizedRecord) {
+    throw new Error(`Invalid ${table} lookup values`);
+  }
+
+  if (!isSupabaseConfigured || !supabase) {
+    const nextLookups = replaceLookupRecord(getCatalogLookups(), table, normalizedRecord);
+    saveLocalLookupsSnapshot(nextLookups);
+    return normalizedRecord;
+  }
+
+  const { id: _unusedId, created_at: _unusedCreatedAt, ...updatePayload } = normalizedRecord;
+  const { data, error } = await supabase
+    .from(table)
+    .update(updatePayload)
+    .eq("id", lookupId)
+    .select("*")
+    .single();
+
+  if (error) {
+    if (isMissingLookupTableError(error, table)) {
+      const nextLookups = replaceLookupRecord(getCatalogLookups(), table, normalizedRecord);
+      saveLocalLookupsSnapshot(nextLookups);
+      return normalizedRecord;
+    }
+
+    throw error;
+  }
+
+  const remoteRecord = normalizeLookupItem(table, data);
+  const nextLookups = replaceLookupRecord(getCatalogLookups(), table, remoteRecord);
+  saveLocalLookupsSnapshot(nextLookups);
+  return remoteRecord;
 }

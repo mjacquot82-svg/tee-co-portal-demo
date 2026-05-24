@@ -4,7 +4,11 @@ import "./Products.css";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import ProductImageUploader from "../components/ProductImageUploader";
 import { PRODUCTION_TYPES } from "../constants/productionTypes";
-import { useCatalogLookups } from "../lib/catalogLookupsStore";
+import {
+  createCatalogLookup,
+  updateCatalogLookup,
+  useCatalogLookups,
+} from "../lib/catalogLookupsStore";
 import { useGarmentLibraryItems } from "../lib/garmentLibraryStore";
 import { findLinkedGarmentLibraryItem } from "../lib/productGarmentLinks";
 import {
@@ -75,7 +79,9 @@ const emptyProduct = {
   cost_price: "",
   markup_percentage: "",
   category: "",
+  storefront_category: "",
   category_lookup_id: "",
+  storefront_category_lookup_id: "",
   brand_lookup_id: "",
   garment_model_lookup_id: "",
   product_type: "",
@@ -112,6 +118,31 @@ function buildPlacementLibrary(products = [], libraryItems = []) {
   });
 
   return Array.from(placementNames).sort((left, right) => left.localeCompare(right));
+}
+
+function resolveStorefrontCategoryOption(
+  storefrontCategories = [],
+  storefrontCategoryLookupId = "",
+  storefrontCategoryName = "",
+  fallbackCategoryName = ""
+) {
+  const normalizedLookupId = normalizeText(storefrontCategoryLookupId);
+  if (normalizedLookupId) {
+    const matchedCategory = findLookupById(storefrontCategories, normalizedLookupId);
+    if (matchedCategory) return matchedCategory;
+  }
+
+  const targetName = normalizeText(
+    storefrontCategoryName || fallbackCategoryName || "Catalog"
+  ).toLowerCase();
+
+  if (!targetName) return null;
+
+  return (
+    storefrontCategories.find(
+      (category) => normalizeText(category?.name).toLowerCase() === targetName
+    ) || null
+  );
 }
 
 function resolveProductMode(product = {}, matchedItem = null) {
@@ -164,10 +195,24 @@ function buildCategoryScopedBrandOptions(
   return Array.from(optionsById.values()).sort((left, right) => left.label.localeCompare(right.label));
 }
 
-function buildFormFromGarmentDraft(item, sizeLookups, brands, categories, garmentModels) {
+function buildFormFromGarmentDraft(
+  item,
+  sizeLookups,
+  brands,
+  categories,
+  garmentModels,
+  storefrontCategories = []
+) {
   const garmentModel = findLookupById(garmentModels, item?.garment_model_lookup_id);
   const brand = findLookupById(brands, item?.brand_lookup_id);
   const category = findLookupById(categories, item?.category_lookup_id);
+  const storefrontCategory =
+    resolveStorefrontCategoryOption(
+      storefrontCategories,
+      item?.storefront_category_lookup_id,
+      item?.storefront_category,
+      category?.name || item?.category
+    ) || null;
   const defaultProductionMethods =
     Array.isArray(item?.default_production_methods) && item.default_production_methods.length
       ? item.default_production_methods
@@ -190,7 +235,10 @@ function buildFormFromGarmentDraft(item, sizeLookups, brands, categories, garmen
     production_methods: defaultProductionMethods,
     production_method_prices: buildMethodPriceMap(defaultProductionMethods, {}),
     category: category?.name || "",
+    storefront_category:
+      storefrontCategory?.name || category?.name || item?.storefront_category || "",
     category_lookup_id: item?.category_lookup_id || "",
+    storefront_category_lookup_id: storefrontCategory?.id || "",
     brand_lookup_id: item?.brand_lookup_id || "",
     garment_model_lookup_id: item?.garment_model_lookup_id || "",
     product_type: resolveStructuredProductType(garmentModel, "", item?.title || ""),
@@ -199,8 +247,23 @@ function buildFormFromGarmentDraft(item, sizeLookups, brands, categories, garmen
   };
 }
 
-function buildFormFromProduct(product, libraryItems, sizeLookups, brands, categories, garmentModels) {
+function buildFormFromProduct(
+  product,
+  libraryItems,
+  sizeLookups,
+  brands,
+  categories,
+  garmentModels,
+  storefrontCategories = []
+) {
   const matchedItem = findLinkedGarmentLibraryItem(product, libraryItems);
+  const storefrontCategory =
+    resolveStorefrontCategoryOption(
+      storefrontCategories,
+      product?.storefront_category_lookup_id,
+      product?.storefront_category,
+      product?.category
+    ) || null;
   const placements = getProductPlacementConfig(product).map((placement) => placement.label);
   const productionMethods = Array.isArray(product?.production_methods) && product.production_methods.length
     ? product.production_methods
@@ -236,6 +299,9 @@ function buildFormFromProduct(product, libraryItems, sizeLookups, brands, catego
         ? ""
         : String(product.markup_percentage),
     notes: product?.notes || "",
+    storefront_category:
+      storefrontCategory?.name || product?.storefront_category || product?.category || "",
+    storefront_category_lookup_id: storefrontCategory?.id || "",
   };
 }
 
@@ -246,7 +312,8 @@ function normalizeStatusValue(value) {
 function buildProductRenderIdentity(product, index) {
   const normalizedId = normalizeText(product?.id);
   const normalizedName = normalizeText(product?.name) || "unnamed-product";
-  const normalizedCategory = normalizeText(product?.category) || "uncategorized";
+  const normalizedCategory =
+    normalizeText(product?.storefront_category || product?.category) || "uncategorized";
   const fallbackId = `${normalizedName}-${normalizedCategory}-${index}`;
 
   return {
@@ -270,6 +337,10 @@ export default function Products() {
   const libraryItems = useGarmentLibraryItems();
   const lookups = useCatalogLookups();
   const categories = useMemo(() => lookups.categories || [], [lookups.categories]);
+  const storefrontCategories = useMemo(
+    () => lookups.storefront_categories || [],
+    [lookups.storefront_categories]
+  );
   const brands = useMemo(() => lookups.brands || [], [lookups.brands]);
   const sizes = useMemo(() => lookups.sizes || [], [lookups.sizes]);
   const garmentModels = useMemo(() => lookups.garment_models || [], [lookups.garment_models]);
@@ -277,6 +348,15 @@ export default function Products() {
   const [editingProductId, setEditingProductId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [selectedStorefrontCategory, setSelectedStorefrontCategory] = useState("all");
+  const [selectedBrand, setSelectedBrand] = useState("all");
+  const [selectedProductType, setSelectedProductType] = useState("all");
+  const [selectedProductMode, setSelectedProductMode] = useState("all");
+  const [newStorefrontCategoryName, setNewStorefrontCategoryName] = useState("");
+  const [categorySaveError, setCategorySaveError] = useState("");
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
+  const [editingStorefrontCategoryId, setEditingStorefrontCategoryId] = useState("");
+  const [editingStorefrontCategoryName, setEditingStorefrontCategoryName] = useState("");
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [creationNotice, setCreationNotice] = useState("");
@@ -322,14 +402,65 @@ export default function Products() {
     [products, libraryItems]
   );
   const placementOptions = normalizeListInput(form.placementsText);
+  const activeStorefrontCategories = useMemo(
+    () => storefrontCategories.filter((category) => category?.active !== false),
+    [storefrontCategories]
+  );
+  const productTypeOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          products
+            .map((product) => normalizeText(product?.product_type))
+            .filter(Boolean)
+        )
+      ).sort((left, right) => left.localeCompare(right)),
+    [products]
+  );
+  const brandFilterOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          products
+            .map((product) => normalizeText(product?.brand_model))
+            .filter(Boolean)
+        )
+      ).sort((left, right) => left.localeCompare(right)),
+    [products]
+  );
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
     return products.filter((product) => {
+      const storefrontCategoryName = normalizeText(
+        product?.storefront_category || product?.category
+      );
+      const productTypeName = normalizeText(product?.product_type);
+      const brandName = normalizeText(product?.brand_model);
+      const matchesStorefrontCategory =
+        selectedStorefrontCategory === "all" ||
+        normalizeText(product?.storefront_category_lookup_id) === selectedStorefrontCategory;
+      const matchesBrand =
+        selectedBrand === "all" || brandName.toLowerCase() === selectedBrand.toLowerCase();
+      const matchesProductType =
+        selectedProductType === "all" ||
+        productTypeName.toLowerCase() === selectedProductType.toLowerCase();
+      const matchesProductMode =
+        selectedProductMode === "all" ||
+        (selectedProductMode === "apparel"
+          ? Boolean(product?.garment_library_item_id)
+          : !product?.garment_library_item_id);
       const matchesSearch =
         !normalizedSearch ||
-        [product?.name, product?.brand_model, product?.category, product?.notes]
+        [
+          product?.name,
+          brandName,
+          storefrontCategoryName,
+          product?.category,
+          productTypeName,
+          product?.notes,
+        ]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(normalizedSearch));
       const matchesStatus =
@@ -337,9 +468,24 @@ export default function Products() {
         (selectedStatus === "active"
           ? normalizeStatusValue(product?.status) === "active"
           : normalizeStatusValue(product?.status) !== "active");
-      return matchesSearch && matchesStatus;
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesStorefrontCategory &&
+        matchesBrand &&
+        matchesProductType &&
+        matchesProductMode
+      );
     });
-  }, [products, searchTerm, selectedStatus]);
+  }, [
+    products,
+    searchTerm,
+    selectedStatus,
+    selectedStorefrontCategory,
+    selectedBrand,
+    selectedProductType,
+    selectedProductMode,
+  ]);
 
   const activeCount = products.filter((product) => normalizeStatusValue(product?.status) === "active").length;
 
@@ -479,6 +625,11 @@ export default function Products() {
         }
       }
 
+      if (name === "storefront_category_lookup_id") {
+        const selectedStorefrontCategory = findLookupById(storefrontCategories, value);
+        nextForm.storefront_category = selectedStorefrontCategory?.name || "";
+      }
+
       if (name === "brand_lookup_id") {
         const selectedBrand = findLookupById(brands, value);
         nextForm.brand_model = selectedBrand?.name || "";
@@ -493,6 +644,7 @@ export default function Products() {
     setEditingProductId(null);
     setCreationNotice("");
     setHighlightedProductIds([]);
+    setCategorySaveError("");
   }
 
   function handleProductModeChange(productMode) {
@@ -535,7 +687,8 @@ export default function Products() {
         sizes,
         brands,
         categories,
-        garmentModels
+        garmentModels,
+        storefrontCategories
       );
       console.info("[Products] created fresh storefront draft from garment template", {
         garmentId: item?.id || null,
@@ -548,6 +701,14 @@ export default function Products() {
 
     const garmentModel = findLookupById(garmentModels, item.garment_model_lookup_id);
     const brand = findLookupById(brands, item.brand_lookup_id);
+    const supplierCategory = findLookupById(categories, item.category_lookup_id);
+    const storefrontCategory =
+      resolveStorefrontCategoryOption(
+        storefrontCategories,
+        item?.storefront_category_lookup_id,
+        item?.storefront_category,
+        supplierCategory?.name || item?.category
+      ) || null;
     setForm((current) => ({
       ...current,
       selectedGarmentLibraryId: item.id,
@@ -555,8 +716,15 @@ export default function Products() {
       image: current.image || item.image || "",
       visibleVariants: getVariantOptions(item).map((variant) => variant.name),
       sizes: sortSizesByLookup(item.sizes || [], sizes),
-      category: findLookupById(categories, item.category_lookup_id)?.name || current.category || "",
+      category: supplierCategory?.name || current.category || "",
+      storefront_category:
+        storefrontCategory?.name ||
+        current.storefront_category ||
+        supplierCategory?.name ||
+        "",
       category_lookup_id: item.category_lookup_id || current.category_lookup_id || "",
+      storefront_category_lookup_id:
+        storefrontCategory?.id || current.storefront_category_lookup_id || "",
       brand_lookup_id: item.brand_lookup_id || current.brand_lookup_id || "",
       garment_model_lookup_id: item.garment_model_lookup_id || current.garment_model_lookup_id || "",
       product_type: resolveStructuredProductType(garmentModel, current.product_type, current.name || item.title),
@@ -594,7 +762,8 @@ export default function Products() {
         sizes,
         brands,
         categories,
-        garmentModels
+        garmentModels,
+        storefrontCategories
       )
     );
     navigate(location.pathname, { replace: true, state: {} });
@@ -614,6 +783,7 @@ export default function Products() {
     location.state,
     navigate,
     sizes,
+    storefrontCategories,
   ]);
 
   useEffect(() => {
@@ -767,12 +937,100 @@ export default function Products() {
 
   function handleEdit(product) {
     setEditingProductId(product.id);
-    setForm(buildFormFromProduct(product, libraryItems, sizes, brands, categories, garmentModels));
+    setForm(
+      buildFormFromProduct(
+        product,
+        libraryItems,
+        sizes,
+        brands,
+        categories,
+        garmentModels,
+        storefrontCategories
+      )
+    );
     editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     window.requestAnimationFrame(() => {
       nameInputRef.current?.focus();
       nameInputRef.current?.select();
     });
+  }
+
+  async function handleCreateStorefrontCategory() {
+    const nextName = normalizeText(newStorefrontCategoryName);
+    if (!nextName) return;
+
+    try {
+      setIsSavingCategory(true);
+      setCategorySaveError("");
+      const createdCategory = await createCatalogLookup("storefront_categories", {
+        name: nextName,
+        active: true,
+      });
+      setNewStorefrontCategoryName("");
+      setForm((current) => ({
+        ...current,
+        storefront_category_lookup_id: createdCategory.id,
+        storefront_category: createdCategory.name,
+      }));
+    } catch (error) {
+      console.error("Unable to create storefront category", error);
+      setCategorySaveError("Unable to create storefront category right now.");
+    } finally {
+      setIsSavingCategory(false);
+    }
+  }
+
+  async function handleSaveStorefrontCategoryEdits(categoryId) {
+    const nextName = normalizeText(editingStorefrontCategoryName);
+    if (!categoryId || !nextName) return;
+
+    try {
+      setIsSavingCategory(true);
+      setCategorySaveError("");
+      const updatedCategory = await updateCatalogLookup("storefront_categories", categoryId, {
+        name: nextName,
+      });
+      if (form.storefront_category_lookup_id === categoryId) {
+        setForm((current) => ({
+          ...current,
+          storefront_category: updatedCategory.name,
+        }));
+      }
+      setEditingStorefrontCategoryId("");
+      setEditingStorefrontCategoryName("");
+    } catch (error) {
+      console.error("Unable to update storefront category", error);
+      setCategorySaveError("Unable to save storefront category changes right now.");
+    } finally {
+      setIsSavingCategory(false);
+    }
+  }
+
+  async function handleToggleStorefrontCategoryActive(category) {
+    if (!category?.id) return;
+
+    try {
+      setIsSavingCategory(true);
+      setCategorySaveError("");
+      await updateCatalogLookup("storefront_categories", category.id, {
+        active: category.active === false,
+      });
+      if (
+        category.active !== false &&
+        form.storefront_category_lookup_id === category.id
+      ) {
+        setForm((current) => ({
+          ...current,
+          storefront_category_lookup_id: "",
+          storefront_category: "",
+        }));
+      }
+    } catch (error) {
+      console.error("Unable to update storefront category status", error);
+      setCategorySaveError("Unable to update storefront category status right now.");
+    } finally {
+      setIsSavingCategory(false);
+    }
   }
 
   async function handleSubmit(event) {
@@ -781,6 +1039,11 @@ export default function Products() {
 
     if (!editingProductId && !isManualProductMode && !selectedGarmentItem) {
       setSaveError("Choose a garment from the Garment Library before creating a storefront product.");
+      return;
+    }
+
+    if (!normalizeText(form.storefront_category_lookup_id) && !normalizeText(form.storefront_category)) {
+      setSaveError("Assign a storefront category before publishing this product.");
       return;
     }
 
@@ -805,6 +1068,10 @@ export default function Products() {
       categories,
       selectedGarmentItem?.category_lookup_id || form.category_lookup_id
     );
+    const storefrontCategory = findLookupById(
+      storefrontCategories,
+      form.storefront_category_lookup_id
+    );
     const flatPrice = Number(form.flat_price || 0);
     const selectedSizes =
       !isManualProductMode && selectedGarmentItem && isOneSizeOnly(selectedGarmentItem.sizes || [])
@@ -822,7 +1089,11 @@ export default function Products() {
         ? null
         : selectedGarmentItem?.id || form.selectedGarmentLibraryId || null,
       category: category?.name || form.category || "Catalog",
+      storefront_category:
+        storefrontCategory?.name || form.storefront_category || category?.name || "Catalog",
       category_lookup_id: category?.id || form.category_lookup_id || null,
+      storefront_category_lookup_id:
+        storefrontCategory?.id || form.storefront_category_lookup_id || null,
       product_type: resolvedProductType,
       brand_model: isManualProductMode
         ? buildLegacyBrandModelValue(brand, null, form.brand_model)
@@ -1003,43 +1274,170 @@ export default function Products() {
             </label>
             </div>
 
-            {isManualProductMode ? (
-              <div className="products-editor-grid">
-                <label style={labelStyle}>
-                  Category
-                  <select
-                    name="category_lookup_id"
-                    value={form.category_lookup_id}
-                    onChange={updateField}
-                    style={fieldStyle}
-                  >
-                    <option value="">Catalog</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+            <div className="products-editor-grid">
+              <label style={labelStyle}>
+                Storefront Category
+                <select
+                  name="storefront_category_lookup_id"
+                  value={form.storefront_category_lookup_id}
+                  onChange={updateField}
+                  style={fieldStyle}
+                >
+                  <option value="">Select storefront category</option>
+                  {activeStorefrontCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-                <label style={labelStyle}>
-                  Brand
-                  <select
-                    name="brand_lookup_id"
-                    value={form.brand_lookup_id}
-                    onChange={updateField}
-                    style={fieldStyle}
-                  >
-                    <option value="">No brand</option>
-                    {brandSelectOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              <label style={labelStyle}>
+                Brand
+                <select
+                  name="brand_lookup_id"
+                  value={form.brand_lookup_id}
+                  onChange={updateField}
+                  style={fieldStyle}
+                >
+                  <option value="">No brand</option>
+                  {brandSelectOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="products-inline-create-panel">
+              <input
+                value={newStorefrontCategoryName}
+                onChange={(event) => setNewStorefrontCategoryName(event.target.value)}
+                placeholder="Create storefront category like Drinkware"
+                style={{ ...fieldStyle, flex: "1 1 220px" }}
+              />
+              <button
+                type="button"
+                className="products-inline-save"
+                onClick={handleCreateStorefrontCategory}
+                disabled={isSavingCategory || !normalizeText(newStorefrontCategoryName)}
+              >
+                {isSavingCategory ? "Saving..." : "Create Category"}
+              </button>
+            </div>
+
+            <div className="products-editor-grid">
+              <label style={labelStyle}>
+                Supplier Category
+                <select
+                  name="category_lookup_id"
+                  value={form.category_lookup_id}
+                  onChange={updateField}
+                  style={fieldStyle}
+                >
+                  <option value="">Catalog</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={labelStyle}>
+                Product Type
+                <input
+                  name="product_type"
+                  value={form.product_type}
+                  onChange={updateField}
+                  placeholder={isManualProductMode ? "Tumbler" : "Pullover Hoodie"}
+                  style={fieldStyle}
+                />
+              </label>
+            </div>
+
+            {categorySaveError ? <div className="products-error-banner">{categorySaveError}</div> : null}
+
+            <div className="products-category-manager">
+              <div className="products-category-manager-header">
+                <div>
+                  <strong>Storefront Category Manager</strong>
+                  <p>Create, rename, or deactivate customer-facing browse categories.</p>
+                </div>
               </div>
-            ) : null}
+
+              <div className="products-category-manager-list">
+                {storefrontCategories.map((category) => {
+                  const isEditingCategory = editingStorefrontCategoryId === category.id;
+                  return (
+                    <div key={category.id} className="products-category-manager-item">
+                      {isEditingCategory ? (
+                        <input
+                          value={editingStorefrontCategoryName}
+                          onChange={(event) => setEditingStorefrontCategoryName(event.target.value)}
+                          style={fieldStyle}
+                        />
+                      ) : (
+                        <div>
+                          <strong>{category.name}</strong>
+                          <div className="products-category-manager-meta">
+                            <span>{category.active === false ? "Inactive" : "Active"}</span>
+                            <span>{category.id}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="products-category-manager-actions">
+                        {isEditingCategory ? (
+                          <>
+                            <button
+                              type="button"
+                              className="products-inline-save"
+                              onClick={() => handleSaveStorefrontCategoryEdits(category.id)}
+                              disabled={isSavingCategory || !normalizeText(editingStorefrontCategoryName)}
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              className="products-inline-cancel"
+                              onClick={() => {
+                                setEditingStorefrontCategoryId("");
+                                setEditingStorefrontCategoryName("");
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="products-inline-action"
+                              onClick={() => {
+                                setEditingStorefrontCategoryId(category.id);
+                                setEditingStorefrontCategoryName(category.name);
+                              }}
+                            >
+                              Rename
+                            </button>
+                            <button
+                              type="button"
+                              className="products-inline-action"
+                              onClick={() => handleToggleStorefrontCategoryActive(category)}
+                              disabled={isSavingCategory}
+                            >
+                              {category.active === false ? "Activate" : "Deactivate"}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </section>
 
           {!isManualProductMode ? (
@@ -1322,6 +1720,9 @@ export default function Products() {
                 <strong>{form.name || "Customer product name pending"}</strong>
                 <p>
                   Customer price: {form.flat_price ? formatMoney(form.flat_price) : "not set"}.
+                  {form.storefront_category
+                    ? ` Storefront category: ${form.storefront_category}.`
+                    : " Storefront category still needs to be assigned."}
                   {isManualProductMode
                     ? " Manual product mode does not require a garment template."
                     : ` Garment link: ${selectedGarmentItem?.title || "required before create"}.`}
@@ -1369,6 +1770,10 @@ export default function Products() {
                 <span>Garments</span>
                 <strong>{libraryItems.length}</strong>
               </div>
+              <div className="products-stat-card">
+                <span>Categories</span>
+                <strong>{activeStorefrontCategories.length}</strong>
+              </div>
             </div>
           </div>
 
@@ -1379,9 +1784,66 @@ export default function Products() {
                 type="search"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search product name or garment"
+                placeholder="Search product, category, brand, type"
                 style={fieldStyle}
               />
+            </label>
+
+            <label className="products-toolbar-field">
+              <span>Storefront Category</span>
+              <select
+                value={selectedStorefrontCategory}
+                onChange={(event) => setSelectedStorefrontCategory(event.target.value)}
+                style={fieldStyle}
+              >
+                <option value="all">All categories</option>
+                {activeStorefrontCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="products-toolbar-field">
+              <span>Brand</span>
+              <select value={selectedBrand} onChange={(event) => setSelectedBrand(event.target.value)} style={fieldStyle}>
+                <option value="all">All brands</option>
+                {brandFilterOptions.map((brand) => (
+                  <option key={brand} value={brand}>
+                    {brand}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="products-toolbar-field">
+              <span>Product Type</span>
+              <select
+                value={selectedProductType}
+                onChange={(event) => setSelectedProductType(event.target.value)}
+                style={fieldStyle}
+              >
+                <option value="all">All product types</option>
+                {productTypeOptions.map((productType) => (
+                  <option key={productType} value={productType}>
+                    {productType}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="products-toolbar-field">
+              <span>Mode</span>
+              <select
+                value={selectedProductMode}
+                onChange={(event) => setSelectedProductMode(event.target.value)}
+                style={fieldStyle}
+              >
+                <option value="all">All products</option>
+                <option value="apparel">Garment-linked</option>
+                <option value="manual">Manual products</option>
+              </select>
             </label>
 
             <label className="products-toolbar-field">
@@ -1389,7 +1851,7 @@ export default function Products() {
               <select value={selectedStatus} onChange={(event) => setSelectedStatus(event.target.value)} style={fieldStyle}>
                 <option value="all">All statuses</option>
                 <option value="active">Active</option>
-                <option value="archived">Archived</option>
+                <option value="archived">Inactive</option>
               </select>
             </label>
           </div>
@@ -1398,6 +1860,27 @@ export default function Products() {
             <span>
               Showing <strong>{filteredProducts.length}</strong> of <strong>{products.length}</strong> products
             </span>
+            {(searchTerm ||
+              selectedStorefrontCategory !== "all" ||
+              selectedBrand !== "all" ||
+              selectedProductType !== "all" ||
+              selectedProductMode !== "all" ||
+              selectedStatus !== "all") ? (
+              <button
+                type="button"
+                className="products-clear-filters"
+                onClick={() => {
+                  setSearchTerm("");
+                  setSelectedStorefrontCategory("all");
+                  setSelectedBrand("all");
+                  setSelectedProductType("all");
+                  setSelectedProductMode("all");
+                  setSelectedStatus("all");
+                }}
+              >
+                Clear Filters
+              </button>
+            ) : null}
             {highlightedProductIds.length ? <span>Newest storefront product highlighted below.</span> : null}
           </div>
 
@@ -1448,6 +1931,7 @@ export default function Products() {
                               <h3 style={{ margin: 0 }}>{product.name}</h3>
                             </div>
                             <p className="products-card-subtitle">
+                              {product.storefront_category || product.category || "Catalog"} •{" "}
                               {linkedGarment?.title ||
                                 product.brand_model ||
                                 (product?.garment_library_item_id ? "Linked apparel product" : "Manual catalog product")}
@@ -1459,20 +1943,17 @@ export default function Products() {
 
                         <div className="products-card-detail-grid">
                           <div className="products-card-detail">
-                            <span>Variants</span>
+                            <span>Category</span>
                             <strong>
-                              {product?.garment_library_item_id
-                                ? `${(product?.colors || []).length} enabled`
-                                : "Not apparel-based"}
+                              {product?.storefront_category || product?.category || "Catalog"}
                             </strong>
                           </div>
 
                           <div className="products-card-detail">
-                            <span>Sizes</span>
+                            <span>Type</span>
                             <strong>
-                              {product?.garment_library_item_id
-                                ? (product?.sizes || []).join(", ") || "None"
-                                : "Not apparel-based"}
+                              {product?.product_type ||
+                                (product?.garment_library_item_id ? "Apparel Product" : "Manual Product")}
                             </strong>
                           </div>
 
@@ -1484,12 +1965,9 @@ export default function Products() {
                           </div>
 
                           <div className="products-card-detail">
-                            <span>Placements</span>
+                            <span>Mode</span>
                             <strong>
-                              {getProductPlacementConfig(product)
-                                .map((placement) => placement.label)
-                                .slice(0, 3)
-                                .join(", ") || "None"}
+                              {product?.garment_library_item_id ? "Garment-linked" : "Manual"}
                             </strong>
                           </div>
                         </div>
