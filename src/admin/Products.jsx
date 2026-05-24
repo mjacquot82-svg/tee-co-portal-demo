@@ -81,7 +81,6 @@ const emptyProduct = {
   cost_price: "",
   markup_percentage: "",
   category: "",
-  storefront_category: "",
   category_lookup_id: "",
   storefront_category_lookup_id: "",
   brand_lookup_id: "",
@@ -246,13 +245,6 @@ function buildFormFromGarmentDraft(
     production_methods: defaultProductionMethods,
     production_method_prices: buildMethodPriceMap(defaultProductionMethods, {}),
     category: category?.name || "",
-    storefront_category:
-      prefilledStorefrontCategory?.name ||
-      normalizeText(prefilledStorefrontSetup?.storefront_category) ||
-      storefrontCategory?.name ||
-      category?.name ||
-      item?.storefront_category ||
-      "",
     category_lookup_id: item?.category_lookup_id || "",
     storefront_category_lookup_id:
       prefilledStorefrontCategory?.id ||
@@ -277,6 +269,7 @@ function buildFormFromProduct(
   garmentModels,
   storefrontCategories = []
 ) {
+  const { storefront_category: _storefrontCategory, ...productFields } = product || {};
   const matchedItem = findLinkedGarmentLibraryItem(product, libraryItems);
   const storefrontCategory =
     resolveStorefrontCategoryOption(
@@ -293,7 +286,7 @@ function buildFormFromProduct(
 
   return {
     ...emptyProduct,
-    ...product,
+    ...productFields,
     productMode: resolveProductMode(product, matchedItem),
     selectedGarmentLibraryId: matchedItem?.id || "",
     garmentSearch: matchedItem
@@ -319,7 +312,6 @@ function buildFormFromProduct(
         ? ""
         : String(product.markup_percentage),
     notes: product?.notes || "",
-    storefront_category: storefrontCategory?.name || product?.storefront_category || "",
     storefront_category_lookup_id: storefrontCategory?.id || "",
   };
 }
@@ -443,6 +435,11 @@ export default function Products() {
     () => storefrontCategories.filter((category) => category?.active !== false),
     [storefrontCategories]
   );
+  const activeStorefrontCategory = useMemo(
+    () => findLookupById(storefrontCategories, form.storefront_category_lookup_id) || null,
+    [form.storefront_category_lookup_id, storefrontCategories]
+  );
+  const activeStorefrontCategoryLabel = activeStorefrontCategory?.name || "";
   const brandFilterOptions = useMemo(
     () =>
       Array.from(
@@ -717,11 +714,6 @@ export default function Products() {
         }
       }
 
-      if (name === "storefront_category_lookup_id") {
-        const selectedStorefrontCategory = findLookupById(storefrontCategories, value);
-        nextForm.storefront_category = selectedStorefrontCategory?.name || "";
-      }
-
       if (name === "brand_lookup_id") {
         const selectedBrand = findLookupById(brands, value);
         nextForm.brand_model = selectedBrand?.name || "";
@@ -745,11 +737,9 @@ export default function Products() {
     setNewStorefrontCategoryName("");
     setCategorySaveError("");
     setForm((current) => {
-      const selectedStorefrontCategory = findLookupById(storefrontCategories, value);
       return {
         ...current,
         storefront_category_lookup_id: value,
-        storefront_category: selectedStorefrontCategory?.name || "",
       };
     });
   }
@@ -919,11 +909,6 @@ export default function Products() {
       visibleVariants: getVariantOptions(item).map((variant) => variant.name),
       sizes: sortSizesByLookup(item.sizes || [], sizes),
       category: supplierCategory?.name || current.category || "",
-      storefront_category:
-        storefrontCategory?.name ||
-        current.storefront_category ||
-        supplierCategory?.name ||
-        "",
       category_lookup_id: item.category_lookup_id || current.category_lookup_id || "",
       storefront_category_lookup_id:
         storefrontCategory?.id || current.storefront_category_lookup_id || "",
@@ -1169,7 +1154,6 @@ export default function Products() {
       setForm((current) => ({
         ...current,
         storefront_category_lookup_id: existingCategory.id,
-        storefront_category: existingCategory.name,
       }));
       setNewStorefrontCategoryName("");
       setIsCreatingStorefrontCategory(false);
@@ -1189,7 +1173,6 @@ export default function Products() {
       setForm((current) => ({
         ...current,
         storefront_category_lookup_id: createdCategory.id,
-        storefront_category: createdCategory.name,
       }));
     } catch (error) {
       console.error("Unable to create storefront category", error);
@@ -1272,8 +1255,7 @@ export default function Products() {
     const resolvedSupplierCategoryName = isManualProductMode
       ? "Manual"
       : category?.name || form.category || "Catalog";
-    const resolvedStorefrontCategoryName =
-      storefrontCategory?.name || normalizeText(form.storefront_category) || "";
+    const resolvedStorefrontCategoryName = storefrontCategory?.name || "";
 
     const productPayload = {
       name: normalizeText(form.name),
@@ -1900,8 +1882,8 @@ export default function Products() {
 
                       <div className="products-field-footer">
                         <span>
-                          {form.storefront_category
-                            ? `Selected: ${form.storefront_category}`
+                          {activeStorefrontCategoryLabel
+                            ? `Selected: ${activeStorefrontCategoryLabel}`
                             : "Keeps the product uncategorized until you assign one."}
                         </span>
                       </div>
@@ -2028,20 +2010,6 @@ export default function Products() {
                       emptyState="No garments found. Add one in Garment Library first."
                     />
                   ) : null}
-
-                  <div className="products-storefront-header-glance products-storefront-header-glance-compact">
-                    <div className="products-summary-card">
-                      <span className="products-summary-label">Category</span>
-                      <strong>{form.storefront_category || "Uncategorized"}</strong>
-                    </div>
-                    <div className="products-summary-card">
-                      <span className="products-summary-label">Price</span>
-                      <strong>{form.flat_price ? formatMoney(form.flat_price) : "Add sale price"}</strong>
-                      <div className="products-summary-details">
-                        <span>{normalizeStatusValue(form.status) === "active" ? "Visible" : "Hidden"}</span>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </div>
 
@@ -2091,35 +2059,11 @@ export default function Products() {
                 </div>
                 <p>Use this as the single source of truth for the colors and sizes customers can buy.</p>
               </div>
-
-              <div className="products-variant-summary-row">
-                <div className="products-summary-card">
-                  <span className="products-summary-label">Colors Enabled</span>
-                  <strong>{form.visibleVariants.length || 0}</strong>
-                  <div className="products-summary-details">
-                    <span>{selectedGarmentVariantCount} template colors available</span>
-                  </div>
-                </div>
-                <div className="products-summary-card">
-                  <span className="products-summary-label">Sizes Enabled</span>
-                  <strong>
-                    {isSelectedGarmentOneSize ? "One size" : form.sizes.length || 0}
-                  </strong>
-                  <div className="products-summary-details">
-                    <span>
-                      {isSelectedGarmentOneSize
-                        ? "Inherited from template"
-                        : `${garmentSizes.length || 0} template sizes available`}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
               <div className="products-library-grid products-library-grid-wide">
                 {showVariantSelection ? (
                   <MultiSelectLookupField
                     label="Colors"
-                    helperText="Enable only the garment colorways you want represented in the storefront."
+                    helperText={`${form.visibleVariants.length || 0} of ${selectedGarmentVariantCount} template colorways enabled.`}
                     options={garmentVariants}
                     selectedValues={form.visibleVariants}
                     onToggle={toggleVariant}
@@ -2130,14 +2074,15 @@ export default function Products() {
 
                 {showSizeSelection ? (
                   isSelectedGarmentOneSize ? (
-                    <div className="products-summary-card products-one-size-card">
-                      <span className="products-summary-label">Sizes</span>
+                    <div className="products-derived-field">
+                      <span>Sizes</span>
                       <strong>One size available</strong>
+                      <p>This product inherits its single size directly from the garment template.</p>
                     </div>
                   ) : (
                     <MultiSelectLookupField
                       label="Sizes"
-                      helperText="Sizes load from the garment template and can be narrowed for this product."
+                      helperText={`${form.sizes.length || 0} of ${garmentSizes.length || 0} garment sizes enabled.`}
                       options={garmentSizeOptions}
                       selectedValues={form.sizes}
                       onToggle={toggleSize}
@@ -2300,8 +2245,8 @@ export default function Products() {
                 <strong>{form.name || "Customer product name pending"}</strong>
                 <p>
                   Customer price: {form.flat_price ? formatMoney(form.flat_price) : "not set"}.
-                  {form.storefront_category
-                    ? ` Storefront category: ${form.storefront_category}.`
+                  {activeStorefrontCategoryLabel
+                    ? ` Storefront category: ${activeStorefrontCategoryLabel}.`
                     : " Storefront category: uncategorized for now."}
                   {isManualProductMode
                     ? " Manual product mode does not require a garment template."

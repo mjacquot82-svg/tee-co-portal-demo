@@ -256,16 +256,40 @@ export function MultiSelectLookupField({
   const [searchTerm, setSearchTerm] = useState("");
   const normalizedSearch = normalizeTextKey(searchTerm);
   const selectedSet = new Set(selectedValues.map((value) => normalizeTextKey(value)));
+  const legacySelectedOptions = useMemo(
+    () =>
+      selectedValues
+        .filter(
+          (value) =>
+            !options.some(
+              (option) => normalizeTextKey(option?.name) === normalizeTextKey(value)
+            )
+        )
+        .map((value) => ({
+          id: `legacy-${normalizeTextKey(value)}`,
+          name: value,
+          meta: "Saved selection",
+          isLegacy: true,
+        })),
+    [options, selectedValues]
+  );
 
   const filteredOptions = useMemo(() => {
-    if (!normalizedSearch) return options;
+    const normalizedOptions = options.map((option) => ({
+      ...option,
+      isLegacy: false,
+    }));
 
-    return options.filter((option) => {
+    const allOptions = [...legacySelectedOptions, ...normalizedOptions];
+
+    if (!normalizedSearch) return allOptions;
+
+    return allOptions.filter((option) => {
       const labelValue = option?.name || "";
       const metaValue = option?.meta || "";
       return `${labelValue} ${metaValue}`.toLowerCase().includes(normalizedSearch);
     });
-  }, [options, normalizedSearch]);
+  }, [legacySelectedOptions, normalizedSearch, options]);
 
   const hasExactMatch = options.some(
     (option) => normalizeTextKey(option?.name) === normalizedSearch
@@ -274,39 +298,13 @@ export function MultiSelectLookupField({
   return (
     <div className="products-multiselect">
       <div className="products-multiselect-header">
-        <strong>{label}</strong>
+        <div className="products-multiselect-heading-row">
+          <strong>{label}</strong>
+          <span className="products-multiselect-count">
+            {selectedValues.length} selected
+          </span>
+        </div>
         <p>{helperText}</p>
-      </div>
-
-      <div className="products-selection-chip-row">
-        {selectedValues.length ? (
-          selectedValues.map((value) => {
-            const matchedOption =
-              options.find(
-                (option) => normalizeTextKey(option?.name) === normalizeTextKey(value)
-              ) || null;
-
-            return (
-              <button
-                key={value}
-                type="button"
-                className={`products-selection-chip ${matchedOption ? "" : "is-legacy"}`}
-                onClick={() => onToggle(value)}
-              >
-                {showColorSwatch ? (
-                  <span
-                    className="products-selection-swatch"
-                    style={{ background: matchedOption?.hex_code || matchedOption?.swatch || "#cbd5e1" }}
-                  />
-                ) : null}
-                <span>{value}</span>
-                <strong>×</strong>
-              </button>
-            );
-          })
-        ) : (
-          <div className="products-selection-empty">No selections yet.</div>
-        )}
       </div>
 
       <div className="products-multiselect-toolbar">
@@ -335,21 +333,25 @@ export function MultiSelectLookupField({
             const isSelected = selectedSet.has(normalizeTextKey(option?.name));
 
             return (
-              <label key={option.id || option.name} className="products-option-row">
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={() => onToggle(option.name)}
-                />
+              <button
+                key={option.id || option.name}
+                type="button"
+                className={`products-selection-chip products-selection-option ${
+                  isSelected ? "is-active" : ""
+                } ${option.isLegacy ? "is-legacy" : ""}`}
+                onClick={() => onToggle(option.name)}
+                aria-pressed={isSelected}
+              >
                 {showColorSwatch ? (
                   <span
-                    className="products-option-swatch"
+                    className="products-selection-swatch"
                     style={{ background: option.hex_code || option.swatch || "#cbd5e1" }}
                   />
                 ) : null}
                 <span>{option.name}</span>
                 {option.meta ? <small>{option.meta}</small> : null}
-              </label>
+                <strong>{isSelected ? "×" : "+"}</strong>
+              </button>
             );
           })
         ) : (
