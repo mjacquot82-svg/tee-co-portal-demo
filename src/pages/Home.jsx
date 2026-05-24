@@ -1,18 +1,46 @@
 import { Link } from "react-router-dom";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import {
   getStorefrontProductImage,
   getStorefrontProducts,
 } from "../lib/storefrontCatalog";
-import { useStoredProducts } from "../lib/productsStore";
+import { areStoredProductsReady, useStoredProducts } from "../lib/productsStore";
 
 export default function Home() {
   const storedProducts = useStoredProducts();
+  const productsReady = areStoredProductsReady();
   const storefrontProducts = useMemo(
     () => getStorefrontProducts(storedProducts),
     [storedProducts]
   );
+  useEffect(() => {
+    const includedIds = new Set(storefrontProducts.map((product) => product?.id).filter(Boolean));
+    console.info("[Home] Customer catalog render source", {
+      productsReady,
+      sourceCount: storedProducts.length,
+      includedCount: storefrontProducts.length,
+      sourceProducts: storedProducts.map((product) => ({
+        id: product?.id || null,
+        name: product?.name || "",
+        status: product?.status || "",
+        category: product?.category || "",
+        garment_library_item_id: product?.garment_library_item_id || null,
+        sizeCount: Array.isArray(product?.sizes) ? product.sizes.length : 0,
+        colorCount: Array.isArray(product?.colors) ? product.colors.length : 0,
+      })),
+      excludedProducts: storedProducts
+        .filter((product) => !includedIds.has(product?.id))
+        .map((product) => ({
+          id: product?.id || null,
+          name: product?.name || "",
+          status: product?.status || "",
+          reason: String(product?.status || "").trim().toLowerCase() === "active"
+            ? "missing-id-during-catalog-filter"
+            : "inactive-status",
+        })),
+    });
+  }, [productsReady, storefrontProducts, storedProducts]);
   const previewCardStyle = {
     textDecoration: "none",
     background: "#ffffff",

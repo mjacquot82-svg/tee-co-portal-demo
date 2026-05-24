@@ -473,7 +473,17 @@ function normalizeVariant(variant = {}, context = {}) {
 
 function hydrateVariantSizes(variant = {}, fallbackSizes = []) {
   const normalizedFallbackSizes = normalizeStringList(fallbackSizes);
-  const normalizedVariantSizes = normalizeStringList(variant?.sizes);
+  const normalizedVariantSizes = normalizeStringList(
+    variant?.sizes ||
+      variant?.available_sizes ||
+      variant?.availableSizes ||
+      variant?.size_run ||
+      variant?.sizeRun ||
+      variant?.size ||
+      variant?.size_name ||
+      variant?.sizeName ||
+      variant?.variant_size
+  );
   const resolvedSizes = normalizedVariantSizes.length ? normalizedVariantSizes : normalizedFallbackSizes;
 
   return {

@@ -16,6 +16,7 @@ let cachedProductsSnapshot = EMPTY_PRODUCTS;
 let productsLoadStarted = false;
 let productsLoadPromise = null;
 let hasLoadedProductsFromSupabase = false;
+let refreshSequence = 0;
 
 const PRODUCTS_SELECT_FIELDS = [
   "id",
@@ -375,6 +376,23 @@ function cacheProductsSnapshot(products) {
   };
 }
 
+function buildProductDebugSummary(product = {}) {
+  return {
+    id: product?.id || null,
+    name: product?.name || "",
+    status: product?.status || "",
+    category: product?.category || "",
+    garment_library_item_id: product?.garment_library_item_id || null,
+    colorCount: Array.isArray(product?.colors) ? product.colors.length : 0,
+    sizeCount: Array.isArray(product?.sizes) ? product.sizes.length : 0,
+    price: product?.unit_price ?? product?.base_garment_price ?? null,
+  };
+}
+
+function safeProductsSnapshot(products = []) {
+  return (Array.isArray(products) ? products : []).map((product) => buildProductDebugSummary(product));
+}
+
 function setProductsSnapshot(products) {
   const { normalizedProducts, normalizedSnapshot } = cacheProductsSnapshot(products);
   cachedProductsStorageRaw = normalizedSnapshot;
@@ -509,6 +527,32 @@ function omitGarmentLibraryItemId(record = {}) {
   return legacyRecord;
 }
 
+function mergeProductCollections(primaryProducts = [], secondaryProducts = []) {
+  const mergedById = new Map();
+
+  [...(Array.isArray(primaryProducts) ? primaryProducts : []), ...(Array.isArray(secondaryProducts) ? secondaryProducts : [])]
+    .filter(Boolean)
+    .forEach((product) => {
+      const productId = String(product?.id || "").trim();
+      const mapKey = productId || `fallback::${product?.legacy_product_id || ""}::${product?.name || ""}`;
+      if (!mapKey) return;
+      if (!mergedById.has(mapKey)) {
+        mergedById.set(mapKey, product);
+      }
+    });
+
+  return Array.from(mergedById.values()).sort((left, right) => {
+    const leftTimestamp = Date.parse(left?.created_at || "") || 0;
+    const rightTimestamp = Date.parse(right?.created_at || "") || 0;
+
+    if (leftTimestamp !== rightTimestamp) {
+      return rightTimestamp - leftTimestamp;
+    }
+
+    return String(right?.id || "").localeCompare(String(left?.id || ""));
+  });
+}
+
 async function fetchProductsFromSupabase() {
   if (!isSupabaseConfigured || !supabase) {
     return null;
@@ -551,20 +595,53 @@ async function fetchProductsFromSupabase() {
   });
   console.info(
     "[productsStore] Supabase storefront products fetched",
-    normalizedProducts.length
+    {
+      count: normalizedProducts.length,
+      products: normalizedProducts.map((product) => buildProductDebugSummary(product)),
+    }
   );
   return normalizedProducts;
 }
 
 export async function refreshStoredProducts() {
+  const refreshId = ++refreshSequence;
+  const localProductsBeforeRefresh = getLocalProductsSnapshot();
+  console.info("[productsStore] Starting storefront products refresh", {
+    refreshId,
+    localCountBeforeRefresh: localProductsBeforeRefresh.length,
+    localProductsBeforeRefresh: safeProductsSnapshot(localProductsBeforeRefresh),
+  });
   const remoteProducts = await fetchProductsFromSupabase();
 
   if (!remoteProducts) {
+    console.info("[productsStore] Skipping storefront product publish because no remote products were returned", {
+      refreshId,
+      localCountBeforeRefresh: localProductsBeforeRefresh.length,
+    });
     return getLocalProductsSnapshot();
   }
 
   hasLoadedProductsFromSupabase = true;
-  const snapshot = setProductsSnapshot(remoteProducts);
+  const localProductsAtPublishTime = getLocalProductsSnapshot();
+  const snapshot = setProductsSnapshot(
+    mergeProductCollections(remoteProducts, localProductsAtPublishTime)
+  );
+  const localOnlyProducts = localProductsAtPublishTime.filter(
+    (localProduct) =>
+      localProduct?.id &&
+      !remoteProducts.some((remoteProduct) => remoteProduct?.id === localProduct.id)
+  );
+  console.info("[productsStore] Published storefront product snapshot after refresh", {
+    refreshId,
+    remoteCount: remoteProducts.length,
+    localCountBeforeRefresh: localProductsBeforeRefresh.length,
+    localCountAtPublishTime: localProductsAtPublishTime.length,
+    staleLocalSnapshotDetected:
+      localProductsAtPublishTime.length !== localProductsBeforeRefresh.length,
+    publishedCount: snapshot.length,
+    localOnlyProducts: localOnlyProducts.map((product) => buildProductDebugSummary(product)),
+    publishedProducts: snapshot.map((product) => buildProductDebugSummary(product)),
+  });
   await syncGarmentLinks(snapshot);
   return snapshot;
 }
@@ -657,6 +734,12 @@ export function useStoredProducts() {
 }
 
 export async function createStoredProduct(productInput) {
+  console.info("[productsStore] createStoredProduct called", {
+    rawInput: productInput,
+    rawInputSummary: buildProductDebugSummary(productInput),
+    currentStoredProductCountBeforeCreate: getStoredProducts().length,
+    currentStoredProductsBeforeCreate: safeProductsSnapshot(getStoredProducts()),
+  });
   const placements = normalizeList(productInput.placements);
   const placementPrices = normalizePlacementPrices(placements, productInput.placement_prices);
   const placementConfig = buildPlacementConfig(
@@ -675,6 +758,11 @@ export async function createStoredProduct(productInput) {
     placement_config: placementConfig,
     decoration_types: normalizeList(productInput.decoration_types),
   });
+  console.info("[productsStore] Preparing storefront product for creation", {
+    input: buildProductDebugSummary(productInput),
+    normalizedProduct: buildProductDebugSummary(product),
+    normalizedProductSnapshot: product,
+  });
 
   if (!isSupabaseConfigured || !supabase) {
     const localProduct = {
@@ -684,11 +772,22 @@ export async function createStoredProduct(productInput) {
     const nextProducts = [localProduct, ...getStoredProducts()];
     hasLoadedProductsFromSupabase = true;
     saveStoredProducts(nextProducts);
+    console.info("[productsStore] Created local-only storefront product", {
+      createdProduct: buildProductDebugSummary(localProduct),
+      createStoredProductReturnValue: localProduct,
+      addedToLocalProductsArray: nextProducts.some((entry) => entry.id === localProduct.id),
+      persistedSnapshotCount: nextProducts.length,
+      persistedSnapshot: nextProducts.map((entry) => buildProductDebugSummary(entry)),
+    });
     await syncGarmentLinks(nextProducts);
     return localProduct;
   }
 
   const payload = buildSupabaseProductRecord(product, { includeId: true });
+  console.info("[productsStore] Inserting storefront product into Supabase", {
+    payload: buildProductDebugSummary(payload),
+    payloadSnapshot: payload,
+  });
   let query = supabase.from("products").insert(payload).select(PRODUCTS_SELECT_FIELDS).single();
   let { data, error } = await query;
 
@@ -724,7 +823,32 @@ export async function createStoredProduct(productInput) {
   ];
   hasLoadedProductsFromSupabase = true;
   saveStoredProducts(nextProducts);
-  await syncGarmentLinks(nextProducts);
+  console.info("[productsStore] Storefront product created and persisted", {
+    createdProduct: buildProductDebugSummary(createdProduct),
+    createdProductSnapshot: createdProduct,
+    createStoredProductReturnValue: createdProduct,
+    addedToLocalProductsArray: nextProducts.some((entry) => entry.id === createdProduct.id),
+    persistedSnapshotCount: nextProducts.length,
+    persistedSnapshot: nextProducts.map((entry) => buildProductDebugSummary(entry)),
+  });
+  const refreshedSnapshot = await refreshStoredProducts();
+  console.info("[productsStore] Storefront product post-create refresh verification", {
+    createdProductId: createdProduct.id,
+    createdProductName: createdProduct.name,
+    currentStoreContentsImmediatelyAfterCreation: safeProductsSnapshot(nextProducts),
+    currentStoreContentsAfterRefreshStoredProducts: safeProductsSnapshot(refreshedSnapshot),
+    createdProductPresentImmediatelyAfterCreation: nextProducts.some(
+      (entry) => entry.id === createdProduct.id
+    ),
+    createdProductPresentAfterRefreshStoredProducts: refreshedSnapshot.some(
+      (entry) => entry.id === createdProduct.id
+    ),
+    productCounts: {
+      immediatelyAfterCreation: nextProducts.length,
+      afterRefreshStoredProducts: refreshedSnapshot.length,
+    },
+  });
+  await syncGarmentLinks(refreshedSnapshot);
   return createdProduct;
 }
 
