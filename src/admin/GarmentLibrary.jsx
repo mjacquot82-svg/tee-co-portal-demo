@@ -18,7 +18,7 @@ import {
   useGarmentLibraryStatus,
 } from "../lib/garmentLibraryStore";
 import { buildGarmentUsageMap } from "../lib/productGarmentLinks";
-import { useStoredProducts } from "../lib/productsStore";
+import { createStoredProduct, useStoredProducts } from "../lib/productsStore";
 import { parseTeeCoGarmentSpreadsheet } from "../lib/teeCoGarmentSpreadsheet";
 import {
   buildLegacyBrandModelValue,
@@ -109,12 +109,12 @@ function buildFormFromGarment(item, brands, categories, garmentModels, sizeLooku
         .map((variant) => normalizeVariantForEditor(variant, item?.sizes || []))
         .filter(Boolean)
     : [];
-  const derivedSizes = uniqueList(normalizedVariants.flatMap((variant) => variant.sizes || []));
+  const derivedSizes = deriveSharedGarmentSizes(item, EMPTY_LIST, sizeLookups);
   const hydratedForm = {
     ...emptyLibraryForm,
     ...item,
     variants: normalizedVariants,
-    sizes: sortSizesByLookup(uniqueList([...(item?.sizes || []), ...derivedSizes]), sizeLookups),
+    sizes: derivedSizes,
     default_production_methods:
       item?.default_production_methods?.length ? item.default_production_methods : ["Screen Print"],
   };
@@ -366,13 +366,7 @@ function buildStorefrontProductPayloadFromGarment(item, context = {}) {
         .filter((variant) => variant && variant.active !== false)
     : [];
   const colors = uniqueList(activeVariants.map((variant) => resolveVariantColorName(variant)).filter(Boolean));
-  const derivedSizes = sortSizesByLookup(
-    uniqueList([
-      ...(Array.isArray(item?.sizes) ? item.sizes : []),
-      ...activeVariants.flatMap((variant) => resolveVariantSizes(variant)),
-    ]),
-    context.sizeLookups || []
-  );
+  const derivedSizes = deriveSharedGarmentSizes(item, EMPTY_LIST, context.sizeLookups || []);
   const placements = uniqueList(item?.default_placements || []);
   const productionMethods = uniqueList(item?.default_production_methods || []);
   const storefrontProductDraft = {
@@ -627,18 +621,33 @@ function buildImportedCapabilityMatrix(variants = [], sizeValues = [], sizeLooku
 }
 
 function deriveSharedGarmentSizes(item = {}, fallbackSizes = [], sizeLookups = []) {
+  const explicitSharedSizes = sortSizesByLookup(
+    uniqueList([
+      ...(Array.isArray(item?.sizes) ? item.sizes : []),
+      ...normalizeDelimitedTextList(item?.shared_sizes),
+      ...normalizeDelimitedTextList(item?.sharedSizes),
+      ...normalizeDelimitedTextList(item?.size_run),
+      ...normalizeDelimitedTextList(item?.sizeRun),
+    ]),
+    sizeLookups
+  );
+  if (explicitSharedSizes.length) {
+    return explicitSharedSizes;
+  }
+
+  const normalizedFallbackSizes = sortSizesByLookup(
+    uniqueList(Array.isArray(fallbackSizes) ? fallbackSizes : normalizeDelimitedTextList(fallbackSizes)),
+    sizeLookups
+  );
+  if (normalizedFallbackSizes.length) {
+    return normalizedFallbackSizes;
+  }
+
   const variantDerivedSizes = Array.isArray(item?.variants)
     ? item.variants.flatMap((variant) => extractVariantSizeValues(variant))
     : [];
 
-  return sortSizesByLookup(
-    uniqueList([
-      ...(Array.isArray(item?.sizes) ? item.sizes : []),
-      ...(Array.isArray(fallbackSizes) ? fallbackSizes : []),
-      ...variantDerivedSizes,
-    ]),
-    sizeLookups
-  );
+  return sortSizesByLookup(uniqueList(variantDerivedSizes), sizeLookups);
 }
 
 function buildImportedSharedSizeOptions(sizeValues = [], sizeLookups = []) {
@@ -1211,7 +1220,7 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
             className="products-card-button"
             disabled={isCreatingStorefrontProduct}
           >
-            {isCreatingStorefrontProduct ? "Opening..." : "Create Storefront Product"}
+            {isCreatingStorefrontProduct ? "Creating..." : "Create Storefront Product"}
           </button>
           <button
             type="button"
@@ -2498,22 +2507,33 @@ export default function GarmentLibrary() {
     try {
       setIsCreatingStorefrontProduct(true);
       setSaveError("");
-      console.info("[StorefrontCreateVerification] storefront draft handoff starting", {
+      const productPayload = buildStorefrontProductPayloadFromGarment(item, {
+        brands,
+        categories,
+        garmentModels,
+        garmentModelMap,
+        sizeLookups: sizes,
+      });
+      console.info("[StorefrontCreateVerification] storefront product creation starting", {
         garmentId: item?.id || null,
         garmentTitle: item?.title || "",
-        destination: "/admin/products",
-        createFromGarmentId: item.id,
+        productPayload,
       });
+      const createdProduct = await createStoredProduct(productPayload);
 
       navigate("/admin/products", {
         state: {
-          createFromGarmentId: item.id,
+          focusProductIds: createdProduct?.id ? [createdProduct.id] : [],
+          focusGarmentTitle: item?.title || "",
+          creationNotice: item?.title
+            ? `Storefront product created from ${item.title}.`
+            : "Storefront product created successfully.",
         },
       });
     } catch (error) {
-      console.error("Unable to open storefront product draft from garment template", error);
+      console.error("Unable to create storefront product from garment template", error);
       setSaveError(
-        error?.message || "Unable to open a storefront product draft from this garment template right now."
+        error?.message || "Unable to create a storefront product from this garment template right now."
       );
     } finally {
       setIsCreatingStorefrontProduct(false);
@@ -3951,7 +3971,7 @@ export default function GarmentLibrary() {
                       onClick={() => startCreatingStorefrontProduct(editingGarment)}
                       disabled={isCreatingStorefrontProduct}
                     >
-                      {isCreatingStorefrontProduct ? "Opening..." : "Create Storefront Product"}
+                      {isCreatingStorefrontProduct ? "Creating..." : "Create Storefront Product"}
                     </button>
                   </div>
                 ) : null}

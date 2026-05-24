@@ -181,7 +181,9 @@ function normalizeStatusValue(value) {
 export default function Products() {
   const pageRef = useRef(null);
   const editorRef = useRef(null);
+  const catalogPanelRef = useRef(null);
   const nameInputRef = useRef(null);
+  const productCardRefs = useRef(new Map());
   const prefilledLocationKeyRef = useRef("");
   const location = useLocation();
   const navigate = useNavigate();
@@ -427,18 +429,41 @@ export default function Products() {
     }
 
     const focusGarmentTitle = normalizeText(location.state?.focusGarmentTitle);
+    const locationCreationNotice = normalizeText(location.state?.creationNotice);
     setEditingProductId(null);
     setFocusedProductIds(focusProductIds);
     setSaveError("");
     setSearchTerm("");
     setSelectedStatus("all");
     setCreationNotice(
-      focusGarmentTitle
+      locationCreationNotice ||
+        (focusGarmentTitle
         ? `Showing storefront products linked to ${focusGarmentTitle}.`
-        : "Showing linked storefront products."
+        : "Showing linked storefront products.")
     );
     navigate(location.pathname, { replace: true, state: {} });
   }, [location.pathname, location.state, navigate]);
+
+  useEffect(() => {
+    if (!focusedProductIds.length) return;
+
+    const focusedProductIdSet = new Set(focusedProductIds);
+    const firstVisibleFocusedProduct = filteredProducts.find((product) =>
+      focusedProductIdSet.has(normalizeText(product?.id))
+    );
+    const focusedCard = firstVisibleFocusedProduct
+      ? productCardRefs.current.get(firstVisibleFocusedProduct.id)
+      : null;
+
+    window.requestAnimationFrame(() => {
+      if (focusedCard) {
+        focusedCard.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+
+      catalogPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [filteredProducts, focusedProductIds]);
 
   function handleGarmentSearchChange(event) {
     const nextValue = event.target.value;
@@ -552,7 +577,7 @@ export default function Products() {
     setSaveError("");
 
     if (!editingProductId && !selectedGarmentItem) {
-      setSaveError("Choose a garment from the Garment Library before publishing a storefront product.");
+      setSaveError("Choose a garment from the Garment Library before creating a storefront product.");
       return;
     }
 
@@ -673,14 +698,16 @@ export default function Products() {
           <div style={{ display: "grid", gap: "10px" }}>
             <p className="products-eyebrow">Customer Product Catalog</p>
             <h1 style={{ margin: 0 }}>
-              {editingProduct ? `Edit ${editingProduct.name}` : "Publish Storefront Product"}
+              {editingProduct ? `Edit ${editingProduct.name}` : "Create Product Manually"}
             </h1>
             <p style={{ margin: 0, color: "#64748b" }}>
-              Start from a garment template, configure the customer-facing details, then publish the storefront product.
+              {editingProduct
+                ? "Update the customer-facing product details here."
+                : "Products created from Garment Library already appear in the catalog immediately. Use this form only for manual product creation."}
             </p>
             <div className="products-callout">
-              Garment templates live in the <Link to="/admin/garments">Garment Library</Link>. Published storefront
-              products appear in the customer catalog after you publish them here.
+              Garment templates live in the <Link to="/admin/garments">Garment Library</Link>. The normal workflow is
+              template to storefront product to catalog card. This workspace is for editing existing products or creating one manually.
             </div>
           </div>
 
@@ -936,7 +963,7 @@ export default function Products() {
 
           <div style={{ display: "grid", gridTemplateColumns: editingProduct ? "1fr 1fr" : "1fr", gap: "10px" }}>
             <button type="submit" disabled={isSaving} className="products-primary-button">
-              {isSaving ? "Saving..." : editingProduct ? "Update Product" : "Publish Product"}
+              {isSaving ? "Saving..." : editingProduct ? "Update Product" : "Create Product"}
             </button>
 
             {editingProduct ? (
@@ -947,7 +974,7 @@ export default function Products() {
           </div>
         </form>
 
-        <section className="products-catalog-panel">
+        <section ref={catalogPanelRef} className="products-catalog-panel">
           <div className="products-catalog-header">
             <div>
               <p className="products-eyebrow">Published Catalog</p>
@@ -1017,7 +1044,19 @@ export default function Products() {
                   const linkedGarment = findLinkedGarmentLibraryItem(product, libraryItems);
 
                   return (
-                    <article key={product.id} className={`products-card ${product.id === editingProductId ? "is-active" : ""}`}>
+                    <article
+                      key={product.id}
+                      ref={(node) => {
+                        if (node) {
+                          productCardRefs.current.set(product.id, node);
+                        } else {
+                          productCardRefs.current.delete(product.id);
+                        }
+                      }}
+                      className={`products-card ${
+                        product.id === editingProductId || focusedProductIds.includes(product.id) ? "is-active" : ""
+                      }`}
+                    >
                       <div className="products-card-media">
                         {product.image ? (
                           <img src={product.image} alt={product.name} className="products-card-image" />
@@ -1085,7 +1124,7 @@ export default function Products() {
                 <div className="products-empty-state">
                   <h3 style={{ margin: 0 }}>No products found</h3>
                   <p style={{ margin: 0, color: "#64748b" }}>
-                    Publish your first storefront product from the garment library.
+                    Create your first storefront product from the garment library, or use the manual form if needed.
                   </p>
                 </div>
               )}
