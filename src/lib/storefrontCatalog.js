@@ -128,17 +128,28 @@ function resolveProductStorefrontCategory(product, storefrontCategoryMap) {
   });
 }
 
-export function buildStorefrontCategories(products = [], storefrontCategories = []) {
-  const groupedCategories = new Map();
+export function resolveStorefrontCategoryAssignment(product, storefrontCategories = []) {
   const categoryMap = new Map(
     (Array.isArray(storefrontCategories) ? storefrontCategories : [])
       .map(buildStorefrontCategoryRecord)
       .filter((category) => category.active)
       .map((category) => [category.lookupId || category.id, category])
   );
+  const resolvedCategory = resolveProductStorefrontCategory(product, categoryMap);
+  const explicitStorefrontName = normalizeText(product?.storefront_category);
+  const storefrontLookupId = normalizeText(product?.storefront_category_lookup_id);
+
+  return {
+    ...resolvedCategory,
+    hasAssignedStorefrontCategory: Boolean(storefrontLookupId || explicitStorefrontName),
+  };
+}
+
+export function buildStorefrontCategories(products = [], storefrontCategories = []) {
+  const groupedCategories = new Map();
 
   getStorefrontProducts(products).forEach((product) => {
-    const resolvedCategory = resolveProductStorefrontCategory(product, categoryMap);
+    const resolvedCategory = resolveStorefrontCategoryAssignment(product, storefrontCategories);
     const categoryId = resolvedCategory.id || "catalog";
     const existingCategory = groupedCategories.get(categoryId);
 

@@ -20,6 +20,7 @@ import {
   updateStoredProduct,
   useStoredProducts,
 } from "../lib/productsStore";
+import { resolveStorefrontCategoryAssignment } from "../lib/storefrontCatalog";
 import {
   buildGarmentLibraryLabel,
   buildLegacyBrandModelValue,
@@ -312,7 +313,8 @@ function buildFormFromProduct(
         ? ""
         : String(product.markup_percentage),
     notes: product?.notes || "",
-    storefront_category_lookup_id: storefrontCategory?.id || "",
+    storefront_category_lookup_id:
+      storefrontCategory?.id || normalizeText(product?.storefront_category_lookup_id) || "",
   };
 }
 
@@ -456,13 +458,16 @@ export default function Products() {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
     return products.filter((product) => {
-      const storefrontCategoryName = normalizeText(
-        product?.storefront_category || product?.category
+      const storefrontCategory = resolveStorefrontCategoryAssignment(
+        product,
+        storefrontCategories
       );
+      const storefrontCategoryName = normalizeText(storefrontCategory?.name);
       const brandName = normalizeText(product?.brand_model);
       const matchesStorefrontCategory =
         selectedStorefrontCategory === "all" ||
-        normalizeText(product?.storefront_category_lookup_id) === selectedStorefrontCategory;
+        normalizeText(storefrontCategory?.lookupId || storefrontCategory?.id) ===
+          selectedStorefrontCategory;
       const matchesBrand =
         selectedBrand === "all" || brandName.toLowerCase() === selectedBrand.toLowerCase();
       const matchesProductMode =
@@ -500,6 +505,7 @@ export default function Products() {
     selectedStatus,
     selectedStorefrontCategory,
     selectedBrand,
+    storefrontCategories,
     selectedProductMode,
   ]);
 
@@ -1554,20 +1560,40 @@ export default function Products() {
               {filteredProducts.length ? (
                 filteredProducts.map((product, index) => {
                   const linkedGarment = findLinkedGarmentLibraryItem(product, libraryItems);
+                  const storefrontCategory = resolveStorefrontCategoryAssignment(
+                    product,
+                    storefrontCategories
+                  );
                   const renderIdentity = buildProductRenderIdentity(product, index);
                   const isActiveCard =
                     product.id === editingProductId || highlightedProductIds.includes(product.id);
                   const statusIsActive = normalizeStatusValue(product?.status) === "active";
                   const colorCount = Array.isArray(product?.colors) ? product.colors.length : 0;
                   const sizeCount = Array.isArray(product?.sizes) ? product.sizes.length : 0;
-                  const productModeLabel = product?.garment_library_item_id ? "Garment-linked" : "Manual product";
+                  const categoryLabel =
+                    normalizeText(storefrontCategory?.name) || "Uncategorized";
+                  const variantSummaryParts = [];
+
+                  if (colorCount) {
+                    variantSummaryParts.push(`${colorCount} color${colorCount === 1 ? "" : "s"}`);
+                  }
+
+                  if (sizeCount) {
+                    variantSummaryParts.push(`${sizeCount} size${sizeCount === 1 ? "" : "s"}`);
+                  }
+
+                  const variantSummary = variantSummaryParts.length
+                    ? variantSummaryParts.join(" · ")
+                    : product?.garment_library_item_id
+                      ? "Variants inherited from garment template"
+                      : "Single configuration";
 
                   console.info("[Products] Rendering customer catalog product card", {
                     index,
                     id: product?.id || null,
                     name: product?.name || "",
                     status: product?.status || "",
-                    category: product?.category || "",
+                    category: categoryLabel,
                     renderKey: renderIdentity.key,
                     fallbackKeyUsed: renderIdentity.fallbackKeyUsed,
                     linkedGarmentTitle: linkedGarment?.title || "",
@@ -1596,11 +1622,11 @@ export default function Products() {
                       <div className="products-card-body">
                         <div className="products-card-topline">
                           <span className="products-card-category-pill">
-                            {product.storefront_category || "Uncategorized"}
+                            {categoryLabel}
                           </span>
-                          <span className={`products-status products-status-${statusIsActive ? "active" : "archived"}`}>
-                            {statusIsActive ? "Active" : "Archived"}
-                          </span>
+                          {!statusIsActive ? (
+                            <span className="products-card-meta-pill">Hidden</span>
+                          ) : null}
                         </div>
 
                         <div className="products-card-title-block">
@@ -1618,42 +1644,20 @@ export default function Products() {
                             {formatMoney(product?.base_garment_price)}
                           </strong>
                           <p className="products-card-subtitle">
-                            {linkedGarment?.title ||
-                              product.brand_model ||
-                              productModeLabel}
+                            {variantSummary}
                           </p>
                           {product?.notes ? (
                             <p className="products-card-description">{product.notes}</p>
                           ) : null}
                         </div>
 
-                        <div className="products-card-detail-grid products-card-detail-grid-primary">
-                          <div className="products-card-detail">
-                            <span>Colors</span>
-                            <strong>{colorCount || (product?.garment_library_item_id ? "Template-driven" : "N/A")}</strong>
+                        {linkedGarment?.title ? (
+                          <div className="products-card-meta-row">
+                            <span className="products-card-meta-pill">
+                              Template: {linkedGarment.title}
+                            </span>
                           </div>
-                          <div className="products-card-detail">
-                            <span>Sizes</span>
-                            <strong>{sizeCount || (product?.garment_library_item_id ? "Template-driven" : "N/A")}</strong>
-                          </div>
-                        </div>
-
-                        <div className="products-card-meta-row">
-                          <span className="products-card-meta-pill products-card-meta-pill-emphasis">
-                            {linkedGarment?.title || "No linked garment template"}
-                          </span>
-                        </div>
-
-                        <div className="products-card-detail-grid">
-                          <div className="products-card-detail">
-                            <span>Mode</span>
-                            <strong>{productModeLabel}</strong>
-                          </div>
-                          <div className="products-card-detail">
-                            <span>Visibility</span>
-                            <strong>{statusIsActive ? "Live" : "Hidden"}</strong>
-                          </div>
-                        </div>
+                        ) : null}
                       </div>
 
                       <div className="products-card-actions">

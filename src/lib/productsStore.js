@@ -378,6 +378,25 @@ function normalizeProduct(product) {
   };
 }
 
+function preserveCategoryFields(primary = {}, fallback = {}) {
+  const primaryCategory = primary?.category;
+  const primaryCategoryLookupId = primary?.category_lookup_id;
+  const primaryStorefrontCategory = primary?.storefront_category;
+  const primaryStorefrontCategoryLookupId = primary?.storefront_category_lookup_id;
+
+  return {
+    ...primary,
+    category: primaryCategory ?? fallback?.category ?? "",
+    category_lookup_id: primaryCategoryLookupId ?? fallback?.category_lookup_id ?? null,
+    storefront_category:
+      primaryStorefrontCategory ?? fallback?.storefront_category ?? "",
+    storefront_category_lookup_id:
+      primaryStorefrontCategoryLookupId ??
+      fallback?.storefront_category_lookup_id ??
+      null,
+  };
+}
+
 function normalizeStoredProductsCollection(products) {
   const sourceProducts = Array.isArray(products) ? products : EMPTY_PRODUCTS;
   return sourceProducts.map(normalizeProduct).filter(Boolean);
@@ -943,11 +962,16 @@ export async function createStoredProduct(productInput) {
     throw error;
   }
 
-  const createdProduct = normalizeProduct({
-    ...normalizeSupabaseProduct(data),
-    garment_library_item_id:
-      data?.garment_library_item_id ?? product.garment_library_item_id ?? null,
-  });
+  const createdProduct = normalizeProduct(
+    preserveCategoryFields(
+      {
+        ...normalizeSupabaseProduct(data),
+        garment_library_item_id:
+          data?.garment_library_item_id ?? product.garment_library_item_id ?? null,
+      },
+      product
+    )
+  );
   const insertedProductId = data?.id ?? createdProduct?.id ?? payload?.id ?? null;
   const immediateQuery = await queryInsertedProductRow(insertedProductId, {
     label: "step-6 immediate products table query after insert",
@@ -1097,11 +1121,16 @@ export async function updateStoredProduct(productId, updates) {
     throw error;
   }
 
-  const normalizedUpdatedProduct = normalizeProduct({
-    ...normalizeSupabaseProduct(data),
-    garment_library_item_id:
-      data?.garment_library_item_id ?? updatedProduct.garment_library_item_id ?? null,
-  });
+  const normalizedUpdatedProduct = normalizeProduct(
+    preserveCategoryFields(
+      {
+        ...normalizeSupabaseProduct(data),
+        garment_library_item_id:
+          data?.garment_library_item_id ?? updatedProduct.garment_library_item_id ?? null,
+      },
+      updatedProduct
+    )
+  );
   hasLoadedProductsFromSupabase = true;
   saveStoredProducts(
     nextProducts.map((product) =>
