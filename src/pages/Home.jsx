@@ -7,6 +7,18 @@ import {
 } from "../lib/storefrontCatalog";
 import { areStoredProductsReady, useStoredProducts } from "../lib/productsStore";
 
+function buildStorefrontRenderIdentity(product, index) {
+  const normalizedId = String(product?.id || "").trim();
+  const normalizedName = String(product?.name || "").trim() || "catalog-product";
+  const normalizedCategory = String(product?.category || "").trim() || "catalog";
+
+  return {
+    id: normalizedId || null,
+    key: normalizedId || `${normalizedName}-${normalizedCategory}-${index}`,
+    fallbackKeyUsed: !normalizedId,
+  };
+}
+
 export default function Home() {
   const storedProducts = useStoredProducts();
   const productsReady = areStoredProductsReady();
@@ -16,10 +28,38 @@ export default function Home() {
   );
   useEffect(() => {
     const includedIds = new Set(storefrontProducts.map((product) => product?.id).filter(Boolean));
+    const duplicateIncludedIds = storefrontProducts.reduce((summary, product, index) => {
+      const normalizedId = String(product?.id || "").trim();
+      if (!normalizedId) {
+        summary.missingIds.push({
+          index,
+          name: product?.name || "",
+          status: product?.status || "",
+        });
+        return summary;
+      }
+      if (!summary.seenIds.has(normalizedId)) {
+        summary.seenIds.add(normalizedId);
+        return summary;
+      }
+      summary.duplicates.push({
+        index,
+        id: normalizedId,
+        name: product?.name || "",
+        status: product?.status || "",
+      });
+      return summary;
+    }, {
+      seenIds: new Set(),
+      duplicates: [],
+      missingIds: [],
+    });
+
     console.info("[Home] Customer catalog render source", {
       productsReady,
-      sourceCount: storedProducts.length,
-      includedCount: storefrontProducts.length,
+      rawProductsArrayLength: storedProducts.length,
+      filteredProductsArrayLength: storefrontProducts.length,
+      renderedProductCardCount: storefrontProducts.length,
       sourceProducts: storedProducts.map((product) => ({
         id: product?.id || null,
         name: product?.name || "",
@@ -39,6 +79,20 @@ export default function Home() {
             ? "missing-id-during-catalog-filter"
             : "inactive-status",
         })),
+      duplicateIncludedIds: duplicateIncludedIds.duplicates,
+      missingIncludedIds: duplicateIncludedIds.missingIds,
+      productsBeforeRender: storefrontProducts.map((product, index) => {
+        const renderIdentity = buildStorefrontRenderIdentity(product, index);
+        return {
+          index,
+          id: product?.id || null,
+          name: product?.name || "",
+          status: product?.status || "",
+          category: product?.category || "",
+          renderKey: renderIdentity.key,
+          fallbackKeyUsed: renderIdentity.fallbackKeyUsed,
+        };
+      }),
     });
   }, [productsReady, storefrontProducts, storedProducts]);
   const previewCardStyle = {
@@ -81,14 +135,19 @@ export default function Home() {
 
   const storefrontCards = useMemo(
     () =>
-      storefrontProducts.map((product) => ({
-        id: product?.id || product?.name || product?.product_type || "catalog-product",
+      storefrontProducts.map((product, index) => {
+        const renderIdentity = buildStorefrontRenderIdentity(product, index);
+        return {
+        id: renderIdentity.key,
         title: product?.name || product?.product_type || "Catalog Product",
         subtitle:
           product?.notes || product?.category || "Available for custom orders.",
         image: getStorefrontProductImage(product),
         to: `/garment/${product.id}`,
-      })),
+        rawId: product?.id || null,
+        status: product?.status || "",
+      };
+      }),
     [storefrontProducts]
   );
 
@@ -128,13 +187,22 @@ export default function Home() {
       <div style={{ marginBottom: "24px" }}>
         <h2 style={{ marginBottom: "12px" }}>Shop Products</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "14px" }}>
-          {storefrontCards.map((item) => renderPreviewCard({
-            key: item.id,
-            to: item.to,
-            image: item.image,
-            title: item.title,
-            description: item.subtitle,
-          }))}
+          {storefrontCards.map((item, index) => {
+            console.info("[Home] Rendering storefront product card", {
+              index,
+              id: item.rawId,
+              title: item.title,
+              status: item.status,
+              renderKey: item.id,
+            });
+            return renderPreviewCard({
+              key: item.id,
+              to: item.to,
+              image: item.image,
+              title: item.title,
+              description: item.subtitle,
+            });
+          })}
         </div>
       </div>
 

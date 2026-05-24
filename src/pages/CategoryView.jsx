@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import {
   areStoredProductsReady,
@@ -11,6 +11,18 @@ import {
   getStorefrontProductImage,
   getStorefrontProductsByCategory,
 } from "../lib/storefrontCatalog";
+
+function buildCategoryProductRenderIdentity(product, index) {
+  const normalizedId = String(product?.id || "").trim();
+  const normalizedName = String(product?.name || "").trim() || "catalog-product";
+  const normalizedCategory = String(product?.category || "").trim() || "catalog";
+
+  return {
+    id: normalizedId || null,
+    key: normalizedId || `${normalizedName}-${normalizedCategory}-${index}`,
+    fallbackKeyUsed: !normalizedId,
+  };
+}
 
 function formatBasePrice(value) {
   return Number.isFinite(value) && Number(value) > 0
@@ -30,6 +42,56 @@ export default function CategoryView() {
     () => getStorefrontProductsByCategory(storedProducts, categoryId),
     [categoryId, storedProducts]
   );
+
+  useEffect(() => {
+    const duplicateCategoryIds = categoryProducts.reduce((summary, product, index) => {
+      const normalizedId = String(product?.id || "").trim();
+      if (!normalizedId) {
+        summary.missingIds.push({
+          index,
+          name: product?.name || "",
+          status: product?.status || "",
+        });
+        return summary;
+      }
+      if (!summary.seenIds.has(normalizedId)) {
+        summary.seenIds.add(normalizedId);
+        return summary;
+      }
+      summary.duplicates.push({
+        index,
+        id: normalizedId,
+        name: product?.name || "",
+        status: product?.status || "",
+      });
+      return summary;
+    }, {
+      seenIds: new Set(),
+      duplicates: [],
+      missingIds: [],
+    });
+
+    console.info("[CategoryView] Category product render source", {
+      categoryId,
+      rawProductsArrayLength: storedProducts.length,
+      filteredProductsArrayLength: categoryProducts.length,
+      renderedProductCardCount: categoryProducts.length,
+      duplicateCategoryIds: duplicateCategoryIds.duplicates,
+      missingCategoryIds: duplicateCategoryIds.missingIds,
+      productsBeforeRender: categoryProducts.map((product, index) => {
+        const renderIdentity = buildCategoryProductRenderIdentity(product, index);
+        return {
+          index,
+          id: product?.id || null,
+          name: product?.name || "",
+          status: product?.status || "",
+          category: product?.category || "",
+          renderKey: renderIdentity.key,
+          fallbackKeyUsed: renderIdentity.fallbackKeyUsed,
+        };
+      }),
+    });
+  }, [categoryId, categoryProducts, storedProducts.length]);
 
   if (!productsReady) {
     return (
@@ -118,11 +180,21 @@ export default function CategoryView() {
           gap: "16px",
         }}
       >
-        {categoryProducts.map((item) => {
+        {categoryProducts.map((item, index) => {
           const imageSrc = getStorefrontProductImage(item);
+          const renderIdentity = buildCategoryProductRenderIdentity(item, index);
+          console.info("[CategoryView] Rendering category product card", {
+            index,
+            id: item?.id || null,
+            name: item?.name || "",
+            status: item?.status || "",
+            category: item?.category || "",
+            renderKey: renderIdentity.key,
+            fallbackKeyUsed: renderIdentity.fallbackKeyUsed,
+          });
           return (
             <Link
-              key={item.id}
+              key={renderIdentity.key}
               to={`/garment/${item.id}`}
               style={{
                 textDecoration: "none",

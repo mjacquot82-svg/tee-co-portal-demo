@@ -178,6 +178,19 @@ function normalizeStatusValue(value) {
   return String(value || "Active").trim().toLowerCase();
 }
 
+function buildProductRenderIdentity(product, index) {
+  const normalizedId = normalizeText(product?.id);
+  const normalizedName = normalizeText(product?.name) || "unnamed-product";
+  const normalizedCategory = normalizeText(product?.category) || "uncategorized";
+  const fallbackId = `${normalizedName}-${normalizedCategory}-${index}`;
+
+  return {
+    id: normalizedId || null,
+    key: normalizedId || fallbackId,
+    fallbackKeyUsed: !normalizedId,
+  };
+}
+
 export default function Products() {
   const pageRef = useRef(null);
   const editorRef = useRef(null);
@@ -262,6 +275,35 @@ export default function Products() {
   const activeCount = products.filter((product) => normalizeStatusValue(product?.status) === "active").length;
 
   useEffect(() => {
+    const duplicateProductIds = products.reduce((summary, product, index) => {
+      const normalizedId = normalizeText(product?.id);
+      if (!normalizedId) {
+        summary.missingIds.push({
+          index,
+          name: product?.name || "",
+          status: product?.status || "",
+        });
+        return summary;
+      }
+
+      if (!summary.seenIds.has(normalizedId)) {
+        summary.seenIds.add(normalizedId);
+        return summary;
+      }
+
+      summary.duplicates.push({
+        index,
+        id: normalizedId,
+        name: product?.name || "",
+        status: product?.status || "",
+      });
+      return summary;
+    }, {
+      seenIds: new Set(),
+      duplicates: [],
+      missingIds: [],
+    });
+
     const exclusionDiagnostics = products.reduce(
       (summary, product) => {
         const normalizedStatus = normalizeStatusValue(product?.status);
@@ -313,9 +355,37 @@ export default function Products() {
         colors: Array.isArray(product?.colors) ? product.colors : [],
         sizes: Array.isArray(product?.sizes) ? product.sizes : [],
       })),
+      duplicateProductIds: duplicateProductIds.duplicates,
+      missingProductIds: duplicateProductIds.missingIds,
       exclusionDiagnostics,
     });
   }, [activeCount, filteredProducts.length, focusedProductIds, products, productsReady, searchTerm, selectedStatus]);
+
+  useEffect(() => {
+    const renderedCardNodes = Array.from(productCardRefs.current.entries()).map(([key, node]) => ({
+      key,
+      mounted: Boolean(node),
+    }));
+
+    console.info("[Products] Customer catalog rendered card count", {
+      rawProductsArrayLength: products.length,
+      filteredProductsArrayLength: filteredProducts.length,
+      renderedProductCardCount: renderedCardNodes.length,
+      renderedProductCards: renderedCardNodes,
+      productsBeforeRender: filteredProducts.map((product, index) => {
+        const renderIdentity = buildProductRenderIdentity(product, index);
+        return {
+          index,
+          id: product?.id || null,
+          name: product?.name || "",
+          status: product?.status || "",
+          category: product?.category || "",
+          renderKey: renderIdentity.key,
+          fallbackKeyUsed: renderIdentity.fallbackKeyUsed,
+        };
+      }),
+    });
+  }, [filteredProducts, products.length]);
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -1040,17 +1110,29 @@ export default function Products() {
           <div className="products-list-scroll">
             <div className="products-list-grid">
               {filteredProducts.length ? (
-                filteredProducts.map((product) => {
+                filteredProducts.map((product, index) => {
                   const linkedGarment = findLinkedGarmentLibraryItem(product, libraryItems);
+                  const renderIdentity = buildProductRenderIdentity(product, index);
+
+                  console.info("[Products] Rendering customer catalog product card", {
+                    index,
+                    id: product?.id || null,
+                    name: product?.name || "",
+                    status: product?.status || "",
+                    category: product?.category || "",
+                    renderKey: renderIdentity.key,
+                    fallbackKeyUsed: renderIdentity.fallbackKeyUsed,
+                    linkedGarmentTitle: linkedGarment?.title || "",
+                  });
 
                   return (
                     <article
-                      key={product.id}
+                      key={renderIdentity.key}
                       ref={(node) => {
                         if (node) {
-                          productCardRefs.current.set(product.id, node);
+                          productCardRefs.current.set(renderIdentity.key, node);
                         } else {
-                          productCardRefs.current.delete(product.id);
+                          productCardRefs.current.delete(renderIdentity.key);
                         }
                       }}
                       className={`products-card ${

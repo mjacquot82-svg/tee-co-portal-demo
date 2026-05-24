@@ -816,7 +816,7 @@ export async function createStoredProduct(productInput) {
     const previousProducts = getStoredProducts();
     const localProduct = {
       ...product,
-      id: `product-${Date.now()}`,
+      id: `product-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     };
     const nextProducts = [localProduct, ...previousProducts];
     hasLoadedProductsFromSupabase = true;
