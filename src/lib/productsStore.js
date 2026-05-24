@@ -50,6 +50,7 @@ const PRODUCTS_SELECT_FIELDS = [
   "cost_price",
   "markup_percentage",
   "base_garment_price",
+  "compare_at_price",
   "unit_price",
   "notes",
 ].join(", ");
@@ -57,6 +58,7 @@ const PRODUCTS_SELECT_FIELDS = [
 const LEGACY_PRODUCTS_SELECT_FIELDS = PRODUCTS_SELECT_FIELDS
   .replace("storefront_category, ", "")
   .replace("storefront_category_lookup_id, ", "")
+  .replace("compare_at_price, ", "")
   .replace("garment_library_item_id, ", "");
 
 function buildSupabaseProductErrorDetails(error, extra = {}) {
@@ -102,6 +104,7 @@ function isLegacyProductSchemaError(error) {
     "garment_library_item_id",
     "storefront_category",
     "storefront_category_lookup_id",
+    "compare_at_price",
   ].some((columnName) => isMissingProductColumnError(error, columnName));
 }
 
@@ -364,6 +367,7 @@ function normalizeProduct(product) {
     markup_percentage: markupPercentage,
     calculated_base_price: resolvedBasePrice,
     base_garment_price: resolvedBasePrice,
+    compare_at_price: normalizeNumericPrice(product?.compare_at_price),
     unit_price: resolvedBasePrice,
     placements,
     allowed_placements: placements,
@@ -515,6 +519,7 @@ function buildSupabaseProductRecord(product = {}, options = {}) {
     cost_price: normalizeNumericPrice(product.cost_price) ?? 0,
     markup_percentage: normalizeNumericPrice(product.markup_percentage) ?? 0,
     base_garment_price: resolveProductBasePrice(product),
+    compare_at_price: normalizeNumericPrice(product.compare_at_price),
     unit_price: resolveProductBasePrice(product),
     notes: product.notes || "",
   };
@@ -544,6 +549,7 @@ function normalizeSupabaseProduct(product = {}) {
     base_garment_price: normalizeNumericPrice(
       product?.base_garment_price ?? product?.unit_price ?? product?.price
     ),
+    compare_at_price: normalizeNumericPrice(product?.compare_at_price),
     calculated_base_price: normalizeNumericPrice(
       product?.unit_price ?? product?.base_garment_price ?? product?.price
     ),
@@ -555,6 +561,7 @@ function omitGarmentLibraryItemId(record = {}) {
     garment_library_item_id: _GARMENT_LIBRARY_ITEM_ID,
     storefront_category: _STOREFRONT_CATEGORY,
     storefront_category_lookup_id: _STOREFRONT_CATEGORY_LOOKUP_ID,
+    compare_at_price: _COMPARE_AT_PRICE,
     ...legacyRecord
   } = record;
   return legacyRecord;

@@ -134,6 +134,75 @@
   gap: 10px;
 }
 
+.garment-library-storefront-setup-dialog {
+  width: min(100%, 560px);
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, #ffffff 100%);
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.22);
+  padding: 28px;
+  display: grid;
+  gap: 22px;
+  animation: productsDialogIn 0.22s cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+.garment-library-storefront-setup-copy {
+  display: grid;
+  gap: 10px;
+}
+
+.garment-library-storefront-setup-copy h2,
+.garment-library-storefront-setup-copy p {
+  margin: 0;
+}
+
+.garment-library-storefront-setup-copy h2 {
+  color: #0f172a;
+  font-size: 30px;
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+}
+
+.garment-library-storefront-setup-copy p {
+  color: #475569;
+  line-height: 1.55;
+}
+
+.garment-library-storefront-setup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.garment-library-storefront-setup-visibility {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid #dbeafe;
+  background: linear-gradient(180deg, #f8fbff 0%, #f8fafc 100%);
+}
+
+.garment-library-storefront-setup-label {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.garment-library-storefront-setup-error {
+  border-radius: 16px;
+  border: 1px solid #fecaca;
+  background: #fff7f7;
+  color: #b91c1c;
+  padding: 12px 14px;
+  font-weight: 700;
+}
+
+.garment-library-storefront-setup-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .products-confirmation-cancel {
   min-height: 48px;
 }
@@ -2416,16 +2485,19 @@
     padding: 16px;
   }
 
-  .products-confirmation-dialog {
+  .products-confirmation-dialog,
+  .garment-library-storefront-setup-dialog {
     padding: 22px;
     border-radius: 22px;
   }
 
-  .products-confirmation-copy h2 {
+  .products-confirmation-copy h2,
+  .garment-library-storefront-setup-copy h2 {
     font-size: 24px;
   }
 
-  .products-confirmation-actions {
+  .products-confirmation-actions,
+  .garment-library-storefront-setup-actions {
     grid-template-columns: 1fr;
   }
 
@@ -2453,7 +2525,8 @@
   .products-import-variant-row,
   .products-import-actions,
   .products-price-row,
-  .products-price-row-wide {
+  .products-price-row-wide,
+  .garment-library-storefront-setup-grid {
     grid-template-columns: 1fr;
   }
 

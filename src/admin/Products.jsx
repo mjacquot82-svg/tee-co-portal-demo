@@ -69,6 +69,7 @@ const emptyProduct = {
   selectedGarmentLibraryId: "",
   garmentSearch: "",
   flat_price: "",
+  compare_at_price: "",
   image: "",
   visibleVariants: [],
   sizes: [],
@@ -203,7 +204,8 @@ function buildFormFromGarmentDraft(
   brands,
   categories,
   garmentModels,
-  storefrontCategories = []
+  storefrontCategories = [],
+  prefilledStorefrontSetup = {}
 ) {
   const garmentModel = findLookupById(garmentModels, item?.garment_model_lookup_id);
   const brand = findLookupById(brands, item?.brand_lookup_id);
@@ -214,6 +216,13 @@ function buildFormFromGarmentDraft(
       item?.storefront_category_lookup_id,
       item?.storefront_category,
       category?.name || item?.category
+    ) || null;
+  const prefilledStorefrontCategory =
+    resolveStorefrontCategoryOption(
+      storefrontCategories,
+      prefilledStorefrontSetup?.storefront_category_lookup_id,
+      prefilledStorefrontSetup?.storefront_category,
+      storefrontCategory?.name || category?.name || item?.category
     ) || null;
   const defaultProductionMethods =
     Array.isArray(item?.default_production_methods) && item.default_production_methods.length
@@ -232,19 +241,31 @@ function buildFormFromGarmentDraft(
     image: item?.image || "",
     visibleVariants: getVariantOptions(item).map((variant) => variant.name),
     sizes: sortSizesByLookup(item?.sizes || [], sizeLookups),
+    flat_price: normalizeText(prefilledStorefrontSetup?.flat_price),
+    compare_at_price: normalizeText(prefilledStorefrontSetup?.compare_at_price),
     placementsText: defaultPlacements.join(", "),
     placementPriceMap: buildPlacementPriceMap(defaultPlacements, {}),
     production_methods: defaultProductionMethods,
     production_method_prices: buildMethodPriceMap(defaultProductionMethods, {}),
     category: category?.name || "",
     storefront_category:
-      storefrontCategory?.name || category?.name || item?.storefront_category || "",
+      prefilledStorefrontCategory?.name ||
+      normalizeText(prefilledStorefrontSetup?.storefront_category) ||
+      storefrontCategory?.name ||
+      category?.name ||
+      item?.storefront_category ||
+      "",
     category_lookup_id: item?.category_lookup_id || "",
-    storefront_category_lookup_id: storefrontCategory?.id || "",
+    storefront_category_lookup_id:
+      prefilledStorefrontCategory?.id ||
+      normalizeText(prefilledStorefrontSetup?.storefront_category_lookup_id) ||
+      storefrontCategory?.id ||
+      "",
     brand_lookup_id: item?.brand_lookup_id || "",
     garment_model_lookup_id: item?.garment_model_lookup_id || "",
     product_type: resolveStructuredProductType(garmentModel, "", item?.title || ""),
     brand_model: buildLegacyBrandModelValue(brand, garmentModel, ""),
+    status: normalizeText(prefilledStorefrontSetup?.status) || "Active",
     notes: "",
   };
 }
@@ -285,6 +306,10 @@ function buildFormFromProduct(
       product?.base_garment_price === null || product?.base_garment_price === undefined
         ? ""
         : String(product.base_garment_price),
+    compare_at_price:
+      product?.compare_at_price === null || product?.compare_at_price === undefined
+        ? ""
+        : String(product.compare_at_price),
     visibleVariants: Array.isArray(product?.colors) ? uniqueList(product.colors) : [],
     sizes: sortSizesByLookup(Array.isArray(product?.sizes) ? product.sizes : [], sizeLookups),
     placementsText: placements.join(", "),
@@ -904,6 +929,7 @@ export default function Products() {
 
   useEffect(() => {
     const createFromGarmentId = normalizeText(location.state?.createFromGarmentId);
+    const storefrontSetup = location.state?.storefrontSetup || {};
     if (!createFromGarmentId || !libraryItems.length) {
       return;
     }
@@ -924,7 +950,8 @@ export default function Products() {
     setSearchTerm("");
     setSelectedStatus("all");
     setCreationNotice(
-      `Storefront product draft loaded from garment template ${matchedGarment.title}. Review storefront details and publish when ready.`
+      normalizeText(location.state?.creationNotice) ||
+        `Storefront product draft loaded from garment template ${matchedGarment.title}. Review storefront details and publish when ready.`
     );
     setForm(
       buildFormFromGarmentDraft(
@@ -933,7 +960,8 @@ export default function Products() {
         brands,
         categories,
         garmentModels,
-        storefrontCategories
+        storefrontCategories,
+        storefrontSetup
       )
     );
     setIsEditorOpen(true);
@@ -1210,6 +1238,7 @@ export default function Products() {
       form.storefront_category_lookup_id
     );
     const flatPrice = Number(form.flat_price || 0);
+    const compareAtPrice = form.compare_at_price === "" ? null : Number(form.compare_at_price || 0);
     const selectedSizes =
       !isManualProductMode && selectedGarmentItem && isOneSizeOnly(selectedGarmentItem.sizes || [])
         ? sortSizesByLookup(selectedGarmentItem.sizes || [], sizes)
@@ -1255,6 +1284,7 @@ export default function Products() {
       cost_price: Number(form.cost_price || 0),
       markup_percentage: Number(form.markup_percentage || 0),
       base_garment_price: flatPrice,
+      compare_at_price: compareAtPrice,
       unit_price: flatPrice,
       notes: form.notes,
     };

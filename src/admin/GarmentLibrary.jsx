@@ -19,8 +19,6 @@ import {
 } from "../lib/garmentLibraryStore";
 import { buildGarmentUsageMap } from "../lib/productGarmentLinks";
 import {
-  createStoredProduct,
-  refreshStoredProducts,
   useStoredProducts,
 } from "../lib/productsStore";
 import { parseTeeCoGarmentSpreadsheet } from "../lib/teeCoGarmentSpreadsheet";
@@ -418,6 +416,52 @@ function buildStorefrontProductPayloadFromGarment(item, context = {}) {
   });
 
   return storefrontProductDraft;
+}
+
+function resolveStorefrontCategoryOption(
+  storefrontCategories = [],
+  storefrontCategoryLookupId = "",
+  storefrontCategoryName = "",
+  fallbackCategoryName = ""
+) {
+  const normalizedLookupId = normalizeText(storefrontCategoryLookupId);
+  if (normalizedLookupId) {
+    const matchedCategory = findLookupById(storefrontCategories, normalizedLookupId);
+    if (matchedCategory) return matchedCategory;
+  }
+
+  const targetName = normalizeText(
+    storefrontCategoryName || fallbackCategoryName || "Catalog"
+  ).toLowerCase();
+  if (!targetName) return null;
+
+  return (
+    storefrontCategories.find(
+      (category) => normalizeText(category?.name).toLowerCase() === targetName
+    ) || null
+  );
+}
+
+function buildQuickStorefrontSetupDraft(item, categories = [], storefrontCategories = []) {
+  const supplierCategory = findLookupById(categories, item?.category_lookup_id);
+  const storefrontCategory =
+    resolveStorefrontCategoryOption(
+      storefrontCategories,
+      item?.storefront_category_lookup_id,
+      item?.storefront_category,
+      supplierCategory?.name || item?.category
+    ) || null;
+
+  return {
+    garmentId: item?.id || "",
+    garmentTitle: normalizeText(item?.title) || "Selected garment",
+    salePrice: "",
+    compareAtPrice: "",
+    storefrontCategoryLookupId: storefrontCategory?.id || "",
+    storefrontCategory: storefrontCategory?.name || "",
+    status: item?.active === false ? "Inactive" : "Active",
+    error: "",
+  };
 }
 
 function buildImportedGarmentOptionLabel(item, model) {
@@ -1298,6 +1342,7 @@ export default function GarmentLibrary() {
   const products = useStoredProducts();
   const lookups = useCatalogLookups();
   const categories = lookups.categories ?? EMPTY_LIST;
+  const storefrontCategories = lookups.storefront_categories ?? EMPTY_LIST;
   const brands = lookups.brands ?? EMPTY_LIST;
   const sizes = lookups.sizes ?? EMPTY_LIST;
   const garmentModels = lookups.garment_models ?? EMPTY_LIST;
@@ -1306,7 +1351,7 @@ export default function GarmentLibrary() {
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isCreatingStorefrontProduct, setIsCreatingStorefrontProduct] = useState(false);
-  const [storefrontSalePrice, setStorefrontSalePrice] = useState("");
+  const [quickStorefrontSetup, setQuickStorefrontSetup] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [variantSearch, setVariantSearch] = useState("");
   const [variantDraft, setVariantDraft] = useState(buildVariantDraft());
@@ -1335,10 +1380,18 @@ export default function GarmentLibrary() {
   const [activeWorkspace, setActiveWorkspace] = useState(null);
   const repairingBrandIdsRef = useRef(new Set());
   const brandSelectRef = useRef(null);
+  const quickStorefrontSetupPriceRef = useRef(null);
+  const quickStorefrontSetupCancelRef = useRef(null);
+  const quickStorefrontSetupContinueRef = useRef(null);
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const isEditMode = Boolean(editingId);
   const isEditorOpen = activeWorkspace === "create" || activeWorkspace === "edit";
   const isImportOpen = activeWorkspace === "import";
+  const isQuickStorefrontSetupOpen = Boolean(quickStorefrontSetup?.garmentId);
+  const activeStorefrontCategories = useMemo(
+    () => storefrontCategories.filter((category) => category?.active !== false),
+    [storefrontCategories]
+  );
   const editingGarment = useMemo(
     () => garments.find((item) => item.id === editingId) || null,
     [editingId, garments]
@@ -1367,6 +1420,49 @@ export default function GarmentLibrary() {
       initialGarmentModelCount: garmentModels.length,
     });
   }, []);
+  useEffect(() => {
+    if (!isQuickStorefrontSetupOpen) return undefined;
+
+    window.requestAnimationFrame(() => {
+      quickStorefrontSetupPriceRef.current?.focus();
+      quickStorefrontSetupPriceRef.current?.select();
+    });
+
+    function handleQuickStorefrontSetupKeyDown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeQuickStorefrontSetup();
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+
+      const focusableElements = [
+        quickStorefrontSetupPriceRef.current,
+        quickStorefrontSetupCancelRef.current,
+        quickStorefrontSetupContinueRef.current,
+      ].filter(Boolean);
+
+      if (!focusableElements.length) return;
+
+      const currentIndex = focusableElements.indexOf(document.activeElement);
+      const nextIndex = event.shiftKey
+        ? currentIndex <= 0
+          ? focusableElements.length - 1
+          : currentIndex - 1
+        : currentIndex === -1 || currentIndex === focusableElements.length - 1
+          ? 0
+          : currentIndex + 1;
+
+      event.preventDefault();
+      focusableElements[nextIndex]?.focus();
+    }
+
+    document.addEventListener("keydown", handleQuickStorefrontSetupKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleQuickStorefrontSetupKeyDown);
+    };
+  }, [isQuickStorefrontSetupOpen, isCreatingStorefrontProduct]);
   useEffect(() => {
     console.debug("[GarmentLibrary] raw garments entering component", {
       rawGarmentsIsArray: Array.isArray(rawGarments),
@@ -1990,7 +2086,7 @@ export default function GarmentLibrary() {
                 startEditingGarment(item);
               }}
               onCreateStorefrontProduct={() => {
-                startCreatingStorefrontProduct(item);
+                openQuickStorefrontSetup(item);
               }}
               onViewLinkedProducts={() => {
                 startViewingLinkedStorefrontProducts(item, usage);
@@ -2493,7 +2589,6 @@ export default function GarmentLibrary() {
   function resetForm() {
     setForm(emptyLibraryForm);
     setEditingId(null);
-    setStorefrontSalePrice("");
     setHasCustomizedPlacements(false);
     setSaveError("");
     setVariantDraft(buildVariantDraft());
@@ -2547,59 +2642,119 @@ export default function GarmentLibrary() {
     setSaveError("");
     setImportError("");
     setVariantSearch("");
-    setStorefrontSalePrice("");
     setActiveWorkspace("edit");
   }
 
-  async function startCreatingStorefrontProduct(item) {
+  function openQuickStorefrontSetup(item) {
     if (!item?.id) return;
+    setIsCreatingStorefrontProduct(false);
+    setQuickStorefrontSetup(buildQuickStorefrontSetupDraft(item, categories, activeStorefrontCategories));
+  }
 
-    const storefrontPrice = parseOptionalPrice(storefrontSalePrice);
+  function closeQuickStorefrontSetup() {
+    if (isCreatingStorefrontProduct) return;
+    setQuickStorefrontSetup(null);
+  }
+
+  function updateQuickStorefrontSetupField(event) {
+    const { name, value } = event.target;
+    setQuickStorefrontSetup((current) => {
+      if (!current) return current;
+
+      if (name === "storefrontCategoryLookupId") {
+        const selectedStorefrontCategory = findLookupById(activeStorefrontCategories, value);
+        return {
+          ...current,
+          storefrontCategoryLookupId: value,
+          storefrontCategory: selectedStorefrontCategory?.name || "",
+          error: "",
+        };
+      }
+
+      return {
+        ...current,
+        [name]: value,
+        error: "",
+      };
+    });
+  }
+
+  async function continueToStorefrontProductFromSetup() {
+    if (!quickStorefrontSetup?.garmentId) return;
+
+    const storefrontPrice = parseOptionalPrice(quickStorefrontSetup.salePrice);
     if (storefrontPrice === null) {
-      setSaveError("Enter a customer sale price before creating the storefront product.");
+      setQuickStorefrontSetup((current) =>
+        current
+          ? {
+              ...current,
+              error: "Add a customer sale price to continue into storefront setup.",
+            }
+          : current
+      );
       return;
     }
 
-    try {
-      setIsCreatingStorefrontProduct(true);
-      setSaveError("");
-      const productPayload = buildStorefrontProductPayloadFromGarment(item, {
-        brands,
-        categories,
-        garmentModels,
-        garmentModelMap,
-        sizeLookups: sizes,
-      });
-      productPayload.base_garment_price = storefrontPrice;
-      productPayload.unit_price = storefrontPrice;
-      console.info("[StorefrontCreateVerification] storefront product creation starting", {
-        garmentId: item?.id || null,
-        garmentTitle: item?.title || "",
-        productPayload,
-      });
-      const createdProduct = await createStoredProduct(productPayload);
-      await refreshStoredProducts().catch((error) => {
-        console.warn("[GarmentLibrary] storefront refresh after product create failed", error);
-      });
-
-      navigate("/admin/products", {
-        state: {
-          highlightProductIds: createdProduct?.id ? [createdProduct.id] : [],
-          highlightedGarmentTitle: item?.title || "",
-          creationNotice: item?.title
-            ? `Storefront product created from ${item.title}.`
-            : "Storefront product created successfully.",
-          productsRefreshToken: Date.now(),
-        },
-      });
-    } catch (error) {
-      console.error("Unable to create storefront product from garment template", error);
-      setSaveError(
-        error?.message || "Unable to create a storefront product from this garment template right now."
+    const compareAtPriceRaw = normalizeText(quickStorefrontSetup.compareAtPrice);
+    const compareAtPrice = compareAtPriceRaw ? parseOptionalPrice(compareAtPriceRaw) : null;
+    if (compareAtPriceRaw && compareAtPrice === null) {
+      setQuickStorefrontSetup((current) =>
+        current
+          ? {
+              ...current,
+              error: "Enter a valid compare-at price or leave it blank.",
+            }
+          : current
       );
-    } finally {
-      setIsCreatingStorefrontProduct(false);
+      return;
     }
+
+    if (compareAtPrice !== null && compareAtPrice < storefrontPrice) {
+      setQuickStorefrontSetup((current) =>
+        current
+          ? {
+              ...current,
+              error: "Compare-at price should be higher than the customer sale price.",
+            }
+          : current
+      );
+      return;
+    }
+
+    const selectedStorefrontCategory = resolveStorefrontCategoryOption(
+      activeStorefrontCategories,
+      quickStorefrontSetup.storefrontCategoryLookupId,
+      quickStorefrontSetup.storefrontCategory
+    );
+
+    if (!selectedStorefrontCategory) {
+      setQuickStorefrontSetup((current) =>
+        current
+          ? {
+              ...current,
+              error: "Choose a storefront category before continuing.",
+            }
+          : current
+      );
+      return;
+    }
+
+    setIsCreatingStorefrontProduct(true);
+    navigate("/admin/products", {
+      state: {
+        createFromGarmentId: quickStorefrontSetup.garmentId,
+        storefrontSetup: {
+          flat_price: storefrontPrice.toFixed(2),
+          compare_at_price: compareAtPrice !== null ? compareAtPrice.toFixed(2) : "",
+          storefront_category_lookup_id: selectedStorefrontCategory.id,
+          storefront_category: selectedStorefrontCategory.name,
+          status: quickStorefrontSetup.status,
+        },
+        creationNotice: quickStorefrontSetup.garmentTitle
+          ? `Quick storefront setup applied to ${quickStorefrontSetup.garmentTitle}. Review the product and publish when ready.`
+          : "Quick storefront setup applied. Review the product and publish when ready.",
+      },
+    });
   }
 
   function startViewingLinkedStorefrontProducts(item, usage) {
@@ -4073,10 +4228,10 @@ export default function GarmentLibrary() {
                         <button
                           type="button"
                           className="products-primary-button products-primary-button-large"
-                          onClick={() => startCreatingStorefrontProduct(editingGarment)}
+                          onClick={() => openQuickStorefrontSetup(editingGarment)}
                           disabled={isCreatingStorefrontProduct}
                         >
-                          {isCreatingStorefrontProduct ? "Creating..." : "Create Storefront Product"}
+                          {isCreatingStorefrontProduct ? "Opening..." : "Create Storefront Product"}
                         </button>
                         <button type="submit" disabled={isSaving} className="products-secondary-button">
                           {isSaving ? "Saving..." : "Edit Template"}
@@ -4645,56 +4800,42 @@ export default function GarmentLibrary() {
             <section className="products-editor-section garment-library-completion-card">
               <div className="products-section-header">
                 <div>
-                  <p className="products-section-step">Final Step</p>
-                  <h2>Create Storefront Product</h2>
+                  <p className="products-section-step">Storefront Publishing</p>
+                  <h2>Quick Storefront Setup</h2>
                 </div>
                 <p>
-                  Garment template edits stay reusable supplier data. The customer-facing catalog product is created
-                  here after you confirm the sale price.
+                  Keep garment maintenance separate from storefront publishing. Open a lightweight setup flow here,
+                  confirm the storefront basics, then continue directly into the product editor.
                 </p>
               </div>
 
               <div className="garment-library-completion-grid">
-                <label style={labelStyle}>
-                  Customer Sale Price
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={storefrontSalePrice}
-                    onChange={(event) => setStorefrontSalePrice(event.target.value)}
-                    placeholder="24.00"
-                    required
-                    style={fieldStyle}
-                  />
-                </label>
-
                 <div className="products-summary-card garment-library-completion-summary">
-                  <span className="products-summary-label">Workflow</span>
+                  <span className="products-summary-label">Publishing Flow</span>
                   <strong>{normalizeText(form.title) || "Named garment template"}</strong>
                   <div className="products-summary-details">
                     <span>Template saved separately</span>
-                    <span>Catalog product created on demand</span>
+                    <span>Storefront draft opens with setup applied</span>
                   </div>
                 </div>
               </div>
 
               <div className="garment-library-completion-actions">
                 <div className="garment-library-completion-copy">
-                  <strong>Primary workflow</strong>
+                  <strong>Guided handoff</strong>
                   <p>
-                    Configure the garment, confirm sale price, then publish the storefront product. Template editing
-                    remains available below for supplier/admin maintenance.
+                    Add the customer-facing price, storefront category, and visibility in-context, then move straight
+                    into the storefront product workflow without a library-wide warning state.
                   </p>
                 </div>
 
                 <button
                   type="button"
                   className="products-primary-button products-primary-button-large"
-                  onClick={() => startCreatingStorefrontProduct(editingGarment)}
+                  onClick={() => openQuickStorefrontSetup(editingGarment)}
                   disabled={isCreatingStorefrontProduct}
                 >
-                  {isCreatingStorefrontProduct ? "Creating..." : "Create Storefront Product"}
+                  {isCreatingStorefrontProduct ? "Opening..." : "Create Storefront Product"}
                 </button>
               </div>
             </section>
@@ -4740,6 +4881,163 @@ export default function GarmentLibrary() {
           </aside>
         ) : null}
       </div>
+
+      {isQuickStorefrontSetupOpen ? (
+        <div
+          className="products-confirmation-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              closeQuickStorefrontSetup();
+            }
+          }}
+        >
+          <div
+            className="garment-library-storefront-setup-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="quick-storefront-setup-title"
+            aria-describedby="quick-storefront-setup-description"
+          >
+            <div className="garment-library-storefront-setup-copy">
+              <p className="products-confirmation-kicker">Quick Storefront Setup</p>
+              <h2 id="quick-storefront-setup-title">
+                {quickStorefrontSetup?.garmentTitle || "Selected garment"}
+              </h2>
+              <p id="quick-storefront-setup-description">
+                Add the customer-facing basics here, then continue directly into the storefront product flow.
+              </p>
+            </div>
+
+            <div className="garment-library-storefront-setup-grid">
+              <label style={labelStyle}>
+                Customer Sale Price
+                <input
+                  ref={quickStorefrontSetupPriceRef}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  name="salePrice"
+                  value={quickStorefrontSetup?.salePrice || ""}
+                  onChange={updateQuickStorefrontSetupField}
+                  placeholder="24.00"
+                  style={fieldStyle}
+                />
+              </label>
+
+              <label style={labelStyle}>
+                Compare-at Price
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  name="compareAtPrice"
+                  value={quickStorefrontSetup?.compareAtPrice || ""}
+                  onChange={updateQuickStorefrontSetupField}
+                  placeholder="32.00"
+                  style={fieldStyle}
+                />
+              </label>
+
+              <label style={labelStyle}>
+                Storefront Category
+                <select
+                  name="storefrontCategoryLookupId"
+                  value={quickStorefrontSetup?.storefrontCategoryLookupId || ""}
+                  onChange={updateQuickStorefrontSetupField}
+                  style={fieldStyle}
+                >
+                  <option value="">Select storefront category</option>
+                  {activeStorefrontCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="garment-library-storefront-setup-visibility">
+                <span className="garment-library-storefront-setup-label">Storefront Visibility</span>
+                <div className="products-segmented-toggle" role="group" aria-label="Storefront visibility">
+                  <button
+                    type="button"
+                    className={`products-segmented-toggle-button ${
+                      quickStorefrontSetup?.status === "Active" ? "is-active" : ""
+                    }`}
+                    onClick={() =>
+                      setQuickStorefrontSetup((current) =>
+                        current
+                          ? {
+                              ...current,
+                              status: "Active",
+                              error: "",
+                            }
+                          : current
+                      )
+                    }
+                  >
+                    Active
+                  </button>
+                  <button
+                    type="button"
+                    className={`products-segmented-toggle-button ${
+                      quickStorefrontSetup?.status !== "Active" ? "is-active" : ""
+                    }`}
+                    onClick={() =>
+                      setQuickStorefrontSetup((current) =>
+                        current
+                          ? {
+                              ...current,
+                              status: "Inactive",
+                              error: "",
+                            }
+                          : current
+                      )
+                    }
+                  >
+                    Inactive
+                  </button>
+                </div>
+                <span
+                  className={`products-status products-status-${
+                    quickStorefrontSetup?.status === "Active" ? "active" : "archived"
+                  }`}
+                >
+                  {quickStorefrontSetup?.status === "Active"
+                    ? "Visible on storefront"
+                    : "Hidden from storefront"}
+                </span>
+              </div>
+            </div>
+
+            {quickStorefrontSetup?.error ? (
+              <div className="garment-library-storefront-setup-error" role="status" aria-live="polite">
+                {quickStorefrontSetup.error}
+              </div>
+            ) : null}
+
+            <div className="garment-library-storefront-setup-actions">
+              <button
+                ref={quickStorefrontSetupCancelRef}
+                type="button"
+                className="products-secondary-button"
+                onClick={closeQuickStorefrontSetup}
+                disabled={isCreatingStorefrontProduct}
+              >
+                Cancel
+              </button>
+              <button
+                ref={quickStorefrontSetupContinueRef}
+                type="button"
+                className="products-primary-button"
+                onClick={continueToStorefrontProductFromSetup}
+                disabled={isCreatingStorefrontProduct}
+              >
+                {isCreatingStorefrontProduct ? "Opening..." : "Continue to Storefront Product"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
