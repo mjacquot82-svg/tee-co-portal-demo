@@ -1,4 +1,5 @@
 import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "./Products.css";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import ProductImageUploader from "../components/ProductImageUploader";
@@ -43,6 +44,7 @@ const GARMENT_SORT_OPTIONS = [
 
 const EMPTY_GARMENT_USAGE = Object.freeze({
   linkedProductCount: 0,
+  linkedProductIds: [],
 });
 const emptyLibraryForm = {
   title: "",
@@ -878,6 +880,7 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
   usage,
   sizeLookups,
   onSelect,
+  onCreateStorefrontProduct,
   onRemove,
 }) {
   const [hasImageError, setHasImageError] = useState(false);
@@ -1092,6 +1095,16 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
             type="button"
             onClick={(event) => {
               event.stopPropagation();
+              onCreateStorefrontProduct();
+            }}
+            className="products-card-button"
+          >
+            Create Storefront Product
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
               onRemove();
             }}
             className="products-card-button products-card-button-danger"
@@ -1128,6 +1141,7 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
 });
 
 export default function GarmentLibrary() {
+  const navigate = useNavigate();
   const rawGarments = useGarmentLibraryItems();
   const liveGarments = Array.isArray(rawGarments) ? rawGarments : EMPTY_LIST;
   const garments = liveGarments;
@@ -1174,6 +1188,10 @@ export default function GarmentLibrary() {
   const isEditMode = Boolean(editingId);
   const isEditorOpen = activeWorkspace === "create" || activeWorkspace === "edit";
   const isImportOpen = activeWorkspace === "import";
+  const editingGarment = useMemo(
+    () => garments.find((item) => item.id === editingId) || null,
+    [editingId, garments]
+  );
 
   console.log("[GarmentLibrary] render start", {
     garmentCount: Array.isArray(garments) ? garments.length : "non-array",
@@ -1813,6 +1831,9 @@ export default function GarmentLibrary() {
               onSelect={() => {
                 startEditingGarment(item);
               }}
+              onCreateStorefrontProduct={() => {
+                startCreatingStorefrontProduct(item);
+              }}
               onRemove={() => {
                 if (editingId === item.id) {
                   resetForm();
@@ -2301,6 +2322,16 @@ export default function GarmentLibrary() {
     setImportError("");
     setVariantSearch("");
     setActiveWorkspace("edit");
+  }
+
+  function startCreatingStorefrontProduct(item) {
+    if (!item?.id) return;
+
+    navigate("/admin/products", {
+      state: {
+        createFromGarmentId: item.id,
+      },
+    });
   }
 
   function handleReusableGarmentSelect(garmentId) {
@@ -3680,6 +3711,30 @@ export default function GarmentLibrary() {
                 </div>
 
                 {saveError ? <div className="products-error-banner">{saveError}</div> : null}
+                {isEditMode && editingGarment ? (
+                  <div
+                    className="products-callout"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span>
+                      This reusable garment is ready to become a customer-facing catalog product
+                      without rebuilding its colors, sizes, or defaults.
+                    </span>
+                    <button
+                      type="button"
+                      className="products-primary-button"
+                      onClick={() => startCreatingStorefrontProduct(editingGarment)}
+                    >
+                      Create Storefront Product
+                    </button>
+                  </div>
+                ) : null}
 
                 <section className="products-editor-section">
                   <div className="products-section-header">
