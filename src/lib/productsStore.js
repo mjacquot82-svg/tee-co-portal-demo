@@ -4,6 +4,7 @@ import {
 } from "../constants/productionTypes";
 import { useEffect, useSyncExternalStore } from "react";
 import { getRawStorageItem, hasBrowserStorage, setRawStorageItem } from "./browserStorage";
+import { syncGarmentLibraryProductLinks } from "./garmentLibraryStore";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
 
 const STORAGE_KEY = "teeCoProducts";
@@ -328,6 +329,9 @@ function normalizeProduct(product) {
 
   return {
     ...product,
+    status: buildPersistentStatus(
+      product?.status ?? (product?.active === false ? "Inactive" : "Active")
+    ),
     garment_library_item_id:
       product.garment_library_item_id || product.garment_library_id || null,
     product_type: product.product_type || product.type || product.name || "General",
@@ -381,6 +385,18 @@ function setProductsSnapshot(products) {
 
   emitProductsUpdated();
   return normalizedProducts;
+}
+
+async function syncGarmentLinks(products) {
+  try {
+    await syncGarmentLibraryProductLinks(products);
+  } catch (error) {
+    console.warn("[productsStore] Unable to synchronize garment storefront links", {
+      productCount: Array.isArray(products) ? products.length : 0,
+      message: error?.message,
+      error,
+    });
+  }
 }
 
 function getLocalProductsSnapshot() {
@@ -548,7 +564,9 @@ export async function refreshStoredProducts() {
   }
 
   hasLoadedProductsFromSupabase = true;
-  return setProductsSnapshot(remoteProducts);
+  const snapshot = setProductsSnapshot(remoteProducts);
+  await syncGarmentLinks(snapshot);
+  return snapshot;
 }
 
 function ensureStoredProductsLoaded() {
@@ -575,7 +593,7 @@ function ensureStoredProductsLoaded() {
 
 export function getStoredProducts() {
   if (isSupabaseConfigured && supabase) {
-    if (hasLoadedProductsFromSupabase || productsLoadStarted) {
+    if (hasLoadedProductsFromSupabase || productsLoadStarted || cachedProductsSnapshot.length > 0) {
       return cachedProductsSnapshot;
     }
 
@@ -664,7 +682,9 @@ export async function createStoredProduct(productInput) {
       id: `product-${Date.now()}`,
     };
     const nextProducts = [localProduct, ...getStoredProducts()];
+    hasLoadedProductsFromSupabase = true;
     saveStoredProducts(nextProducts);
+    await syncGarmentLinks(nextProducts);
     return localProduct;
   }
 
@@ -702,7 +722,9 @@ export async function createStoredProduct(productInput) {
       (existingProduct) => existingProduct.id !== createdProduct.id
     ),
   ];
+  hasLoadedProductsFromSupabase = true;
   saveStoredProducts(nextProducts);
+  await syncGarmentLinks(nextProducts);
   return createdProduct;
 }
 
@@ -750,7 +772,9 @@ export async function updateStoredProduct(productId, updates) {
   if (!updatedProduct) return null;
 
   if (!isSupabaseConfigured || !supabase) {
+    hasLoadedProductsFromSupabase = true;
     saveStoredProducts(nextProducts);
+    await syncGarmentLinks(nextProducts);
     return updatedProduct;
   }
 
@@ -789,7 +813,13 @@ export async function updateStoredProduct(productId, updates) {
     garment_library_item_id:
       data?.garment_library_item_id ?? updatedProduct.garment_library_item_id ?? null,
   });
+  hasLoadedProductsFromSupabase = true;
   saveStoredProducts(
+    nextProducts.map((product) =>
+      product.id === productId ? normalizedUpdatedProduct : product
+    )
+  );
+  await syncGarmentLinks(
     nextProducts.map((product) =>
       product.id === productId ? normalizedUpdatedProduct : product
     )
@@ -808,5 +838,7 @@ export async function deleteStoredProduct(productId) {
   }
 
   const nextProducts = getStoredProducts().filter((product) => product.id !== productId);
+  hasLoadedProductsFromSupabase = true;
   saveStoredProducts(nextProducts);
+  await syncGarmentLinks(nextProducts);
 }

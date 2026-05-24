@@ -758,7 +758,9 @@ export function parseTeeCoGarmentSpreadsheet(text) {
       sizes: group.constSortedSizes,
       variants: group.variants
         .map((variant) => {
-          const sortedVariantSizes = Array.from(new Set(variant.sizes || [])).sort((left, right) =>
+          const variantSizes =
+            Array.isArray(variant.sizes) && variant.sizes.length ? variant.sizes : group.constSortedSizes;
+          const sortedVariantSizes = Array.from(new Set(variantSizes || [])).sort((left, right) =>
             left.localeCompare(right)
           );
           return {

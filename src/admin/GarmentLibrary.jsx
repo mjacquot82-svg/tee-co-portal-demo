@@ -105,7 +105,9 @@ function getGarmentModeLabel(itemTitle) {
 
 function buildFormFromGarment(item, brands, categories, garmentModels, sizeLookups) {
   const normalizedVariants = Array.isArray(item?.variants)
-    ? item.variants.map((variant) => normalizeVariantForEditor(variant)).filter(Boolean)
+    ? item.variants
+        .map((variant) => normalizeVariantForEditor(variant, item?.sizes || []))
+        .filter(Boolean)
     : [];
   const derivedSizes = uniqueList(normalizedVariants.flatMap((variant) => variant.sizes || []));
   const hydratedForm = {
@@ -247,8 +249,11 @@ function resolveVariantSizes(variant = {}) {
   return extractVariantSizeValues(variant);
 }
 
-function normalizeVariantForEditor(variant = {}) {
-  const parsedSizesBeforeNormalization = extractVariantSizeValues(variant);
+function normalizeVariantForEditor(variant = {}, fallbackSizes = []) {
+  const parsedSizesBeforeNormalization = uniqueList([
+    ...extractVariantSizeValues(variant),
+    ...normalizeDelimitedTextList(fallbackSizes),
+  ]);
   const parsedVariantBeforeNormalization = summarizeVariantForDebug(variant);
 
   console.info("[GarmentLibrary] parsed variant before UI normalization", {
@@ -270,7 +275,7 @@ function normalizeVariantForEditor(variant = {}) {
 
   const color = resolveVariantColorName(variant) || name;
   const colorOptions = extractVariantColorNames(variant);
-  const sizes = resolveVariantSizes(variant);
+  const sizes = parsedSizesBeforeNormalization;
   const supplierSku = resolveVariantSupplierSku(variant);
 
   const normalizedVariant = {
@@ -568,7 +573,7 @@ function buildImportedCapabilityMatrix(variants = [], sizeValues = [], sizeLooku
   const capabilitiesByColor = new Map();
 
   (variants || [])
-    .map((variant) => normalizeVariantForEditor(variant))
+    .map((variant) => normalizeVariantForEditor(variant, fallbackSizes))
     .filter(Boolean)
     .forEach((variant) => {
       const colorNames = extractVariantColorNames(variant);

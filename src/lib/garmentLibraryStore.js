@@ -471,6 +471,25 @@ function normalizeVariant(variant = {}, context = {}) {
   return normalizedVariant;
 }
 
+function hydrateVariantSizes(variant = {}, fallbackSizes = []) {
+  const normalizedFallbackSizes = normalizeStringList(fallbackSizes);
+  const normalizedVariantSizes = normalizeStringList(variant?.sizes);
+  const resolvedSizes = normalizedVariantSizes.length ? normalizedVariantSizes : normalizedFallbackSizes;
+
+  return {
+    ...variant,
+    sizes: resolvedSizes,
+    size: normalizeText(
+      variant?.size ||
+        variant?.size_name ||
+        variant?.sizeName ||
+        variant?.variant_size ||
+        resolvedSizes[0] ||
+        ""
+    ),
+  };
+}
+
 function normalizeGarmentLibraryItem(item = {}) {
   const title = normalizeText(item.title);
   if (!title) return null;
@@ -523,6 +542,7 @@ function normalizeGarmentLibraryItem(item = {}) {
   );
   const derivedVariantSizes = variants.flatMap((variant) => normalizeStringList(variant.sizes));
   const sizes = normalizeStringList([...(Array.isArray(item.sizes) ? item.sizes : []), ...derivedVariantSizes]);
+  const hydratedVariants = variants.map((variant) => hydrateVariantSizes(variant, sizes));
   const placeholderVariantCount = rawVariants.filter((variant) => {
     if (!variant || typeof variant !== "object") return false;
     return !Object.values(variant).some((value) => normalizeText(value));
@@ -542,15 +562,15 @@ function normalizeGarmentLibraryItem(item = {}) {
       summarizeVariantForDebug(variant)
     ),
     parsedSizesBeforeNormalization: Array.isArray(item.sizes) ? item.sizes : item.sizes || [],
-    parsedColors: variants.map((variant) => variant.color || variant.name).filter(Boolean),
+    parsedColors: hydratedVariants.map((variant) => variant.color || variant.name).filter(Boolean),
     parsedSizes: sizes,
-    generatedVariantCount: variants.length,
-    finalPersistedVariantStructure: variants.map((variant) => summarizeVariantForDebug(variant)),
+    generatedVariantCount: hydratedVariants.length,
+    finalPersistedVariantStructure: hydratedVariants.map((variant) => summarizeVariantForDebug(variant)),
     rawItemJson: safeStringify(item),
     normalizedItemJson: safeStringify({
       ...item,
       title,
-      variants,
+      variants: hydratedVariants,
       sizes,
     }),
   });
@@ -562,7 +582,7 @@ function normalizeGarmentLibraryItem(item = {}) {
     brand_lookup_id: item.brand_lookup_id || "",
     garment_model_lookup_id: item.garment_model_lookup_id || "",
     image: normalizeText(item.image),
-    variants,
+    variants: hydratedVariants,
     sizes,
     default_placements: normalizeStringList(item.default_placements),
     default_production_methods: normalizeStringList(item.default_production_methods),
