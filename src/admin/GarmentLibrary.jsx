@@ -18,7 +18,11 @@ import {
   useGarmentLibraryStatus,
 } from "../lib/garmentLibraryStore";
 import { buildGarmentUsageMap } from "../lib/productGarmentLinks";
-import { createStoredProduct, useStoredProducts } from "../lib/productsStore";
+import {
+  createStoredProduct,
+  refreshStoredProducts,
+  useStoredProducts,
+} from "../lib/productsStore";
 import { parseTeeCoGarmentSpreadsheet } from "../lib/teeCoGarmentSpreadsheet";
 import {
   buildLegacyBrandModelValue,
@@ -29,6 +33,7 @@ import {
   labelStyle,
   normalizeText,
   normalizeTextKey,
+  parseOptionalPrice,
   resolveStructuredProductType,
   SearchableLookupField,
   sortSizesByLookup,
@@ -1205,22 +1210,22 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
             type="button"
             onClick={(event) => {
               event.stopPropagation();
-              onSelect();
+              onCreateStorefrontProduct();
             }}
-            className="products-card-button"
+            className="products-card-button products-card-button-primary"
+            disabled={isCreatingStorefrontProduct}
           >
-            {isSelected ? "Editing Template" : "Edit Template"}
+            {isCreatingStorefrontProduct ? "Creating..." : "Create Storefront Product"}
           </button>
           <button
             type="button"
             onClick={(event) => {
               event.stopPropagation();
-              onCreateStorefrontProduct();
+              onSelect();
             }}
             className="products-card-button"
-            disabled={isCreatingStorefrontProduct}
           >
-            {isCreatingStorefrontProduct ? "Creating..." : "Create Storefront Product"}
+            {isSelected ? "Template Settings" : "Edit Template"}
           </button>
           <button
             type="button"
@@ -1278,6 +1283,7 @@ export default function GarmentLibrary() {
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isCreatingStorefrontProduct, setIsCreatingStorefrontProduct] = useState(false);
+  const [storefrontSalePrice, setStorefrontSalePrice] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [variantSearch, setVariantSearch] = useState("");
   const [variantDraft, setVariantDraft] = useState(buildVariantDraft());
@@ -2445,6 +2451,7 @@ export default function GarmentLibrary() {
   function resetForm() {
     setForm(emptyLibraryForm);
     setEditingId(null);
+    setStorefrontSalePrice("");
     setHasCustomizedPlacements(false);
     setSaveError("");
     setVariantDraft(buildVariantDraft());
@@ -2498,11 +2505,18 @@ export default function GarmentLibrary() {
     setSaveError("");
     setImportError("");
     setVariantSearch("");
+    setStorefrontSalePrice("");
     setActiveWorkspace("edit");
   }
 
   async function startCreatingStorefrontProduct(item) {
     if (!item?.id) return;
+
+    const storefrontPrice = parseOptionalPrice(storefrontSalePrice);
+    if (storefrontPrice === null) {
+      setSaveError("Enter a customer sale price before creating the storefront product.");
+      return;
+    }
 
     try {
       setIsCreatingStorefrontProduct(true);
@@ -2514,20 +2528,26 @@ export default function GarmentLibrary() {
         garmentModelMap,
         sizeLookups: sizes,
       });
+      productPayload.base_garment_price = storefrontPrice;
+      productPayload.unit_price = storefrontPrice;
       console.info("[StorefrontCreateVerification] storefront product creation starting", {
         garmentId: item?.id || null,
         garmentTitle: item?.title || "",
         productPayload,
       });
       const createdProduct = await createStoredProduct(productPayload);
+      await refreshStoredProducts().catch((error) => {
+        console.warn("[GarmentLibrary] storefront refresh after product create failed", error);
+      });
 
       navigate("/admin/products", {
         state: {
-          focusProductIds: createdProduct?.id ? [createdProduct.id] : [],
-          focusGarmentTitle: item?.title || "",
+          highlightProductIds: createdProduct?.id ? [createdProduct.id] : [],
+          highlightedGarmentTitle: item?.title || "",
           creationNotice: item?.title
             ? `Storefront product created from ${item.title}.`
             : "Storefront product created successfully.",
+          productsRefreshToken: Date.now(),
         },
       });
     } catch (error) {
@@ -2548,8 +2568,11 @@ export default function GarmentLibrary() {
 
     navigate("/admin/products", {
       state: {
-        focusProductIds: linkedProductIds,
-        focusGarmentTitle: item?.title || "",
+        highlightProductIds: linkedProductIds,
+        highlightedGarmentTitle: item?.title || "",
+        creationNotice: item?.title
+          ? `Highlighted storefront products linked to ${item.title}.`
+          : "Highlighted linked storefront products.",
       },
     });
   }
@@ -3950,32 +3973,6 @@ export default function GarmentLibrary() {
                 </div>
 
                 {saveError ? <div className="products-error-banner">{saveError}</div> : null}
-                {isEditMode && editingGarment ? (
-                  <div
-                    className="products-callout"
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: "12px",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <span>
-                      This garment template is reusable supplier setup. Use a separate storefront draft when you are
-                      ready to create a customer-facing catalog product.
-                    </span>
-                    <button
-                      type="button"
-                      className="products-primary-button"
-                      onClick={() => startCreatingStorefrontProduct(editingGarment)}
-                      disabled={isCreatingStorefrontProduct}
-                    >
-                      {isCreatingStorefrontProduct ? "Creating..." : "Create Storefront Product"}
-                    </button>
-                  </div>
-                ) : null}
-
                 <section className="products-editor-section">
                   <div className="products-section-header">
                     <div>
@@ -4475,24 +4472,100 @@ export default function GarmentLibrary() {
             </label>
           </section>
 
-          <div style={{ display: "grid", gridTemplateColumns: editingId ? "1fr 1fr" : "1fr", gap: "10px" }}>
-            <button type="submit" disabled={isSaving} className="products-primary-button">
-              {isSaving ? "Saving..." : isEditMode ? "Save Garment Template" : "Create Garment Template"}
-            </button>
+          {isEditMode && editingGarment ? (
+            <section className="products-editor-section garment-library-completion-card">
+              <div className="products-section-header">
+                <div>
+                  <p className="products-section-step">Final Step</p>
+                  <h2>Create Storefront Product</h2>
+                </div>
+                <p>
+                  Garment template edits stay reusable supplier data. The customer-facing catalog product is created
+                  here after you confirm the sale price.
+                </p>
+              </div>
 
-            {editingId ? (
-              <button
-                type="button"
-                onClick={() => {
-                  resetForm();
-                  closeWorkspace();
-                }}
-                className="products-secondary-button"
-              >
-                Cancel Editing
+              <div className="garment-library-completion-grid">
+                <label style={labelStyle}>
+                  Customer Sale Price
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={storefrontSalePrice}
+                    onChange={(event) => setStorefrontSalePrice(event.target.value)}
+                    placeholder="24.00"
+                    required
+                    style={fieldStyle}
+                  />
+                </label>
+
+                <div className="products-summary-card garment-library-completion-summary">
+                  <span className="products-summary-label">Workflow</span>
+                  <strong>{normalizeText(form.title) || "Named garment template"}</strong>
+                  <div className="products-summary-details">
+                    <span>Template saved separately</span>
+                    <span>Catalog product created on demand</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="garment-library-completion-actions">
+                <div className="garment-library-completion-copy">
+                  <strong>Primary workflow</strong>
+                  <p>
+                    Configure the garment, confirm sale price, then publish the storefront product. Template editing
+                    remains available below for supplier/admin maintenance.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className="products-primary-button products-primary-button-large"
+                  onClick={() => startCreatingStorefrontProduct(editingGarment)}
+                  disabled={isCreatingStorefrontProduct}
+                >
+                  {isCreatingStorefrontProduct ? "Creating..." : "Create Storefront Product"}
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          <details className="products-editor-section products-advanced-section garment-library-admin-actions">
+            <summary className="products-advanced-summary">
+              <div>
+                <strong>Template Admin Actions</strong>
+                <span>
+                  Supplier-template maintenance stays available here without competing with storefront creation.
+                </span>
+              </div>
+            </summary>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: editingId ? "1fr 1fr" : "1fr",
+                gap: "10px",
+              }}
+            >
+              <button type="submit" disabled={isSaving} className="products-secondary-button">
+                {isSaving ? "Saving..." : isEditMode ? "Save Template Changes" : "Create Garment Template"}
               </button>
-            ) : null}
-          </div>
+
+              {editingId ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetForm();
+                    closeWorkspace();
+                  }}
+                  className="products-secondary-button"
+                >
+                  Cancel Editing
+                </button>
+              ) : null}
+            </div>
+          </details>
               </form>
             )}
           </aside>

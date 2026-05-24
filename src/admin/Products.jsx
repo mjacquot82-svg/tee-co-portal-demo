@@ -13,6 +13,7 @@ import {
   createStoredProduct,
   deleteStoredProduct,
   getProductPlacementConfig,
+  refreshStoredProducts,
   updateStoredProduct,
   useStoredProducts,
 } from "../lib/productsStore";
@@ -215,7 +216,7 @@ export default function Products() {
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [creationNotice, setCreationNotice] = useState("");
-  const [focusedProductIds, setFocusedProductIds] = useState([]);
+  const [highlightedProductIds, setHighlightedProductIds] = useState([]);
 
   const editingProduct = editingProductId
     ? products.find((product) => product.id === editingProductId) || null
@@ -249,15 +250,8 @@ export default function Products() {
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
-    const focusedProductIdSet = new Set(
-      (Array.isArray(focusedProductIds) ? focusedProductIds : [])
-        .map((value) => normalizeText(value))
-        .filter(Boolean)
-    );
 
     return products.filter((product) => {
-      const matchesFocusedProducts =
-        focusedProductIdSet.size === 0 || focusedProductIdSet.has(normalizeText(product?.id));
       const matchesSearch =
         !normalizedSearch ||
         [product?.name, product?.brand_model, product?.category, product?.notes]
@@ -268,9 +262,9 @@ export default function Products() {
         (selectedStatus === "active"
           ? normalizeStatusValue(product?.status) === "active"
           : normalizeStatusValue(product?.status) !== "active");
-      return matchesFocusedProducts && matchesSearch && matchesStatus;
+      return matchesSearch && matchesStatus;
     });
-  }, [focusedProductIds, products, searchTerm, selectedStatus]);
+  }, [products, searchTerm, selectedStatus]);
 
   const activeCount = products.filter((product) => normalizeStatusValue(product?.status) === "active").length;
 
@@ -345,7 +339,7 @@ export default function Products() {
       filteredProducts: filteredProducts.length,
       selectedStatus,
       searchTerm,
-      focusedProductIds,
+      highlightedProductIds,
       products: products.map((product) => ({
         id: product?.id || null,
         name: product?.name || "",
@@ -359,7 +353,7 @@ export default function Products() {
       missingProductIds: duplicateProductIds.missingIds,
       exclusionDiagnostics,
     });
-  }, [activeCount, filteredProducts.length, focusedProductIds, products, productsReady, searchTerm, selectedStatus]);
+  }, [activeCount, filteredProducts.length, highlightedProductIds, products, productsReady, searchTerm, selectedStatus]);
 
   useEffect(() => {
     const renderedCardNodes = Array.from(productCardRefs.current.entries()).map(([key, node]) => ({
@@ -396,12 +390,12 @@ export default function Products() {
     setForm(emptyProduct);
     setEditingProductId(null);
     setCreationNotice("");
-    setFocusedProductIds([]);
+    setHighlightedProductIds([]);
   }
 
   function handleGarmentSelect(item) {
     setCreationNotice("");
-    setFocusedProductIds([]);
+    setHighlightedProductIds([]);
 
     if (!editingProductId) {
       const nextDraft = buildFormFromGarmentDraft(
@@ -491,38 +485,45 @@ export default function Products() {
   ]);
 
   useEffect(() => {
-    const focusProductIds = Array.isArray(location.state?.focusProductIds)
-      ? location.state.focusProductIds.map((value) => normalizeText(value)).filter(Boolean)
+    const highlightProductIds = Array.isArray(location.state?.highlightProductIds)
+      ? location.state.highlightProductIds.map((value) => normalizeText(value)).filter(Boolean)
       : [];
-    if (!focusProductIds.length) {
+    const productsRefreshToken = location.state?.productsRefreshToken;
+    const creationNoticeFromLocation = normalizeText(location.state?.creationNotice);
+    const highlightedGarmentTitle = normalizeText(location.state?.highlightedGarmentTitle);
+
+    if (!highlightProductIds.length && !productsRefreshToken && !creationNoticeFromLocation) {
       return;
     }
 
-    const focusGarmentTitle = normalizeText(location.state?.focusGarmentTitle);
-    const locationCreationNotice = normalizeText(location.state?.creationNotice);
     setEditingProductId(null);
-    setFocusedProductIds(focusProductIds);
+    setHighlightedProductIds(highlightProductIds);
     setSaveError("");
     setSearchTerm("");
     setSelectedStatus("all");
     setCreationNotice(
-      locationCreationNotice ||
-        (focusGarmentTitle
-        ? `Showing storefront products linked to ${focusGarmentTitle}.`
-        : "Showing linked storefront products.")
+      creationNoticeFromLocation ||
+        (highlightedGarmentTitle
+          ? `Storefront products updated for ${highlightedGarmentTitle}.`
+          : "Storefront products updated.")
     );
+    if (productsRefreshToken) {
+      refreshStoredProducts().catch((error) => {
+        console.warn("[Products] storefront refresh after navigation failed", error);
+      });
+    }
     navigate(location.pathname, { replace: true, state: {} });
   }, [location.pathname, location.state, navigate]);
 
   useEffect(() => {
-    if (!focusedProductIds.length) return;
+    if (!highlightedProductIds.length) return;
 
-    const focusedProductIdSet = new Set(focusedProductIds);
-    const firstVisibleFocusedProduct = filteredProducts.find((product) =>
-      focusedProductIdSet.has(normalizeText(product?.id))
+    const highlightedProductIdSet = new Set(highlightedProductIds);
+    const firstVisibleHighlightedProduct = filteredProducts.find((product) =>
+      highlightedProductIdSet.has(normalizeText(product?.id))
     );
-    const focusedCard = firstVisibleFocusedProduct
-      ? productCardRefs.current.get(firstVisibleFocusedProduct.id)
+    const focusedCard = firstVisibleHighlightedProduct
+      ? productCardRefs.current.get(firstVisibleHighlightedProduct.id)
       : null;
 
     window.requestAnimationFrame(() => {
@@ -533,7 +534,7 @@ export default function Products() {
 
       catalogPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
-  }, [filteredProducts, focusedProductIds]);
+  }, [filteredProducts, highlightedProductIds]);
 
   function handleGarmentSearchChange(event) {
     const nextValue = event.target.value;
@@ -768,23 +769,33 @@ export default function Products() {
           <div style={{ display: "grid", gap: "10px" }}>
             <p className="products-eyebrow">Customer Product Catalog</p>
             <h1 style={{ margin: 0 }}>
-              {editingProduct ? `Edit ${editingProduct.name}` : "Create Product Manually"}
+              {editingProduct ? `Edit ${editingProduct.name}` : "Storefront Product Editor"}
             </h1>
             <p style={{ margin: 0, color: "#64748b" }}>
               {editingProduct
                 ? "Update the customer-facing product details here."
-                : "Products created from Garment Library already appear in the catalog immediately. Use this form only for manual product creation."}
+                : "Configure a storefront product from a garment template, confirm customer pricing, and publish it into the catalog."}
             </p>
             <div className="products-callout">
               Garment templates live in the <Link to="/admin/garments">Garment Library</Link>. The normal workflow is
-              template to storefront product to catalog card. This workspace is for editing existing products or creating one manually.
+              template to storefront product to catalog card. This workspace is for storefront configuration and
+              catalog maintenance.
             </div>
           </div>
 
           {saveError ? <div className="products-error-banner">{saveError}</div> : null}
           {creationNotice ? <div className="products-callout">{creationNotice}</div> : null}
 
-          <div className="products-editor-grid">
+          <section className="products-editor-section">
+            <div className="products-section-header">
+              <div>
+                <p className="products-section-step">Step 1</p>
+                <h2>Customer Product Basics</h2>
+              </div>
+              <p>Name the product and set the base customer-facing sale price before publishing it.</p>
+            </div>
+
+            <div className="products-pricing-grid">
             <label style={labelStyle}>
               Customer Product Name
               <input
@@ -799,7 +810,7 @@ export default function Products() {
             </label>
 
             <label style={labelStyle}>
-              Flat Customer Price
+              Customer Sale Price
               <input
                 type="number"
                 min="0"
@@ -812,9 +823,18 @@ export default function Products() {
                 style={fieldStyle}
               />
             </label>
-          </div>
+            </div>
+          </section>
 
-          <div className="products-editor-section">
+          <section className="products-editor-section">
+            <div className="products-section-header">
+              <div>
+                <p className="products-section-step">Step 2</p>
+                <h2>Choose Garment Source</h2>
+              </div>
+              <p>Select the linked garment template first, then narrow which colors and sizes customers can buy.</p>
+            </div>
+
             <SearchableLookupField
               label="Garment"
               value={form.garmentSearch}
@@ -858,10 +878,19 @@ export default function Products() {
                 This product predates the new garment library. Select a library garment to relink it.
               </div>
             ) : null}
-          </div>
+          </section>
 
           {selectedGarmentItem ? (
-            <div className="products-library-grid">
+            <section className="products-editor-section">
+              <div className="products-section-header">
+                <div>
+                  <p className="products-section-step">Step 3</p>
+                  <h2>Configure Variants</h2>
+                </div>
+                <p>Keep the catalog readable by enabling only the variants and sizes this storefront product should sell.</p>
+              </div>
+
+              <div className="products-library-grid products-library-grid-wide">
               {showVariantSelection ? (
                 <MultiSelectLookupField
                   label="Visible Variants"
@@ -891,23 +920,45 @@ export default function Products() {
                   />
                 )
               ) : null}
-            </div>
+              </div>
+            </section>
           ) : null}
 
-          <ProductImageUploader
-            image={form.image}
-            onImageChange={(image) => setForm((current) => ({ ...current, image }))}
-          />
+          <section className="products-editor-section">
+            <div className="products-section-header">
+              <div>
+                <p className="products-section-step">Step 4</p>
+                <h2>Merchandising</h2>
+              </div>
+              <p>Set the product image and catalog status without collapsing the editor into a narrow utility form.</p>
+            </div>
 
-          <div className="products-editor-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
-            <label style={labelStyle}>
-              Status
-              <select name="status" value={form.status} onChange={updateField} style={fieldStyle}>
-                <option>Active</option>
-                <option>Inactive</option>
-              </select>
-            </label>
-          </div>
+            <div className="products-config-grid">
+              <ProductImageUploader
+                image={form.image}
+                onImageChange={(image) => setForm((current) => ({ ...current, image }))}
+              />
+
+              <div className="products-config-sidebar">
+                <label style={labelStyle}>
+                  Status
+                  <select name="status" value={form.status} onChange={updateField} style={fieldStyle}>
+                    <option>Active</option>
+                    <option>Inactive</option>
+                  </select>
+                </label>
+
+                <div className="products-summary-card">
+                  <span className="products-summary-label">Catalog Readiness</span>
+                  <strong>{form.flat_price ? formatMoney(form.flat_price) : "Add sale price"}</strong>
+                  <div className="products-summary-details">
+                    <span>{form.visibleVariants.length || 0} color variants</span>
+                    <span>{form.sizes.length || 0} sizes enabled</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
 
           <details className="products-editor-section products-advanced-section">
             <summary className="products-advanced-summary">
@@ -1031,17 +1082,43 @@ export default function Products() {
             </div>
           </details>
 
-          <div style={{ display: "grid", gridTemplateColumns: editingProduct ? "1fr 1fr" : "1fr", gap: "10px" }}>
-            <button type="submit" disabled={isSaving} className="products-primary-button">
-              {isSaving ? "Saving..." : editingProduct ? "Update Product" : "Create Product"}
-            </button>
+          <section className="products-editor-section products-completion-panel">
+            <div className="products-section-header">
+              <div>
+                <p className="products-section-step">Final Step</p>
+                <h2>{editingProduct ? "Update Storefront Product" : "Create Storefront Product"}</h2>
+              </div>
+              <p>Review the storefront setup, then publish the catalog-facing product as the primary completion action.</p>
+            </div>
+
+            <div className="products-completion-row">
+              <div className="products-completion-copy">
+                <strong>{form.name || "Customer product name pending"}</strong>
+                <p>
+                  Customer price: {form.flat_price ? formatMoney(form.flat_price) : "not set"}.
+                  Garment link: {selectedGarmentItem?.title || "required before create"}.
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="products-primary-button products-primary-button-large"
+              >
+                {isSaving
+                  ? "Saving..."
+                  : editingProduct
+                    ? "Update Storefront Product"
+                    : "Create Storefront Product"}
+              </button>
+            </div>
 
             {editingProduct ? (
               <button type="button" onClick={resetForm} className="products-secondary-button">
                 Cancel Editing
               </button>
             ) : null}
-          </div>
+          </section>
         </form>
 
         <section ref={catalogPanelRef} className="products-catalog-panel">
@@ -1093,18 +1170,7 @@ export default function Products() {
             <span>
               Showing <strong>{filteredProducts.length}</strong> of <strong>{products.length}</strong> products
             </span>
-            {focusedProductIds.length ? (
-              <button
-                type="button"
-                className="products-clear-filters"
-                onClick={() => {
-                  setFocusedProductIds([]);
-                  setCreationNotice("");
-                }}
-              >
-                Show All Products
-              </button>
-            ) : null}
+            {highlightedProductIds.length ? <span>Newest storefront product highlighted below.</span> : null}
           </div>
 
           <div className="products-list-scroll">
@@ -1136,7 +1202,7 @@ export default function Products() {
                         }
                       }}
                       className={`products-card ${
-                        product.id === editingProductId || focusedProductIds.includes(product.id) ? "is-active" : ""
+                        product.id === editingProductId || highlightedProductIds.includes(product.id) ? "is-active" : ""
                       }`}
                     >
                       <div className="products-card-media">
