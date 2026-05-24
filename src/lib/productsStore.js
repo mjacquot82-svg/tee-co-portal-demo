@@ -5,7 +5,12 @@ import {
 import { useEffect, useSyncExternalStore } from "react";
 import { getRawStorageItem, hasBrowserStorage, setRawStorageItem } from "./browserStorage";
 import { syncGarmentLibraryProductLinks } from "./garmentLibraryStore";
-import { isSupabaseConfigured, supabase } from "./supabaseClient";
+import {
+  isSupabaseConfigured,
+  supabase,
+  supabaseConfig,
+  supabaseDiagnostics,
+} from "./supabaseClient";
 
 const STORAGE_KEY = "teeCoProducts";
 const EMPTY_PRODUCTS = [];
@@ -75,6 +80,12 @@ function buildSupabaseProductErrorDetails(error, extra = {}) {
 
 function logSupabaseProductError(message, error, extra = {}) {
   console.error(message, buildSupabaseProductErrorDetails(error, extra));
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function isMissingGarmentLibraryColumnError(error) {
@@ -527,6 +538,73 @@ function omitGarmentLibraryItemId(record = {}) {
   return legacyRecord;
 }
 
+async function queryInsertedProductRow(productId, options = {}) {
+  if (!productId || !isSupabaseConfigured || !supabase) {
+    return {
+      data: null,
+      error: null,
+      usedLegacySelect: false,
+      usedLegacyFilter: false,
+      label: options.label || "unspecified",
+    };
+  }
+
+  const label = options.label || "unspecified";
+  let usedLegacySelect = false;
+  let usedLegacyFilter = false;
+  let query = supabase
+    .from("products")
+    .select(PRODUCTS_SELECT_FIELDS)
+    .eq("id", productId)
+    .maybeSingle();
+  let { data, error } = await query;
+
+  if (error && isMissingGarmentLibraryColumnError(error)) {
+    usedLegacySelect = true;
+    query = supabase
+      .from("products")
+      .select(LEGACY_PRODUCTS_SELECT_FIELDS)
+      .eq("id", productId)
+      .maybeSingle();
+    ({ data, error } = await query);
+  }
+
+  if (error && isMissingGarmentLibraryColumnError(error)) {
+    usedLegacyFilter = true;
+    query = supabase
+      .from("products")
+      .select(LEGACY_PRODUCTS_SELECT_FIELDS)
+      .eq("legacy_product_id", productId)
+      .maybeSingle();
+    ({ data, error } = await query);
+  }
+
+  console.info("[StorefrontCreateVerification] post-insert products table query result", {
+    verificationStep: label,
+    productId,
+    usedLegacySelect,
+    usedLegacyFilter,
+    queryData: data,
+    queryError: error
+      ? buildSupabaseProductErrorDetails(error, {
+          table: "products",
+          action: "select-after-insert",
+          label,
+          productId,
+        })
+      : null,
+    rowExists: Boolean(data),
+  });
+
+  return {
+    data,
+    error,
+    usedLegacySelect,
+    usedLegacyFilter,
+    label,
+  };
+}
+
 async function fetchProductsFromSupabase() {
   if (!isSupabaseConfigured || !supabase) {
     return null;
@@ -769,23 +847,66 @@ export async function createStoredProduct(productInput) {
   }
 
   const payload = buildSupabaseProductRecord(product, { includeId: true });
-  console.info("[productsStore] Inserting storefront product into Supabase", {
-    payload: buildProductDebugSummary(payload),
-    payloadSnapshot: payload,
+  console.info("[StorefrontCreateVerification] step-3 exact payload sent to Supabase", {
+    verificationStep: "step-3 exact payload sent to Supabase",
+    supabaseTarget: {
+      url: supabaseConfig.url,
+      resolvedPublishableKeySource: supabaseDiagnostics.resolvedPublishableKeySource,
+      table: "public.products",
+    },
+    payload,
+    payloadSummary: buildProductDebugSummary(payload),
   });
   let query = supabase.from("products").insert(payload).select(PRODUCTS_SELECT_FIELDS).single();
   let { data, error } = await query;
+  console.info("[StorefrontCreateVerification] step-4 exact Supabase insert response", {
+    verificationStep: "step-4 exact Supabase insert response",
+    usedLegacyInsertFallback: false,
+    insertResponseData: data,
+    insertResponseError: error
+      ? buildSupabaseProductErrorDetails(error, {
+          table: "products",
+          action: "insert",
+          select: PRODUCTS_SELECT_FIELDS,
+        })
+      : null,
+  });
 
   if (error && isMissingGarmentLibraryColumnError(error)) {
+    console.warn(
+      "[StorefrontCreateVerification] insert fallback triggered because garment_library_item_id is unavailable"
+    );
     query = supabase
       .from("products")
       .insert(omitGarmentLibraryItemId(payload))
       .select(LEGACY_PRODUCTS_SELECT_FIELDS)
       .single();
     ({ data, error } = await query);
+    console.info("[StorefrontCreateVerification] step-4 exact Supabase insert response", {
+      verificationStep: "step-4 exact Supabase insert response",
+      usedLegacyInsertFallback: true,
+      insertPayload: omitGarmentLibraryItemId(payload),
+      insertResponseData: data,
+      insertResponseError: error
+        ? buildSupabaseProductErrorDetails(error, {
+            table: "products",
+            action: "insert",
+            select: LEGACY_PRODUCTS_SELECT_FIELDS,
+          })
+        : null,
+    });
   }
 
   if (error) {
+    console.error("[StorefrontCreateVerification] step-5 Supabase insert error", {
+      verificationStep: "step-5 Supabase insert error",
+      error: buildSupabaseProductErrorDetails(error, {
+        table: "products",
+        action: "insert",
+        select: PRODUCTS_SELECT_FIELDS,
+        payload,
+      }),
+    });
     logSupabaseProductError("Unable to create Tee & Co product in Supabase", error, {
       table: "products",
       action: "insert",
@@ -799,6 +920,41 @@ export async function createStoredProduct(productInput) {
     ...normalizeSupabaseProduct(data),
     garment_library_item_id:
       data?.garment_library_item_id ?? product.garment_library_item_id ?? null,
+  });
+  const insertedProductId = data?.id ?? createdProduct?.id ?? payload?.id ?? null;
+  const immediateQuery = await queryInsertedProductRow(insertedProductId, {
+    label: "step-6 immediate products table query after insert",
+  });
+  const delayedQueryDelayMs = 1500;
+  await sleep(delayedQueryDelayMs);
+  const delayedQuery = await queryInsertedProductRow(insertedProductId, {
+    label: "step-8 delayed products table query after insert",
+  });
+  console.info("[StorefrontCreateVerification] insert lifecycle verdict", {
+    verificationStep: "insert lifecycle verdict",
+    insertedProductId,
+    insertReturnedRow: data,
+    immediateQueryRow: immediateQuery.data,
+    immediateQueryError: immediateQuery.error
+      ? buildSupabaseProductErrorDetails(immediateQuery.error, {
+          table: "products",
+          action: "select-after-insert",
+          label: immediateQuery.label,
+        })
+      : null,
+    delayedQueryRow: delayedQuery.data,
+    delayedQueryError: delayedQuery.error
+      ? buildSupabaseProductErrorDetails(delayedQuery.error, {
+          table: "products",
+          action: "select-after-insert",
+          label: delayedQuery.label,
+        })
+      : null,
+    rowExistsImmediatelyAfterInsert: Boolean(immediateQuery.data),
+    rowStillExistsAfterDelay: Boolean(delayedQuery.data),
+    rowDisappearedAfterInsert:
+      Boolean(immediateQuery.data) && !Boolean(delayedQuery.data),
+    delayedQueryDelayMs,
   });
   const nextProducts = [
     createdProduct,

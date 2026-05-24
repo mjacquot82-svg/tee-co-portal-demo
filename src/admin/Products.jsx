@@ -131,6 +131,7 @@ function buildFormFromGarmentDraft(item, sizeLookups, brands, categories, garmen
     garment_model_lookup_id: item?.garment_model_lookup_id || "",
     product_type: resolveStructuredProductType(garmentModel, "", item?.title || ""),
     brand_model: buildLegacyBrandModelValue(brand, garmentModel, ""),
+    notes: "",
   };
 }
 
@@ -327,37 +328,35 @@ export default function Products() {
   }
 
   function handleGarmentSelect(item) {
-    const garmentModel = findLookupById(garmentModels, item.garment_model_lookup_id);
-    const brand = findLookupById(brands, item.brand_lookup_id);
     setCreationNotice("");
     setFocusedProductIds([]);
 
+    if (!editingProductId) {
+      const nextDraft = buildFormFromGarmentDraft(
+        item,
+        sizes,
+        brands,
+        categories,
+        garmentModels
+      );
+      console.info("[Products] created fresh storefront draft from garment template", {
+        garmentId: item?.id || null,
+        garmentTitle: item?.title || "",
+        nextDraft,
+      });
+      setForm(nextDraft);
+      return;
+    }
+
+    const garmentModel = findLookupById(garmentModels, item.garment_model_lookup_id);
+    const brand = findLookupById(brands, item.brand_lookup_id);
     setForm((current) => ({
       ...current,
       selectedGarmentLibraryId: item.id,
       garmentSearch: buildGarmentLibraryLabel(item, brands, categories, garmentModels),
-      name: current.name || item.title,
       image: current.image || item.image || "",
       visibleVariants: getVariantOptions(item).map((variant) => variant.name),
       sizes: sortSizesByLookup(item.sizes || [], sizes),
-      placementsText: current.placementsText || (item.default_placements || []).join(", "),
-      placementPriceMap: buildPlacementPriceMap(
-        current.placementsText ? normalizeListInput(current.placementsText) : item.default_placements || [],
-        current.placementPriceMap
-      ),
-      production_methods: current.production_methods.length
-        ? current.production_methods
-        : item.default_production_methods?.length
-          ? item.default_production_methods
-          : ["Screen Print"],
-      production_method_prices: buildMethodPriceMap(
-        current.production_methods.length
-          ? current.production_methods
-          : item.default_production_methods?.length
-            ? item.default_production_methods
-            : ["Screen Print"],
-        current.production_method_prices
-      ),
       category: findLookupById(categories, item.category_lookup_id)?.name || current.category || "",
       category_lookup_id: item.category_lookup_id || current.category_lookup_id || "",
       brand_lookup_id: item.brand_lookup_id || current.brand_lookup_id || "",
