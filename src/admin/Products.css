@@ -770,6 +770,67 @@
   font-weight: 700;
 }
 
+.garment-library-card-preview-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.garment-library-card-preview-block {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.garment-library-card-preview-label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.garment-library-card-preview-row,
+.garment-library-card-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.garment-library-preview-chip,
+.garment-library-metadata-chip {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.garment-library-preview-chip {
+  border: 1px solid #dbe4ee;
+  background: #f8fafc;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.garment-library-preview-chip-muted,
+.garment-library-metadata-chip {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+}
+
+.garment-library-inline-empty {
+  color: #64748b;
+  font-size: 13px;
+}
+
 .products-status {
   display: inline-flex;
   align-items: center;

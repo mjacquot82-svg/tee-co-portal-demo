@@ -1,4 +1,5 @@
 import Papa from "papaparse";
+import { normalizeGarmentText, normalizeGarmentTextKey } from "./garmentTextNormalization";
 
 const EXPECTED_TEE_CO_COLUMNS = [
   "Category",
@@ -19,11 +20,11 @@ function safeStringify(value) {
 }
 
 function normalizeText(value) {
-  return String(value || "").trim();
+  return normalizeGarmentText(value);
 }
 
 function normalizeKey(value) {
-  return normalizeText(value).toLowerCase();
+  return normalizeGarmentTextKey(value);
 }
 
 function buildRowError(rowNumber, message) {

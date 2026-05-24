@@ -28,6 +28,7 @@ import {
   MultiSelectLookupField,
   normalizeText,
   normalizeTextKey,
+  SearchableLookupField,
   sortSizesByLookup,
   uniqueList,
 } from "./catalogShared";
@@ -357,14 +358,77 @@ function buildImportedGarmentOptionLabel(item, model) {
   const garmentTitle = normalizeText(item?.title);
 
   if (modelCode && modelName) {
-    return `${modelCode} - ${modelName}`;
+    return `${modelName} - ${modelCode}`;
   }
 
-  return modelCode || modelName || garmentTitle || "Untitled Garment";
+  return modelName || modelCode || garmentTitle || "Untitled Garment";
 }
 
 function formatCountLabel(count, singular, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function formatPreviewList(values = [], previewCount = 5, moreLabel = "more") {
+  const normalizedValues = uniqueList(values.map((value) => normalizeText(value)).filter(Boolean));
+  return {
+    visible: normalizedValues.slice(0, previewCount),
+    remainingCount: Math.max(normalizedValues.length - previewCount, 0),
+    remainingLabel: moreLabel,
+    totalCount: normalizedValues.length,
+  };
+}
+
+function summarizeGarmentCardData(item = {}, sizeLookups = []) {
+  const variants = Array.isArray(item?.variants) ? item.variants : [];
+  const sizes = sortSizesByLookup(Array.isArray(item?.sizes) ? item.sizes : [], sizeLookups);
+  const activeVariants = variants.filter((variant) => variant?.active !== false);
+  const inactiveVariants = Math.max(variants.length - activeVariants.length, 0);
+  const colorNames = uniqueList(
+    activeVariants
+      .flatMap((variant) => extractVariantColorNames(variant))
+      .filter(Boolean)
+  );
+  const supplierSkuCount = uniqueList(
+    variants
+      .map((variant) => resolveVariantSupplierSku(variant))
+      .filter(Boolean)
+  ).length;
+
+  return {
+    colorPreview: formatPreviewList(colorNames, 5, "more"),
+    sizePreview: formatPreviewList(sizes, 5, ""),
+    totalColors: colorNames.length,
+    totalSizes: sizes.length,
+    totalVariants: variants.length,
+    activeVariants: activeVariants.length,
+    inactiveVariants,
+    supplierSkuCount,
+    defaultProductionMethods: uniqueList(item?.default_production_methods || []),
+    defaultPlacements: uniqueList(item?.default_placements || []),
+  };
+}
+
+function renderPreviewChips(preview, emptyLabel, remainderPrefix = "+") {
+  if (!preview.visible.length) {
+    return <span className="garment-library-inline-empty">{emptyLabel}</span>;
+  }
+
+  return (
+    <>
+      {preview.visible.map((value) => (
+        <span key={value} className="garment-library-preview-chip">
+          {value}
+        </span>
+      ))}
+      {preview.remainingCount ? (
+        <span className="garment-library-preview-chip garment-library-preview-chip-muted">
+          {remainderPrefix}
+          {preview.remainingCount}
+          {preview.remainingLabel ? ` ${preview.remainingLabel}` : ""}
+        </span>
+      ) : null}
+    </>
+  );
 }
 
 function buildUniqueSelectOptions(values = []) {
@@ -744,6 +808,7 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
   isSelected,
   subtitle,
   usage,
+  sizeLookups,
   onSelect,
   onRemove,
 }) {
@@ -847,6 +912,9 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
       usageType: typeof safeUsage,
       usageKeys: safeUsage && typeof safeUsage === "object" ? Object.keys(safeUsage) : [],
     });
+    const summary = readCardField("garment-card-summary", () =>
+      summarizeGarmentCardData(safeItem, sizeLookups)
+    );
 
     return (
       <article
@@ -886,21 +954,58 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
 
           <div className="products-card-detail-grid">
             <div className="products-card-detail">
-              <span>Variants</span>
-              <strong>{variantCount}</strong>
+              <span>Colors</span>
+              <strong>{summary.totalColors}</strong>
             </div>
             <div className="products-card-detail">
               <span>Sizes</span>
-              <strong>{sizeCount}</strong>
+              <strong>{summary.totalSizes}</strong>
             </div>
             <div className="products-card-detail">
-              <span>Defaults</span>
-              <strong>{defaultsLabel}</strong>
+              <span>Variants</span>
+              <strong>
+                {summary.activeVariants} active
+                {summary.inactiveVariants ? ` • ${summary.inactiveVariants} inactive` : ""}
+              </strong>
             </div>
             <div className="products-card-detail">
-              <span>Storefront Usage</span>
-              <strong>{linkedProductCount} linked product{linkedProductCount === 1 ? "" : "s"}</strong>
+              <span>Supplier SKUs</span>
+              <strong>{summary.supplierSkuCount || 0}</strong>
             </div>
+          </div>
+
+          <div className="garment-library-card-preview-grid">
+            <div className="garment-library-card-preview-block">
+              <span className="garment-library-card-preview-label">Colors</span>
+              <div className="garment-library-card-preview-row">
+                {renderPreviewChips(summary.colorPreview, "No colors")}
+              </div>
+            </div>
+
+            <div className="garment-library-card-preview-block">
+              <span className="garment-library-card-preview-label">Sizes</span>
+              <div className="garment-library-card-preview-row">
+                {renderPreviewChips(summary.sizePreview, "No sizes")}
+              </div>
+            </div>
+          </div>
+
+          <div className="garment-library-card-metadata">
+            <span className="garment-library-metadata-chip">
+              {variantCount} supplier variant{variantCount === 1 ? "" : "s"}
+            </span>
+            <span className="garment-library-metadata-chip">
+              {sizeCount} size option{sizeCount === 1 ? "" : "s"}
+            </span>
+            <span className="garment-library-metadata-chip">
+              {linkedProductCount} linked product{linkedProductCount === 1 ? "" : "s"}
+            </span>
+            <span className="garment-library-metadata-chip">
+              Methods: {defaultsLabel}
+            </span>
+            <span className="garment-library-metadata-chip">
+              Placements: {summary.defaultPlacements.length ? summary.defaultPlacements.join(", ") : "None"}
+            </span>
           </div>
         </div>
 
@@ -977,6 +1082,7 @@ export default function GarmentLibrary() {
   const [modelDraft, setModelDraft] = useState(buildModelDraftFromModel());
   const [createMode, setCreateMode] = useState("imported");
   const [selectedReusableGarmentId, setSelectedReusableGarmentId] = useState("");
+  const [reusableGarmentSearch, setReusableGarmentSearch] = useState("");
   const [importError, setImportError] = useState("");
   const [importNotice, setImportNotice] = useState("");
   const [importWarnings, setImportWarnings] = useState([]);
@@ -1611,6 +1717,7 @@ export default function GarmentLibrary() {
               isSelected={editingId === item.id && activeWorkspace === "edit"}
               subtitle={subtitle}
               usage={usage}
+              sizeLookups={sizes}
               onSelect={() => {
                 startEditingGarment(item);
               }}
@@ -1852,6 +1959,7 @@ export default function GarmentLibrary() {
     return garments
       .filter(
         (item) =>
+          item.active !== false &&
           item.category_lookup_id === form.category_lookup_id &&
           resolveGarmentBrandId(item, garmentModelMap) === form.brand_lookup_id
       )
@@ -2062,6 +2170,7 @@ export default function GarmentLibrary() {
     setModelDraft(buildModelDraftFromModel());
     setCreateMode("imported");
     setSelectedReusableGarmentId("");
+    setReusableGarmentSearch("");
     setVariantSearch("");
   }
 
@@ -2089,6 +2198,7 @@ export default function GarmentLibrary() {
 
     setCreateMode("custom");
     setSelectedReusableGarmentId("");
+    setReusableGarmentSearch("");
     setEditingId(item.id);
     setForm(buildFormFromGarment(item, brands, categories, garmentModels, sizes));
     setHasCustomizedPlacements(
@@ -2111,6 +2221,7 @@ export default function GarmentLibrary() {
   function handleReusableGarmentSelect(garmentId) {
     if (!garmentId) {
       setSelectedReusableGarmentId("");
+      setReusableGarmentSearch("");
       return;
     }
 
@@ -2134,6 +2245,7 @@ export default function GarmentLibrary() {
 
     setCreateMode("imported");
     setSelectedReusableGarmentId(matchedEntry.item.id);
+    setReusableGarmentSearch(matchedEntry.optionLabel);
     setEditingId(matchedEntry.item.id);
     setForm((current) => ({
       ...buildFormFromGarment(matchedEntry.item, brands, categories, garmentModels, sizes),
@@ -2180,6 +2292,7 @@ export default function GarmentLibrary() {
     setModelDraft(buildModelDraftFromModel(null, preservedBrandId));
     setCreateMode("custom");
     setSelectedReusableGarmentId("");
+    setReusableGarmentSearch("");
     setVariantSearch("");
     setActiveWorkspace("create");
   }
@@ -2229,10 +2342,12 @@ export default function GarmentLibrary() {
 
     if (
       !editingId &&
-      (name === "category_lookup_id" || name === "brand_lookup_id") &&
-      selectedReusableGarmentId
+      (name === "category_lookup_id" || name === "brand_lookup_id")
     ) {
-      setSelectedReusableGarmentId("");
+      if (selectedReusableGarmentId) {
+        setSelectedReusableGarmentId("");
+      }
+      setReusableGarmentSearch("");
     }
   }
 
@@ -3513,24 +3628,44 @@ export default function GarmentLibrary() {
                     <div className="products-summary-card">
                       {matchingImportedGarments.length ? (
                         <div style={{ display: "grid", gap: "12px" }}>
-                          <label style={labelStyle}>
-                            Garment Model / Style
-                            <select
-                              value={selectedReusableGarmentId}
-                              onChange={(event) => handleReusableGarmentSelect(event.target.value)}
-                              style={fieldStyle}
-                              disabled={isImportedSelectionLocked}
-                            >
-                              <option value="">
-                                Select a garment model or style
-                              </option>
-                              {matchingImportedGarments.map(({ item, optionLabel }) => (
-                                <option key={item.id} value={item.id}>
-                                  {optionLabel}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
+                          <SearchableLookupField
+                            label="Select Existing Garment Model"
+                            value={reusableGarmentSearch}
+                            onChange={(event) => {
+                              setReusableGarmentSearch(event.target.value);
+                              if (selectedReusableGarmentId) {
+                                setSelectedReusableGarmentId("");
+                              }
+                            }}
+                            onSelect={(entry) => handleReusableGarmentSelect(entry.item.id)}
+                            options={matchingImportedGarments}
+                            placeholder="Search imported garment models"
+                            helperText={
+                              selectedReusableGarmentEntry
+                                ? "Selecting an imported model loads its normalized supplier colors, sizes, defaults, and production setup."
+                                : "Choose an existing imported garment before creating anything custom."
+                            }
+                            action={
+                              <button
+                                type="button"
+                                className="products-inline-cancel"
+                                onClick={switchToCustomGarmentFlow}
+                              >
+                                Create Custom Garment Instead
+                              </button>
+                            }
+                            renderOptionLabel={(entry) => entry.optionLabel}
+                            renderOptionMeta={(entry) => {
+                              const item = entry?.item;
+                              const activeVariantCount = (item?.variants || []).filter(
+                                (variant) => variant?.active !== false
+                              ).length;
+                              const sizeCount = (item?.sizes || []).length;
+                              const title = normalizeText(item?.title);
+                              return `${title} • ${activeVariantCount} active variants • ${sizeCount} sizes`;
+                            }}
+                            emptyState="No imported garments match this category and brand."
+                          />
 
                           {selectedReusableGarmentEntry ? (
                             <div className="products-card-detail-grid">
@@ -3561,13 +3696,6 @@ export default function GarmentLibrary() {
                                 ? `${derivedImportedColorOptions.length} supplier colors and ${derivedImportedSizeOptions.length} supplier sizes were derived from the imported library data. Enable only the ones this garment should keep available.`
                                 : "Choose a model to derive colors and sizes from the library."}
                             </span>
-                            <button
-                              type="button"
-                              className="products-inline-cancel"
-                              onClick={switchToCustomGarmentFlow}
-                            >
-                              Create Custom Garment Instead
-                            </button>
                           </div>
 
                           {isImportedSelectionLocked ? (

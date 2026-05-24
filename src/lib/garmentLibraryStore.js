@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { hasBrowserStorage } from "./browserStorage";
+import { normalizeGarmentText } from "./garmentTextNormalization";
 import {
   isSupabaseConfigured,
   supabase,
@@ -102,7 +103,7 @@ function updateExternalSnapshot(items = cachedSnapshot) {
 }
 
 function normalizeText(value) {
-  return String(value || "").trim();
+  return normalizeGarmentText(value);
 }
 
 function safeStringify(value) {

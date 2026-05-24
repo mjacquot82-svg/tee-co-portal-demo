@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { normalizeGarmentText } from "../lib/garmentTextNormalization";
 
 export const fieldStyle = {
   border: "1px solid #cbd5e1",
@@ -18,7 +19,7 @@ export const labelStyle = {
 };
 
 export function normalizeText(value) {
-  return String(value || "").trim();
+  return normalizeGarmentText(value);
 }
 
 export function normalizeTextKey(value) {
