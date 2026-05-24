@@ -1780,15 +1780,6 @@ export default function GarmentLibrary() {
       ),
     [normalizedEditorVariants]
   );
-  const visibleImportedCapabilities = useMemo(() => {
-    const normalizedSearch = variantSearch.trim().toLowerCase();
-    return importedCapabilityMatrix.filter((capability) => {
-      if (!normalizedSearch) return true;
-      return [capability.name, capability.supplierSkus.join(", "), capability.sizes.join(", ")]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(normalizedSearch));
-    });
-  }, [importedCapabilityMatrix, variantSearch]);
   const renderedGarmentCards = useMemo(() => {
     const renderMetrics = {
       attemptedCount: garmentEntriesForRender.length,
@@ -2129,6 +2120,15 @@ export default function GarmentLibrary() {
     },
     [importedCapabilityMatrix, selectedImportedColorValues, sizes]
   );
+  const visibleImportedCapabilities = useMemo(() => {
+    const normalizedSearch = variantSearch.trim().toLowerCase();
+    return importedCapabilityMatrix.filter((capability) => {
+      if (!normalizedSearch) return true;
+      return [capability.name, capability.supplierSkus.join(", "), capability.sizes.join(", ")]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedSearch));
+    });
+  }, [importedCapabilityMatrix, variantSearch]);
   const isImportedCapabilityMode = Boolean(selectedReusableGarmentEntry);
   const hasCategoryAndBrandSelected = Boolean(form.category_lookup_id && form.brand_lookup_id);
   const showReusableSelector = Boolean(isEditorOpen);
