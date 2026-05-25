@@ -5,6 +5,7 @@ import { useCatalogLookups } from "../lib/catalogLookupsStore";
 import {
   buildStorefrontCategories,
   getFeaturedStorefrontProducts,
+  getHeroStorefrontProduct,
   getStorefrontProductCategoryLabel,
   getStorefrontProductImage,
   getStorefrontProducts,
@@ -23,14 +24,14 @@ function buildStorefrontRenderIdentity(product, index) {
   };
 }
 
-function buildHeroTitle(featuredCount, categoryCount) {
-  if (featuredCount > 0) return "Curated merch, featured intentionally";
+function buildHeroTitle(hasHeroProduct, categoryCount) {
+  if (hasHeroProduct) return "Curated merch, spotlighted intentionally";
   if (categoryCount > 1) return "Browse collections built for real storefront shopping";
   return "Browse the storefront by collection";
 }
 
-function buildHeroCopy(featuredCount, heroCollection) {
-  if (featuredCount > 0 && heroCollection?.name) {
+function buildHeroCopy(hasHeroProduct, heroCollection) {
+  if (hasHeroProduct && heroCollection?.name) {
     return `Start with hand-picked highlights, then move through ${heroCollection.name.toLowerCase()} and the rest of the storefront collections.`;
   }
 
@@ -43,7 +44,7 @@ function buildHeroCopy(featuredCount, heroCollection) {
 
 function buildFeaturedSectionNote(featuredCount) {
   if (featuredCount > 0) {
-    return "Manual product picks for homepage merchandising, promotions, and curated discovery.";
+    return "Manual featured picks for rails, grids, promotions, and curated discovery. Hero spotlighting stays separate.";
   }
 
   return "Featured product slots stay reserved for owner-curated picks. Browse the live collections below in the meantime.";
@@ -69,6 +70,10 @@ export default function Home() {
     () => getFeaturedStorefrontProducts(storedProducts, 8),
     [storedProducts]
   );
+  const heroFeaturedProduct = useMemo(
+    () => getHeroStorefrontProduct(storedProducts),
+    [storedProducts]
+  );
   const collectionHighlights = useMemo(
     () => storefrontCategories.filter((category) => category?.productCount > 0).slice(0, 3),
     [storefrontCategories]
@@ -86,7 +91,8 @@ export default function Home() {
   );
 
   const primaryCollection = collectionHighlights[0] || null;
-  const heroProduct = featuredProducts[0] || primaryCollection?.products?.[0] || storefrontProducts[0] || null;
+  const heroProduct =
+    heroFeaturedProduct || primaryCollection?.products?.[0] || storefrontProducts[0] || null;
   const heroCollection =
     collectionHighlights.find((category) =>
       category.products.some((product) => product?.id && product.id === heroProduct?.id)
@@ -142,10 +148,10 @@ export default function Home() {
             <div className="storefront-merch-hero-copy">
               <p className="storefront-eyebrow">Curated Storefront</p>
               <h1 className="storefront-merch-hero-title">
-                {buildHeroTitle(featuredProducts.length, storefrontCategories.length)}
+                {buildHeroTitle(Boolean(heroFeaturedProduct), storefrontCategories.length)}
               </h1>
               <p className="storefront-merch-hero-body">
-                {buildHeroCopy(featuredProducts.length, heroCollection)}
+                {buildHeroCopy(Boolean(heroFeaturedProduct), heroCollection)}
               </p>
 
               <div className="storefront-merch-hero-actions">
@@ -194,7 +200,13 @@ export default function Home() {
                 </p>
                 <div className="storefront-merch-hero-tags">
                   <span>{heroCollection?.productCountLabel || "Curated picks"}</span>
-                  <span>{featuredProducts.length > 0 ? "Featured by owner" : "Collection-led browse"}</span>
+                  <span>
+                    {heroFeaturedProduct
+                      ? "Hero feature by owner"
+                      : featuredProducts.length > 0
+                        ? "Featured by owner"
+                        : "Collection-led browse"}
+                  </span>
                 </div>
               </div>
             </Link>

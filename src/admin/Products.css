@@ -445,6 +445,18 @@
   color: #92400e;
 }
 
+.products-storefront-hero-toggle.is-active {
+  border-color: #0891b2;
+  background: linear-gradient(180deg, #effcff 0%, #ffffff 100%);
+  box-shadow: 0 16px 32px rgba(8, 145, 178, 0.12);
+}
+
+.products-storefront-hero-toggle.is-active .products-storefront-feature-toggle-state {
+  border-color: #67e8f9;
+  background: #cffafe;
+  color: #155e75;
+}
+
 .products-storefront-header {
   grid-template-columns: minmax(220px, 0.64fr) minmax(0, 1.36fr);
   align-items: start;
@@ -1557,6 +1569,18 @@
   border-color: #f3c768;
   color: #8a4b08;
   box-shadow: inset 0 0 0 1px rgba(243, 199, 104, 0.2);
+}
+
+.products-card-hero-toggle:hover:not(:disabled) {
+  border-color: #67e8f9;
+  color: #155e75;
+}
+
+.products-card-hero-toggle.is-hero {
+  background: #ecfeff;
+  border-color: #67e8f9;
+  color: #155e75;
+  box-shadow: inset 0 0 0 1px rgba(103, 232, 249, 0.24);
 }
 
 .products-card-featured-toggle:disabled {

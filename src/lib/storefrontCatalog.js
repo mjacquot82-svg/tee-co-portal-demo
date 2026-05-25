@@ -114,6 +114,12 @@ export function getFeaturedStorefrontProducts(products = [], limit = null) {
   return featuredProducts.slice(0, limit);
 }
 
+export function getHeroStorefrontProduct(products = []) {
+  return (
+    getStorefrontProducts(products).find((product) => product?.is_hero_feature) || null
+  );
+}
+
 export function getStorefrontProductImage(product) {
   return normalizeText(product?.image);
 }

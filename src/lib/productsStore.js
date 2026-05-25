@@ -40,6 +40,7 @@ const PRODUCTS_SELECT_FIELDS = [
   "garment_model_lookup_id",
   "status",
   "is_featured",
+  "is_hero_feature",
   "image",
   "characteristics",
   "colors",
@@ -63,6 +64,7 @@ const LEGACY_PRODUCTS_SELECT_FIELDS = PRODUCTS_SELECT_FIELDS
   .replace("storefront_category_lookup_id, ", "")
   .replace("compare_at_price, ", "")
   .replace("characteristics, ", "")
+  .replace("is_hero_feature, ", "")
   .replace("garment_library_item_id, ", "");
 
 function buildSupabaseProductErrorDetails(error, extra = {}) {
@@ -111,6 +113,7 @@ function isLegacyProductSchemaError(error) {
     "compare_at_price",
     "characteristics",
     "is_featured",
+    "is_hero_feature",
   ].some((columnName) => isMissingProductColumnError(error, columnName));
 }
 
@@ -121,6 +124,7 @@ const LEGACY_OPTIONAL_PRODUCT_COLUMNS = [
   "compare_at_price",
   "characteristics",
   "is_featured",
+  "is_hero_feature",
 ];
 
 function getMissingProductColumns(error) {
@@ -378,13 +382,16 @@ function normalizeProduct(product) {
     productionMethods,
     product.production_method_prices
   );
+  const isHeroFeature = Boolean(product?.is_hero_feature ?? product?.hero_feature);
+  const isFeatured = isHeroFeature || Boolean(product?.is_featured ?? product?.featured);
 
   return {
     ...product,
     status: buildPersistentStatus(
       product?.status ?? (product?.active === false ? "Inactive" : "Active")
     ),
-    is_featured: Boolean(product?.is_featured ?? product?.featured),
+    is_featured: isFeatured,
+    is_hero_feature: isHeroFeature,
     storefront_category: product.storefront_category || "",
     storefront_category_lookup_id: product.storefront_category_lookup_id || null,
     garment_library_item_id:
@@ -423,6 +430,10 @@ function preferPresentValue(primaryValue, fallbackValue, emptyValue = null) {
 
 function preserveCriticalProductFields(primary = {}, fallback = {}) {
   const primaryHasFeatured = Object.prototype.hasOwnProperty.call(primary, "is_featured");
+  const primaryHasHeroFeature = Object.prototype.hasOwnProperty.call(primary, "is_hero_feature");
+  const resolvedHeroFeature = primaryHasHeroFeature
+    ? Boolean(primary?.is_hero_feature)
+    : Boolean(fallback?.is_hero_feature);
 
   return {
     ...fallback,
@@ -465,10 +476,36 @@ function preserveCriticalProductFields(primary = {}, fallback = {}) {
     brand_model: preferPresentValue(primary?.brand_model, fallback?.brand_model, ""),
     product_type: preferPresentValue(primary?.product_type, fallback?.product_type, ""),
     image: preferPresentValue(primary?.image, fallback?.image, ""),
-    is_featured: primaryHasFeatured
-      ? Boolean(primary?.is_featured)
-      : Boolean(fallback?.is_featured),
+    is_featured:
+      resolvedHeroFeature ||
+      (primaryHasFeatured ? Boolean(primary?.is_featured) : Boolean(fallback?.is_featured)),
+    is_hero_feature: resolvedHeroFeature,
   };
+}
+
+function applyHeroFeatureRules(products = [], preferredHeroProductId = null) {
+  const normalizedProducts = (Array.isArray(products) ? products : [])
+    .map((product) => normalizeProduct(product))
+    .filter(Boolean);
+  const preferredHeroProduct = preferredHeroProductId
+    ? normalizedProducts.find(
+        (product) => product.id === preferredHeroProductId && product.is_hero_feature
+      ) || null
+    : null;
+  const fallbackHeroProduct =
+    normalizedProducts.find((product) => product.is_hero_feature) || null;
+  const resolvedHeroProductId =
+    preferredHeroProduct?.id || fallbackHeroProduct?.id || null;
+
+  return normalizedProducts.map((product) =>
+    normalizeProduct({
+      ...product,
+      is_hero_feature: resolvedHeroProductId ? product.id === resolvedHeroProductId : false,
+      is_featured:
+        (resolvedHeroProductId ? product.id === resolvedHeroProductId : false) ||
+        Boolean(product?.is_featured),
+    })
+  );
 }
 
 function findMatchingLocalProduct(products = [], product = {}) {
@@ -528,6 +565,7 @@ function buildProductDebugSummary(product = {}) {
     name: product?.name || "",
     status: product?.status || "",
     is_featured: Boolean(product?.is_featured),
+    is_hero_feature: Boolean(product?.is_hero_feature),
     category: product?.category || "",
     storefront_category: product?.storefront_category || "",
     garment_library_item_id: product?.garment_library_item_id || null,
@@ -615,7 +653,8 @@ function buildSupabaseProductRecord(product = {}, options = {}) {
       product.garment_library_item_id || product.garment_library_id || null,
     garment_model_lookup_id: product.garment_model_lookup_id || null,
     status: normalizedStatus,
-    is_featured: Boolean(product.is_featured),
+    is_featured: Boolean(product.is_featured || product.is_hero_feature),
+    is_hero_feature: Boolean(product.is_hero_feature),
     image: product.image || "",
     characteristics: getProductCharacteristics(product),
     colors: normalizeList(product.colors),
@@ -656,15 +695,14 @@ function buildSupabaseProductUpdateRecord(product = {}, updates = {}) {
   const updateKeys = Object.keys(updates || {});
 
   if (
-    updateKeys.length === 1 &&
-    Object.prototype.hasOwnProperty.call(updates, "is_featured")
+    updateKeys.length > 0 &&
+    updateKeys.every(
+      (key) => key === "is_featured" || key === "is_hero_feature"
+    )
   ) {
     return {
-      is_featured: Boolean(
-        Object.prototype.hasOwnProperty.call(updates, "is_featured")
-          ? updates.is_featured
-          : product?.is_featured
-      ),
+      is_featured: Boolean(product?.is_featured),
+      is_hero_feature: Boolean(product?.is_hero_feature),
     };
   }
 
@@ -691,6 +729,40 @@ async function fetchUpdatedProductAfterWrite(productId, updatedProduct) {
   }
 
   return null;
+}
+
+async function clearPreviousHeroFeatureProducts(activeProductId) {
+  if (!activeProductId || !isSupabaseConfigured || !supabase) {
+    return;
+  }
+
+  const activeIdFilterColumn = isUuidLike(activeProductId) ? "id" : "legacy_product_id";
+  let { error } = await supabase
+    .from("products")
+    .update({ is_hero_feature: false })
+    .eq("is_hero_feature", true)
+    .neq(activeIdFilterColumn, activeProductId);
+
+  if (error && isLegacyProductSchemaError(error)) {
+    console.warn("[productsStore] Hero feature cleanup skipped because the column is unavailable", {
+      activeProductId,
+      error: buildSupabaseProductErrorDetails(error, {
+        table: "products",
+        action: "hero-feature-cleanup",
+      }),
+    });
+    return;
+  }
+
+  if (error) {
+    console.warn("[productsStore] Unable to clear previous hero feature products", {
+      activeProductId,
+      error: buildSupabaseProductErrorDetails(error, {
+        table: "products",
+        action: "hero-feature-cleanup",
+      }),
+    });
+  }
 }
 
 function normalizeSupabaseProduct(product = {}) {
@@ -1022,11 +1094,16 @@ export async function createStoredProduct(productInput) {
 
   if (!isSupabaseConfigured || !supabase) {
     const previousProducts = getStoredProducts();
-    const localProduct = {
+    const baseLocalProduct = {
       ...product,
       id: `product-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     };
-    const nextProducts = [localProduct, ...previousProducts];
+    const nextProducts = applyHeroFeatureRules(
+      [baseLocalProduct, ...previousProducts],
+      baseLocalProduct.is_hero_feature ? baseLocalProduct.id : null
+    );
+    const localProduct =
+      nextProducts.find((entry) => entry.id === baseLocalProduct.id) || baseLocalProduct;
     hasLoadedProductsFromSupabase = true;
     saveStoredProducts(nextProducts);
     console.info("[StorefrontCreateVerification] step-4 product added to products store", {
@@ -1142,6 +1219,16 @@ export async function createStoredProduct(productInput) {
       product
     )
   );
+  const previousProducts = getStoredProducts();
+  const nextProducts = applyHeroFeatureRules(
+    [
+      createdProduct,
+      ...previousProducts.filter((existingProduct) => existingProduct.id !== createdProduct.id),
+    ],
+    createdProduct.is_hero_feature ? createdProduct.id : null
+  );
+  const finalizedCreatedProduct =
+    nextProducts.find((entry) => entry.id === createdProduct.id) || createdProduct;
   const insertedProductId = data?.id ?? createdProduct?.id ?? payload?.id ?? null;
   const immediateQuery = await queryInsertedProductRow(insertedProductId, {
     label: "step-6 immediate products table query after insert",
@@ -1176,20 +1263,16 @@ export async function createStoredProduct(productInput) {
     rowDisappearedAfterInsert: Boolean(immediateQuery.data && !delayedQuery.data),
     delayedQueryDelayMs,
   });
-  const nextProducts = [
-    createdProduct,
-    ...getStoredProducts().filter(
-      (existingProduct) => existingProduct.id !== createdProduct.id
-    ),
-  ];
-  const previousProducts = getStoredProducts();
+  if (finalizedCreatedProduct.is_hero_feature) {
+    await clearPreviousHeroFeatureProducts(insertedProductId || finalizedCreatedProduct.id);
+  }
   hasLoadedProductsFromSupabase = true;
   saveStoredProducts(nextProducts);
   console.info("[StorefrontCreateVerification] step-4 product added to products store", {
-    createdProduct: buildProductDebugSummary(createdProduct),
-    createdProductSnapshot: createdProduct,
-    createStoredProductReturnValue: createdProduct,
-    addedToLocalProductsArray: nextProducts.some((entry) => entry.id === createdProduct.id),
+    createdProduct: buildProductDebugSummary(finalizedCreatedProduct),
+    createdProductSnapshot: finalizedCreatedProduct,
+    createStoredProductReturnValue: finalizedCreatedProduct,
+    addedToLocalProductsArray: nextProducts.some((entry) => entry.id === finalizedCreatedProduct.id),
     productCounts: {
       beforeCreate: previousProducts.length,
       afterCreate: nextProducts.length,
@@ -1198,9 +1281,9 @@ export async function createStoredProduct(productInput) {
     persistedSnapshot: nextProducts.map((entry) => buildProductDebugSummary(entry)),
   });
   console.info("[StorefrontCreateVerification] step-5 products store count increased", {
-    createdProductId: createdProduct.id,
-    createdProductName: createdProduct.name,
-    createdProductPresentInStore: nextProducts.some((entry) => entry.id === createdProduct.id),
+    createdProductId: finalizedCreatedProduct.id,
+    createdProductName: finalizedCreatedProduct.name,
+    createdProductPresentInStore: nextProducts.some((entry) => entry.id === finalizedCreatedProduct.id),
     productCounts: {
       beforeCreate: previousProducts.length,
       afterCreate: nextProducts.length,
@@ -1208,7 +1291,7 @@ export async function createStoredProduct(productInput) {
     },
   });
   await syncGarmentLinks(nextProducts);
-  return createdProduct;
+  return finalizedCreatedProduct;
 }
 
 export function getStoredProduct(productId) {
@@ -1224,41 +1307,61 @@ export async function updateStoredProduct(productId, updates) {
     previousProducts: safeProductsSnapshot(previousProducts),
   });
   const hasOwn = (key) => Object.prototype.hasOwnProperty.call(updates, key);
-  const nextProducts = products.map((product) => {
+  const nextProducts = applyHeroFeatureRules(
+    products.map((product) => {
     if (product.id !== productId) return product;
 
-    const placements = hasOwn("placements")
-      ? normalizeList(updates.placements)
+    const resolvedUpdates = { ...updates };
+    if (
+      hasOwn("is_featured") &&
+      !updates.is_featured &&
+      !Object.prototype.hasOwnProperty.call(resolvedUpdates, "is_hero_feature") &&
+      product?.is_hero_feature
+    ) {
+      resolvedUpdates.is_hero_feature = false;
+    }
+    if (resolvedUpdates.is_hero_feature) {
+      resolvedUpdates.is_featured = true;
+    }
+
+    const placements = Object.prototype.hasOwnProperty.call(resolvedUpdates, "placements")
+      ? normalizeList(resolvedUpdates.placements)
       : product.placements;
-    const placementPrices = hasOwn("placement_prices")
-      ? normalizePlacementPrices(placements, updates.placement_prices)
+    const placementPrices = Object.prototype.hasOwnProperty.call(resolvedUpdates, "placement_prices")
+      ? normalizePlacementPrices(placements, resolvedUpdates.placement_prices)
       : product.placement_prices || normalizePlacementPrices(placements, {});
     const placementConfig = buildPlacementConfig(
-      Array.isArray(updates.placement_config) && updates.placement_config.length
-        ? updates.placement_config
+      Array.isArray(resolvedUpdates.placement_config) && resolvedUpdates.placement_config.length
+        ? resolvedUpdates.placement_config
         : placements,
       placementPrices
     );
 
     return normalizeProduct({
       ...product,
-      ...updates,
-      status: hasOwn("status")
-        ? buildPersistentStatus(updates.status)
+      ...resolvedUpdates,
+      status: Object.prototype.hasOwnProperty.call(resolvedUpdates, "status")
+        ? buildPersistentStatus(resolvedUpdates.status)
         : buildPersistentStatus(product.status),
-      characteristics: hasOwn("characteristics")
-        ? getProductCharacteristics({ ...product, characteristics: updates.characteristics })
+      characteristics: Object.prototype.hasOwnProperty.call(resolvedUpdates, "characteristics")
+        ? getProductCharacteristics({ ...product, characteristics: resolvedUpdates.characteristics })
         : getProductCharacteristics(product),
-      colors: hasOwn("colors") ? normalizeList(updates.colors) : product.colors,
-      sizes: hasOwn("sizes") ? normalizeList(updates.sizes) : product.sizes,
+      colors: Object.prototype.hasOwnProperty.call(resolvedUpdates, "colors")
+        ? normalizeList(resolvedUpdates.colors)
+        : product.colors,
+      sizes: Object.prototype.hasOwnProperty.call(resolvedUpdates, "sizes")
+        ? normalizeList(resolvedUpdates.sizes)
+        : product.sizes,
       placements,
       placement_prices: placementPrices,
       placement_config: placementConfig,
-      decoration_types: hasOwn("decoration_types")
-        ? normalizeList(updates.decoration_types)
+      decoration_types: Object.prototype.hasOwnProperty.call(resolvedUpdates, "decoration_types")
+        ? normalizeList(resolvedUpdates.decoration_types)
         : product.decoration_types,
     });
-  });
+    }),
+    updates?.is_hero_feature ? productId : null
+  );
 
   const updatedProduct = nextProducts.find((product) => product.id === productId) || null;
   if (!updatedProduct) return null;
@@ -1453,11 +1556,13 @@ export async function updateStoredProduct(productId, updates) {
       updatedProduct
     )
   );
-  saveStoredProducts(
+  const persistedProducts = applyHeroFeatureRules(
     nextProducts.map((product) =>
       product.id === productId ? normalizedUpdatedProduct : product
-    )
+    ),
+    normalizedUpdatedProduct.is_hero_feature ? productId : null
   );
+  saveStoredProducts(persistedProducts);
   console.info("[productsStore] Storefront product update persisted successfully", {
     productId,
     persistedProduct: buildProductDebugSummary(normalizedUpdatedProduct),
@@ -1465,11 +1570,10 @@ export async function updateStoredProduct(productId, updates) {
     usedLegacyFilter,
     returnedRow: data,
   });
-  await syncGarmentLinks(
-    nextProducts.map((product) =>
-      product.id === productId ? normalizedUpdatedProduct : product
-    )
-  );
+  if (normalizedUpdatedProduct.is_hero_feature) {
+    await clearPreviousHeroFeatureProducts(productId);
+  }
+  await syncGarmentLinks(persistedProducts);
   return normalizedUpdatedProduct;
 }
 

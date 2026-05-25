@@ -21,3 +21,6 @@ add column if not exists characteristics jsonb not null default '[]'::jsonb;
 
 alter table public.products
 add column if not exists is_featured boolean not null default false;
+
+alter table public.products
+add column if not exists is_hero_feature boolean not null default false;

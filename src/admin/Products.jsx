@@ -86,6 +86,7 @@ const emptyProduct = {
   notes: "",
   status: "Active",
   is_featured: false,
+  is_hero_feature: false,
   placementsText: "",
   placementPriceMap: {},
   production_methods: ["Screen Print"],
@@ -300,6 +301,7 @@ function buildFormFromGarmentDraft(
     brand_model: buildLegacyBrandModelValue(brand, garmentModel, ""),
     status: normalizeText(prefilledStorefrontSetup?.status) || "Active",
     is_featured: Boolean(prefilledStorefrontSetup?.is_featured),
+    is_hero_feature: Boolean(prefilledStorefrontSetup?.is_hero_feature),
     notes: "",
   };
 }
@@ -359,6 +361,7 @@ function buildFormFromProduct(
         : String(product.markup_percentage),
     notes: product?.notes || "",
     is_featured: Boolean(product?.is_featured),
+    is_hero_feature: Boolean(product?.is_hero_feature),
     storefront_category_lookup_id:
       (storefrontCategory
         ? buildStorefrontCategorySelectionValue(storefrontCategory)
@@ -438,10 +441,13 @@ export default function Products() {
   const [isRemovingProduct, setIsRemovingProduct] = useState(false);
   const [isGarmentPickerOpen, setIsGarmentPickerOpen] = useState(false);
   const [featuredToggleProductIds, setFeaturedToggleProductIds] = useState([]);
+  const [heroToggleProductIds, setHeroToggleProductIds] = useState([]);
 
   const editingProduct = editingProductId
     ? products.find((product) => product.id === editingProductId) || null
     : null;
+  const activeHeroProduct =
+    products.find((product) => Boolean(product?.is_hero_feature)) || null;
   const selectedGarmentItem =
     libraryItems.find((item) => item.id === form.selectedGarmentLibraryId) || null;
   const garmentVariants = getVariantOptions(selectedGarmentItem);
@@ -1332,11 +1338,13 @@ export default function Products() {
     if (!productId) return;
 
     const nextFeaturedState = !product?.is_featured;
+    const nextHeroFeatureState = nextFeaturedState ? Boolean(product?.is_hero_feature) : false;
     console.info("[Products] Featured toggle requested", {
       productId,
       productName: product?.name || "",
       currentFeaturedState: Boolean(product?.is_featured),
       nextFeaturedState,
+      nextHeroFeatureState,
       product,
     });
     setSaveError("");
@@ -1348,12 +1356,14 @@ export default function Products() {
       setForm((current) => ({
         ...current,
         is_featured: nextFeaturedState,
+        is_hero_feature: nextHeroFeatureState,
       }));
     }
 
     try {
       await updateStoredProduct(productId, {
         is_featured: nextFeaturedState,
+        is_hero_feature: nextHeroFeatureState,
       });
       console.info("[Products] Featured toggle persisted", {
         productId,
@@ -1372,11 +1382,65 @@ export default function Products() {
         setForm((current) => ({
           ...current,
           is_featured: Boolean(product?.is_featured),
+          is_hero_feature: Boolean(product?.is_hero_feature),
         }));
       }
       setSaveError("Unable to update featured state right now. Please try again.");
     } finally {
       setFeaturedToggleProductIds((current) =>
+        current.filter((currentProductId) => currentProductId !== productId)
+      );
+    }
+  }
+
+  async function handleToggleHeroFeature(product) {
+    const productId = product?.id || null;
+    if (!productId) return;
+
+    const nextHeroFeatureState = !product?.is_hero_feature;
+    if (
+      nextHeroFeatureState &&
+      activeHeroProduct?.id &&
+      activeHeroProduct.id !== productId
+    ) {
+      const confirmed = window.confirm(
+        `Replace the current hero feature with ${product?.name || "this product"}?`
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setSaveError("");
+    setHeroToggleProductIds((current) =>
+      current.includes(productId) ? current : [...current, productId]
+    );
+
+    if (editingProductId === productId) {
+      setForm((current) => ({
+        ...current,
+        is_hero_feature: nextHeroFeatureState,
+        is_featured: nextHeroFeatureState ? true : current.is_featured,
+      }));
+    }
+
+    try {
+      await updateStoredProduct(productId, {
+        is_hero_feature: nextHeroFeatureState,
+        is_featured: nextHeroFeatureState ? true : Boolean(product?.is_featured),
+      });
+    } catch (error) {
+      console.error("Unable to update hero feature state", error);
+      if (editingProductId === productId) {
+        setForm((current) => ({
+          ...current,
+          is_hero_feature: Boolean(product?.is_hero_feature),
+          is_featured: Boolean(product?.is_featured),
+        }));
+      }
+      setSaveError("Unable to update hero feature right now. Please try again.");
+    } finally {
+      setHeroToggleProductIds((current) =>
         current.filter((currentProductId) => currentProductId !== productId)
       );
     }
@@ -1526,6 +1590,7 @@ export default function Products() {
       image: form.image,
       status: form.status,
       is_featured: Boolean(form.is_featured),
+      is_hero_feature: Boolean(form.is_hero_feature),
       characteristics: isManualProductMode ? getProductCharacteristics(form) : [],
       colors: isManualProductMode ? [] : uniqueList(form.visibleVariants),
       sizes: selectedSizes,
@@ -1855,6 +1920,7 @@ export default function Products() {
                       ? "Variants inherited from garment template"
                       : "Single configuration";
                   const isFeaturedTogglePending = featuredToggleProductIds.includes(product.id);
+                  const isHeroTogglePending = heroToggleProductIds.includes(product.id);
 
                   console.info("[Products] Rendering customer catalog product card", {
                     index,
@@ -1913,6 +1979,26 @@ export default function Products() {
                               </span>
                               <span>
                                 {product?.is_featured ? "Featured" : "Feature"}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              className={`products-card-featured-toggle products-card-hero-toggle ${
+                                product?.is_hero_feature ? "is-hero" : ""
+                              }`}
+                              onClick={() => handleToggleHeroFeature(product)}
+                              aria-pressed={Boolean(product?.is_hero_feature)}
+                              aria-label={
+                                product?.is_hero_feature
+                                  ? `Remove ${product?.name || "product"} as hero feature`
+                                  : `Set ${product?.name || "product"} as hero feature`
+                              }
+                              aria-busy={isHeroTogglePending}
+                              disabled={isHeroTogglePending}
+                            >
+                              <span aria-hidden="true">⬢</span>
+                              <span>
+                                {product?.is_hero_feature ? "Hero Feature" : "Make Hero"}
                               </span>
                             </button>
                             {!statusIsActive ? (
@@ -2130,6 +2216,10 @@ export default function Products() {
                           setForm((current) => ({
                             ...current,
                             is_featured: !current.is_featured,
+                            is_hero_feature:
+                              current.is_featured && current.is_hero_feature
+                                ? false
+                                : current.is_hero_feature,
                           }))
                         }
                         aria-pressed={form.is_featured}
@@ -2142,6 +2232,44 @@ export default function Products() {
                         </span>
                         <span className="products-storefront-feature-toggle-state">
                           {form.is_featured ? "ON" : "OFF"}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`products-storefront-feature-toggle products-storefront-hero-toggle ${
+                          form.is_hero_feature ? "is-active" : ""
+                        }`}
+                        onClick={() => {
+                          if (
+                            !form.is_hero_feature &&
+                            activeHeroProduct?.id &&
+                            activeHeroProduct.id !== editingProductId
+                          ) {
+                            const confirmed = window.confirm(
+                              `Replace the current hero feature with ${form.name || "this product"}?`
+                            );
+                            if (!confirmed) {
+                              return;
+                            }
+                          }
+
+                          setForm((current) => ({
+                            ...current,
+                            is_hero_feature: !current.is_hero_feature,
+                            is_featured: !current.is_hero_feature ? true : current.is_featured,
+                          }));
+                        }}
+                        aria-pressed={form.is_hero_feature}
+                      >
+                        <span className="products-storefront-feature-toggle-copy">
+                          <strong>⬢ Hero Feature</strong>
+                          <span>
+                            Use this as the primary homepage spotlight. Only one hero feature stays active at a time.
+                          </span>
+                        </span>
+                        <span className="products-storefront-feature-toggle-state">
+                          {form.is_hero_feature ? "ON" : "OFF"}
                         </span>
                       </button>
 
