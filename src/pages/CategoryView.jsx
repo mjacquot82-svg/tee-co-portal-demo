@@ -9,6 +9,7 @@ import {
 import { useCatalogLookups } from "../lib/catalogLookupsStore";
 import {
   getStorefrontCategoryById,
+  getStorefrontProductCategoryLabel,
   getStorefrontProductImage,
   getStorefrontProductsByCategory,
 } from "../lib/storefrontCatalog";
@@ -100,13 +101,13 @@ export default function CategoryView() {
           id: product?.id || null,
           name: product?.name || "",
           status: product?.status || "",
-          category: product?.storefront_category || product?.category || "",
+          category: getStorefrontProductCategoryLabel(product, storefrontCategories),
           renderKey: renderIdentity.key,
           fallbackKeyUsed: renderIdentity.fallbackKeyUsed,
         };
       }),
     });
-  }, [categoryId, categoryProducts, storedProducts.length]);
+  }, [categoryId, categoryProducts, storefrontCategories, storedProducts.length]);
 
   if (!productsReady) {
     return (
@@ -188,13 +189,28 @@ export default function CategoryView() {
 
         <p
           style={{
-            margin: 0,
+            margin: "0 0 10px",
             fontSize: "14px",
             color: "#78716c",
           }}
         >
           {category.description}
         </p>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            minHeight: "34px",
+            borderRadius: "999px",
+            padding: "0 12px",
+            background: "#f3f4f6",
+            color: "#374151",
+            fontSize: "12px",
+            fontWeight: 800,
+          }}
+        >
+          {category.productCountLabel}
+        </span>
       </div>
 
       <div
@@ -209,12 +225,13 @@ export default function CategoryView() {
           const renderIdentity = buildCategoryProductRenderIdentity(item, index);
           const colorPreview = buildPreviewList(item?.colors, 4);
           const sizePreview = buildPreviewList(item?.sizes, 6);
+          const categoryLabel = getStorefrontProductCategoryLabel(item, storefrontCategories);
           console.info("[CategoryView] Rendering category product card", {
             index,
             id: item?.id || null,
             name: item?.name || "",
             status: item?.status || "",
-            category: item?.storefront_category || item?.category || "",
+            category: categoryLabel,
             renderKey: renderIdentity.key,
             fallbackKeyUsed: renderIdentity.fallbackKeyUsed,
           });
@@ -286,7 +303,7 @@ export default function CategoryView() {
                     lineHeight: 1.45,
                   }}
                 >
-                  {item.notes || item.product_type || item.category}
+                  {item.notes || `${categoryLabel} ready for custom orders.`}
                 </p>
               </div>
 

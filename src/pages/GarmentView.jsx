@@ -11,6 +11,7 @@ import {
 import { useCatalogLookups } from "../lib/catalogLookupsStore";
 import {
   getStorefrontCategoryById,
+  getStorefrontProductCategoryLabel,
   getStorefrontProductImage,
   normalizeCategorySlug,
 } from "../lib/storefrontCatalog";
@@ -56,10 +57,12 @@ export default function GarmentView() {
     () =>
       getStorefrontCategoryById(
         catalogProducts,
-        normalizeCategorySlug(selectedProduct?.storefront_category || selectedProduct?.category || garment?.category),
+        normalizeCategorySlug(
+          getStorefrontProductCategoryLabel(selectedProduct, storefrontCategories) || garment?.category
+        ),
         storefrontCategories
       ),
-    [catalogProducts, garment?.category, selectedProduct?.category, selectedProduct?.storefront_category, storefrontCategories]
+    [catalogProducts, garment?.category, selectedProduct, storefrontCategories]
   );
   const detailTitle =
     garment?.display_name || selectedProduct?.name || "Catalog Product";
@@ -68,14 +71,16 @@ export default function GarmentView() {
   const detailDescription =
     garment?.description ||
     selectedProduct?.notes ||
-    selectedProduct?.product_type ||
     "Custom garment configuration";
+  const storefrontCategoryLabel = getStorefrontProductCategoryLabel(
+    selectedProduct,
+    storefrontCategories
+  );
   const detailCategory =
     storefrontCategory?.name ||
-    selectedProduct?.storefront_category ||
+    storefrontCategoryLabel ||
     garment?.category ||
-    selectedProduct?.category ||
-    "Catalog";
+    "Featured";
   const availableColors =
     garment?.available_colors?.length
       ? garment.available_colors

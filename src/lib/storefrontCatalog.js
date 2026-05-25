@@ -2,6 +2,25 @@ function normalizeText(value) {
   return String(value || "").trim();
 }
 
+const INTERNAL_STOREFRONT_LABELS = new Set([
+  "manual",
+  "manual product",
+  "apparel product",
+  "garment-linked",
+  "garment linked",
+  "catalog",
+]);
+
+const CATEGORY_DESCRIPTOR_OVERRIDES = {
+  accessories: "Finishing pieces for gifting, events, and easy add-ons.",
+  apparel: "Everyday staples built for teams, brands, and custom drops.",
+  candles: "Gift-ready scents for seasonal launches and curated sets.",
+  clearance: "Limited-run picks and end-of-season favorites.",
+  drinkware: "Mugs, tumblers, and easy add-on favorites.",
+  featured: "Current highlights, best sellers, and front-of-store picks.",
+  hats: "Caps and headwear ready for crews, clubs, and merch tables.",
+};
+
 function getCharacteristicCount(product = {}) {
   return Array.isArray(product?.characteristics) ? product.characteristics.length : 0;
 }
@@ -18,15 +37,13 @@ function buildCatalogFieldDiagnostics(product = {}) {
     id: product?.id || null,
     name: normalizeText(product?.name),
     category: normalizeText(product?.category),
-    storefront_category: normalizeText(product?.storefront_category || product?.category),
+    storefront_category: normalizeText(product?.storefront_category),
     status: product?.status || "",
     normalizedStatus: normalizeProductStatus(product?.status || "Active"),
     garment_library_item_id: product?.garment_library_item_id || null,
     hasName: Boolean(normalizeText(product?.name)),
     hasCategory: Boolean(normalizeText(product?.category)),
-    hasStorefrontCategory: Boolean(
-      normalizeText(product?.storefront_category || product?.category)
-    ),
+    hasStorefrontCategory: Boolean(normalizeText(product?.storefront_category)),
     hasStatus: Boolean(normalizeText(product?.status)),
     hasImage: Boolean(normalizeText(product?.image)),
     hasPrice: Number.isFinite(Number(resolvedPrice)) && Number(resolvedPrice) > 0,
@@ -78,7 +95,7 @@ export function getStorefrontProducts(products = []) {
     includedProducts: includedProducts.map((product) => ({
       id: product?.id || null,
       name: normalizeText(product?.name),
-      storefront_category: normalizeText(product?.storefront_category || product?.category),
+      storefront_category: normalizeText(product?.storefront_category),
       status: product?.status || "",
     })),
     excludedProducts,
@@ -91,14 +108,51 @@ export function getStorefrontProductImage(product) {
   return normalizeText(product?.image);
 }
 
-function buildCategoryDescription(categoryName, productCount) {
-  if (!categoryName) return "Browse available products";
-  if (productCount === 1) return "1 product available";
-  return `${productCount} products available`;
+function isCustomerFacingStorefrontLabel(value) {
+  const normalizedValue = normalizeText(value).toLowerCase();
+  return Boolean(normalizedValue) && !INTERNAL_STOREFRONT_LABELS.has(normalizedValue);
+}
+
+function getCategoryDescriptor(categoryName, productCount) {
+  const normalizedKey = normalizeCategorySlug(categoryName);
+  if (CATEGORY_DESCRIPTOR_OVERRIDES[normalizedKey]) {
+    return CATEGORY_DESCRIPTOR_OVERRIDES[normalizedKey];
+  }
+  if (productCount <= 1) {
+    return "A curated starting point for custom merch and easy browsing.";
+  }
+  return `A curated selection of ${productCount} products to browse in one place.`;
+}
+
+function formatProductCountLabel(productCount) {
+  if (productCount === 1) return "1 product";
+  return `${productCount} products`;
+}
+
+function buildFallbackStorefrontCategory() {
+  return buildStorefrontCategoryRecord({
+    id: "featured",
+    lookupId: "featured",
+    name: "Featured",
+    active: true,
+  });
+}
+
+function sortStorefrontCategories(leftCategory, rightCategory) {
+  const leftFeatured = normalizeCategorySlug(leftCategory?.name) === "featured";
+  const rightFeatured = normalizeCategorySlug(rightCategory?.name) === "featured";
+
+  if (leftFeatured && !rightFeatured) return -1;
+  if (!leftFeatured && rightFeatured) return 1;
+
+  return String(leftCategory?.name || "").localeCompare(String(rightCategory?.name || ""));
 }
 
 function buildStorefrontCategoryRecord(category = {}) {
-  const name = normalizeText(category?.name);
+  const rawName = normalizeText(category?.name);
+  const name = isCustomerFacingStorefrontLabel(rawName)
+    ? rawName
+    : normalizeText(category?.fallbackName) || "Featured";
   const lookupId = normalizeText(category?.lookupId ?? category?.id);
   const id = normalizeCategorySlug(category?.slug || name || lookupId) || "catalog";
 
@@ -130,8 +184,9 @@ function mergeStorefrontCategoryRecord(existingCategory, nextCategory) {
 
 function buildStorefrontProductCategoryRecord(product = {}) {
   const lookupId = normalizeText(product?.storefront_category_lookup_id);
-  const name = normalizeText(product?.storefront_category || product?.category);
+  const name = normalizeText(product?.storefront_category);
   if (!lookupId && !name) return null;
+  if (name && !isCustomerFacingStorefrontLabel(name)) return null;
 
   return buildStorefrontCategoryRecord({
     id: lookupId || name,
@@ -184,7 +239,7 @@ function buildStorefrontCategoryRegistryMaps(products = [], storefrontCategories
 
 function resolveProductStorefrontCategory(product, registry) {
   const storefrontLookupId = normalizeText(product?.storefront_category_lookup_id);
-  const explicitStorefrontName = normalizeText(product?.storefront_category || product?.category);
+  const explicitStorefrontName = normalizeText(product?.storefront_category);
 
   if (storefrontLookupId && registry.categoriesByLookupId.has(storefrontLookupId)) {
     return registry.categoriesByLookupId.get(storefrontLookupId);
@@ -197,20 +252,15 @@ function resolveProductStorefrontCategory(product, registry) {
 
   return (
     buildStorefrontProductCategoryRecord(product) ||
-    buildStorefrontCategoryRecord({
-      id: "catalog",
-      name: "Catalog",
-      active: true,
-    })
+    registry.categoriesByName.get("featured") ||
+    buildFallbackStorefrontCategory()
   );
 }
 
 export function buildStorefrontCategoryRegistry(products = [], storefrontCategories = []) {
   const registry = buildStorefrontCategoryRegistryMaps(products, storefrontCategories);
 
-  return Array.from(registry.categoriesById.values()).sort((left, right) =>
-    left.name.localeCompare(right.name)
-  );
+  return Array.from(registry.categoriesById.values()).sort(sortStorefrontCategories);
 }
 
 export function buildStorefrontCategorySelectionValue(category = {}) {
@@ -240,6 +290,10 @@ export function resolveStorefrontCategoryAssignment(product, storefrontCategorie
     ...resolvedCategory,
     hasAssignedStorefrontCategory: Boolean(storefrontLookupId || explicitStorefrontName),
   };
+}
+
+export function getStorefrontProductCategoryLabel(product, storefrontCategories = []) {
+  return resolveStorefrontCategoryAssignment(product, storefrontCategories).name;
 }
 
 export function buildStorefrontCategories(products = [], storefrontCategories = []) {
@@ -272,11 +326,12 @@ export function buildStorefrontCategories(products = [], storefrontCategories = 
       lookupId: category.lookupId || "",
       name: category.name,
       image: normalizeText(category.image),
-      description: buildCategoryDescription(category.name, category.products.length),
+      description: getCategoryDescriptor(category.name, category.products.length),
       products: category.products,
       productCount: category.products.length,
+      productCountLabel: formatProductCountLabel(category.products.length),
     }))
-    .sort((left, right) => left.name.localeCompare(right.name));
+    .sort(sortStorefrontCategories);
 }
 
 export function getStorefrontCategoryById(
