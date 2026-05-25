@@ -1561,7 +1561,7 @@
 
 .products-card-featured-toggle:disabled {
   cursor: wait;
-  opacity: 0.72;
+  opacity: 0.86;
   transform: none;
 }
 

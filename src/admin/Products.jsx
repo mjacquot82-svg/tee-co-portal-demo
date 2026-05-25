@@ -1812,8 +1812,9 @@ export default function Products() {
                   const characteristicSummary = summarizeCharacteristics(
                     getProductCharacteristics(product)
                   );
-                  const categoryLabel =
-                    normalizeText(storefrontCategory?.name) || "Uncategorized";
+                  const categoryLabel = storefrontCategory?.hasAssignedStorefrontCategory
+                    ? normalizeText(storefrontCategory?.name) || "Uncategorized"
+                    : "Uncategorized";
                   const variantSummaryParts = [];
 
                   if (!product?.garment_library_item_id && characteristicSummary.length) {
@@ -1888,17 +1889,14 @@ export default function Products() {
                                   ? `Remove ${product?.name || "product"} from featured`
                                   : `Feature ${product?.name || "product"}`
                               }
+                              aria-busy={isFeaturedTogglePending}
                               disabled={isFeaturedTogglePending}
                             >
                               <span aria-hidden="true">
                                 {product?.is_featured ? "★" : "☆"}
                               </span>
                               <span>
-                                {isFeaturedTogglePending
-                                  ? "Saving..."
-                                  : product?.is_featured
-                                    ? "Featured"
-                                    : "Feature"}
+                                {product?.is_featured ? "Featured" : "Feature"}
                               </span>
                             </button>
                             {!statusIsActive ? (

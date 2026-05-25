@@ -559,6 +559,21 @@ function buildSupabaseProductRecord(product = {}, options = {}) {
   return record;
 }
 
+function buildSupabaseProductUpdateRecord(product = {}, updates = {}) {
+  const updateKeys = Object.keys(updates || {});
+
+  if (
+    updateKeys.length === 1 &&
+    Object.prototype.hasOwnProperty.call(updates, "is_featured")
+  ) {
+    return {
+      is_featured: Boolean(product?.is_featured),
+    };
+  }
+
+  return buildSupabaseProductRecord(product);
+}
+
 function normalizeSupabaseProduct(product = {}) {
   return normalizeProduct({
     ...product,
@@ -1111,36 +1126,59 @@ export async function updateStoredProduct(productId, updates) {
   hasLoadedProductsFromSupabase = true;
   saveStoredProducts(nextProducts);
 
-  const payload = buildSupabaseProductRecord(updatedProduct);
+  const payload = buildSupabaseProductUpdateRecord(updatedProduct, updates);
+  let usedLegacySelect = false;
+  let usedLegacyFilter = false;
   let query = supabase
     .from("products")
     .update(payload)
     .eq("id", productId)
     .select(PRODUCTS_SELECT_FIELDS)
-    .single();
+    .maybeSingle();
   let { data, error } = await query;
 
   if (error && isLegacyProductSchemaError(error)) {
+    usedLegacySelect = true;
     query = supabase
       .from("products")
       .update(omitGarmentLibraryItemId(payload))
       .eq("id", productId)
       .select(LEGACY_PRODUCTS_SELECT_FIELDS)
-      .single();
+      .maybeSingle();
     ({ data, error } = await query);
   }
 
-  if (error) {
+  if ((!data && !error) || error) {
+    usedLegacyFilter = true;
+    query = supabase
+      .from("products")
+      .update(usedLegacySelect ? omitGarmentLibraryItemId(payload) : payload)
+      .eq("legacy_product_id", productId)
+      .select(usedLegacySelect ? LEGACY_PRODUCTS_SELECT_FIELDS : PRODUCTS_SELECT_FIELDS)
+      .maybeSingle();
+    const fallbackResult = await query;
+
+    if (fallbackResult?.data || (!fallbackResult?.error && !data)) {
+      data = fallbackResult.data;
+      error = fallbackResult.error;
+    } else if (!data) {
+      error = fallbackResult.error || error;
+    }
+  }
+
+  if (error || !data) {
     saveStoredProducts(previousProducts);
     await syncGarmentLinks(previousProducts);
     logSupabaseProductError("Unable to update Tee & Co product in Supabase", error, {
       table: "products",
       action: "update",
       productId,
-      select: PRODUCTS_SELECT_FIELDS,
+      select: usedLegacySelect ? LEGACY_PRODUCTS_SELECT_FIELDS : PRODUCTS_SELECT_FIELDS,
+      usedLegacySelect,
+      usedLegacyFilter,
       payload,
     });
-    throw error;
+    throw error || new Error("Updated product row was not returned from Supabase.");
   }
 
   const normalizedUpdatedProduct = normalizeProduct(
