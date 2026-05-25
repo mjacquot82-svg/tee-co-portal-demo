@@ -1331,7 +1331,7 @@ export default function Products() {
     const productId = product?.id || null;
     if (!productId) return;
 
-    const nextFeaturedState = !Boolean(product?.is_featured);
+    const nextFeaturedState = !product?.is_featured;
     setSaveError("");
     setFeaturedToggleProductIds((current) =>
       current.includes(productId) ? current : [...current, productId]

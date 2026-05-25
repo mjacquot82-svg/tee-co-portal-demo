@@ -110,7 +110,14 @@ function isLegacyProductSchemaError(error) {
     "storefront_category_lookup_id",
     "compare_at_price",
     "characteristics",
+    "is_featured",
   ].some((columnName) => isMissingProductColumnError(error, columnName));
+}
+
+function isUuidLike(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(value || "").trim()
+  );
 }
 
 function emitProductsUpdated() {
@@ -385,23 +392,94 @@ function normalizeProduct(product) {
   };
 }
 
-function preserveCategoryFields(primary = {}, fallback = {}) {
-  const primaryCategory = primary?.category;
-  const primaryCategoryLookupId = primary?.category_lookup_id;
-  const primaryStorefrontCategory = primary?.storefront_category;
-  const primaryStorefrontCategoryLookupId = primary?.storefront_category_lookup_id;
+function hasPresentValue(value) {
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+
+  return value !== null && value !== undefined;
+}
+
+function preferPresentValue(primaryValue, fallbackValue, emptyValue = null) {
+  if (hasPresentValue(primaryValue)) return primaryValue;
+  if (hasPresentValue(fallbackValue)) return fallbackValue;
+  return emptyValue;
+}
+
+function preserveCriticalProductFields(primary = {}, fallback = {}) {
+  const primaryHasFeatured = Object.prototype.hasOwnProperty.call(primary, "is_featured");
 
   return {
+    ...fallback,
     ...primary,
-    category: primaryCategory ?? fallback?.category ?? "",
-    category_lookup_id: primaryCategoryLookupId ?? fallback?.category_lookup_id ?? null,
-    storefront_category:
-      primaryStorefrontCategory ?? fallback?.storefront_category ?? "",
-    storefront_category_lookup_id:
-      primaryStorefrontCategoryLookupId ??
-      fallback?.storefront_category_lookup_id ??
-      null,
+    id: preferPresentValue(primary?.id, fallback?.id, ""),
+    legacy_product_id: preferPresentValue(
+      primary?.legacy_product_id,
+      fallback?.legacy_product_id,
+      null
+    ),
+    name: preferPresentValue(primary?.name, fallback?.name, ""),
+    status: preferPresentValue(primary?.status, fallback?.status, "Active"),
+    category: preferPresentValue(primary?.category, fallback?.category, ""),
+    category_lookup_id: preferPresentValue(
+      primary?.category_lookup_id,
+      fallback?.category_lookup_id,
+      null
+    ),
+    storefront_category: preferPresentValue(
+      primary?.storefront_category,
+      fallback?.storefront_category,
+      ""
+    ),
+    storefront_category_lookup_id: preferPresentValue(
+      primary?.storefront_category_lookup_id,
+      fallback?.storefront_category_lookup_id,
+      null
+    ),
+    garment_library_item_id: preferPresentValue(
+      primary?.garment_library_item_id,
+      fallback?.garment_library_item_id,
+      null
+    ),
+    brand_lookup_id: preferPresentValue(primary?.brand_lookup_id, fallback?.brand_lookup_id, null),
+    garment_model_lookup_id: preferPresentValue(
+      primary?.garment_model_lookup_id,
+      fallback?.garment_model_lookup_id,
+      null
+    ),
+    brand_model: preferPresentValue(primary?.brand_model, fallback?.brand_model, ""),
+    product_type: preferPresentValue(primary?.product_type, fallback?.product_type, ""),
+    image: preferPresentValue(primary?.image, fallback?.image, ""),
+    is_featured: primaryHasFeatured
+      ? Boolean(primary?.is_featured)
+      : Boolean(fallback?.is_featured),
   };
+}
+
+function findMatchingLocalProduct(products = [], product = {}) {
+  const candidateIds = new Set(
+    [product?.id, product?.legacy_product_id]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  );
+
+  if (!candidateIds.size) return null;
+
+  return (
+    (Array.isArray(products) ? products : []).find((entry) => {
+      const entryIds = [
+        String(entry?.id || "").trim(),
+        String(entry?.legacy_product_id || "").trim(),
+      ].filter(Boolean);
+      return entryIds.some((value) => candidateIds.has(value));
+    }) || null
+  );
+}
+
+function mergeRemoteProductsWithLocalSnapshot(remoteProducts = [], localProducts = []) {
+  return (Array.isArray(remoteProducts) ? remoteProducts : []).map((product) =>
+    normalizeProduct(preserveCriticalProductFields(product, findMatchingLocalProduct(localProducts, product)))
+  );
 }
 
 function normalizeStoredProductsCollection(products) {
@@ -651,10 +729,12 @@ async function queryInsertedProductRow(productId, options = {}) {
   const label = options.label || "unspecified";
   let usedLegacySelect = false;
   let usedLegacyFilter = false;
+  const primaryFilterColumn = isUuidLike(productId) ? "id" : "legacy_product_id";
+  const secondaryFilterColumn = primaryFilterColumn === "id" ? "legacy_product_id" : "id";
   let query = supabase
     .from("products")
     .select(PRODUCTS_SELECT_FIELDS)
-    .eq("id", productId)
+    .eq(primaryFilterColumn, productId)
     .maybeSingle();
   let { data, error } = await query;
 
@@ -663,17 +743,17 @@ async function queryInsertedProductRow(productId, options = {}) {
     query = supabase
       .from("products")
       .select(LEGACY_PRODUCTS_SELECT_FIELDS)
-      .eq("id", productId)
+      .eq(primaryFilterColumn, productId)
       .maybeSingle();
     ({ data, error } = await query);
   }
 
-  if (error && isLegacyProductSchemaError(error)) {
+  if ((error && isLegacyProductSchemaError(error)) || (!error && !data)) {
     usedLegacyFilter = true;
     query = supabase
       .from("products")
       .select(LEGACY_PRODUCTS_SELECT_FIELDS)
-      .eq("legacy_product_id", productId)
+      .eq(secondaryFilterColumn, productId)
       .maybeSingle();
     ({ data, error } = await query);
   }
@@ -731,9 +811,11 @@ async function fetchProductsFromSupabase() {
     throw error;
   }
 
-  const normalizedProducts = Array.isArray(data)
-    ? data.map(normalizeSupabaseProduct).filter(Boolean)
-    : [];
+  const localProductsSnapshot = getLocalProductsSnapshot();
+  const normalizedProducts = mergeRemoteProductsWithLocalSnapshot(
+    Array.isArray(data) ? data.map(normalizeSupabaseProduct).filter(Boolean) : [],
+    localProductsSnapshot
+  );
   normalizedProducts.sort((left, right) => {
     const leftTimestamp = Date.parse(left?.created_at || "") || 0;
     const rightTimestamp = Date.parse(right?.created_at || "") || 0;
@@ -1017,7 +1099,7 @@ export async function createStoredProduct(productInput) {
   }
 
   const createdProduct = normalizeProduct(
-    preserveCategoryFields(
+    preserveCriticalProductFields(
       {
         ...normalizeSupabaseProduct(data),
         garment_library_item_id:
@@ -1153,12 +1235,13 @@ export async function updateStoredProduct(productId, updates) {
   saveStoredProducts(nextProducts);
 
   const payload = buildSupabaseProductUpdateRecord(updatedProduct, updates);
+  const primaryFilterColumn = isUuidLike(productId) ? "id" : "legacy_product_id";
   let usedLegacySelect = false;
   let usedLegacyFilter = false;
   let query = supabase
     .from("products")
     .update(payload)
-    .eq("id", productId)
+    .eq(primaryFilterColumn, productId)
     .select(PRODUCTS_SELECT_FIELDS)
     .maybeSingle();
   let { data, error } = await query;
@@ -1168,7 +1251,7 @@ export async function updateStoredProduct(productId, updates) {
     query = supabase
       .from("products")
       .update(omitGarmentLibraryItemId(payload))
-      .eq("id", productId)
+      .eq(isUuidLike(productId) ? "id" : "legacy_product_id", productId)
       .select(LEGACY_PRODUCTS_SELECT_FIELDS)
       .maybeSingle();
     ({ data, error } = await query);
@@ -1176,10 +1259,11 @@ export async function updateStoredProduct(productId, updates) {
 
   if ((!data && !error) || error) {
     usedLegacyFilter = true;
+    const fallbackFilterColumn = isUuidLike(productId) ? "legacy_product_id" : "id";
     query = supabase
       .from("products")
       .update(usedLegacySelect ? omitGarmentLibraryItemId(payload) : payload)
-      .eq("legacy_product_id", productId)
+      .eq(fallbackFilterColumn, productId)
       .select(usedLegacySelect ? LEGACY_PRODUCTS_SELECT_FIELDS : PRODUCTS_SELECT_FIELDS)
       .maybeSingle();
     const fallbackResult = await query;
@@ -1212,7 +1296,7 @@ export async function updateStoredProduct(productId, updates) {
   }
 
   const normalizedUpdatedProduct = normalizeProduct(
-    preserveCategoryFields(
+    preserveCriticalProductFields(
       {
         ...normalizeSupabaseProduct(data),
         garment_library_item_id:
@@ -1236,7 +1320,16 @@ export async function updateStoredProduct(productId, updates) {
 
 export async function deleteStoredProduct(productId) {
   if (isSupabaseConfigured && supabase) {
-    const { error } = await supabase.from("products").delete().eq("id", productId);
+    const primaryFilterColumn = isUuidLike(productId) ? "id" : "legacy_product_id";
+    let { error } = await supabase.from("products").delete().eq(primaryFilterColumn, productId);
+
+    if (error && primaryFilterColumn === "id") {
+      const fallbackResult = await supabase
+        .from("products")
+        .delete()
+        .eq("legacy_product_id", productId);
+      error = fallbackResult.error;
+    }
 
     if (error) {
       console.error("Unable to delete Tee & Co product from Supabase", error);
