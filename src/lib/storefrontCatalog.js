@@ -9,6 +9,7 @@ const INTERNAL_STOREFRONT_LABELS = new Set([
   "garment-linked",
   "garment linked",
   "catalog",
+  "featured",
 ]);
 
 const CATEGORY_DESCRIPTOR_OVERRIDES = {
@@ -17,7 +18,6 @@ const CATEGORY_DESCRIPTOR_OVERRIDES = {
   candles: "Gift-ready scents for seasonal launches and curated sets.",
   clearance: "Limited-run picks and end-of-season favorites.",
   drinkware: "Mugs, tumblers, and easy add-on favorites.",
-  featured: "Current highlights, best sellers, and front-of-store picks.",
   hats: "Caps and headwear ready for crews, clubs, and merch tables.",
 };
 
@@ -140,36 +140,43 @@ function formatProductCountLabel(productCount) {
 }
 
 function buildFallbackStorefrontCategory() {
-  return buildStorefrontCategoryRecord({
-    id: "featured",
-    lookupId: "featured",
-    name: "Featured",
+  return {
+    id: "uncategorized",
+    lookupId: "",
+    name: "Uncategorized",
     active: true,
-  });
+  };
 }
 
 function sortStorefrontCategories(leftCategory, rightCategory) {
-  const leftFeatured = normalizeCategorySlug(leftCategory?.name) === "featured";
-  const rightFeatured = normalizeCategorySlug(rightCategory?.name) === "featured";
+  const leftUncategorized = normalizeCategorySlug(leftCategory?.name) === "uncategorized";
+  const rightUncategorized = normalizeCategorySlug(rightCategory?.name) === "uncategorized";
 
-  if (leftFeatured && !rightFeatured) return -1;
-  if (!leftFeatured && rightFeatured) return 1;
+  if (leftUncategorized && !rightUncategorized) return 1;
+  if (!leftUncategorized && rightUncategorized) return -1;
 
   return String(leftCategory?.name || "").localeCompare(String(rightCategory?.name || ""));
 }
 
 function buildStorefrontCategoryRecord(category = {}) {
   const rawName = normalizeText(category?.name);
+  const fallbackName = normalizeText(category?.fallbackName);
   const name = isCustomerFacingStorefrontLabel(rawName)
     ? rawName
-    : normalizeText(category?.fallbackName) || "Featured";
+    : isCustomerFacingStorefrontLabel(fallbackName)
+      ? fallbackName
+      : "";
   const lookupId = normalizeText(category?.lookupId ?? category?.id);
-  const id = normalizeCategorySlug(category?.slug || name || lookupId) || "catalog";
+  const id = normalizeCategorySlug(category?.slug || name || lookupId);
+
+  if (!name || !id) {
+    return null;
+  }
 
   return {
     id,
     lookupId,
-    name: name || "Catalog",
+    name,
     active: category?.active !== false,
   };
 }
@@ -206,6 +213,20 @@ function buildStorefrontProductCategoryRecord(product = {}) {
   });
 }
 
+function buildProductFallbackCategoryRecord(product = {}) {
+  const lookupId = normalizeText(product?.category_lookup_id);
+  const name = normalizeText(product?.category);
+  if (!lookupId && !name) return null;
+  if (name && !isCustomerFacingStorefrontLabel(name)) return null;
+
+  return buildStorefrontCategoryRecord({
+    id: lookupId || name,
+    lookupId,
+    name,
+    active: true,
+  });
+}
+
 function buildStorefrontCategoryRegistryMaps(products = [], storefrontCategories = []) {
   const categoriesById = new Map();
   const categoriesByLookupId = new Map();
@@ -213,6 +234,7 @@ function buildStorefrontCategoryRegistryMaps(products = [], storefrontCategories
 
   const registerCategory = (category) => {
     const normalizedCategory = buildStorefrontCategoryRecord(category);
+    if (!normalizedCategory) return;
     const existingCategory =
       categoriesByLookupId.get(normalizedCategory.lookupId) ||
       categoriesById.get(normalizedCategory.id) ||
@@ -240,6 +262,11 @@ function buildStorefrontCategoryRegistryMaps(products = [], storefrontCategories
     .filter(Boolean)
     .forEach(registerCategory);
 
+  (Array.isArray(products) ? products : [])
+    .map((product) => buildProductFallbackCategoryRecord(product))
+    .filter(Boolean)
+    .forEach(registerCategory);
+
   return {
     categoriesById,
     categoriesByLookupId,
@@ -250,6 +277,8 @@ function buildStorefrontCategoryRegistryMaps(products = [], storefrontCategories
 function resolveProductStorefrontCategory(product, registry) {
   const storefrontLookupId = normalizeText(product?.storefront_category_lookup_id);
   const explicitStorefrontName = normalizeText(product?.storefront_category);
+  const fallbackCategoryLookupId = normalizeText(product?.category_lookup_id);
+  const fallbackCategoryName = normalizeText(product?.category);
 
   if (storefrontLookupId && registry.categoriesByLookupId.has(storefrontLookupId)) {
     return registry.categoriesByLookupId.get(storefrontLookupId);
@@ -260,11 +289,16 @@ function resolveProductStorefrontCategory(product, registry) {
     return registry.categoriesByName.get(normalizedExplicitName);
   }
 
-  return (
-    buildStorefrontProductCategoryRecord(product) ||
-    registry.categoriesByName.get("featured") ||
-    buildFallbackStorefrontCategory()
-  );
+  if (fallbackCategoryLookupId && registry.categoriesByLookupId.has(fallbackCategoryLookupId)) {
+    return registry.categoriesByLookupId.get(fallbackCategoryLookupId);
+  }
+
+  const normalizedFallbackName = fallbackCategoryName.toLowerCase();
+  if (normalizedFallbackName && registry.categoriesByName.has(normalizedFallbackName)) {
+    return registry.categoriesByName.get(normalizedFallbackName);
+  }
+
+  return buildProductFallbackCategoryRecord(product) || buildFallbackStorefrontCategory();
 }
 
 export function buildStorefrontCategoryRegistry(products = [], storefrontCategories = []) {
@@ -299,6 +333,7 @@ export function resolveStorefrontCategoryAssignment(product, storefrontCategorie
   return {
     ...resolvedCategory,
     hasAssignedStorefrontCategory: Boolean(storefrontLookupId || explicitStorefrontName),
+    hasResolvedCategory: Boolean(normalizeText(resolvedCategory?.name)),
   };
 }
 

@@ -1812,9 +1812,7 @@ export default function Products() {
                   const characteristicSummary = summarizeCharacteristics(
                     getProductCharacteristics(product)
                   );
-                  const categoryLabel = storefrontCategory?.hasAssignedStorefrontCategory
-                    ? normalizeText(storefrontCategory?.name) || "Uncategorized"
-                    : "Uncategorized";
+                  const categoryLabel = normalizeText(storefrontCategory?.name) || "Uncategorized";
                   const variantSummaryParts = [];
 
                   if (!product?.garment_library_item_id && characteristicSummary.length) {

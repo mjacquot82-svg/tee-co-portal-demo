@@ -14,7 +14,8 @@ import { areStoredProductsReady, useStoredProducts } from "../lib/productsStore"
 function buildStorefrontRenderIdentity(product, index) {
   const normalizedId = String(product?.id || "").trim();
   const normalizedName = String(product?.name || "").trim() || "catalog-product";
-  const normalizedCategory = String(product?.storefront_category || "").trim() || "featured";
+  const normalizedCategory =
+    String(product?.storefront_category || product?.category || "").trim() || "uncategorized";
 
   return {
     id: normalizedId || null,
@@ -92,7 +93,7 @@ export default function Home() {
     ) || primaryCollection;
   const heroProductCategoryLabel = heroProduct
     ? getStorefrontProductCategoryLabel(heroProduct, storefrontCategoryLookups)
-    : heroCollection?.name || "Featured";
+    : heroCollection?.name || "Uncategorized";
   const heroLink = heroProduct
     ? `/garment/${heroProduct.id}`
     : heroCollection

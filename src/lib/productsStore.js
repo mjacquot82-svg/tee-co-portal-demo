@@ -567,11 +567,37 @@ function buildSupabaseProductUpdateRecord(product = {}, updates = {}) {
     Object.prototype.hasOwnProperty.call(updates, "is_featured")
   ) {
     return {
-      is_featured: Boolean(product?.is_featured),
+      is_featured: Boolean(
+        Object.prototype.hasOwnProperty.call(updates, "is_featured")
+          ? updates.is_featured
+          : product?.is_featured
+      ),
     };
   }
 
   return buildSupabaseProductRecord(product);
+}
+
+async function fetchUpdatedProductAfterWrite(productId, updatedProduct) {
+  const candidateIds = Array.from(
+    new Set(
+      [productId, updatedProduct?.id, updatedProduct?.legacy_product_id]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  );
+
+  for (const candidateId of candidateIds) {
+    const result = await queryInsertedProductRow(candidateId, {
+      label: "post-update verification fetch",
+    });
+
+    if (result?.data) {
+      return result.data;
+    }
+  }
+
+  return null;
 }
 
 function normalizeSupabaseProduct(product = {}) {
@@ -1164,6 +1190,10 @@ export async function updateStoredProduct(productId, updates) {
     } else if (!data) {
       error = fallbackResult.error || error;
     }
+  }
+
+  if (!error && !data) {
+    data = await fetchUpdatedProductAfterWrite(productId, updatedProduct);
   }
 
   if (error || !data) {

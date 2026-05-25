@@ -32,7 +32,6 @@ const DEFAULT_LOOKUPS = {
     { id: "storefront-category-hats", name: "Hats", active: true },
     { id: "storefront-category-drinkware", name: "Drinkware", active: true },
     { id: "storefront-category-accessories", name: "Accessories", active: true },
-    { id: "storefront-category-featured", name: "Featured", active: true },
     { id: "storefront-category-clearance", name: "Clearance", active: true },
   ],
   brands: [],

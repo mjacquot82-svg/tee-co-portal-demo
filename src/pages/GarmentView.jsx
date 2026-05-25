@@ -80,7 +80,7 @@ export default function GarmentView() {
     storefrontCategory?.name ||
     storefrontCategoryLabel ||
     garment?.category ||
-    "Featured";
+    "Uncategorized";
   const availableColors =
     garment?.available_colors?.length
       ? garment.available_colors
