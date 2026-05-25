@@ -55,26 +55,7 @@ function formatWorkerName(worker) {
   return `${worker.name}${worker.role ? ` (${worker.role})` : ""}`;
 }
 
-function SummaryMetric({ label, value, tone = "default" }) {
-  const palette =
-    tone === "warning"
-      ? { background: "#fffbeb", color: "#92400e" }
-      : tone === "danger"
-        ? { background: "#fef2f2", color: "#b91c1c" }
-        : tone === "success"
-          ? { background: "#ecfdf5", color: "#047857" }
-          : { background: "#ffffff", color: "#64748b" };
-
-  return (
-    <div style={{ ...cardStyle, background: palette.background }}>
-      <p style={{ margin: 0, color: palette.color, fontWeight: 800 }}>{label}</p>
-      <h2 style={{ margin: "8px 0 0", fontSize: "34px" }}>{value}</h2>
-    </div>
-  );
-}
-
-function OwnerAssignments({ allOrders, staffUsers, activeOrders, assignedOrders, overdueOrders }) {
-  const unassignedOrders = activeOrders.filter((order) => !order.assigned_to_staff_id);
+function OwnerAssignments({ allOrders, staffUsers }) {
 
   function handleAssign(order, staffId) {
     const selectedWorker = staffUsers.find((worker) => worker.id === staffId);
@@ -106,14 +87,8 @@ function OwnerAssignments({ allOrders, staffUsers, activeOrders, assignedOrders,
       <div style={{ marginBottom: "18px" }}>
         <p style={{ margin: 0, color: "#78716c", fontSize: "12px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase" }}>Production Dispatch</p>
         <h1 style={{ margin: "6px 0 8px", fontSize: "32px" }}>Assignment Dispatch Board</h1>
-        <p style={{ margin: 0, color: "#64748b", maxWidth: "760px" }}>Dispatch production work, resolve unassigned jobs, and rebalance worker load. This workspace is for assignment decisions, not for reviewing the whole production dashboard.</p>
+        <p style={{ margin: 0, color: "#64748b", maxWidth: "760px" }}>Assign and rebalance work here. Production status tracking stays in Shop Production, and financial follow-up stays in Invoices & Payments.</p>
       </div>
-
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "14px", marginBottom: "18px" }}>
-        <SummaryMetric label="Need Assignment" value={unassignedOrders.length} tone="warning" />
-        <SummaryMetric label="Overdue" value={overdueOrders.length} tone="danger" />
-        <SummaryMetric label="Assigned" value={assignedOrders.length} tone="success" />
-      </section>
 
       <AssignmentDispatchBoard
         orders={allOrders}
@@ -143,9 +118,6 @@ export default function Assignments() {
     () => sortOrdersByOperationalStatus(storedOrders.map(normalizeOrder)),
     [storedOrders]
   );
-  const activeOrders = useMemo(() => allOrders.filter(isOpenOrder), [allOrders]);
-  const assignedOrders = activeOrders.filter((order) => order.assigned_to_staff_id);
-  const overdueOrders = activeOrders.filter(isOverdue);
 
   if (isStaffWorkspaceView(staffUser)) {
     return <Navigate to="/admin" replace />;
@@ -155,9 +127,6 @@ export default function Assignments() {
     <OwnerAssignments
       allOrders={allOrders}
       staffUsers={staffUsers}
-      activeOrders={activeOrders}
-      assignedOrders={assignedOrders}
-      overdueOrders={overdueOrders}
     />
   );
 }

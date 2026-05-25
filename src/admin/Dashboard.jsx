@@ -17,7 +17,6 @@ import {
   isStaffWorkspaceView,
   resolveOperationalRole,
 } from "./adminRoleView";
-import OperationsSummaryCards from "../dashboard/OperationsSummaryCards";
 import { buildProductionReadiness } from "../quotes/productionReadiness";
 import StaffHomeWorkspace from "./StaffHomeWorkspace";
 import AdminDiagnosticsPanel from "../components/AdminDiagnosticsPanel";
@@ -180,7 +179,7 @@ function WorkspaceCountLink({ label, count, description, to, tone = "default" })
   );
 }
 
-function WorkspaceOverviewLink({ label, count, description, to }) {
+function WorkspaceOverviewLink({ label, description, to }) {
   return (
     <Link
       to={to}
@@ -196,11 +195,9 @@ function WorkspaceOverviewLink({ label, count, description, to }) {
         color: "#171717",
       }}
       >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "baseline" }}>
-        <strong style={{ fontSize: "14px" }}>{label}</strong>
-        <span style={{ color: "#0f172a", fontSize: "18px", fontWeight: 900 }}>{count}</span>
-      </div>
+      <strong style={{ fontSize: "14px" }}>{label}</strong>
       <p style={{ margin: 0, color: "#64748b", fontSize: "12px", lineHeight: 1.35 }}>{description}</p>
+      <span style={{ color: "#475569", fontWeight: 700, fontSize: "12px" }}>Open workspace</span>
     </Link>
   );
 }
@@ -259,30 +256,24 @@ function buildOwnerAttentionItems(orders = []) {
 }
 
 function buildOwnerWorkspaceOverview(orders = []) {
-  const metrics = buildOperationalMetrics(orders);
-
   return [
     {
       label: "Quotes",
-      count: metrics.activeQuotes,
       description: "Pricing, approvals, deposits, and artwork readiness.",
       to: "/admin/quotes",
     },
     {
       label: "Front Counter",
-      count: metrics.readyForPickup,
       description: "Pickup-ready orders and day-of customer transactions.",
       to: "/admin/sales/new",
     },
     {
       label: "Shop Production",
-      count: metrics.activeProduction,
       description: "Active production work currently moving through the floor.",
       to: "/admin/orders",
     },
     {
       label: "Financial",
-      count: metrics.outstandingPayments,
       description: "Orders with remaining balances and invoice follow-up.",
       to: "/admin/financial",
     },
@@ -501,11 +492,7 @@ function OwnerDashboard({ orders, operationalEvents }) {
       <div className="owner-dashboard-hero" style={{ marginBottom: "14px" }}>
         <p style={{ margin: 0, color: "#78716c", fontSize: "12px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase" }}>Owner Operations</p>
         <h1 style={{ margin: "4px 0 6px", fontSize: "32px", lineHeight: 1.02 }}>Dashboard</h1>
-        <p style={{ margin: 0, color: "#64748b", maxWidth: "680px", lineHeight: 1.45, fontSize: "14px" }}>Global operational overview for the owner workspace. Use this page to spot pressure points, then move into the dedicated workspace that handles the work.</p>
-      </div>
-
-      <div style={{ marginBottom: "14px" }}>
-        <OperationsSummaryCards metrics={metrics} />
+        <p style={{ margin: 0, color: "#64748b", maxWidth: "680px", lineHeight: 1.45, fontSize: "14px" }}>Urgent owner attention, recent operational activity, and direct paths into the workspace that owns the work.</p>
       </div>
 
       <div
@@ -571,7 +558,6 @@ function OwnerDashboard({ orders, operationalEvents }) {
                 <WorkspaceOverviewLink
                   key={workspace.label}
                   label={workspace.label}
-                  count={workspace.count}
                   description={workspace.description}
                   to={workspace.to}
                 />

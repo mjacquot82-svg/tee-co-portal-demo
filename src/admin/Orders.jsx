@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import PaymentStatusBadge from "../components/PaymentStatusBadge";
 import StatusBadge from "../components/StatusBadge";
 import { formatShortDate } from "../lib/dateFormatting";
 import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
@@ -32,25 +31,10 @@ import {
   isStaffWorkspaceView,
 } from "./adminRoleView";
 
-function money(value) {
-  return `$${Number(value || 0).toFixed(2)}`;
-}
-
-function getPaymentSummary(order) {
-  const balanceDue = Number(order.balance_due || 0);
-
-  if (balanceDue > 0) {
-    return `${order.payment_collection_state || "Awaiting Payment"} • ${money(balanceDue)} due`;
-  }
-
-  return order.payment_status === "Paid" ? "Paid" : "No balance due";
-}
-
 function OrdersTable({
   orders,
   emptyMessage,
   onAdvanceStatus,
-  showPayment = true,
   statusActionLabel = "Mark",
 }) {
   return (
@@ -72,9 +56,6 @@ function OrdersTable({
             <th style={{ padding: "12px 8px", textAlign: "left" }}>Assigned Worker</th>
             <th style={{ padding: "12px 8px", textAlign: "left", minWidth: "120px" }}>Created</th>
             <th style={{ padding: "12px 8px", textAlign: "left", minWidth: "120px" }}>Due Date</th>
-            {showPayment ? (
-              <th style={{ padding: "12px 8px", textAlign: "left" }}>Payment</th>
-            ) : null}
             <th style={{ padding: "12px 8px", textAlign: "left" }}>Status</th>
             <th style={{ padding: "12px 8px", textAlign: "left" }}>Action</th>
           </tr>
@@ -124,25 +105,6 @@ function OrdersTable({
                 {order.due_date ? formatShortDate(order.due_date) : "—"}
               </td>
 
-              {showPayment ? (
-                <td style={{ padding: "14px 8px" }}>
-                  <div style={{ display: "grid", gap: "6px" }}>
-                    <PaymentStatusBadge status={order.payment_status} />
-                    <span
-                      style={{
-                        color: order.balance_due > 0 ? "#991b1b" : "#64748b",
-                        fontSize: "12px",
-                        fontWeight: 700,
-                        lineHeight: 1.3,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {getPaymentSummary(order)}
-                    </span>
-                  </div>
-                </td>
-              ) : null}
-
               <td style={{ padding: "14px 8px" }}>
                 <StatusBadge status={order.status} />
               </td>
@@ -174,7 +136,7 @@ function OrdersTable({
           {orders.length === 0 ? (
             <tr>
               <td
-                colSpan={showPayment ? 10 : 9}
+                colSpan={9}
                 style={{
                   padding: "24px 8px",
                   textAlign: "center",
@@ -243,40 +205,6 @@ function FilterPill({ active, children, count, tone = "default", onClick }) {
   );
 }
 
-function SummaryCard({ label, value, tone = "default" }) {
-  const background =
-    tone === "warning" ? "#fff7ed" : tone === "danger" ? "#fef2f2" : "#f8fafc";
-  const border =
-    tone === "warning" ? "#fdba74" : tone === "danger" ? "#fecaca" : "#dbe4ee";
-  const color =
-    tone === "warning" ? "#c2410c" : tone === "danger" ? "#b91c1c" : "#475569";
-
-  return (
-    <div
-      style={{
-        background,
-        border: `1px solid ${border}`,
-        borderRadius: "14px",
-        padding: "12px 14px",
-      }}
-    >
-      <p
-        style={{
-          margin: 0,
-          color,
-          fontWeight: 800,
-          fontSize: "12px",
-          letterSpacing: "0.04em",
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
-      </p>
-      <h2 style={{ margin: "6px 0 0", fontSize: "26px", lineHeight: 1.1 }}>{value}</h2>
-    </div>
-  );
-}
-
 export default function Orders() {
   const storedOrders = useStoredOrders();
   const staffUser = getActiveStaffUser();
@@ -338,6 +266,10 @@ export default function Orders() {
   const methodCounts = useMemo(() => getProductionMethodCounts(workspaceOrders), [workspaceOrders]);
   const workspaceSummary = useMemo(
     () => buildProductionWorkspaceSummary(workspaceOrders),
+    [workspaceOrders]
+  );
+  const paymentFollowUpCount = useMemo(
+    () => workspaceOrders.filter((order) => Number(order.balance_due || 0) > 0).length,
     [workspaceOrders]
   );
 
@@ -484,28 +416,72 @@ export default function Orders() {
               Shop Production
             </p>
             <h1 style={{ margin: "8px 0 6px" }}>Shop Production</h1>
-              <p style={{ margin: 0, color: "#64748b", maxWidth: "760px" }}>
+            <p style={{ margin: 0, color: "#64748b", maxWidth: "760px" }}>
               {isStaffWorkspace
-                ? "Global production visibility across the floor. Use this workspace for the shared shop queue; your personal execution queue stays in My Assigned Work."
-                : "Global production visibility for active jobs, queue state, and shop-wide order handling."}
+                ? "Use this workspace for production movement and status updates across the floor. Your personal queue stays in My Assigned Work."
+                : "Use this workspace for production movement, queue handling, and status changes. Assignment balancing and payment follow-up stay in their own workspaces."}
             </p>
           </div>
         </div>
 
-        <section
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-            gap: "10px",
-          }}
-        >
-          <SummaryCard label="Active Jobs" value={workspaceSummary.activeOrders} />
-          <SummaryCard label="Awaiting Production" value={statusCounts["awaiting-production"] || 0} />
-          <SummaryCard label="In Production" value={statusCounts["in-production"] || 0} tone="success" />
-          <SummaryCard label="Ready For Pickup" value={statusCounts["ready-for-pickup"] || 0} />
-          <SummaryCard label="Unassigned" value={workspaceSummary.unassignedOrders} tone="warning" />
-          <SummaryCard label="Urgent" value={workspaceSummary.urgentOrders} tone="danger" />
-        </section>
+        {!isStaffWorkspace && (
+          <section
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: "10px",
+            }}
+          >
+            <Link
+              to={workspaceSummary.urgentOrders ? "/admin/orders?status=urgent" : "/admin/orders"}
+              style={{
+                textDecoration: "none",
+                color: "#171717",
+                border: "1px solid #fecaca",
+                background: "#fef2f2",
+                borderRadius: "16px",
+                padding: "14px 16px",
+                display: "grid",
+                gap: "4px",
+              }}
+            >
+              <strong>Urgent Production</strong>
+              <span style={{ color: "#64748b" }}>{workspaceSummary.urgentOrders} jobs need immediate production review.</span>
+            </Link>
+            <Link
+              to="/admin/assignments"
+              style={{
+                textDecoration: "none",
+                color: "#171717",
+                border: "1px solid #fde68a",
+                background: "#fffbeb",
+                borderRadius: "16px",
+                padding: "14px 16px",
+                display: "grid",
+                gap: "4px",
+              }}
+            >
+              <strong>Assignment Dispatch</strong>
+              <span style={{ color: "#64748b" }}>{workspaceSummary.unassignedOrders} jobs still need assignment or rebalancing.</span>
+            </Link>
+            <Link
+              to="/admin/financial"
+              style={{
+                textDecoration: "none",
+                color: "#171717",
+                border: "1px solid #e2e8f0",
+                background: "#f8fafc",
+                borderRadius: "16px",
+                padding: "14px 16px",
+                display: "grid",
+                gap: "4px",
+              }}
+            >
+              <strong>Financial Follow-up</strong>
+              <span style={{ color: "#64748b" }}>{paymentFollowUpCount} production orders still carry a balance due.</span>
+            </Link>
+          </section>
+        )}
 
         <section style={{ display: "grid", gap: "16px" }}>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
@@ -794,7 +770,6 @@ export default function Orders() {
                 : "No production orders match the current workspace filters."
             }
             onAdvanceStatus={handleAdvanceStatus}
-            showPayment={!isStaffWorkspace}
             statusActionLabel={isStaffWorkspace ? "Move to" : "Mark"}
           />
         </section>

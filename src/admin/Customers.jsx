@@ -21,19 +21,6 @@ const labelStyle = {
   color: "#292524",
 };
 
-const summaryCardStyle = {
-  background: "#ffffff",
-  border: "1px solid #e2e8f0",
-  borderRadius: "18px",
-  padding: "18px",
-  display: "grid",
-  gap: "6px",
-};
-
-function currency(value) {
-  return `$${Number(value || 0).toFixed(2)}`;
-}
-
 function formatDate(value) {
   if (!value) return "Recently added";
 
@@ -184,38 +171,6 @@ export default function Customers() {
     });
   }, [customerRecords, searchTerm]);
 
-  const summary = useMemo(() => {
-    const customersWithBalances = customerRecords.filter(
-      (customer) => customer.balanceDue > 0 || customer.counterBalanceDue > 0
-    ).length;
-    const openOrders = customerRecords.reduce(
-      (sum, customer) => sum + customer.openOrders.length,
-      0
-    );
-    const todaysCounterSales = sales.filter((sale) => {
-      if (!sale.created_at) return false;
-      const createdAt = new Date(sale.created_at);
-      const now = new Date();
-
-      return (
-        createdAt.getFullYear() === now.getFullYear() &&
-        createdAt.getMonth() === now.getMonth() &&
-        createdAt.getDate() === now.getDate()
-      );
-    }).length;
-
-    return {
-      customersWithBalances,
-      openOrders,
-      todaysCounterSales,
-      outstandingBalance:
-        customerRecords.reduce(
-          (sum, customer) => sum + customer.balanceDue + customer.counterBalanceDue,
-          0
-        ),
-    };
-  }, [customerRecords, sales]);
-
   function updateForm(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
   }
@@ -268,8 +223,7 @@ export default function Customers() {
           </p>
           <h1 style={{ margin: "6px 0 8px", fontSize: "32px" }}>Customer Lookup</h1>
           <p style={{ margin: 0, color: "#475569", maxWidth: "760px" }}>
-            Search saved customer records, check linked orders, and confirm open balances
-            before starting a quote, collecting payment, or releasing work.
+            Find, open, or create a customer record here. Operational queue detail and financial follow-up live in the workspaces that own them.
           </p>
         </div>
 
@@ -278,61 +232,6 @@ export default function Customers() {
           <span style={{ color: "#64748b", fontWeight: 700 }}>Saved Customers</span>
         </div>
       </div>
-
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "14px",
-          marginBottom: "18px",
-        }}
-      >
-        <article style={summaryCardStyle}>
-          <span style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>
-            Open Production Orders
-          </span>
-          <strong style={{ fontSize: "28px", color: "#171717" }}>{summary.openOrders}</strong>
-          <span style={{ color: "#475569" }}>
-            Active jobs connected to saved customer records.
-          </span>
-        </article>
-
-        <article style={summaryCardStyle}>
-          <span style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>
-            Customers With Balances
-          </span>
-          <strong style={{ fontSize: "28px", color: "#171717" }}>
-            {summary.customersWithBalances}
-          </strong>
-          <span style={{ color: "#475569" }}>
-            Customers with production or counter amounts still due.
-          </span>
-        </article>
-
-        <article style={summaryCardStyle}>
-          <span style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>
-            Outstanding Balance
-          </span>
-          <strong style={{ fontSize: "28px", color: "#171717" }}>
-            {currency(summary.outstandingBalance)}
-          </strong>
-          <span style={{ color: "#475569" }}>
-            Combined open balance across linked orders and counter sales.
-          </span>
-        </article>
-
-        <article style={summaryCardStyle}>
-          <span style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>
-            Counter Sales Today
-          </span>
-          <strong style={{ fontSize: "28px", color: "#171717" }}>
-            {summary.todaysCounterSales}
-          </strong>
-          <span style={{ color: "#475569" }}>
-            Quick sales recorded today for saved customer records.
-          </span>
-        </article>
-      </section>
 
       <div
         style={{
@@ -473,7 +372,7 @@ export default function Customers() {
                   to={`/admin/customers/${customer.id}`}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "minmax(220px, 1.15fr) minmax(180px, 0.9fr) minmax(180px, 0.9fr) minmax(180px, 0.9fr) auto",
+                    gridTemplateColumns: "minmax(220px, 1.4fr) repeat(2, minmax(160px, 0.8fr)) auto",
                     gap: "14px",
                     alignItems: "center",
                     padding: "16px",
@@ -506,9 +405,9 @@ export default function Customers() {
 
                   <div style={{ color: "#475569" }}>
                     <strong style={{ display: "block", color: "#292524", fontSize: "13px" }}>
-                      Payment Visibility
+                      Linked Records
                     </strong>
-                    {currency(customer.balanceDue + customer.counterBalanceDue)} due
+                    {customer.relatedOrders.length} orders
                     <div style={{ color: "#64748b", fontSize: "12px", marginTop: "4px" }}>
                       {customer.relatedSales.length} counter sales
                     </div>
@@ -520,7 +419,7 @@ export default function Customers() {
                     </strong>
                     {formatDate(customer.lastActivityAt)}
                     <div style={{ color: "#64748b", fontSize: "12px", marginTop: "4px" }}>
-                      Sales total {currency(customer.totalSales)}
+                      {customer.openOrders.length} open orders
                     </div>
                   </div>
 

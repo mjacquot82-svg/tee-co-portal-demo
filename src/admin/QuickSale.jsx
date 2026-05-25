@@ -73,10 +73,10 @@ const transactionWorkspaceModes = {
     label: "Payment Items",
     title: "Payment Collection",
     description:
-      "Work only the counter balances that need payment now, including deposits, unpaid invoices, and pickup-blocking balances.",
+      "Collect deposits and balances that are due now.",
     selectionHeading: "Select Payment Items",
     selectionDescription:
-      "Select the exact balances to collect so staff can record payment without sorting through release-only work.",
+      "Select the balances to collect.",
     emptySelectedCustomerMessage:
       "No payment items are due for this customer right now. Deposits and unpaid balances appear here when collection is needed.",
   },
@@ -85,10 +85,10 @@ const transactionWorkspaceModes = {
     label: "Pickup Items",
     title: "Pickup Release",
     description:
-      "Work only release-ready orders so staff can hand off completed jobs without payment-only noise.",
+      "Release completed orders that are ready to hand off.",
     selectionHeading: "Select Pickup Releases",
     selectionDescription:
-      "Select the ready orders being handed to the customer so the release workflow stays fast and unambiguous.",
+      "Select the ready orders being handed to the customer.",
     emptySelectedCustomerMessage:
       "No pickup releases are ready for this customer. Paid, release-ready orders appear here when they can be handed off.",
   },
@@ -97,7 +97,7 @@ const transactionWorkspaceModes = {
     label: "Quick Sale",
     title: "Quick Counter Sale",
     description:
-      "Use the direct walk-in sale workflow for immediate over-the-counter transactions without loading a customer order queue.",
+      "Use the direct walk-in sale flow for immediate over-the-counter transactions.",
   },
 };
 
@@ -427,32 +427,6 @@ function buildCustomerSummary(orders = []) {
   };
 }
 
-function buildCustomerSummaryStatus(summary) {
-  if (!summary.activeOrders) {
-    return {
-      title: "No active customer orders",
-      detail: "No operational work or payment follow-up is currently linked to this customer.",
-      tone: "default",
-    };
-  }
-
-  if (summary.outstandingBalance <= 0) {
-    return {
-      title: "Financially clear, operationally active",
-      detail:
-        "Payment obligations are cleared. Any remaining active orders are still tracked for production, pickup readiness, or release.",
-      tone: "success",
-    };
-  }
-
-  return {
-    title: "Operational work and payment follow-up remain",
-    detail:
-      "Some orders are still active in workflow, and at least one order still has a balance due before financial completion.",
-    tone: "warning",
-  };
-}
-
 function OperationalStat({ label, value, emphasis = "default" }) {
   return (
     <div
@@ -627,10 +601,6 @@ export default function QuickSale() {
     };
   }, [selectedTransactionItems]);
   const customerSummary = useMemo(() => buildCustomerSummary(customerOrders), [customerOrders]);
-  const customerSummaryStatus = useMemo(
-    () => buildCustomerSummaryStatus(customerSummary),
-    [customerSummary]
-  );
   const paymentSelectionKey = `${selectedPaymentSignature}:${Number(transactionSummary.amountDue || 0)}`;
   const paymentAmount =
     selectedTransactionKind !== "payment"
@@ -1324,9 +1294,7 @@ export default function QuickSale() {
                 Front Counter
               </h1>
               <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
-                Move through the counter workflow in sequence: find the customer, choose the
-                payment or pickup action, then complete the transaction without extra workspace
-                noise.
+                Find the customer, select the payment or pickup action, and complete the transaction.
               </p>
             </div>
 
@@ -1343,35 +1311,10 @@ export default function QuickSale() {
               Quick Sale
             </button>
           </div>
-          <div
-            style={{
-              border: "1px solid #e2e8f0",
-              borderRadius: "18px",
-              background: "#ffffffcc",
-              padding: "16px 18px",
-              display: "grid",
-              gap: "6px",
-              maxWidth: "860px",
-            }}
-          >
-            <span
-              style={{
-                color: "#78716c",
-                fontSize: "11px",
-                fontWeight: 800,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-              }}
-            >
-              Active Workflow Mode
-            </span>
-            <strong style={{ color: "#0f172a", fontSize: "20px" }}>
-              {activeWorkspaceMode.title}
-            </strong>
-            <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
-              {activeWorkspaceMode.description}
-            </p>
-          </div>
+          <p style={{ margin: 0, color: "#475569", maxWidth: "860px" }}>
+            <strong style={{ color: "#0f172a" }}>{activeWorkspaceMode.title}.</strong>{" "}
+            {activeWorkspaceMode.description}
+          </p>
         </section>
 
         {activeMode !== "quick-sale" ? (
@@ -1402,24 +1345,11 @@ export default function QuickSale() {
               <aside style={{ display: "grid", gap: "18px" }}>
                 <section style={sectionCardStyle}>
                   <div>
-                    <p
-                      style={{
-                        margin: 0,
-                        color: "#78716c",
-                        fontSize: "12px",
-                        fontWeight: 800,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.08em",
-                      }}
-                    >
-                      Step 1
-                    </p>
-                    <h2 style={{ margin: "6px 0 8px", fontSize: "26px", color: "#0f172a" }}>
+                    <h2 style={{ margin: "0 0 8px", fontSize: "26px", color: "#0f172a" }}>
                       Customer & Transaction Lookup
                     </h2>
                     <p style={{ margin: 0, color: "#64748b", lineHeight: 1.5 }}>
-                      Search by customer, phone, email, company, or order number to start payment,
-                      pickup, or release work without leaving Front Counter.
+                      Search by customer, phone, email, company, or order number.
                     </p>
                   </div>
 
@@ -1663,196 +1593,22 @@ export default function QuickSale() {
                         ) : (
                           <span>No linked order numbers stored yet.</span>
                         )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        border: "1px dashed #cbd5e1",
-                        borderRadius: "18px",
-                        padding: "18px",
-                        color: "#64748b",
-                        background: "#f8fafc",
-                      }}
-                    >
-                      Select a customer first. Financial totals and payment actions stay collapsed
-                      until staff intentionally chooses transaction items.
-                    </div>
-                  )}
-                </section>
-
-                <section style={sectionCardStyle}>
-                  <div>
-                    <p
-                      style={{
-                        margin: 0,
-                        color: "#78716c",
-                        fontSize: "12px",
-                        fontWeight: 800,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.08em",
-                      }}
-                    >
-                      Step 2
-                    </p>
-                    <h2 style={{ margin: "6px 0 8px", fontSize: "24px" }}>Customer Summary</h2>
-                    <p style={{ margin: 0, color: "#64748b" }}>
-                      Review operational workflow state separately from financial status so payment
-                      completion does not read like production closure.
-                    </p>
-                  </div>
-
-                  {selectedCustomer ? (
-                    <>
-                      <div style={{ display: "grid", gap: "14px" }}>
-                        <div
-                          style={{
-                            border: "1px solid #e2e8f0",
-                            borderRadius: "18px",
-                            padding: "14px",
-                            display: "grid",
-                            gap: "12px",
-                            background: "#ffffff",
-                          }}
-                        >
-                          <div>
-                            <span
-                              style={{
-                                color: "#64748b",
-                                fontSize: "11px",
-                                fontWeight: 800,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.06em",
-                              }}
-                            >
-                              Operational State
-                            </span>
-                            <p style={{ margin: "6px 0 0", color: "#475569", fontSize: "14px" }}>
-                              Orders that still require production, pickup, or release handling.
-                            </p>
-                          </div>
-                          <div
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                              gap: "12px",
-                            }}
-                          >
-                            <OperationalStat label="Active Orders" value={customerSummary.activeOrders} />
-                            <OperationalStat label="Pickup Ready" value={customerSummary.pickupReady} />
-                          </div>
-                        </div>
-
-                        <div
-                          style={{
-                            border: "1px solid #e2e8f0",
-                            borderRadius: "18px",
-                            padding: "14px",
-                            display: "grid",
-                            gap: "12px",
-                            background: "#ffffff",
-                          }}
-                        >
-                          <div>
-                            <span
-                              style={{
-                                color: "#64748b",
-                                fontSize: "11px",
-                                fontWeight: 800,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.06em",
-                              }}
-                            >
-                              Financial State
-                            </span>
-                            <p style={{ margin: "6px 0 0", color: "#475569", fontSize: "14px" }}>
-                              Payment completion and remaining customer balance.
-                            </p>
-                          </div>
-                          <div
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                              gap: "12px",
-                            }}
-                          >
-                            <OperationalStat label="Unpaid Orders" value={customerSummary.unpaidBalances} />
-                            <OperationalStat label="Paid Orders" value={customerSummary.paidOrders} />
-                            <div style={{ gridColumn: "1 / -1" }}>
-                              <OperationalStat
-                                label="Outstanding Balance"
-                                value={currency(customerSummary.outstandingBalance)}
-                                emphasis={customerSummary.outstandingBalance > 0 ? "danger" : "success"}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "14px", display: "grid", gap: "8px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                          <span style={{ color: "#475569", fontWeight: 700 }}>Ready for pickup release</span>
-                          <strong style={{ color: "#166534" }}>{customerSummary.releaseReady}</strong>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                          <span style={{ color: "#475569", fontWeight: 700 }}>Awaiting balance before release</span>
-                          <strong style={{ color: "#b45309" }}>{customerSummary.pickupAwaitingPayment}</strong>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                          <span style={{ color: "#475569", fontWeight: 700 }}>Current workflow</span>
-                          <strong style={{ color: "#0f172a" }}>{activeWorkspaceMode.label}</strong>
-                        </div>
-                      </div>
-
-                      <div
-                        style={{
-                          border:
-                            customerSummaryStatus.tone === "success"
-                              ? "1px solid #bbf7d0"
-                              : customerSummaryStatus.tone === "warning"
-                              ? "1px solid #fde68a"
-                              : "1px solid #e2e8f0",
-                          background:
-                            customerSummaryStatus.tone === "success"
-                              ? "#f0fdf4"
-                              : customerSummaryStatus.tone === "warning"
-                              ? "#fffbeb"
-                              : "#f8fafc",
-                          borderRadius: "16px",
-                          padding: "14px 16px",
-                          display: "grid",
-                          gap: "6px",
-                        }}
-                      >
-                        <strong
-                          style={{
-                            color:
-                              customerSummaryStatus.tone === "success"
-                                ? "#166534"
-                                : customerSummaryStatus.tone === "warning"
-                                ? "#92400e"
-                                : "#0f172a",
-                          }}
-                        >
-                          {customerSummaryStatus.title}
-                        </strong>
-                        <span style={{ color: "#475569", lineHeight: 1.5 }}>
-                          {customerSummaryStatus.detail}
+                        <span>
+                          {customerSummary.activeOrders} active orders • {customerSummary.pickupReady} pickup ready • {currency(customerSummary.outstandingBalance)} due
                         </span>
                       </div>
-                    </>
+                    </div>
                   ) : (
                     <div
                       style={{
                         border: "1px dashed #cbd5e1",
                         borderRadius: "18px",
                         padding: "18px",
-                        background: "#f8fafc",
                         color: "#64748b",
+                        background: "#f8fafc",
                       }}
                     >
-                      Customer summary appears here after lookup so staff can choose the next
-                      counter action before any totals are generated.
+                      Select a customer to open payment or pickup items.
                     </div>
                   )}
                 </section>
@@ -1860,19 +1616,7 @@ export default function QuickSale() {
 
               <section style={{ ...sectionCardStyle, minHeight: "520px" }}>
                 <div>
-                  <p
-                    style={{
-                      margin: 0,
-                      color: "#78716c",
-                      fontSize: "12px",
-                      fontWeight: 800,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.08em",
-                    }}
-                  >
-                    Step 3
-                  </p>
-                  <h2 style={{ margin: "6px 0 8px", fontSize: "28px", color: "#0f172a" }}>
+                  <h2 style={{ margin: "0 0 8px", fontSize: "28px", color: "#0f172a" }}>
                     {activeWorkspaceMode.selectionHeading}
                   </h2>
                   <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
@@ -1890,8 +1634,7 @@ export default function QuickSale() {
                       color: "#64748b",
                     }}
                     >
-                      Begin with customer lookup. Transaction items stay hidden until a customer is
-                      selected.
+                      Begin with customer lookup.
                     </div>
                   ) : !visibleSelectableItems.length ? (
                   <div
@@ -2028,23 +1771,11 @@ export default function QuickSale() {
               <aside style={{ display: "grid", gap: "18px" }}>
                 <section style={sectionCardStyle}>
                   <div>
-                    <p
-                      style={{
-                        margin: 0,
-                        color: "#78716c",
-                        fontSize: "12px",
-                        fontWeight: 800,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.08em",
-                      }}
-                    >
-                      Step 4
-                    </p>
-                    <h2 style={{ margin: "6px 0 8px", fontSize: "24px", color: "#0f172a" }}>
+                    <h2 style={{ margin: "0 0 8px", fontSize: "24px", color: "#0f172a" }}>
                       Transaction Summary
                     </h2>
                     <p style={{ margin: 0, color: "#64748b" }}>
-                      Review the active items, total due, and complete the counter action from one place.
+                      Review the active items, total due, and complete the counter action.
                     </p>
                   </div>
 

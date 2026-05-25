@@ -129,27 +129,13 @@ export default function InvoicesPayments() {
         </p>
         <h1 style={{ margin: "8px 0 6px" }}>Invoices & Payments</h1>
         <p style={{ margin: 0, color: "#64748b", maxWidth: "760px" }}>
-          Connected operational billing visibility across quote totals, deposit credits, invoice states, outstanding balances, and payment history.
+          Work the billing queue here: deposits, invoices, balances due, and payment history. Production status and assignment follow-up stay in their own workspaces.
         </p>
       </div>
 
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
-          gap: "12px",
-        }}
-      >
-        <SummaryCard label="Balances Outstanding" value={money(totalOutstanding)} tone="warning" detail={`${unpaidInvoices.length} invoices still open`} />
-        <SummaryCard label="Deposits Applied" value={money(totalDepositsApplied)} detail={`${awaitingDepositInvoices.length} still awaiting deposit`} />
-        <SummaryCard label="Payments Recorded" value={money(totalPaid)} tone="success" detail={`${paidInvoices.length} invoices fully paid`} />
-        <SummaryCard label="Overdue Invoices" value={overdueInvoices.length} tone="danger" detail={overdueInvoices.length ? "Past due and needs follow-up" : "No overdue invoices"} />
-        <SummaryCard label="Partial Payment" value={partiallyPaidInvoices.length} detail={`${statusCounts.collection["Awaiting Final Payment"] || 0} awaiting final payment`} />
-      </section>
-
       <SectionCard
-        title="Operational Billing Queue"
-        description="Scan invoice state, payment stage, deposits credited, and the remaining amount due from one queue."
+        title="Billing Queue"
+        description="One queue for invoice state, payment stage, deposits credited, and amount still due."
       >
         <div
           style={{
@@ -247,86 +233,12 @@ export default function InvoicesPayments() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 1.5fr) minmax(320px, 1fr)",
           gap: "20px",
-          alignItems: "start",
         }}
       >
         <SectionCard
-          title="Connected Balance Visibility"
-          description="Deposit requests, deposit credits, paid-to-date, and final balance all stay visible together so billing follow-up feels continuous."
-        >
-          <div style={{ display: "grid", gap: "12px" }}>
-            {unpaidInvoices.map((order) => (
-              <article
-                key={`continuity-${order.order_number}`}
-                style={{
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "16px",
-                  padding: "16px",
-                  background: "#f8fafc",
-                  display: "grid",
-                  gap: "10px",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-                  <div>
-                    <Link
-                      to={`/admin/orders/${order.order_number}`}
-                      style={{ color: "#0f172a", fontWeight: 800, textDecoration: "none" }}
-                    >
-                      {order.order_number}
-                    </Link>
-                    <p style={{ margin: "4px 0 0", color: "#64748b" }}>{order.customer_name}</p>
-                  </div>
-
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                    <PaymentStatusBadge status={order.invoice_status} />
-                    <PaymentStatusBadge status={order.payment_status} />
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-                    gap: "10px",
-                  }}
-                >
-                  <div>
-                    <p style={{ margin: 0, color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Paid To Date</p>
-                    <strong style={{ display: "block", marginTop: "4px" }}>{money(order.total_paid)}</strong>
-                  </div>
-                  <div>
-                    <p style={{ margin: 0, color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Deposit Applied</p>
-                    <strong style={{ display: "block", marginTop: "4px" }}>{money(order.deposit_applied)}</strong>
-                  </div>
-                  <div>
-                    <p style={{ margin: 0, color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Remaining Balance</p>
-                    <strong style={{ display: "block", marginTop: "4px", color: "#991b1b" }}>{money(order.balance_due)}</strong>
-                  </div>
-                  <div>
-                    <p style={{ margin: 0, color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Next Step</p>
-                    <strong style={{ display: "block", marginTop: "4px" }}>{order.payment_collection_state}</strong>
-                  </div>
-                </div>
-
-                <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "10px" }}>
-                  <p style={{ margin: 0, color: "#0f172a", fontWeight: 700 }}>{order.deposit_credited_message}</p>
-                  <p style={{ margin: "4px 0 0", color: "#64748b" }}>{order.balance_summary}</p>
-                </div>
-              </article>
-            ))}
-
-            {!unpaidInvoices.length ? (
-              <p style={{ margin: 0, color: "#64748b" }}>All invoices are currently settled.</p>
-            ) : null}
-          </div>
-        </SectionCard>
-
-        <SectionCard
           title="Recent Financial History"
-          description="Billing milestones feed the same operational record so deposit requests, invoice issuance, and payments are visible in sequence."
+          description="Recent billing milestones so payment follow-up stays traceable without turning this page into another operations dashboard."
         >
           {!recentFinancialEvents.length ? (
             <p style={{ margin: 0, color: "#94a3b8" }}>No financial history recorded yet.</p>
