@@ -30,6 +30,7 @@ import ArchivedQuotes from "./admin/ArchivedQuotes";
 import CanceledOrders from "./admin/CanceledOrders";
 import QuoteDetail from "./admin/QuoteDetail";
 import InvoicesPayments from "./admin/InvoicesPayments";
+import FinancialHistory from "./admin/FinancialHistory";
 import AppSplash from "./components/AppSplash";
 
 export default function App() {
@@ -65,6 +66,7 @@ export default function App() {
             <Route path="admin/garments" element={<GarmentLibrary />} />
             <Route path="admin/assignments" element={<Assignments />} />
             <Route path="admin/financial" element={<InvoicesPayments />} />
+            <Route path="admin/financial/history" element={<FinancialHistory />} />
 
             <Route path="admin/customers" element={<Customers />} />
             <Route

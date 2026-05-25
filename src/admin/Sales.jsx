@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { formatShortDate } from "../lib/dateFormatting";
 import { getStoredQuickSales } from "../lib/salesStore";
 
 const fieldStyle = {
@@ -21,6 +22,14 @@ const summaryCardStyle = {
   gap: "6px",
 };
 
+const DATE_FILTER_OPTIONS = [
+  { value: "today", label: "Today" },
+  { value: "last7", label: "Last 7 Days" },
+  { value: "thisMonth", label: "This Month" },
+  { value: "lastMonth", label: "Last Month" },
+  { value: "custom", label: "Custom Range" },
+];
+
 function currency(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
@@ -36,11 +45,137 @@ function formatDateTime(value) {
   return date.toLocaleString();
 }
 
+function buildStartOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+}
+
+function buildEndOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+}
+
+function shiftDays(date, amount) {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + amount);
+  return nextDate;
+}
+
+function buildDateRange(filter, customStartDate, customEndDate) {
+  const now = new Date();
+
+  if (filter === "today") {
+    return {
+      start: buildStartOfDay(now),
+      end: buildEndOfDay(now),
+      label: "Today",
+    };
+  }
+
+  if (filter === "last7") {
+    return {
+      start: buildStartOfDay(shiftDays(now, -6)),
+      end: buildEndOfDay(now),
+      label: "Last 7 days",
+    };
+  }
+
+  if (filter === "thisMonth") {
+    return {
+      start: new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0),
+      end: buildEndOfDay(now),
+      label: "This month",
+    };
+  }
+
+  if (filter === "lastMonth") {
+    return {
+      start: new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0),
+      end: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999),
+      label: "Last month",
+    };
+  }
+
+  if (filter === "custom") {
+    const start = customStartDate ? new Date(`${customStartDate}T00:00:00`) : null;
+    const end = customEndDate ? new Date(`${customEndDate}T23:59:59.999`) : null;
+
+    if (start && end && start.getTime() > end.getTime()) {
+      return {
+        start: new Date(`${customEndDate}T00:00:00`),
+        end: new Date(`${customStartDate}T23:59:59.999`),
+        label: "Custom range",
+      };
+    }
+
+    return {
+      start,
+      end,
+      label: "Custom range",
+    };
+  }
+
+  return {
+    start: null,
+    end: null,
+    label: "All recorded history",
+  };
+}
+
+function matchesDateRange(value, range) {
+  if (!range.start && !range.end) return true;
+
+  const timestamp = new Date(value || "").getTime();
+  if (!timestamp) return false;
+
+  if (range.start && timestamp < range.start.getTime()) return false;
+  if (range.end && timestamp > range.end.getTime()) return false;
+  return true;
+}
+
+function buildDateRangeLabel(filter, range, count) {
+  if (filter === "custom") {
+    if (range.start && range.end) {
+      return `${formatShortDate(range.start)} to ${formatShortDate(range.end)}`;
+    }
+    if (range.start) {
+      return `From ${formatShortDate(range.start)}`;
+    }
+    if (range.end) {
+      return `Through ${formatShortDate(range.end)}`;
+    }
+    return count ? "Custom range" : "Set a custom range";
+  }
+
+  return range.label;
+}
+
+function FilterChip({ active, children, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        borderRadius: "999px",
+        border: active ? "1px solid #cbd5e1" : "1px solid #e2e8f0",
+        background: active ? "#f1f5f9" : "#ffffff",
+        color: active ? "#0f172a" : "#475569",
+        padding: "10px 14px",
+        fontWeight: 700,
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function Sales() {
   const [sales, setSales] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [methodFilter, setMethodFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("last7");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
 
   useEffect(() => {
     setSales(getStoredQuickSales());
@@ -51,6 +186,11 @@ export default function Sales() {
       new Set(sales.map((sale) => sale.payment_method).filter(Boolean))
     ).sort((left, right) => left.localeCompare(right));
   }, [sales]);
+
+  const dateRange = useMemo(
+    () => buildDateRange(dateFilter, customStartDate, customEndDate),
+    [customEndDate, customStartDate, dateFilter]
+  );
 
   const filteredSales = useMemo(() => {
     const query = normalize(searchTerm);
@@ -75,10 +215,11 @@ export default function Sales() {
         statusFilter === "all" || sale.payment_status === statusFilter;
       const matchesMethod =
         methodFilter === "all" || sale.payment_method === methodFilter;
+      const matchesTime = matchesDateRange(sale.created_at, dateRange);
 
-      return matchesQuery && matchesStatus && matchesMethod;
+      return matchesQuery && matchesStatus && matchesMethod && matchesTime;
     });
-  }, [methodFilter, sales, searchTerm, statusFilter]);
+  }, [dateRange, methodFilter, sales, searchTerm, statusFilter]);
 
   const summary = useMemo(() => {
     return {
@@ -97,6 +238,24 @@ export default function Sales() {
       ),
     };
   }, [filteredSales]);
+
+  const dateRangeLabel = buildDateRangeLabel(dateFilter, dateRange, filteredSales.length);
+  const hasFilters =
+    searchTerm.trim() ||
+    statusFilter !== "all" ||
+    methodFilter !== "all" ||
+    dateFilter !== "last7" ||
+    customStartDate ||
+    customEndDate;
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setMethodFilter("all");
+    setDateFilter("last7");
+    setCustomStartDate("");
+    setCustomEndDate("");
+  };
 
   return (
     <div
@@ -133,7 +292,7 @@ export default function Sales() {
           </p>
           <h1 style={{ margin: "6px 0 8px" }}>Sales History</h1>
           <p style={{ margin: 0, color: "#64748b", maxWidth: "760px" }}>
-            Review completed counter transactions, partial payments, and production-linked walk-in sales without switching back to the dashboard.
+            Review completed counter transactions, partial payments, and production-linked walk-in sales without turning this workspace into an endless feed.
           </p>
         </div>
 
@@ -168,7 +327,7 @@ export default function Sales() {
             {filteredSales.length}
           </strong>
           <span style={{ color: "#475569" }}>
-            Matching sales in the current history view.
+            {dateRangeLabel} in the current history view.
           </span>
         </article>
 
@@ -228,10 +387,94 @@ export default function Sales() {
           border: "1px solid #e2e8f0",
           padding: "18px",
           display: "grid",
-          gap: "14px",
+          gap: "16px",
           marginBottom: "18px",
         }}
       >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: "16px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "grid", gap: "6px" }}>
+            <strong style={{ color: "#0f172a" }}>Lookup Window</strong>
+            <span style={{ color: "#64748b", fontSize: "14px" }}>
+              Start with time, then narrow with search only when needed.
+            </span>
+          </div>
+
+          {hasFilters ? (
+            <button
+              type="button"
+              onClick={clearFilters}
+              style={{
+                border: "1px solid #e2e8f0",
+                background: "#ffffff",
+                borderRadius: "12px",
+                padding: "10px 12px",
+                fontWeight: 700,
+                color: "#334155",
+                cursor: "pointer",
+              }}
+            >
+              Reset Filters
+            </button>
+          ) : null}
+        </div>
+
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <FilterChip active={dateFilter === "all"} onClick={() => setDateFilter("all")}>
+            All History
+          </FilterChip>
+          {DATE_FILTER_OPTIONS.map((option) => (
+            <FilterChip
+              key={option.value}
+              active={dateFilter === option.value}
+              onClick={() => setDateFilter(option.value)}
+            >
+              {option.label}
+            </FilterChip>
+          ))}
+        </div>
+
+        {dateFilter === "custom" ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 220px))",
+              gap: "12px",
+              alignItems: "end",
+            }}
+          >
+            <label style={{ display: "grid", gap: "6px" }}>
+              <span style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>
+                Start date
+              </span>
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={(event) => setCustomStartDate(event.target.value)}
+                style={fieldStyle}
+              />
+            </label>
+            <label style={{ display: "grid", gap: "6px" }}>
+              <span style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>
+                End date
+              </span>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={(event) => setCustomEndDate(event.target.value)}
+                style={fieldStyle}
+              />
+            </label>
+          </div>
+        ) : null}
+
         <div
           style={{
             display: "grid",
@@ -273,6 +516,25 @@ export default function Sales() {
               </option>
             ))}
           </select>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "12px",
+            flexWrap: "wrap",
+            borderTop: "1px solid #f1f5f9",
+            paddingTop: "14px",
+          }}
+        >
+          <span style={{ color: "#475569", fontWeight: 700 }}>
+            {dateRangeLabel}
+          </span>
+          <span style={{ color: "#64748b", fontSize: "14px" }}>
+            {filteredSales.length} matching transaction{filteredSales.length === 1 ? "" : "s"}
+          </span>
         </div>
       </section>
 
@@ -394,10 +656,22 @@ export default function Sales() {
             </table>
           </div>
         ) : (
-          <div style={{ padding: "24px", color: "#64748b" }}>
-            {sales.length
-              ? "No sales match the current filters."
-              : "No front-counter sales recorded yet."}
+          <div
+            style={{
+              padding: "28px 24px",
+              display: "grid",
+              gap: "10px",
+              color: "#64748b",
+            }}
+          >
+            <strong style={{ color: "#0f172a" }}>
+              {sales.length ? "No sales match this lookup window." : "No front-counter sales recorded yet."}
+            </strong>
+            <span>
+              {sales.length
+                ? "Adjust the time window or filters to widen the history view."
+                : "Completed counter transactions will appear here once the front counter starts recording sales."}
+            </span>
           </div>
         )}
       </section>

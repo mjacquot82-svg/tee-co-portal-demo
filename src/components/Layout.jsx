@@ -173,7 +173,7 @@ function getActiveSidebarLink(pathname, staffUser) {
   if (pathname === "/admin/quotes/archived") return "archivedQuotes";
   if (pathname === "/admin/quotes") return "quotes";
   if (pathname.startsWith("/admin/quotes/")) return pathname === "/admin/quotes/new" ? "newQuote" : "quotes";
-  if (pathname === "/admin/financial") return "financial";
+  if (pathname.startsWith("/admin/financial")) return "financial";
   if (pathname === "/admin/sales") return "counterSales";
   if (pathname === "/admin/sales/new") return "frontCounter";
   if (pathname.startsWith("/admin/sales/receipt/")) {
