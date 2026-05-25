@@ -437,6 +437,7 @@ export default function Products() {
   const [productPendingRemoval, setProductPendingRemoval] = useState(null);
   const [isRemovingProduct, setIsRemovingProduct] = useState(false);
   const [isGarmentPickerOpen, setIsGarmentPickerOpen] = useState(false);
+  const [featuredToggleProductIds, setFeaturedToggleProductIds] = useState([]);
 
   const editingProduct = editingProductId
     ? products.find((product) => product.id === editingProductId) || null
@@ -1326,6 +1327,43 @@ export default function Products() {
     focusEditorNameField();
   }
 
+  async function handleToggleFeatured(product) {
+    const productId = product?.id || null;
+    if (!productId) return;
+
+    const nextFeaturedState = !Boolean(product?.is_featured);
+    setSaveError("");
+    setFeaturedToggleProductIds((current) =>
+      current.includes(productId) ? current : [...current, productId]
+    );
+
+    if (editingProductId === productId) {
+      setForm((current) => ({
+        ...current,
+        is_featured: nextFeaturedState,
+      }));
+    }
+
+    try {
+      await updateStoredProduct(productId, {
+        is_featured: nextFeaturedState,
+      });
+    } catch (error) {
+      console.error("Unable to update featured state", error);
+      if (editingProductId === productId) {
+        setForm((current) => ({
+          ...current,
+          is_featured: Boolean(product?.is_featured),
+        }));
+      }
+      setSaveError("Unable to update featured state right now. Please try again.");
+    } finally {
+      setFeaturedToggleProductIds((current) =>
+        current.filter((currentProductId) => currentProductId !== productId)
+      );
+    }
+  }
+
   async function handleCreateStorefrontCategory() {
     const nextName = normalizeText(newStorefrontCategoryName);
     if (!nextName) return;
@@ -1799,6 +1837,7 @@ export default function Products() {
                     : product?.garment_library_item_id
                       ? "Variants inherited from garment template"
                       : "Single configuration";
+                  const isFeaturedTogglePending = featuredToggleProductIds.includes(product.id);
 
                   console.info("[Products] Rendering customer catalog product card", {
                     index,
@@ -1833,15 +1872,39 @@ export default function Products() {
 
                       <div className="products-card-body">
                         <div className="products-card-topline">
-                          <span className="products-card-category-pill">
-                            {categoryLabel}
-                          </span>
-                          {product?.is_featured ? (
-                            <span className="products-card-meta-pill">Featured</span>
-                          ) : null}
-                          {!statusIsActive ? (
-                            <span className="products-card-meta-pill">Hidden</span>
-                          ) : null}
+                          <div className="products-card-meta-group">
+                            <span className="products-card-category-pill">
+                              {categoryLabel}
+                            </span>
+                            <button
+                              type="button"
+                              className={`products-card-featured-toggle ${
+                                product?.is_featured ? "is-featured" : ""
+                              }`}
+                              onClick={() => handleToggleFeatured(product)}
+                              aria-pressed={Boolean(product?.is_featured)}
+                              aria-label={
+                                product?.is_featured
+                                  ? `Remove ${product?.name || "product"} from featured`
+                                  : `Feature ${product?.name || "product"}`
+                              }
+                              disabled={isFeaturedTogglePending}
+                            >
+                              <span aria-hidden="true">
+                                {product?.is_featured ? "★" : "☆"}
+                              </span>
+                              <span>
+                                {isFeaturedTogglePending
+                                  ? "Saving..."
+                                  : product?.is_featured
+                                    ? "Featured"
+                                    : "Feature"}
+                              </span>
+                            </button>
+                            {!statusIsActive ? (
+                              <span className="products-card-meta-pill">Hidden</span>
+                            ) : null}
+                          </div>
                         </div>
 
                         <div className="products-card-title-block">

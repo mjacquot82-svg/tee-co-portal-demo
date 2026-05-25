@@ -61,7 +61,6 @@ const PRODUCTS_SELECT_FIELDS = [
 const LEGACY_PRODUCTS_SELECT_FIELDS = PRODUCTS_SELECT_FIELDS
   .replace("storefront_category, ", "")
   .replace("storefront_category_lookup_id, ", "")
-  .replace("is_featured, ", "")
   .replace("compare_at_price, ", "")
   .replace("characteristics, ", "")
   .replace("garment_library_item_id, ", "");
@@ -109,7 +108,6 @@ function isLegacyProductSchemaError(error) {
     "garment_library_item_id",
     "storefront_category",
     "storefront_category_lookup_id",
-    "is_featured",
     "compare_at_price",
     "characteristics",
   ].some((columnName) => isMissingProductColumnError(error, columnName));
@@ -591,7 +589,6 @@ function omitGarmentLibraryItemId(record = {}) {
     garment_library_item_id: _GARMENT_LIBRARY_ITEM_ID,
     storefront_category: _STOREFRONT_CATEGORY,
     storefront_category_lookup_id: _STOREFRONT_CATEGORY_LOOKUP_ID,
-    is_featured: _IS_FEATURED,
     compare_at_price: _COMPARE_AT_PRICE,
     characteristics: _CHARACTERISTICS,
     ...legacyRecord
@@ -1063,6 +1060,7 @@ export function getStoredProduct(productId) {
 
 export async function updateStoredProduct(productId, updates) {
   const products = getStoredProducts();
+  const previousProducts = products;
   const hasOwn = (key) => Object.prototype.hasOwnProperty.call(updates, key);
   const nextProducts = products.map((product) => {
     if (product.id !== productId) return product;
@@ -1110,6 +1108,9 @@ export async function updateStoredProduct(productId, updates) {
     return updatedProduct;
   }
 
+  hasLoadedProductsFromSupabase = true;
+  saveStoredProducts(nextProducts);
+
   const payload = buildSupabaseProductRecord(updatedProduct);
   let query = supabase
     .from("products")
@@ -1130,6 +1131,8 @@ export async function updateStoredProduct(productId, updates) {
   }
 
   if (error) {
+    saveStoredProducts(previousProducts);
+    await syncGarmentLinks(previousProducts);
     logSupabaseProductError("Unable to update Tee & Co product in Supabase", error, {
       table: "products",
       action: "update",
@@ -1150,7 +1153,6 @@ export async function updateStoredProduct(productId, updates) {
       updatedProduct
     )
   );
-  hasLoadedProductsFromSupabase = true;
   saveStoredProducts(
     nextProducts.map((product) =>
       product.id === productId ? normalizedUpdatedProduct : product

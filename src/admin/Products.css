@@ -1405,6 +1405,13 @@
   gap: 10px;
 }
 
+.products-card-meta-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .products-card-category-pill,
 .products-card-meta-pill {
   display: inline-flex;
@@ -1516,6 +1523,46 @@
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   color: #475569;
+}
+
+.products-card-featured-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0 12px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.products-card-featured-toggle:hover:not(:disabled) {
+  border-color: #f1c76d;
+  color: #8a4b08;
+  transform: translateY(-1px);
+}
+
+.products-card-featured-toggle.is-featured {
+  background: #fff7d6;
+  border-color: #f3c768;
+  color: #8a4b08;
+  box-shadow: inset 0 0 0 1px rgba(243, 199, 104, 0.2);
+}
+
+.products-card-featured-toggle:disabled {
+  cursor: wait;
+  opacity: 0.72;
+  transform: none;
 }
 
 .products-card-meta-pill-emphasis {
