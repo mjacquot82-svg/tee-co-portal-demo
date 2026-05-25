@@ -114,6 +114,21 @@ function isLegacyProductSchemaError(error) {
   ].some((columnName) => isMissingProductColumnError(error, columnName));
 }
 
+const LEGACY_OPTIONAL_PRODUCT_COLUMNS = [
+  "garment_library_item_id",
+  "storefront_category",
+  "storefront_category_lookup_id",
+  "compare_at_price",
+  "characteristics",
+  "is_featured",
+];
+
+function getMissingProductColumns(error) {
+  return LEGACY_OPTIONAL_PRODUCT_COLUMNS.filter((columnName) =>
+    isMissingProductColumnError(error, columnName)
+  );
+}
+
 function isUuidLike(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(value || "").trim()
@@ -703,16 +718,27 @@ function normalizeSupabaseProduct(product = {}) {
   });
 }
 
-function omitGarmentLibraryItemId(record = {}) {
-  const {
-    garment_library_item_id: _GARMENT_LIBRARY_ITEM_ID,
-    storefront_category: _STOREFRONT_CATEGORY,
-    storefront_category_lookup_id: _STOREFRONT_CATEGORY_LOOKUP_ID,
-    compare_at_price: _COMPARE_AT_PRICE,
-    characteristics: _CHARACTERISTICS,
-    ...legacyRecord
-  } = record;
-  return legacyRecord;
+function omitUnsupportedProductFields(record = {}, error = null) {
+  const missingColumns = getMissingProductColumns(error);
+  const omittedColumns = missingColumns.length
+    ? missingColumns
+    : [
+        "garment_library_item_id",
+        "storefront_category",
+        "storefront_category_lookup_id",
+        "compare_at_price",
+        "characteristics",
+      ];
+
+  const legacyRecord = { ...record };
+  omittedColumns.forEach((columnName) => {
+    delete legacyRecord[columnName];
+  });
+
+  return {
+    legacyRecord,
+    omittedColumns,
+  };
 }
 
 async function queryInsertedProductRow(productId, options = {}) {
@@ -1055,19 +1081,27 @@ export async function createStoredProduct(productInput) {
   });
 
   if (error && isLegacyProductSchemaError(error)) {
+    const { legacyRecord, omittedColumns } = omitUnsupportedProductFields(payload, error);
     console.warn(
-      "[StorefrontCreateVerification] insert fallback triggered because storefront category fields are unavailable"
+      "[StorefrontCreateVerification] insert fallback triggered because optional storefront product columns are unavailable",
+      {
+        missingColumns: getMissingProductColumns(error),
+        omittedColumns,
+        originalPayload: payload,
+        legacyFallbackPayload: legacyRecord,
+      }
     );
     query = supabase
       .from("products")
-      .insert(omitGarmentLibraryItemId(payload))
+      .insert(legacyRecord)
       .select(LEGACY_PRODUCTS_SELECT_FIELDS)
       .single();
     ({ data, error } = await query);
     console.info("[StorefrontCreateVerification] step-4 exact Supabase insert response", {
       verificationStep: "step-4 exact Supabase insert response",
       usedLegacyInsertFallback: true,
-      insertPayload: omitGarmentLibraryItemId(payload),
+      insertPayload: legacyRecord,
+      omittedColumns,
       insertResponseData: data,
       insertResponseError: error
         ? buildSupabaseProductErrorDetails(error, {
@@ -1184,6 +1218,11 @@ export function getStoredProduct(productId) {
 export async function updateStoredProduct(productId, updates) {
   const products = getStoredProducts();
   const previousProducts = products;
+  console.info("[productsStore] updateStoredProduct called", {
+    productId,
+    updates,
+    previousProducts: safeProductsSnapshot(previousProducts),
+  });
   const hasOwn = (key) => Object.prototype.hasOwnProperty.call(updates, key);
   const nextProducts = products.map((product) => {
     if (product.id !== productId) return product;
@@ -1233,11 +1272,32 @@ export async function updateStoredProduct(productId, updates) {
 
   hasLoadedProductsFromSupabase = true;
   saveStoredProducts(nextProducts);
+  console.info("[productsStore] Optimistic storefront product update applied", {
+    productId,
+    updatedProduct: buildProductDebugSummary(updatedProduct),
+    optimisticProducts: safeProductsSnapshot(nextProducts),
+  });
 
   const payload = buildSupabaseProductUpdateRecord(updatedProduct, updates);
   const primaryFilterColumn = isUuidLike(productId) ? "id" : "legacy_product_id";
   let usedLegacySelect = false;
   let usedLegacyFilter = false;
+  console.info("[productsStore] Prepared Supabase storefront product update payload", {
+    productId,
+    primaryFilterColumn,
+    payload,
+    payloadSummary: buildProductDebugSummary(payload),
+    updates,
+    includesFeaturedField: Object.prototype.hasOwnProperty.call(payload, "is_featured"),
+    includesStorefrontCategoryField: Object.prototype.hasOwnProperty.call(
+      payload,
+      "storefront_category"
+    ),
+    includesStorefrontCategoryLookupIdField: Object.prototype.hasOwnProperty.call(
+      payload,
+      "storefront_category_lookup_id"
+    ),
+  });
   let query = supabase
     .from("products")
     .update(payload)
@@ -1245,28 +1305,95 @@ export async function updateStoredProduct(productId, updates) {
     .select(PRODUCTS_SELECT_FIELDS)
     .maybeSingle();
   let { data, error } = await query;
+  console.info("[productsStore] Primary Supabase storefront product update response", {
+    productId,
+    data,
+    error: error
+      ? buildSupabaseProductErrorDetails(error, {
+          table: "products",
+          action: "update",
+          productId,
+          select: PRODUCTS_SELECT_FIELDS,
+          payload,
+        })
+      : null,
+  });
 
   if (error && isLegacyProductSchemaError(error)) {
     usedLegacySelect = true;
+    const { legacyRecord, omittedColumns } = omitUnsupportedProductFields(payload, error);
+    console.warn("[productsStore] Legacy product schema fallback triggered for update", {
+      productId,
+      missingColumns: getMissingProductColumns(error),
+      omittedColumns,
+      originalPayload: payload,
+      legacyFallbackPayload: legacyRecord,
+    });
     query = supabase
       .from("products")
-      .update(omitGarmentLibraryItemId(payload))
+      .update(legacyRecord)
       .eq(isUuidLike(productId) ? "id" : "legacy_product_id", productId)
       .select(LEGACY_PRODUCTS_SELECT_FIELDS)
       .maybeSingle();
     ({ data, error } = await query);
+    console.info("[productsStore] Legacy-select storefront product update response", {
+      productId,
+      omittedColumns,
+      data,
+      error: error
+        ? buildSupabaseProductErrorDetails(error, {
+            table: "products",
+            action: "update",
+            productId,
+            select: LEGACY_PRODUCTS_SELECT_FIELDS,
+            payload: legacyRecord,
+          })
+        : null,
+    });
   }
 
   if ((!data && !error) || error) {
     usedLegacyFilter = true;
     const fallbackFilterColumn = isUuidLike(productId) ? "legacy_product_id" : "id";
+    const { legacyRecord, omittedColumns } = omitUnsupportedProductFields(payload, error);
+    const fallbackPayload = usedLegacySelect ? legacyRecord : payload;
+    console.warn("[productsStore] Fallback storefront product update filter triggered", {
+      productId,
+      fallbackFilterColumn,
+      usedLegacySelect,
+      usedLegacyFilter,
+      omittedColumns,
+      fallbackPayload,
+      currentError: error
+        ? buildSupabaseProductErrorDetails(error, {
+            table: "products",
+            action: "update",
+            productId,
+            payload,
+          })
+        : null,
+    });
     query = supabase
       .from("products")
-      .update(usedLegacySelect ? omitGarmentLibraryItemId(payload) : payload)
+      .update(fallbackPayload)
       .eq(fallbackFilterColumn, productId)
       .select(usedLegacySelect ? LEGACY_PRODUCTS_SELECT_FIELDS : PRODUCTS_SELECT_FIELDS)
       .maybeSingle();
     const fallbackResult = await query;
+    console.info("[productsStore] Fallback storefront product update response", {
+      productId,
+      fallbackFilterColumn,
+      data: fallbackResult?.data || null,
+      error: fallbackResult?.error
+        ? buildSupabaseProductErrorDetails(fallbackResult.error, {
+            table: "products",
+            action: "update",
+            productId,
+            payload: fallbackPayload,
+            filterColumn: fallbackFilterColumn,
+          })
+        : null,
+    });
 
     if (fallbackResult?.data || (!fallbackResult?.error && !data)) {
       data = fallbackResult.data;
@@ -1278,9 +1405,30 @@ export async function updateStoredProduct(productId, updates) {
 
   if (!error && !data) {
     data = await fetchUpdatedProductAfterWrite(productId, updatedProduct);
+    console.info("[productsStore] Post-update verification fetch result", {
+      productId,
+      data,
+    });
   }
 
   if (error || !data) {
+    console.error("[productsStore] Rolling back storefront product update", {
+      productId,
+      rollbackTriggered: true,
+      error: error
+        ? buildSupabaseProductErrorDetails(error, {
+            table: "products",
+            action: "update",
+            productId,
+            payload,
+            usedLegacySelect,
+            usedLegacyFilter,
+          })
+        : {
+            message: "Updated product row was not returned from Supabase.",
+          },
+      previousProducts: safeProductsSnapshot(previousProducts),
+    });
     saveStoredProducts(previousProducts);
     await syncGarmentLinks(previousProducts);
     logSupabaseProductError("Unable to update Tee & Co product in Supabase", error, {
@@ -1310,6 +1458,13 @@ export async function updateStoredProduct(productId, updates) {
       product.id === productId ? normalizedUpdatedProduct : product
     )
   );
+  console.info("[productsStore] Storefront product update persisted successfully", {
+    productId,
+    persistedProduct: buildProductDebugSummary(normalizedUpdatedProduct),
+    usedLegacySelect,
+    usedLegacyFilter,
+    returnedRow: data,
+  });
   await syncGarmentLinks(
     nextProducts.map((product) =>
       product.id === productId ? normalizedUpdatedProduct : product

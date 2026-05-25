@@ -1332,6 +1332,13 @@ export default function Products() {
     if (!productId) return;
 
     const nextFeaturedState = !product?.is_featured;
+    console.info("[Products] Featured toggle requested", {
+      productId,
+      productName: product?.name || "",
+      currentFeaturedState: Boolean(product?.is_featured),
+      nextFeaturedState,
+      product,
+    });
     setSaveError("");
     setFeaturedToggleProductIds((current) =>
       current.includes(productId) ? current : [...current, productId]
@@ -1348,8 +1355,19 @@ export default function Products() {
       await updateStoredProduct(productId, {
         is_featured: nextFeaturedState,
       });
+      console.info("[Products] Featured toggle persisted", {
+        productId,
+        nextFeaturedState,
+      });
     } catch (error) {
       console.error("Unable to update featured state", error);
+      console.error("[Products] Featured toggle persistence failed", {
+        productId,
+        attemptedFeaturedState: nextFeaturedState,
+        rollbackFeaturedState: Boolean(product?.is_featured),
+        errorMessage: error?.message || "",
+        error,
+      });
       if (editingProductId === productId) {
         setForm((current) => ({
           ...current,
@@ -1483,17 +1501,17 @@ export default function Products() {
     const resolvedProductType = isManualProductMode
       ? "Manual Product"
       : resolveStructuredProductType(garmentModel, form.product_type, form.name);
-    const resolvedSupplierCategoryName = isManualProductMode
-      ? "Manual"
-      : category?.name || form.category || "Catalog";
+    const resolvedSupplierCategoryName = category?.name || form.category || "Catalog";
     const resolvedStorefrontCategoryName = storefrontCategory?.name || "";
+    const resolvedManualCategoryName =
+      resolvedStorefrontCategoryName || normalizeText(form.category) || "Catalog";
 
     const productPayload = {
       name: normalizeText(form.name),
       garment_library_item_id: isManualProductMode
         ? null
         : selectedGarmentItem?.id || form.selectedGarmentLibraryId || null,
-      category: resolvedSupplierCategoryName,
+      category: isManualProductMode ? resolvedManualCategoryName : resolvedSupplierCategoryName,
       storefront_category: resolvedStorefrontCategoryName || null,
       category_lookup_id: isManualProductMode ? null : category?.id || form.category_lookup_id || null,
       storefront_category_lookup_id: storefrontCategory?.lookupId || null,
