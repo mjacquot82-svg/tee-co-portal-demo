@@ -45,6 +45,10 @@ import {
   sortSizesByLookup,
   uniqueList,
 } from "./catalogShared";
+import {
+  getProductCharacteristics,
+  summarizeCharacteristics,
+} from "../products/productCharacteristics";
 
 const COMMON_PLACEMENT_OPTIONS = [
   "Left Chest",
@@ -78,6 +82,7 @@ const emptyProduct = {
   image: "",
   visibleVariants: [],
   sizes: [],
+  characteristics: [],
   notes: "",
   status: "Active",
   placementsText: "",
@@ -94,6 +99,17 @@ const emptyProduct = {
   product_type: "",
   brand_model: "",
 };
+
+function createEmptyCharacteristic() {
+  return {
+    name: "",
+    values: [],
+  };
+}
+
+function getCharacteristicValueInputKey(index) {
+  return `characteristic-${index}`;
+}
 
 function isOneSizeOnly(values = []) {
   return values.length === 1 && normalizeTextKey(values[0]) === "one size";
@@ -260,6 +276,7 @@ function buildFormFromGarmentDraft(
     image: item?.image || "",
     visibleVariants: getVariantOptions(item).map((variant) => variant.name),
     sizes: sortSizesByLookup(item?.sizes || [], sizeLookups),
+    characteristics: [],
     flat_price: normalizeText(prefilledStorefrontSetup?.flat_price),
     placementsText: defaultPlacements.join(", "),
     placementPriceMap: buildPlacementPriceMap(defaultPlacements, {}),
@@ -324,6 +341,7 @@ function buildFormFromProduct(
         : String(product.base_garment_price),
     visibleVariants: Array.isArray(product?.colors) ? uniqueList(product.colors) : [],
     sizes: sortSizesByLookup(Array.isArray(product?.sizes) ? product.sizes : [], sizeLookups),
+    characteristics: getProductCharacteristics(product),
     placementsText: placements.join(", "),
     placementPriceMap: buildPlacementPriceMap(placements, product?.placement_prices || {}),
     production_methods: productionMethods,
@@ -406,6 +424,7 @@ export default function Products() {
   const [isCreatingStorefrontCategory, setIsCreatingStorefrontCategory] = useState(false);
   const [isCreatingBrand, setIsCreatingBrand] = useState(false);
   const [localStorefrontCategories, setLocalStorefrontCategories] = useState([]);
+  const [characteristicValueDrafts, setCharacteristicValueDrafts] = useState({});
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [creationNotice, setCreationNotice] = useState("");
@@ -835,6 +854,7 @@ export default function Products() {
 
   function resetForm() {
     setForm(emptyProduct);
+    setCharacteristicValueDrafts({});
     setEditingProductId(null);
     setCreationNotice("");
     setHighlightedProductIds([]);
@@ -864,6 +884,7 @@ export default function Products() {
       productMode,
       product_type: productMode === PRODUCT_MODES.MANUAL ? "Manual Product" : "",
     });
+    setCharacteristicValueDrafts({});
     setEditingProductId(null);
     setCreationNotice("");
     setHighlightedProductIds([]);
@@ -904,6 +925,7 @@ export default function Products() {
     setSaveError("");
     setCreationNotice("");
     setHighlightedProductIds([]);
+    setCharacteristicValueDrafts({});
     setIsGarmentPickerOpen(productMode === PRODUCT_MODES.APPAREL && !form.selectedGarmentLibraryId);
     setForm((current) => {
       if (productMode === current.productMode) {
@@ -918,6 +940,7 @@ export default function Products() {
           garmentSearch: "",
           visibleVariants: [],
           sizes: [],
+          characteristics: current.characteristics?.length ? current.characteristics : [],
           garment_model_lookup_id: "",
           category_lookup_id: "",
           category: "Manual",
@@ -930,6 +953,7 @@ export default function Products() {
       return {
         ...current,
         productMode,
+        characteristics: [],
         category: current.category === "Manual" ? "" : current.category,
         product_type: current.product_type === "Manual Product" ? "" : current.product_type,
       };
@@ -976,6 +1000,7 @@ export default function Products() {
       image: current.image || item.image || "",
       visibleVariants: getVariantOptions(item).map((variant) => variant.name),
       sizes: sortSizesByLookup(item.sizes || [], sizes),
+      characteristics: [],
       category: supplierCategory?.name || current.category || "",
       category_lookup_id: item.category_lookup_id || current.category_lookup_id || "",
       storefront_category_lookup_id:
@@ -1135,6 +1160,82 @@ export default function Products() {
     });
   }
 
+  function addCharacteristic() {
+    setForm((current) => ({
+      ...current,
+      characteristics: [...(Array.isArray(current.characteristics) ? current.characteristics : []), createEmptyCharacteristic()],
+    }));
+  }
+
+  function updateCharacteristicName(index, value) {
+    setForm((current) => ({
+      ...current,
+      characteristics: (current.characteristics || []).map((characteristic, characteristicIndex) =>
+        characteristicIndex === index
+          ? {
+              ...characteristic,
+              name: value,
+            }
+          : characteristic
+      ),
+    }));
+  }
+
+  function removeCharacteristic(index) {
+    setForm((current) => ({
+      ...current,
+      characteristics: (current.characteristics || []).filter(
+        (_, characteristicIndex) => characteristicIndex !== index
+      ),
+    }));
+    setCharacteristicValueDrafts((current) => {
+      const nextDrafts = { ...current };
+      delete nextDrafts[getCharacteristicValueInputKey(index)];
+      return nextDrafts;
+    });
+  }
+
+  function updateCharacteristicValueDraft(index, value) {
+    setCharacteristicValueDrafts((current) => ({
+      ...current,
+      [getCharacteristicValueInputKey(index)]: value,
+    }));
+  }
+
+  function addCharacteristicValue(index, rawValue) {
+    const normalizedValue = normalizeText(rawValue);
+    if (!normalizedValue) return;
+
+    setForm((current) => ({
+      ...current,
+      characteristics: (current.characteristics || []).map((characteristic, characteristicIndex) =>
+        characteristicIndex === index
+          ? {
+              ...characteristic,
+              values: uniqueList([...(characteristic.values || []), normalizedValue]),
+            }
+          : characteristic
+      ),
+    }));
+    updateCharacteristicValueDraft(index, "");
+  }
+
+  function removeCharacteristicValue(index, value) {
+    setForm((current) => ({
+      ...current,
+      characteristics: (current.characteristics || []).map((characteristic, characteristicIndex) =>
+        characteristicIndex === index
+          ? {
+              ...characteristic,
+              values: (characteristic.values || []).filter(
+                (existingValue) => normalizeTextKey(existingValue) !== normalizeTextKey(value)
+              ),
+            }
+          : characteristic
+      ),
+    }));
+  }
+
   function togglePlacement(placementName) {
     setForm((current) => {
       const nextPlacements = normalizeListInput(current.placementsText);
@@ -1198,6 +1299,7 @@ export default function Products() {
     setEditingProductId(product.id);
     setIsEditorOpen(true);
     setIsGarmentPickerOpen(!product?.garment_library_item_id);
+    setCharacteristicValueDrafts({});
     setForm(
       buildFormFromProduct(
         product,
@@ -1355,6 +1457,7 @@ export default function Products() {
         : garmentModel?.id || form.garment_model_lookup_id || null,
       image: form.image,
       status: form.status,
+      characteristics: isManualProductMode ? getProductCharacteristics(form) : [],
       colors: isManualProductMode ? [] : uniqueList(form.visibleVariants),
       sizes: selectedSizes,
       placements,
@@ -1641,15 +1744,26 @@ export default function Products() {
                   const statusIsActive = normalizeStatusValue(product?.status) === "active";
                   const colorCount = Array.isArray(product?.colors) ? product.colors.length : 0;
                   const sizeCount = Array.isArray(product?.sizes) ? product.sizes.length : 0;
+                  const characteristicSummary = summarizeCharacteristics(
+                    getProductCharacteristics(product)
+                  );
                   const categoryLabel =
                     normalizeText(storefrontCategory?.name) || "Uncategorized";
                   const variantSummaryParts = [];
 
-                  if (colorCount) {
+                  if (!product?.garment_library_item_id && characteristicSummary.length) {
+                    variantSummaryParts.push(
+                      `${characteristicSummary.length} characteristic${
+                        characteristicSummary.length === 1 ? "" : "s"
+                      }`
+                    );
+                  }
+
+                  if (product?.garment_library_item_id && colorCount) {
                     variantSummaryParts.push(`${colorCount} color${colorCount === 1 ? "" : "s"}`);
                   }
 
-                  if (sizeCount) {
+                  if (product?.garment_library_item_id && sizeCount) {
                     variantSummaryParts.push(`${sizeCount} size${sizeCount === 1 ? "" : "s"}`);
                   }
 
@@ -1717,6 +1831,15 @@ export default function Products() {
                           <p className="products-card-subtitle">
                             {variantSummary}
                           </p>
+                          {!product?.garment_library_item_id && characteristicSummary.length ? (
+                            <div className="products-card-characteristics">
+                              {characteristicSummary.map((summary) => (
+                                <span key={summary} className="products-card-characteristic-pill">
+                                  {summary}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
                           {product?.notes ? (
                             <p className="products-card-description">{product.notes}</p>
                           ) : null}
@@ -2168,6 +2291,112 @@ export default function Products() {
                     />
                   )
                 ) : null}
+              </div>
+            </section>
+          ) : null}
+
+          {isManualProductMode ? (
+            <section className="products-editor-section">
+              <div className="products-section-header">
+                <div>
+                  <p className="products-section-step">Options</p>
+                  <h2>Characteristics</h2>
+                </div>
+                <p>Add shopper-friendly choices like flavor, scent, finish, size, or capacity only when this product needs them.</p>
+              </div>
+
+              <div className="products-characteristics-panel">
+                {form.characteristics.length ? (
+                  form.characteristics.map((characteristic, index) => {
+                    const draftKey = getCharacteristicValueInputKey(index);
+                    const draftValue = characteristicValueDrafts[draftKey] || "";
+
+                    return (
+                      <div key={draftKey} className="products-characteristic-card">
+                        <div className="products-characteristic-header">
+                          <label style={labelStyle} className="products-characteristic-name-field">
+                            Characteristic Name
+                            <input
+                              value={characteristic.name}
+                              onChange={(event) => updateCharacteristicName(index, event.target.value)}
+                              placeholder="Flavor"
+                              style={fieldStyle}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className="products-inline-action"
+                            onClick={() => removeCharacteristic(index)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+
+                        <div className="products-characteristic-values">
+                          {(characteristic.values || []).length ? (
+                            <div className="products-characteristic-chip-row">
+                              {characteristic.values.map((value) => (
+                                <button
+                                  key={`${draftKey}-${value}`}
+                                  type="button"
+                                  className="products-characteristic-chip"
+                                  onClick={() => removeCharacteristicValue(index, value)}
+                                  title={`Remove ${value}`}
+                                >
+                                  <span>{value}</span>
+                                  <strong aria-hidden="true">×</strong>
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="products-field-hint">
+                              No values yet. Add tags below for the choices shoppers can pick from.
+                            </p>
+                          )}
+
+                          <div className="products-characteristic-input-row">
+                            <input
+                              value={draftValue}
+                              onChange={(event) => updateCharacteristicValueDraft(index, event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === ",") {
+                                  event.preventDefault();
+                                  addCharacteristicValue(index, draftValue);
+                                }
+                              }}
+                              placeholder="Add a value like Orange or 32 oz"
+                              style={fieldStyle}
+                            />
+                            <button
+                              type="button"
+                              className="products-inline-save"
+                              onClick={() => addCharacteristicValue(index, draftValue)}
+                              disabled={!normalizeText(draftValue)}
+                            >
+                              Add Value
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="products-characteristics-empty-state">
+                    <strong>No characteristics added</strong>
+                    <p>This manual product can stay simple, or you can add shopper choices like scent, finish, flavor, or bottle size.</p>
+                  </div>
+                )}
+
+                <div className="products-characteristics-footer">
+                  <button
+                    type="button"
+                    className="products-secondary-button"
+                    onClick={addCharacteristic}
+                  >
+                    Add Characteristic
+                  </button>
+                  <span>Optional. Manual products can have zero, one, or many characteristics.</span>
+                </div>
               </div>
             </section>
           ) : null}

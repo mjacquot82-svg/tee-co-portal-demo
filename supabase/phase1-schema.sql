@@ -92,6 +92,7 @@ create table if not exists public.products (
   garment_model_lookup_id uuid references public.garment_models(id) on delete set null,
   status text not null default 'Active',
   image text default '',
+  characteristics jsonb not null default '[]'::jsonb,
   colors jsonb not null default '[]'::jsonb,
   sizes jsonb not null default '[]'::jsonb,
   placements jsonb not null default '[]'::jsonb,

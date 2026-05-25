@@ -808,6 +808,93 @@
   color: #ffffff;
 }
 
+.products-characteristics-panel,
+.products-characteristic-card,
+.products-characteristic-values {
+  display: grid;
+  gap: 12px;
+}
+
+.products-characteristic-card {
+  border: 1px solid #dbe4ee;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.products-characteristic-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.products-characteristic-name-field {
+  flex: 1 1 260px;
+}
+
+.products-characteristic-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.products-characteristic-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.products-characteristic-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  color: #0f172a;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.products-characteristic-chip strong {
+  font-size: 14px;
+  line-height: 1;
+  color: #64748b;
+}
+
+.products-characteristics-empty-state {
+  border: 1px dashed #cbd5e1;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.products-characteristics-empty-state strong {
+  color: #0f172a;
+}
+
+.products-characteristics-empty-state p,
+.products-characteristics-footer span {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.products-characteristics-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .products-selection-chip strong {
   font-size: 14px;
   line-height: 1;
@@ -1293,6 +1380,25 @@
   margin: 0;
   color: #64748b;
   font-size: 14px;
+}
+
+.products-card-characteristics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.products-card-characteristic-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #dbe4ee;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #334155;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .products-card-description {
@@ -2645,6 +2751,16 @@
   }
 
   .products-card-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .products-characteristic-header,
+  .products-characteristics-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .products-characteristic-input-row {
     grid-template-columns: 1fr;
   }
 

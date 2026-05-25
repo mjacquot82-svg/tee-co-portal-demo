@@ -11,6 +11,7 @@ import {
   supabaseConfig,
   supabaseDiagnostics,
 } from "./supabaseClient";
+import { getProductCharacteristics } from "../products/productCharacteristics";
 
 const STORAGE_KEY = "teeCoProducts";
 const EMPTY_PRODUCTS = [];
@@ -39,6 +40,7 @@ const PRODUCTS_SELECT_FIELDS = [
   "garment_model_lookup_id",
   "status",
   "image",
+  "characteristics",
   "colors",
   "sizes",
   "placements",
@@ -59,6 +61,7 @@ const LEGACY_PRODUCTS_SELECT_FIELDS = PRODUCTS_SELECT_FIELDS
   .replace("storefront_category, ", "")
   .replace("storefront_category_lookup_id, ", "")
   .replace("compare_at_price, ", "")
+  .replace("characteristics, ", "")
   .replace("garment_library_item_id, ", "");
 
 function buildSupabaseProductErrorDetails(error, extra = {}) {
@@ -105,6 +108,7 @@ function isLegacyProductSchemaError(error) {
     "storefront_category",
     "storefront_category_lookup_id",
     "compare_at_price",
+    "characteristics",
   ].some((columnName) => isMissingProductColumnError(error, columnName));
 }
 
@@ -361,6 +365,7 @@ function normalizeProduct(product) {
     storefront_category_lookup_id: product.storefront_category_lookup_id || null,
     garment_library_item_id:
       product.garment_library_item_id || product.garment_library_id || null,
+    characteristics: getProductCharacteristics(product),
     product_type: product.product_type || product.type || product.name || "General",
     cost_price: costPrice,
     markup_percentage: markupPercentage,
@@ -430,6 +435,7 @@ function buildProductDebugSummary(product = {}) {
     category: product?.category || "",
     storefront_category: product?.storefront_category || "",
     garment_library_item_id: product?.garment_library_item_id || null,
+    characteristicCount: Array.isArray(product?.characteristics) ? product.characteristics.length : 0,
     colorCount: Array.isArray(product?.colors) ? product.colors.length : 0,
     sizeCount: Array.isArray(product?.sizes) ? product.sizes.length : 0,
     price: product?.unit_price ?? product?.base_garment_price ?? null,
@@ -514,6 +520,7 @@ function buildSupabaseProductRecord(product = {}, options = {}) {
     garment_model_lookup_id: product.garment_model_lookup_id || null,
     status: normalizedStatus,
     image: product.image || "",
+    characteristics: getProductCharacteristics(product),
     colors: normalizeList(product.colors),
     sizes: normalizeList(product.sizes),
     placements: normalizeList(product.placements),
@@ -579,6 +586,7 @@ function omitGarmentLibraryItemId(record = {}) {
     storefront_category: _STOREFRONT_CATEGORY,
     storefront_category_lookup_id: _STOREFRONT_CATEGORY_LOOKUP_ID,
     compare_at_price: _COMPARE_AT_PRICE,
+    characteristics: _CHARACTERISTICS,
     ...legacyRecord
   } = record;
   return legacyRecord;
@@ -838,6 +846,7 @@ export async function createStoredProduct(productInput) {
   const product = normalizeProduct({
     ...productInput,
     status: buildPersistentStatus(productInput.status),
+    characteristics: getProductCharacteristics(productInput),
     colors: normalizeList(productInput.colors),
     sizes: normalizeList(productInput.sizes),
     placements,
@@ -1070,6 +1079,9 @@ export async function updateStoredProduct(productId, updates) {
       status: hasOwn("status")
         ? buildPersistentStatus(updates.status)
         : buildPersistentStatus(product.status),
+      characteristics: hasOwn("characteristics")
+        ? getProductCharacteristics({ ...product, characteristics: updates.characteristics })
+        : getProductCharacteristics(product),
       colors: hasOwn("colors") ? normalizeList(updates.colors) : product.colors,
       sizes: hasOwn("sizes") ? normalizeList(updates.sizes) : product.sizes,
       placements,

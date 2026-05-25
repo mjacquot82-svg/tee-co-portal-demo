@@ -2,6 +2,10 @@ function normalizeText(value) {
   return String(value || "").trim();
 }
 
+function getCharacteristicCount(product = {}) {
+  return Array.isArray(product?.characteristics) ? product.characteristics.length : 0;
+}
+
 function buildCatalogFieldDiagnostics(product = {}) {
   const resolvedPrice =
     product?.unit_price ??
@@ -26,6 +30,8 @@ function buildCatalogFieldDiagnostics(product = {}) {
     hasStatus: Boolean(normalizeText(product?.status)),
     hasImage: Boolean(normalizeText(product?.image)),
     hasPrice: Number.isFinite(Number(resolvedPrice)) && Number(resolvedPrice) > 0,
+    hasCharacteristics: getCharacteristicCount(product) > 0,
+    characteristicCount: getCharacteristicCount(product),
     hasVariants: Array.isArray(product?.colors) ? product.colors.length > 0 : false,
     hasSizes: Array.isArray(product?.sizes) ? product.sizes.length > 0 : false,
     hasGarmentReference: Boolean(product?.garment_library_item_id),
