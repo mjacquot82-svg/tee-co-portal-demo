@@ -85,6 +85,7 @@ export default function StaffUsers() {
     pin: "",
     role: "Staff",
   });
+  const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
   const [notificationPreview, setNotificationPreview] = useState(
     notificationPreferencePreviewDefaults
   );
@@ -237,6 +238,10 @@ export default function StaffUsers() {
       [key]: !current[key],
     }));
   }
+
+  const enabledNotificationPreviewCount = notificationPreferencePreviewItems.filter(
+    (item) => notificationPreview[item.key]
+  ).length;
 
   return (
     <div style={{ padding: "32px" }}>
@@ -439,132 +444,208 @@ export default function StaffUsers() {
           <div
             style={{
               marginBottom: "20px",
-              padding: "18px",
+              padding: "14px 16px",
               borderRadius: "16px",
-              border: "1px solid #cbd5e1",
-              background:
-                "linear-gradient(180deg, rgba(248,250,252,1) 0%, rgba(255,255,255,1) 100%)",
-              boxShadow: "0 10px 24px rgba(15, 23, 42, 0.04)",
+              border: isNotificationPanelOpen ? "1px solid #cbd5e1" : "1px solid #e2e8f0",
+              background: isNotificationPanelOpen ? "#f8fafc" : "#fcfcfd",
             }}
           >
-            <div
+            <button
+              type="button"
+              onClick={() => setIsNotificationPanelOpen((current) => !current)}
+              aria-expanded={isNotificationPanelOpen}
+              aria-controls="operational-notification-settings-panel"
               style={{
                 display: "flex",
                 justifyContent: "space-between",
                 gap: "12px",
-                alignItems: "flex-start",
+                alignItems: "center",
                 flexWrap: "wrap",
-                marginBottom: "10px",
+                width: "100%",
+                padding: 0,
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                textAlign: "left",
               }}
             >
-              <div>
+              <div style={{ display: "grid", gap: "4px" }}>
                 <p
                   style={{
-                    margin: "0 0 6px",
+                    margin: 0,
                     fontSize: "12px",
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
                     color: "#78716c",
                   }}
                 >
-                  Notification Preferences
+                  Advanced Settings
                 </p>
-                <h2 style={{ margin: 0, fontSize: "20px", color: "#171717" }}>
-                  Operational notification customization
+                <h2 style={{ margin: 0, fontSize: "17px", color: "#171717" }}>
+                  Operational Notification Settings
                 </h2>
+                <p style={{ margin: 0, color: "#64748b", fontSize: "13px", lineHeight: 1.45 }}>
+                  Preview owner/admin notification preferences without interrupting staff
+                  management.
+                </p>
               </div>
 
-              <span
+              <div
                 style={{
-                  display: "inline-flex",
+                  display: "flex",
                   alignItems: "center",
-                  padding: "6px 10px",
-                  borderRadius: "999px",
-                  background: "#fff7ed",
-                  border: "1px solid #fed7aa",
-                  color: "#9a3412",
-                  fontSize: "11px",
-                  fontWeight: 900,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
+                  gap: "10px",
+                  marginLeft: "auto",
+                  flexWrap: "wrap",
+                  justifyContent: "flex-end",
                 }}
               >
-                Coming Soon
-              </span>
-            </div>
-
-            <p style={{ margin: "0 0 10px", color: "#475569", lineHeight: 1.5, fontSize: "14px" }}>
-              Pilot-stage preview of future owner/admin operational notification settings.
-              This establishes which workflow events will likely become configurable later
-              without introducing delivery systems or saved preferences yet.
-            </p>
-
-            <p style={{ margin: "0 0 16px", color: "#64748b", lineHeight: 1.5, fontSize: "13px" }}>
-              Preview only. These toggles are not saved and do not send email, SMS, push, or
-              in-app notifications yet.
-            </p>
-
-            <div style={{ display: "grid", gap: "10px" }}>
-              {notificationPreferencePreviewItems.map((item) => (
-                <label
-                  key={item.key}
+                <span
                   style={{
-                    display: "grid",
-                    gridTemplateColumns: "auto 1fr",
-                    gap: "12px",
-                    alignItems: "start",
-                    padding: "12px 13px",
-                    borderRadius: "14px",
-                    border: "1px solid #e2e8f0",
-                    background: notificationPreview[item.key] ? "#f8fafc" : "#ffffff",
-                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "6px 10px",
+                    borderRadius: "999px",
+                    background: "#fff7ed",
+                    border: "1px solid #fed7aa",
+                    color: "#9a3412",
+                    fontSize: "11px",
+                    fontWeight: 900,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
                   }}
                 >
-                  <input
-                    type="checkbox"
-                    checked={Boolean(notificationPreview[item.key])}
-                    onChange={() => handleNotificationPreviewToggle(item.key)}
-                    aria-label={item.label}
-                    style={{
-                      marginTop: "2px",
-                      width: "16px",
-                      height: "16px",
-                      accentColor: "#0f766e",
-                    }}
-                  />
+                  Coming Soon
+                </span>
+                <span
+                  style={{
+                    color: "#475569",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {enabledNotificationPreviewCount} of{" "}
+                  {notificationPreferencePreviewItems.length} previewed on
+                </span>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: "28px",
+                    height: "28px",
+                    borderRadius: "999px",
+                    border: "1px solid #d6d3d1",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#44403c",
+                    fontSize: "14px",
+                    fontWeight: 900,
+                    background: "#ffffff",
+                  }}
+                >
+                  {isNotificationPanelOpen ? "v" : ">"}
+                </span>
+              </div>
+            </button>
 
-                  <div>
-                    <div
+            {isNotificationPanelOpen ? (
+              <div id="operational-notification-settings-panel" style={{ marginTop: "14px" }}>
+                <p
+                  style={{
+                    margin: "0 0 10px",
+                    color: "#475569",
+                    lineHeight: 1.5,
+                    fontSize: "14px",
+                  }}
+                >
+                  Pilot-stage preview of future owner/admin operational notification settings.
+                  This establishes which workflow events will likely become configurable later
+                  without introducing delivery systems or saved preferences yet.
+                </p>
+
+                <p
+                  style={{
+                    margin: "0 0 16px",
+                    color: "#64748b",
+                    lineHeight: 1.5,
+                    fontSize: "13px",
+                  }}
+                >
+                  Preview only. These toggles are not saved and do not send email, SMS, push,
+                  or in-app notifications yet.
+                </p>
+
+                <div style={{ display: "grid", gap: "10px" }}>
+                  {notificationPreferencePreviewItems.map((item) => (
+                    <label
+                      key={item.key}
                       style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "10px",
-                        alignItems: "center",
-                        flexWrap: "wrap",
+                        display: "grid",
+                        gridTemplateColumns: "auto 1fr",
+                        gap: "12px",
+                        alignItems: "start",
+                        padding: "12px 13px",
+                        borderRadius: "14px",
+                        border: "1px solid #e2e8f0",
+                        background: notificationPreview[item.key] ? "#f8fafc" : "#ffffff",
+                        cursor: "pointer",
                       }}
                     >
-                      <strong style={{ color: "#171717" }}>{item.label}</strong>
-                      <span
+                      <input
+                        type="checkbox"
+                        checked={Boolean(notificationPreview[item.key])}
+                        onChange={() => handleNotificationPreviewToggle(item.key)}
+                        aria-label={item.label}
                         style={{
-                          fontSize: "11px",
-                          fontWeight: 800,
-                          color: "#475569",
-                          background: "#e2e8f0",
-                          borderRadius: "999px",
-                          padding: "4px 8px",
+                          marginTop: "2px",
+                          width: "16px",
+                          height: "16px",
+                          accentColor: "#0f766e",
                         }}
-                      >
-                        Preview
-                      </span>
-                    </div>
+                      />
 
-                    <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: "13px", lineHeight: 1.45 }}>
-                      {item.description}
-                    </p>
-                  </div>
-                </label>
-              ))}
-            </div>
+                      <div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: "10px",
+                            alignItems: "center",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <strong style={{ color: "#171717" }}>{item.label}</strong>
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              fontWeight: 800,
+                              color: "#475569",
+                              background: "#e2e8f0",
+                              borderRadius: "999px",
+                              padding: "4px 8px",
+                            }}
+                          >
+                            Preview
+                          </span>
+                        </div>
+
+                        <p
+                          style={{
+                            margin: "6px 0 0",
+                            color: "#64748b",
+                            fontSize: "13px",
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          {item.description}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <h2
