@@ -20,7 +20,12 @@ import {
   updateStoredProduct,
   useStoredProducts,
 } from "../lib/productsStore";
-import { resolveStorefrontCategoryAssignment } from "../lib/storefrontCatalog";
+import {
+  buildStorefrontCategoryRegistry,
+  buildStorefrontCategorySelectionValue,
+  findStorefrontCategoryBySelectionValue,
+  resolveStorefrontCategoryAssignment,
+} from "../lib/storefrontCatalog";
 import {
   buildGarmentLibraryLabel,
   buildLegacyBrandModelValue,
@@ -128,23 +133,31 @@ function resolveStorefrontCategoryOption(
   storefrontCategoryName = "",
   fallbackCategoryName = ""
 ) {
+  const registry = buildStorefrontCategoryRegistry(
+    [
+      {
+        storefront_category_lookup_id: storefrontCategoryLookupId,
+        storefront_category: storefrontCategoryName || fallbackCategoryName,
+        category: fallbackCategoryName,
+      },
+    ],
+    storefrontCategories
+  );
   const normalizedLookupId = normalizeText(storefrontCategoryLookupId);
   if (normalizedLookupId) {
-    const matchedCategory = findLookupById(storefrontCategories, normalizedLookupId);
+    const matchedCategory = findStorefrontCategoryBySelectionValue(
+      registry,
+      normalizedLookupId
+    );
     if (matchedCategory) return matchedCategory;
   }
 
-  const targetName = normalizeText(
-    storefrontCategoryName || fallbackCategoryName || "Catalog"
-  ).toLowerCase();
-
+  const targetName = normalizeText(storefrontCategoryName || fallbackCategoryName).toLowerCase();
   if (!targetName) return null;
 
-  return (
-    storefrontCategories.find(
-      (category) => normalizeText(category?.name).toLowerCase() === targetName
-    ) || null
-  );
+  return registry.find(
+    (category) => normalizeText(category?.name).toLowerCase() === targetName
+  ) || null;
 }
 
 function resolveProductMode(product = {}, matchedItem = null) {
@@ -248,9 +261,13 @@ function buildFormFromGarmentDraft(
     category: category?.name || "",
     category_lookup_id: item?.category_lookup_id || "",
     storefront_category_lookup_id:
-      prefilledStorefrontCategory?.id ||
+      (prefilledStorefrontCategory
+        ? buildStorefrontCategorySelectionValue(prefilledStorefrontCategory)
+        : "") ||
       normalizeText(prefilledStorefrontSetup?.storefront_category_lookup_id) ||
-      storefrontCategory?.id ||
+      (storefrontCategory
+        ? buildStorefrontCategorySelectionValue(storefrontCategory)
+        : "") ||
       "",
     brand_lookup_id: item?.brand_lookup_id || "",
     garment_model_lookup_id: item?.garment_model_lookup_id || "",
@@ -314,7 +331,9 @@ function buildFormFromProduct(
         : String(product.markup_percentage),
     notes: product?.notes || "",
     storefront_category_lookup_id:
-      storefrontCategory?.id || normalizeText(product?.storefront_category_lookup_id) || "",
+      (storefrontCategory
+        ? buildStorefrontCategorySelectionValue(storefrontCategory)
+        : "") || normalizeText(product?.storefront_category_lookup_id) || "",
   };
 }
 
@@ -434,12 +453,16 @@ export default function Products() {
   );
   const placementOptions = normalizeListInput(form.placementsText);
   const activeStorefrontCategories = useMemo(
-    () => storefrontCategories.filter((category) => category?.active !== false),
-    [storefrontCategories]
+    () => buildStorefrontCategoryRegistry(products, storefrontCategories),
+    [products, storefrontCategories]
   );
   const activeStorefrontCategory = useMemo(
-    () => findLookupById(storefrontCategories, form.storefront_category_lookup_id) || null,
-    [form.storefront_category_lookup_id, storefrontCategories]
+    () =>
+      findStorefrontCategoryBySelectionValue(
+        activeStorefrontCategories,
+        form.storefront_category_lookup_id
+      ) || null,
+    [activeStorefrontCategories, form.storefront_category_lookup_id]
   );
   const activeStorefrontCategoryLabel = activeStorefrontCategory?.name || "";
   const brandFilterOptions = useMemo(
@@ -466,8 +489,7 @@ export default function Products() {
       const brandName = normalizeText(product?.brand_model);
       const matchesStorefrontCategory =
         selectedStorefrontCategory === "all" ||
-        normalizeText(storefrontCategory?.lookupId || storefrontCategory?.id) ===
-          selectedStorefrontCategory;
+        normalizeText(storefrontCategory?.id) === selectedStorefrontCategory;
       const matchesBrand =
         selectedBrand === "all" || brandName.toLowerCase() === selectedBrand.toLowerCase();
       const matchesProductMode =
@@ -917,7 +939,9 @@ export default function Products() {
       category: supplierCategory?.name || current.category || "",
       category_lookup_id: item.category_lookup_id || current.category_lookup_id || "",
       storefront_category_lookup_id:
-        storefrontCategory?.id || current.storefront_category_lookup_id || "",
+        (storefrontCategory
+          ? buildStorefrontCategorySelectionValue(storefrontCategory)
+          : "") || current.storefront_category_lookup_id || "",
       brand_lookup_id: item.brand_lookup_id || current.brand_lookup_id || "",
       garment_model_lookup_id: item.garment_model_lookup_id || current.garment_model_lookup_id || "",
       product_type: resolveStructuredProductType(garmentModel, current.product_type, current.name || item.title),
@@ -1159,7 +1183,7 @@ export default function Products() {
     if (existingCategory) {
       setForm((current) => ({
         ...current,
-        storefront_category_lookup_id: existingCategory.id,
+        storefront_category_lookup_id: buildStorefrontCategorySelectionValue(existingCategory),
       }));
       setNewStorefrontCategoryName("");
       setIsCreatingStorefrontCategory(false);
@@ -1178,7 +1202,7 @@ export default function Products() {
       setIsCreatingStorefrontCategory(false);
       setForm((current) => ({
         ...current,
-        storefront_category_lookup_id: createdCategory.id,
+        storefront_category_lookup_id: buildStorefrontCategorySelectionValue(createdCategory),
       }));
     } catch (error) {
       console.error("Unable to create storefront category", error);
@@ -1244,8 +1268,8 @@ export default function Products() {
       categories,
       selectedGarmentItem?.category_lookup_id || form.category_lookup_id
     );
-    const storefrontCategory = findLookupById(
-      storefrontCategories,
+    const storefrontCategory = findStorefrontCategoryBySelectionValue(
+      activeStorefrontCategories,
       form.storefront_category_lookup_id
     );
     const flatPrice = Number(form.flat_price || 0);
@@ -1271,9 +1295,7 @@ export default function Products() {
       category: resolvedSupplierCategoryName,
       storefront_category: resolvedStorefrontCategoryName || null,
       category_lookup_id: isManualProductMode ? null : category?.id || form.category_lookup_id || null,
-      storefront_category_lookup_id: resolvedStorefrontCategoryName
-        ? storefrontCategory?.id || form.storefront_category_lookup_id || null
-        : null,
+      storefront_category_lookup_id: storefrontCategory?.lookupId || null,
       product_type: resolvedProductType,
       brand_model: isManualProductMode
         ? buildLegacyBrandModelValue(brand, null, form.brand_model)
@@ -1830,7 +1852,10 @@ export default function Products() {
                         >
                           <option value="">Uncategorized for now</option>
                           {activeStorefrontCategories.map((category) => (
-                            <option key={category.id} value={category.id}>
+                            <option
+                              key={category.lookupId || category.id}
+                              value={buildStorefrontCategorySelectionValue(category)}
+                            >
                               {category.name}
                             </option>
                           ))}
