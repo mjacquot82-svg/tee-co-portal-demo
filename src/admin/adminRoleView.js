@@ -86,3 +86,25 @@ export function canAccessOwnerWorkspace(pathname, staffUser = getActiveStaffUser
     blockedPathPrefixes.some((prefix) => pathname.startsWith(prefix))
   );
 }
+
+export function requiresProtectedManagementAccess(pathname = "") {
+  const managementExactPaths = [
+    "/admin/customers",
+    "/admin/financial",
+    "/admin/records/canceled",
+    "/admin/sales",
+    "/admin/staff-users",
+    "/admin/quotes/archived",
+  ];
+  const managementPathPrefixes = [
+    "/admin/customers/",
+    "/admin/financial/",
+    "/admin/garments",
+    "/admin/products",
+  ];
+
+  return (
+    managementExactPaths.includes(pathname) ||
+    managementPathPrefixes.some((prefix) => pathname.startsWith(prefix))
+  );
+}

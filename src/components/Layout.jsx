@@ -11,11 +11,11 @@ import {
   hasOperationalSession,
   isAdminWorkspaceView,
   isStaffWorkspaceView,
+  requiresProtectedManagementAccess,
   resolveOperationalRole,
 } from "../admin/adminRoleView";
 import {
   attemptStaffLogin,
-  clearActiveStaffSession,
   getActiveOperationalStaffUsers,
   getActiveStaffUser,
   subscribeToActiveStaffUser,
@@ -842,16 +842,12 @@ function PublicHeader() {
   );
 }
 
-function OperationalIdentitySwitcher({ staffUser, authenticatedUser }) {
+function OperationalIdentitySwitcher({ staffUser }) {
   const [staffOptions, setStaffOptions] = useState(() => getActiveOperationalStaffUsers());
   const [selectedStaffUserId, setSelectedStaffUserId] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [isOpen, setIsOpen] = useState(false);
-
-  const canQuickSwitch =
-    Boolean(authenticatedUser?.id) && isAdminWorkspaceView(authenticatedUser);
-  const isOwnerMode = !staffUser?.id || staffUser.id === authenticatedUser?.id;
 
   useEffect(() => {
     function syncStaffOptions(nextUsers = getActiveOperationalStaffUsers()) {
@@ -878,8 +874,6 @@ function OperationalIdentitySwitcher({ staffUser, authenticatedUser }) {
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, [isOpen]);
-
-  if (!canQuickSwitch) return null;
 
   const resolvedSelectedStaffUserId =
     staffUser?.id && staffOptions.some((user) => user.id === staffUser.id)
@@ -919,13 +913,6 @@ function OperationalIdentitySwitcher({ staffUser, authenticatedUser }) {
     setIsOpen(false);
   }
 
-  function handleReturnToOwner() {
-    clearActiveStaffSession({ reason: "return-to-owner-session" });
-    setError("");
-    setPin("");
-    setIsOpen(false);
-  }
-
   return (
     <>
       <div
@@ -955,7 +942,7 @@ function OperationalIdentitySwitcher({ staffUser, authenticatedUser }) {
             Current Operator
           </p>
           <p style={{ margin: 0, color: "#171717", fontSize: "14px", fontWeight: 800 }}>
-            {staffUser?.name || authenticatedUser?.name || "Owner / Admin"}
+            {staffUser?.name || "Owner / Admin"}
           </p>
         </div>
 
@@ -963,9 +950,9 @@ function OperationalIdentitySwitcher({ staffUser, authenticatedUser }) {
           type="button"
           onClick={() => setIsOpen(true)}
           style={{
-            background: isOwnerMode ? "#171717" : "#eff6ff",
-            color: isOwnerMode ? "#ffffff" : "#1d4ed8",
-            border: isOwnerMode ? "none" : "1px solid #bfdbfe",
+            background: "#eff6ff",
+            color: "#1d4ed8",
+            border: "1px solid #bfdbfe",
             borderRadius: "12px",
             padding: "10px 14px",
             fontWeight: 800,
@@ -973,7 +960,7 @@ function OperationalIdentitySwitcher({ staffUser, authenticatedUser }) {
             flexShrink: 0,
           }}
         >
-          {isOwnerMode ? "Switch Staff" : "Change Operator"}
+          Switch Operator
         </button>
       </div>
 
@@ -981,7 +968,7 @@ function OperationalIdentitySwitcher({ staffUser, authenticatedUser }) {
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Switch staff"
+          aria-label="Switch operator"
           onClick={() => {
             setIsOpen(false);
             setError("");
@@ -1023,35 +1010,13 @@ function OperationalIdentitySwitcher({ staffUser, authenticatedUser }) {
                   textTransform: "uppercase",
                 }}
               >
-                Staff Handoff
+                Workstation
               </p>
               <h2 style={{ margin: 0, color: "#171717", fontSize: "24px", lineHeight: 1.1 }}>
-                Switch staff
+                Switch operator
               </h2>
               <p style={{ margin: 0, color: "#475569", fontSize: "14px", lineHeight: 1.55 }}>
-                The workspace stays signed in. Use a staff PIN to change the active operator on
-                this station.
-              </p>
-            </div>
-
-            <div
-              style={{
-                border: "1px solid #e2e8f0",
-                borderRadius: "16px",
-                background: "#f8fafc",
-                padding: "14px",
-                display: "grid",
-                gap: "6px",
-              }}
-            >
-              <p style={{ margin: 0, color: "#171717", fontSize: "13px", fontWeight: 700 }}>
-                Authenticated workspace
-              </p>
-              <p style={{ margin: 0, color: "#475569", fontSize: "13px", lineHeight: 1.5 }}>
-                {authenticatedUser?.email || authenticatedUser?.name || "Owner / Admin"}
-              </p>
-              <p style={{ margin: 0, color: "#64748b", fontSize: "12px", lineHeight: 1.5 }}>
-                Current operator: {staffUser?.name || authenticatedUser?.name || "Owner / Admin"}
+                Select the next operator and enter the PIN.
               </p>
             </div>
 
@@ -1139,26 +1104,8 @@ function OperationalIdentitySwitcher({ staffUser, authenticatedUser }) {
                     cursor: staffOptions.length ? "pointer" : "not-allowed",
                   }}
                 >
-                  Switch Staff
+                  Switch Operator
                 </button>
-
-                {!isOwnerMode ? (
-                  <button
-                    type="button"
-                    onClick={handleReturnToOwner}
-                    style={{
-                      background: "#ffffff",
-                      color: "#171717",
-                      border: "1px solid #cbd5e1",
-                      borderRadius: "12px",
-                      padding: "10px 14px",
-                      fontWeight: 800,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Return To Owner
-                  </button>
-                ) : null}
 
                 <button
                   type="button"
@@ -1190,16 +1137,15 @@ function OperationalIdentitySwitcher({ staffUser, authenticatedUser }) {
 
 function AdminWorkspaceHeader({ staffUser, authenticatedUser }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const viewer = getAdminViewer(staffUser);
   const initials = getUserInitials(viewer?.name);
   const displayName = viewer?.name || "Operations";
   const displayRole = viewer?.role || "Workspace";
-  const isStaffWorkspace = isStaffWorkspaceView(staffUser);
-  const workspaceLabel = isStaffWorkspace
-    ? "Operational Workspace"
-    : "Owner Management Workspace";
+  const managementUnlocked =
+    Boolean(authenticatedUser?.id) && isAdminWorkspaceView(authenticatedUser);
 
-  async function handleLogout() {
+  async function handleLockWorkstation() {
     await signOutOperationalWorkspace();
     clearAllAuthSessions("staff-logout");
     pushAuthDiagnostic("login-redirect", {
@@ -1209,6 +1155,10 @@ function AdminWorkspaceHeader({ staffUser, authenticatedUser }) {
       target: "/login",
     });
     navigate("/login", { replace: true });
+  }
+
+  async function handleExitManagement() {
+    await signOutOperationalWorkspace();
   }
 
   return (
@@ -1272,7 +1222,7 @@ function AdminWorkspaceHeader({ staffUser, authenticatedUser }) {
                 textTransform: "uppercase",
               }}
             >
-              {workspaceLabel}
+              Current Operator
             </p>
             <p
               style={{
@@ -1295,35 +1245,52 @@ function AdminWorkspaceHeader({ staffUser, authenticatedUser }) {
                 lineHeight: 1.2,
               }}
             >
-              ({displayRole})
+              {displayRole}
             </p>
           </div>
 
           <OperationalIdentitySwitcher
             staffUser={staffUser}
-            authenticatedUser={authenticatedUser}
           />
 
-          {staffUser ? (
-            <button
-              type="button"
-              onClick={handleLogout}
-              style={{
-                background: "#171717",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: "12px",
-                padding: "10px 14px",
-                fontWeight: 800,
-                cursor: "pointer",
-                flexShrink: 0,
-              }}
-            >
-              Logout
-            </button>
+          {managementUnlocked ? (
+            <>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  borderRadius: "999px",
+                  padding: "8px 10px",
+                  background: "#ecfdf5",
+                  border: "1px solid #bbf7d0",
+                  color: "#166534",
+                  fontSize: "12px",
+                  fontWeight: 800,
+                }}
+              >
+                Management unlocked
+              </span>
+
+              <button
+                type="button"
+                onClick={handleExitManagement}
+                style={{
+                  background: "#ffffff",
+                  color: "#171717",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "12px",
+                  padding: "10px 14px",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+              >
+                Exit Management
+              </button>
+            </>
           ) : (
             <Link
-              to="/login"
+              to={`/login?mode=management&redirectTo=${encodeURIComponent(location.pathname + location.search)}`}
               style={{
                 background: "#fafaf9",
                 color: "#171717",
@@ -1335,9 +1302,28 @@ function AdminWorkspaceHeader({ staffUser, authenticatedUser }) {
                 flexShrink: 0,
               }}
             >
-              Login
+              Management Sign In
             </Link>
           )}
+
+          {staffUser ? (
+            <button
+              type="button"
+              onClick={handleLockWorkstation}
+              style={{
+                background: "#171717",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "12px",
+                padding: "10px 14px",
+                fontWeight: 800,
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            >
+              Lock Workstation
+            </button>
+          ) : null}
         </div>
       </div>
     </header>
@@ -1391,7 +1377,7 @@ function AdminAuthLoadingState() {
           Restoring session
         </h1>
         <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
-          Loading your authenticated workspace.
+          Checking management access.
         </p>
       </div>
     </div>
@@ -1441,6 +1427,7 @@ export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const isAdmin = location.pathname.startsWith("/admin");
+  const requiresManagementAccess = requiresProtectedManagementAccess(location.pathname);
   const requiresCustomerSession = location.pathname === "/my-orders";
   const [authenticatedOperationalUser, setAuthenticatedOperationalUser] = useState(() =>
     getOperationalAuthUser()
@@ -1493,7 +1480,7 @@ export default function Layout() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    if (operationalAuthLoading) return;
+    if (operationalAuthLoading && requiresManagementAccess) return;
 
     pushAuthDiagnostic("role-resolution", {
       pathname: location.pathname,
@@ -1501,16 +1488,17 @@ export default function Layout() {
       authenticatedUserRole: authenticatedOperationalUser?.role || "",
       currentUserId: activeStaffUser?.id || "",
       currentUserRole: activeStaffUser?.role || "",
+      requiresManagementAccess,
       workspaceAccess: canAccessOwnerWorkspace(location.pathname, activeStaffUser)
         ? "allowed"
         : "blocked",
     });
 
-    if (!hasOperationalSession(authenticatedOperationalUser)) {
+    if (!hasOperationalSession(activeStaffUser)) {
       pushAuthDiagnostic("login-redirect", {
         actorType: "staff",
         target: "/login",
-        reason: "missing-authenticated-session",
+        reason: "missing-operational-session",
         pathname: location.pathname,
       });
       navigate(`/login?redirectTo=${encodeURIComponent(location.pathname + location.search)}`, {
@@ -1519,7 +1507,25 @@ export default function Layout() {
       return;
     }
 
-    if (!hasOperationalSession(activeStaffUser)) return;
+    if (
+      requiresManagementAccess &&
+      !isAdminWorkspaceView(authenticatedOperationalUser)
+    ) {
+      pushAuthDiagnostic("login-redirect", {
+        actorType: "staff",
+        userId: activeStaffUser?.id || "",
+        role: activeStaffUser?.role || "",
+        target: "/login",
+        reason: "missing-management-session",
+        pathname: location.pathname,
+      });
+      navigate(
+        `/login?mode=management&redirectTo=${encodeURIComponent(location.pathname + location.search)}`,
+        { replace: true }
+      );
+      return;
+    }
+
     if (canAccessOwnerWorkspace(location.pathname, activeStaffUser)) return;
     pushAuthDiagnostic("login-redirect", {
       actorType: "staff",
@@ -1538,6 +1544,7 @@ export default function Layout() {
     location.search,
     navigate,
     operationalAuthLoading,
+    requiresManagementAccess,
   ]);
 
   useEffect(() => {
@@ -1561,7 +1568,7 @@ export default function Layout() {
       : "blocked"
     : "public";
 
-  if (isAdmin && operationalAuthLoading) {
+  if (isAdmin && requiresManagementAccess && operationalAuthLoading) {
     return <AdminAuthLoadingState />;
   }
 
