@@ -104,6 +104,16 @@ export function getStorefrontProducts(products = []) {
   return includedProducts;
 }
 
+export function getFeaturedStorefrontProducts(products = [], limit = null) {
+  const featuredProducts = getStorefrontProducts(products).filter((product) => product?.is_featured);
+
+  if (!Number.isFinite(limit) || limit <= 0) {
+    return featuredProducts;
+  }
+
+  return featuredProducts.slice(0, limit);
+}
+
 export function getStorefrontProductImage(product) {
   return normalizeText(product?.image);
 }

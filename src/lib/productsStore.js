@@ -39,6 +39,7 @@ const PRODUCTS_SELECT_FIELDS = [
   "garment_library_item_id",
   "garment_model_lookup_id",
   "status",
+  "is_featured",
   "image",
   "characteristics",
   "colors",
@@ -60,6 +61,7 @@ const PRODUCTS_SELECT_FIELDS = [
 const LEGACY_PRODUCTS_SELECT_FIELDS = PRODUCTS_SELECT_FIELDS
   .replace("storefront_category, ", "")
   .replace("storefront_category_lookup_id, ", "")
+  .replace("is_featured, ", "")
   .replace("compare_at_price, ", "")
   .replace("characteristics, ", "")
   .replace("garment_library_item_id, ", "");
@@ -107,6 +109,7 @@ function isLegacyProductSchemaError(error) {
     "garment_library_item_id",
     "storefront_category",
     "storefront_category_lookup_id",
+    "is_featured",
     "compare_at_price",
     "characteristics",
   ].some((columnName) => isMissingProductColumnError(error, columnName));
@@ -361,6 +364,7 @@ function normalizeProduct(product) {
     status: buildPersistentStatus(
       product?.status ?? (product?.active === false ? "Inactive" : "Active")
     ),
+    is_featured: Boolean(product?.is_featured ?? product?.featured),
     storefront_category: product.storefront_category || "",
     storefront_category_lookup_id: product.storefront_category_lookup_id || null,
     garment_library_item_id:
@@ -432,6 +436,7 @@ function buildProductDebugSummary(product = {}) {
     id: product?.id || null,
     name: product?.name || "",
     status: product?.status || "",
+    is_featured: Boolean(product?.is_featured),
     category: product?.category || "",
     storefront_category: product?.storefront_category || "",
     garment_library_item_id: product?.garment_library_item_id || null,
@@ -519,6 +524,7 @@ function buildSupabaseProductRecord(product = {}, options = {}) {
       product.garment_library_item_id || product.garment_library_id || null,
     garment_model_lookup_id: product.garment_model_lookup_id || null,
     status: normalizedStatus,
+    is_featured: Boolean(product.is_featured),
     image: product.image || "",
     characteristics: getProductCharacteristics(product),
     colors: normalizeList(product.colors),
@@ -585,6 +591,7 @@ function omitGarmentLibraryItemId(record = {}) {
     garment_library_item_id: _GARMENT_LIBRARY_ITEM_ID,
     storefront_category: _STOREFRONT_CATEGORY,
     storefront_category_lookup_id: _STOREFRONT_CATEGORY_LOOKUP_ID,
+    is_featured: _IS_FEATURED,
     compare_at_price: _COMPARE_AT_PRICE,
     characteristics: _CHARACTERISTICS,
     ...legacyRecord

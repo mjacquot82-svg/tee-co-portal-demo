@@ -85,6 +85,7 @@ const emptyProduct = {
   characteristics: [],
   notes: "",
   status: "Active",
+  is_featured: false,
   placementsText: "",
   placementPriceMap: {},
   production_methods: ["Screen Print"],
@@ -298,6 +299,7 @@ function buildFormFromGarmentDraft(
     product_type: resolveStructuredProductType(garmentModel, "", item?.title || ""),
     brand_model: buildLegacyBrandModelValue(brand, garmentModel, ""),
     status: normalizeText(prefilledStorefrontSetup?.status) || "Active",
+    is_featured: Boolean(prefilledStorefrontSetup?.is_featured),
     notes: "",
   };
 }
@@ -356,6 +358,7 @@ function buildFormFromProduct(
         ? ""
         : String(product.markup_percentage),
     notes: product?.notes || "",
+    is_featured: Boolean(product?.is_featured),
     storefront_category_lookup_id:
       (storefrontCategory
         ? buildStorefrontCategorySelectionValue(storefrontCategory)
@@ -1457,6 +1460,7 @@ export default function Products() {
         : garmentModel?.id || form.garment_model_lookup_id || null,
       image: form.image,
       status: form.status,
+      is_featured: Boolean(form.is_featured),
       characteristics: isManualProductMode ? getProductCharacteristics(form) : [],
       colors: isManualProductMode ? [] : uniqueList(form.visibleVariants),
       sizes: selectedSizes,
@@ -1809,6 +1813,9 @@ export default function Products() {
                           <span className="products-card-category-pill">
                             {categoryLabel}
                           </span>
+                          {product?.is_featured ? (
+                            <span className="products-card-meta-pill">Featured</span>
+                          ) : null}
                           {!statusIsActive ? (
                             <span className="products-card-meta-pill">Hidden</span>
                           ) : null}
@@ -2014,6 +2021,30 @@ export default function Products() {
                         isManualProductMode ? "" : "products-inline-field-stack-wide"
                       }`}
                     >
+                      <button
+                        type="button"
+                        className={`products-storefront-feature-toggle ${
+                          form.is_featured ? "is-active" : ""
+                        }`}
+                        onClick={() =>
+                          setForm((current) => ({
+                            ...current,
+                            is_featured: !current.is_featured,
+                          }))
+                        }
+                        aria-pressed={form.is_featured}
+                      >
+                        <span className="products-storefront-feature-toggle-copy">
+                          <strong>Featured product</strong>
+                          <span>
+                            Manually place this item into homepage merchandising and curated storefront highlights.
+                          </span>
+                        </span>
+                        <span className="products-storefront-feature-toggle-state">
+                          {form.is_featured ? "Featured" : "Standard"}
+                        </span>
+                      </button>
+
                       <label style={labelStyle}>
                         Storefront Category
                         <select
