@@ -847,6 +847,7 @@ function OperationalIdentitySwitcher({ staffUser, authenticatedUser }) {
   const [selectedStaffUserId, setSelectedStaffUserId] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
 
   const canQuickSwitch =
     Boolean(authenticatedUser?.id) && isAdminWorkspaceView(authenticatedUser);
@@ -862,6 +863,21 @@ function OperationalIdentitySwitcher({ staffUser, authenticatedUser }) {
       syncStaffOptions(nextUsers.filter((user) => user.status !== "Inactive" && user.role !== "Owner"));
     });
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+        setError("");
+        setPin("");
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [isOpen]);
 
   if (!canQuickSwitch) return null;
 
@@ -897,173 +913,278 @@ function OperationalIdentitySwitcher({ staffUser, authenticatedUser }) {
       return;
     }
 
+    setSelectedStaffUserId(result.user?.id || resolvedSelectedStaffUserId);
     setError("");
     setPin("");
+    setIsOpen(false);
   }
 
   function handleReturnToOwner() {
     clearActiveStaffSession({ reason: "return-to-owner-session" });
     setError("");
     setPin("");
+    setIsOpen(false);
   }
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gap: "12px",
-        width: "100%",
-        minWidth: "min(100%, 320px)",
-      }}
-    >
+    <>
       <div
         style={{
-          border: "1px solid #e2e8f0",
-          borderRadius: "16px",
-          background: "#f8fafc",
-          padding: "14px",
-          display: "grid",
-          gap: "6px",
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          flexWrap: "wrap",
         }}
       >
-        <p
+        <div
           style={{
-            margin: 0,
-            color: "#64748b",
-            fontSize: "11px",
-            fontWeight: 900,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
+            display: "grid",
+            gap: "2px",
           }}
         >
-          Workstation Access
-        </p>
-        <p style={{ margin: 0, color: "#171717", fontSize: "14px", fontWeight: 700 }}>
-          Authenticated as {authenticatedUser?.email || authenticatedUser?.name || "Owner / Admin"}
-        </p>
-        <p style={{ margin: 0, color: "#475569", fontSize: "13px", lineHeight: 1.5 }}>
-          Use PIN switching for counter, production, and pickup handoffs without replacing the
-          authenticated admin session.
-        </p>
+          <p
+            style={{
+              margin: 0,
+              color: "#64748b",
+              fontSize: "11px",
+              fontWeight: 900,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Current Operator
+          </p>
+          <p style={{ margin: 0, color: "#171717", fontSize: "14px", fontWeight: 800 }}>
+            {staffUser?.name || authenticatedUser?.name || "Owner / Admin"}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          style={{
+            background: isOwnerMode ? "#171717" : "#eff6ff",
+            color: isOwnerMode ? "#ffffff" : "#1d4ed8",
+            border: isOwnerMode ? "none" : "1px solid #bfdbfe",
+            borderRadius: "12px",
+            padding: "10px 14px",
+            fontWeight: 800,
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        >
+          {isOwnerMode ? "Switch Staff" : "Change Operator"}
+        </button>
       </div>
 
-      <form
-        onSubmit={handleSwitch}
-        style={{
-          display: "grid",
-          gap: "10px",
-          border: "1px solid #e2e8f0",
-          borderRadius: "16px",
-          background: "#ffffff",
-          padding: "14px",
-        }}
-      >
-        <div style={{ display: "grid", gap: "4px" }}>
-          <label
-            htmlFor="workstation-staff-user"
-            style={{ color: "#171717", fontSize: "13px", fontWeight: 800 }}
-          >
-            Operate as
-          </label>
-          <select
-            id="workstation-staff-user"
-            value={resolvedSelectedStaffUserId}
-            onChange={(event) => {
-              setError("");
-              setSelectedStaffUserId(event.target.value);
-            }}
+      {isOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Switch staff"
+          onClick={() => {
+            setIsOpen(false);
+            setError("");
+            setPin("");
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.28)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "24px",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
             style={{
               width: "100%",
-              padding: "11px 12px",
-              borderRadius: "12px",
-              border: "1px solid #cbd5e1",
+              maxWidth: "420px",
+              borderRadius: "24px",
+              border: "1px solid #dbe4ee",
               background: "#ffffff",
-              fontSize: "14px",
-              color: "#171717",
+              boxShadow: "0 24px 60px rgba(15, 23, 42, 0.18)",
+              padding: "24px",
+              display: "grid",
+              gap: "16px",
             }}
           >
-            {staffOptions.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.name} ({user.role})
-              </option>
-            ))}
-          </select>
-        </div>
+            <div style={{ display: "grid", gap: "6px" }}>
+              <p
+                style={{
+                  margin: 0,
+                  color: "#64748b",
+                  fontSize: "11px",
+                  fontWeight: 900,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Staff Handoff
+              </p>
+              <h2 style={{ margin: 0, color: "#171717", fontSize: "24px", lineHeight: 1.1 }}>
+                Switch staff
+              </h2>
+              <p style={{ margin: 0, color: "#475569", fontSize: "14px", lineHeight: 1.55 }}>
+                The workspace stays signed in. Use a staff PIN to change the active operator on
+                this station.
+              </p>
+            </div>
 
-        <div style={{ display: "grid", gap: "4px" }}>
-          <label
-            htmlFor="workstation-staff-pin"
-            style={{ color: "#171717", fontSize: "13px", fontWeight: 800 }}
-          >
-            Staff PIN
-          </label>
-          <input
-            id="workstation-staff-pin"
-            type="password"
-            inputMode="numeric"
-            autoComplete="off"
-            value={pin}
-            onChange={(event) => {
-              setError("");
-              setPin(event.target.value.replace(/\D/g, "").slice(0, 4));
-            }}
-            placeholder="4-digit PIN"
-            style={{
-              width: "100%",
-              padding: "11px 12px",
-              borderRadius: "12px",
-              border: "1px solid #cbd5e1",
-              background: "#ffffff",
-              fontSize: "14px",
-              color: "#171717",
-              boxSizing: "border-box",
-            }}
-          />
-        </div>
-
-        {error ? (
-          <p style={{ margin: 0, color: "#b91c1c", fontSize: "13px", fontWeight: 700 }}>
-            {error}
-          </p>
-        ) : null}
-
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <button
-            type="submit"
-            disabled={!staffOptions.length}
-            style={{
-              background: staffOptions.length ? "#171717" : "#94a3b8",
-              color: "#ffffff",
-              border: "none",
-              borderRadius: "12px",
-              padding: "10px 14px",
-              fontWeight: 800,
-              cursor: staffOptions.length ? "pointer" : "not-allowed",
-            }}
-          >
-            Switch With PIN
-          </button>
-
-          {!isOwnerMode ? (
-            <button
-              type="button"
-              onClick={handleReturnToOwner}
+            <div
               style={{
-                background: "#ffffff",
-                color: "#171717",
-                border: "1px solid #cbd5e1",
-                borderRadius: "12px",
-                padding: "10px 14px",
-                fontWeight: 800,
-                cursor: "pointer",
+                border: "1px solid #e2e8f0",
+                borderRadius: "16px",
+                background: "#f8fafc",
+                padding: "14px",
+                display: "grid",
+                gap: "6px",
               }}
             >
-              Return To Owner
-            </button>
-          ) : null}
+              <p style={{ margin: 0, color: "#171717", fontSize: "13px", fontWeight: 700 }}>
+                Authenticated workspace
+              </p>
+              <p style={{ margin: 0, color: "#475569", fontSize: "13px", lineHeight: 1.5 }}>
+                {authenticatedUser?.email || authenticatedUser?.name || "Owner / Admin"}
+              </p>
+              <p style={{ margin: 0, color: "#64748b", fontSize: "12px", lineHeight: 1.5 }}>
+                Current operator: {staffUser?.name || authenticatedUser?.name || "Owner / Admin"}
+              </p>
+            </div>
+
+            <form onSubmit={handleSwitch} style={{ display: "grid", gap: "10px" }}>
+              <div style={{ display: "grid", gap: "4px" }}>
+                <label
+                  htmlFor="workstation-staff-user"
+                  style={{ color: "#171717", fontSize: "13px", fontWeight: 800 }}
+                >
+                  Switch to
+                </label>
+                <select
+                  id="workstation-staff-user"
+                  value={resolvedSelectedStaffUserId}
+                  onChange={(event) => {
+                    setError("");
+                    setSelectedStaffUserId(event.target.value);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "11px 12px",
+                    borderRadius: "12px",
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    fontSize: "14px",
+                    color: "#171717",
+                  }}
+                >
+                  {staffOptions.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} ({user.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: "grid", gap: "4px" }}>
+                <label
+                  htmlFor="workstation-staff-pin"
+                  style={{ color: "#171717", fontSize: "13px", fontWeight: 800 }}
+                >
+                  Staff PIN
+                </label>
+                <input
+                  id="workstation-staff-pin"
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={pin}
+                  onChange={(event) => {
+                    setError("");
+                    setPin(event.target.value.replace(/\D/g, "").slice(0, 4));
+                  }}
+                  placeholder="4-digit PIN"
+                  style={{
+                    width: "100%",
+                    padding: "11px 12px",
+                    borderRadius: "12px",
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    fontSize: "14px",
+                    color: "#171717",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              {error ? (
+                <p style={{ margin: 0, color: "#b91c1c", fontSize: "13px", fontWeight: 700 }}>
+                  {error}
+                </p>
+              ) : null}
+
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <button
+                  type="submit"
+                  disabled={!staffOptions.length}
+                  style={{
+                    background: staffOptions.length ? "#171717" : "#94a3b8",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "12px",
+                    padding: "10px 14px",
+                    fontWeight: 800,
+                    cursor: staffOptions.length ? "pointer" : "not-allowed",
+                  }}
+                >
+                  Switch Staff
+                </button>
+
+                {!isOwnerMode ? (
+                  <button
+                    type="button"
+                    onClick={handleReturnToOwner}
+                    style={{
+                      background: "#ffffff",
+                      color: "#171717",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: "12px",
+                      padding: "10px 14px",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Return To Owner
+                  </button>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
+                    setError("");
+                    setPin("");
+                  }}
+                  style={{
+                    background: "#f8fafc",
+                    color: "#475569",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "12px",
+                    padding: "10px 14px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </form>
-    </div>
+      ) : null}
+    </>
   );
 }
 
