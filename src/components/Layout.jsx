@@ -27,6 +27,12 @@ import { getUserInitials } from "../utils/getUserInitials";
 import AdminDiagnosticsPanel from "./AdminDiagnosticsPanel";
 import { useStaffAssignmentAttention } from "../lib/staffAssignmentAttentionStore";
 import { buildStaffAssignmentAttentionItems } from "../staff/buildStaffAssignmentAttentionItems";
+import {
+  ensureOperationalAuthInitialized,
+  isOperationalAuthLoading,
+  signOutOperationalWorkspace,
+  subscribeToOperationalAuth,
+} from "../lib/operationalAuthStore";
 
 const ADMIN_LOGO_SRC = "/tee&co512x512.png";
 const FACEBOOK_URL =
@@ -842,7 +848,8 @@ function AdminWorkspaceHeader({ staffUser }) {
     ? "Operational Workspace"
     : "Owner Management Workspace";
 
-  function handleLogout() {
+  async function handleLogout() {
+    await signOutOperationalWorkspace();
     clearAllAuthSessions("staff-logout");
     pushAuthDiagnostic("login-redirect", {
       actorType: "staff",
@@ -981,6 +988,60 @@ function AdminWorkspaceHeader({ staffUser }) {
   );
 }
 
+function AdminAuthLoadingState() {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "32px",
+        boxSizing: "border-box",
+        background: "#f8fafc",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "420px",
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "24px",
+          padding: "28px",
+          boxShadow: "0 20px 45px rgba(15, 23, 42, 0.08)",
+        }}
+      >
+        <p
+          style={{
+            margin: "0 0 10px",
+            color: "#64748b",
+            fontSize: "12px",
+            fontWeight: 900,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+          }}
+        >
+          Tee &amp; Co Operations
+        </p>
+        <h1
+          style={{
+            margin: "0 0 8px",
+            color: "#0f172a",
+            fontSize: "28px",
+            lineHeight: 1.1,
+          }}
+        >
+          Restoring session
+        </h1>
+        <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
+          Loading your authenticated workspace.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 class AdminRenderBoundary extends Component {
   constructor(props) {
     super(props);
@@ -1026,9 +1087,24 @@ export default function Layout() {
   const isAdmin = location.pathname.startsWith("/admin");
   const requiresCustomerSession = location.pathname === "/my-orders";
   const [activeStaffUser, setActiveStaffUser] = useState(() => getActiveStaffUser());
+  const [operationalAuthLoading, setOperationalAuthLoading] = useState(() =>
+    isOperationalAuthLoading()
+  );
   const [activeCustomerSession, setActiveCustomerSession] = useState(() =>
     getActiveCustomerSession()
   );
+
+  useEffect(() => {
+    void ensureOperationalAuthInitialized().then((snapshot) => {
+      setOperationalAuthLoading(snapshot.isLoading);
+      setActiveStaffUser(snapshot.operationalUser);
+    });
+
+    return subscribeToOperationalAuth((snapshot) => {
+      setOperationalAuthLoading(snapshot.isLoading);
+      setActiveStaffUser(snapshot.operationalUser);
+    });
+  }, []);
 
   useEffect(() => {
     function syncActiveStaffUser(nextStaffUser = getActiveStaffUser()) {
@@ -1056,6 +1132,7 @@ export default function Layout() {
 
   useEffect(() => {
     if (!isAdmin) return;
+    if (operationalAuthLoading) return;
 
     pushAuthDiagnostic("role-resolution", {
       pathname: location.pathname,
@@ -1073,7 +1150,9 @@ export default function Layout() {
         reason: "missing-operational-session",
         pathname: location.pathname,
       });
-      navigate("/login", { replace: true });
+      navigate(`/login?redirectTo=${encodeURIComponent(location.pathname + location.search)}`, {
+        replace: true,
+      });
       return;
     }
     if (canAccessOwnerWorkspace(location.pathname, activeStaffUser)) return;
@@ -1086,7 +1165,7 @@ export default function Layout() {
       pathname: location.pathname,
     });
     navigate("/admin", { replace: true });
-  }, [activeStaffUser, isAdmin, location.pathname, navigate]);
+  }, [activeStaffUser, isAdmin, location.pathname, location.search, navigate, operationalAuthLoading]);
 
   useEffect(() => {
     if (!requiresCustomerSession) return;
@@ -1108,6 +1187,10 @@ export default function Layout() {
       ? "allowed"
       : "blocked"
     : "public";
+
+  if (isAdmin && operationalAuthLoading) {
+    return <AdminAuthLoadingState />;
+  }
 
   if (isAdmin && location.pathname.startsWith("/admin/garments")) {
     console.log("[Layout] admin garments route render gate", {

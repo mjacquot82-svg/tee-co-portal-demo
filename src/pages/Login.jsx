@@ -1,15 +1,19 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import {
-  attemptTemporaryOwnerLogin,
-  attemptStaffLogin,
   getActiveOperationalStaffUsers,
   subscribeToStaffUsers,
-  TEMP_OWNER_DEMO_CREDENTIALS,
 } from "../lib/staffUsersStore";
 import { pushAuthDiagnostic } from "../lib/authDiagnostics";
 import { clearAllAuthSessions } from "../lib/authSessionStore";
 import { setActiveCustomerSession } from "../lib/customerSessionStore";
+import {
+  ensureOperationalAuthInitialized,
+  getOperationalAuthUser,
+  signInToOperationalWorkspace,
+  signOutOperationalWorkspace,
+  subscribeToOperationalAuth,
+} from "../lib/operationalAuthStore";
 
 const inputStyle = {
   width: "100%",
@@ -51,17 +55,22 @@ const primaryButtonStyle = {
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [workspaceMode, setWorkspaceMode] = useState("staff");
-  const [ownerLoginId, setOwnerLoginId] = useState(TEMP_OWNER_DEMO_CREDENTIALS.loginId);
-  const [ownerPin, setOwnerPin] = useState("");
-  const [ownerError, setOwnerError] = useState("");
   const [staffUsers, setStaffUsers] = useState(() => getActiveOperationalStaffUsers());
-  const [selectedStaffId, setSelectedStaffId] = useState(staffUsers[0]?.id || "");
-  const [pin, setPin] = useState("");
-  const [pinError, setPinError] = useState("");
   const [customerError, setCustomerError] = useState("");
+  const [workspaceEmail, setWorkspaceEmail] = useState("");
+  const [workspacePassword, setWorkspacePassword] = useState("");
+  const [workspaceError, setWorkspaceError] = useState("");
+  const [workspaceSubmitting, setWorkspaceSubmitting] = useState(false);
+  const [activeOperationalUser, setActiveOperationalUser] = useState(() =>
+    getOperationalAuthUser()
+  );
+
+  const redirectTo = new URLSearchParams(location.search).get("redirectTo");
+  const resolvedRedirectTarget =
+    redirectTo && redirectTo.startsWith("/admin") ? redirectTo : "/admin";
 
   useEffect(() => {
     function syncStaffUsers(nextUsers) {
@@ -69,17 +78,27 @@ export default function Login() {
         (user) => user.status !== "Inactive" && user.role !== "Owner"
       );
       setStaffUsers(activeUsers);
-      setSelectedStaffId((currentId) => {
-        if (activeUsers.some((user) => user.id === currentId)) {
-          return currentId;
-        }
-
-        return activeUsers[0]?.id || "";
-      });
     }
 
+    syncStaffUsers(getActiveOperationalStaffUsers());
     return subscribeToStaffUsers(syncStaffUsers);
   }, []);
+
+  useEffect(() => {
+    void ensureOperationalAuthInitialized().then((snapshot) => {
+      setActiveOperationalUser(snapshot.operationalUser);
+    });
+
+    return subscribeToOperationalAuth((snapshot) => {
+      setActiveOperationalUser(snapshot.operationalUser);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!activeOperationalUser?.id) return;
+
+    navigate(resolvedRedirectTarget, { replace: true });
+  }, [activeOperationalUser, navigate, resolvedRedirectTarget]);
 
   function handleCustomerLogin(e) {
     e.preventDefault();
@@ -96,70 +115,43 @@ export default function Login() {
       return;
     }
 
-    clearAllAuthSessions("customer-login-start");
-    setActiveCustomerSession({ email: normalizedEmail }, { source: "customer-login" });
-    pushAuthDiagnostic("login-redirect", {
-      actorType: "customer",
-      target: "/my-orders",
-    });
-    navigate("/my-orders");
+    const startCustomerSession = async () => {
+      await signOutOperationalWorkspace();
+      clearAllAuthSessions("customer-login-start");
+      setActiveCustomerSession({ email: normalizedEmail }, { source: "customer-login" });
+      pushAuthDiagnostic("login-redirect", {
+        actorType: "customer",
+        target: "/my-orders",
+      });
+      navigate("/my-orders");
+    };
+
+    void startCustomerSession();
   }
 
-  function handleShopLogin(event) {
+  async function handleWorkspaceLogin(event) {
     event.preventDefault();
+    const normalizedEmail = workspaceEmail.trim();
 
-    if (!staffUsers.length) {
-      setPinError("No active staff users are available.");
+    if (!normalizedEmail || !workspacePassword) {
+      setWorkspaceError("Enter your workspace email and password.");
       return;
     }
 
-    const loginResult = attemptStaffLogin({
-      staffUserId: selectedStaffId,
-      pin,
-      persistSession: false,
-    });
-
-    if (!loginResult.ok) {
-      setPinError(loginResult.message);
-      setPin("");
-      return;
-    }
-
+    setWorkspaceSubmitting(true);
+    setWorkspaceError("");
     clearAllAuthSessions("staff-login-session-reset");
-    const finalLoginResult = attemptStaffLogin({
-      staffUserId: selectedStaffId,
-      pin,
+
+    const loginResult = await signInToOperationalWorkspace({
+      email: normalizedEmail,
+      password: workspacePassword,
     });
 
-    if (!finalLoginResult.ok) {
-      setPinError(finalLoginResult.message);
-      setPin("");
-      return;
-    }
-
-    pushAuthDiagnostic("login-redirect", {
-      actorType: "staff",
-      userId: finalLoginResult.user?.id || "",
-      role: finalLoginResult.user?.role || "",
-      target: "/admin",
-    });
-    navigate("/admin", { replace: true });
-  }
-
-  function handleOwnerLogin(event) {
-    event.preventDefault();
-
-    setOwnerError("");
-    clearAllAuthSessions("temporary-owner-login-reset");
-
-    const loginResult = attemptTemporaryOwnerLogin({
-      loginId: ownerLoginId,
-      pin: ownerPin,
-    });
+    setWorkspaceSubmitting(false);
 
     if (!loginResult.ok) {
-      setOwnerError(loginResult.message);
-      setOwnerPin("");
+      setWorkspaceError(loginResult.message);
+      setWorkspacePassword("");
       return;
     }
 
@@ -167,28 +159,9 @@ export default function Login() {
       actorType: "staff",
       userId: loginResult.user?.id || "",
       role: loginResult.user?.role || "",
-      target: "/admin",
-      authMode: "temporary-owner",
+      target: resolvedRedirectTarget,
     });
-    navigate("/admin", { replace: true });
-  }
-
-  function addPinDigit(digit) {
-    setPinError("");
-    setPin((current) => `${current}${digit}`.slice(0, 4));
-  }
-
-  function clearPin() {
-    setPinError("");
-    setPin("");
-  }
-
-  function switchWorkspaceMode(nextMode) {
-    setWorkspaceMode(nextMode);
-    setPinError("");
-    setPin("");
-    setOwnerError("");
-    setOwnerPin("");
+    navigate(resolvedRedirectTarget, { replace: true });
   }
 
   return (
@@ -368,53 +341,10 @@ export default function Login() {
               Workspace sign-in
             </h2>
             <p style={{ margin: 0, color: "#57534e", lineHeight: 1.6 }}>
-              Owners, admins, and staff enter the same operational workspace. Sign in with
-              the method assigned to you and the platform will open the correct access level.
+              Owners and admins enter the operational workspace with their assigned email
+              address and password. The current authenticated Supabase user is treated as
+              the foundational owner/admin session.
             </p>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: "10px",
-              padding: "8px",
-              borderRadius: "18px",
-              background: "#f5f5f4",
-              border: "1px solid #e7e5e4",
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => switchWorkspaceMode("staff")}
-              style={{
-                border: "none",
-                borderRadius: "14px",
-                padding: "12px 14px",
-                background: workspaceMode === "staff" ? "#171717" : "transparent",
-                color: workspaceMode === "staff" ? "#ffffff" : "#44403c",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              Staff PIN
-            </button>
-
-            <button
-              type="button"
-              onClick={() => switchWorkspaceMode("owner")}
-              style={{
-                border: "none",
-                borderRadius: "14px",
-                padding: "12px 14px",
-                background: workspaceMode === "owner" ? "#171717" : "transparent",
-                color: workspaceMode === "owner" ? "#ffffff" : "#44403c",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              Owner Credentials
-            </button>
           </div>
 
           <div
@@ -426,254 +356,85 @@ export default function Login() {
               boxShadow: "inset 0 1px 0 rgba(255,255,255,0.65)",
             }}
           >
-            {workspaceMode === "owner" ? (
-              <>
-                <div style={{ marginBottom: "18px" }}>
-                  <p style={{ margin: "0 0 6px", fontWeight: 700, color: "#292524" }}>
-                    Owner and admin access
-                  </p>
-                  <p
-                    style={{
-                      margin: 0,
-                      color: "#57534e",
-                      lineHeight: 1.5,
-                      fontSize: "14px",
-                    }}
-                  >
-                    Use the owner login ID and PIN assigned to the administrative account.
-                  </p>
-                </div>
+            <div style={{ marginBottom: "18px" }}>
+              <p style={{ margin: "0 0 6px", fontWeight: 700, color: "#292524" }}>
+                Operational access
+              </p>
+              <p
+                style={{
+                  margin: 0,
+                  color: "#57534e",
+                  lineHeight: 1.5,
+                  fontSize: "14px",
+                }}
+              >
+                Use your Supabase-authenticated workspace account. Session restore and logout
+                are handled automatically for the admin workspace.
+              </p>
+            </div>
 
-                <form onSubmit={handleOwnerLogin}>
-                  <div style={{ marginBottom: "12px" }}>
-                    <label style={labelStyle}>Login ID</label>
-                    <input
-                      type="text"
-                      value={ownerLoginId}
-                      onChange={(event) => {
-                        setOwnerError("");
-                        setOwnerLoginId(event.target.value);
-                      }}
-                      placeholder="Enter login ID"
-                      style={inputStyle}
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                    />
-                  </div>
-
-                  <div style={{ marginBottom: "12px" }}>
-                    <label style={labelStyle}>PIN</label>
-                    <input
-                      type="password"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength="4"
-                      value={ownerPin}
-                      onChange={(event) => {
-                        setOwnerError("");
-                        setOwnerPin(event.target.value.replace(/\D/g, "").slice(0, 4));
-                      }}
-                      placeholder="••••"
-                      style={inputStyle}
-                    />
-                  </div>
-
-                  {ownerError ? (
-                    <p style={{ margin: "0 0 14px", color: "#b91c1c", fontWeight: 700 }}>
-                      {ownerError}
-                    </p>
-                  ) : null}
-
-                  <button type="submit" style={primaryButtonStyle}>
-                    Enter Workspace
-                  </button>
-                </form>
-
-                <p
-                  style={{
-                    margin: "14px 0 0",
-                    color: "#78716c",
-                    fontSize: "13px",
-                    lineHeight: 1.5,
+            <form onSubmit={handleWorkspaceLogin}>
+              <div style={{ marginBottom: "12px" }}>
+                <label style={labelStyle}>Workspace Email</label>
+                <input
+                  type="email"
+                  value={workspaceEmail}
+                  onChange={(event) => {
+                    setWorkspaceError("");
+                    setWorkspaceEmail(event.target.value);
                   }}
-                >
-                  Administrative access is part of the same workspace. The system will load
-                  owner-level controls after authentication.
-                </p>
-              </>
-            ) : (
-              <>
-                <div style={{ marginBottom: "18px" }}>
-                  <p style={{ margin: "0 0 6px", fontWeight: 700, color: "#292524" }}>
-                    Staff workspace access
-                  </p>
-                  <p
-                    style={{
-                      margin: 0,
-                      color: "#57534e",
-                      lineHeight: 1.5,
-                      fontSize: "14px",
-                    }}
-                  >
-                    Select your assigned profile and enter your 4-digit PIN to open your
-                    operational workspace.
-                  </p>
-                </div>
+                  placeholder="owner@teeandco.com"
+                  style={inputStyle}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                />
+              </div>
 
-                <form onSubmit={handleShopLogin}>
-                  <div style={{ marginBottom: "16px" }}>
-                    <label style={labelStyle}>Staff Member</label>
-                    <select
-                      value={selectedStaffId}
-                      onChange={(event) => {
-                        setSelectedStaffId(event.target.value);
-                        clearPin();
-                      }}
-                      style={inputStyle}
-                      disabled={!staffUsers.length}
-                    >
-                      {staffUsers.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.name} - {user.role}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div style={{ marginBottom: "14px" }}>
-                    <label style={labelStyle}>PIN</label>
-                    <input
-                      type="password"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength="4"
-                      value={pin}
-                      onChange={(event) => {
-                        setPinError("");
-                        setPin(event.target.value.replace(/\D/g, "").slice(0, 4));
-                      }}
-                      placeholder="••••"
-                      style={{
-                        ...inputStyle,
-                        textAlign: "center",
-                        fontSize: "24px",
-                        letterSpacing: "0.25em",
-                      }}
-                    />
-                  </div>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(3, 1fr)",
-                      gap: "10px",
-                      marginBottom: "14px",
-                    }}
-                  >
-                    {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
-                      <button
-                        key={digit}
-                        type="button"
-                        onClick={() => addPinDigit(digit)}
-                        style={{
-                          padding: "14px",
-                          borderRadius: "14px",
-                          border: "1px solid #d6d3d1",
-                          background: "#fafaf9",
-                          fontWeight: 800,
-                          fontSize: "18px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {digit}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={clearPin}
-                      style={{
-                        padding: "14px",
-                        borderRadius: "14px",
-                        border: "1px solid #d6d3d1",
-                        background: "#ffffff",
-                        fontWeight: 800,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Clear
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => addPinDigit("0")}
-                      style={{
-                        padding: "14px",
-                        borderRadius: "14px",
-                        border: "1px solid #d6d3d1",
-                        background: "#fafaf9",
-                        fontWeight: 800,
-                        fontSize: "18px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      0
-                    </button>
-                    <button
-                      type="submit"
-                      style={{
-                        padding: "14px",
-                        borderRadius: "14px",
-                        border: "1px solid #171717",
-                        background: "#171717",
-                        color: "#ffffff",
-                        fontWeight: 800,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Enter
-                    </button>
-                  </div>
-
-                  {pinError && (
-                    <p style={{ margin: "0 0 14px", color: "#b91c1c", fontWeight: 700 }}>
-                      {pinError}
-                    </p>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={pin.length < 4 || !staffUsers.length}
-                    style={{
-                      width: "100%",
-                      background:
-                        pin.length === 4 && staffUsers.length ? "#171717" : "#a8a29e",
-                      color: "#ffffff",
-                      border: "none",
-                      borderRadius: "14px",
-                      padding: "14px 18px",
-                      fontWeight: "800",
-                      fontSize: "15px",
-                      cursor:
-                        pin.length === 4 && staffUsers.length ? "pointer" : "not-allowed",
-                    }}
-                  >
-                    Enter Workspace
-                  </button>
-                </form>
-
-                <p
-                  style={{
-                    margin: "16px 0 0",
-                    color: "#78716c",
-                    fontSize: "13px",
-                    lineHeight: 1.5,
+              <div style={{ marginBottom: "12px" }}>
+                <label style={labelStyle}>Password</label>
+                <input
+                  type="password"
+                  value={workspacePassword}
+                  onChange={(event) => {
+                    setWorkspaceError("");
+                    setWorkspacePassword(event.target.value);
                   }}
-                >
-                  {staffUsers.length
-                    ? "Use the profile assigned to you for day-to-day operations. Workspace visibility is determined after sign-in."
-                    : "No active staff users are currently available. Owner credentials still open the operational workspace."}
+                  placeholder="Enter password"
+                  style={inputStyle}
+                />
+              </div>
+
+              {workspaceError ? (
+                <p style={{ margin: "0 0 14px", color: "#b91c1c", fontWeight: 700 }}>
+                  {workspaceError}
                 </p>
-              </>
-            )}
+              ) : null}
+
+              <button
+                type="submit"
+                disabled={workspaceSubmitting}
+                style={{
+                  ...primaryButtonStyle,
+                  background: workspaceSubmitting ? "#44403c" : primaryButtonStyle.background,
+                  cursor: workspaceSubmitting ? "wait" : "pointer",
+                }}
+              >
+                {workspaceSubmitting ? "Signing In..." : "Enter Workspace"}
+              </button>
+            </form>
+
+            <p
+              style={{
+                margin: "14px 0 0",
+                color: "#78716c",
+                fontSize: "13px",
+                lineHeight: 1.5,
+              }}
+            >
+              {staffUsers.length
+                ? `${staffUsers.length} local staff profiles remain available for workflow data, while access control now runs through authenticated Supabase sessions.`
+                : "Operational workflow data remains intact while access control is now handled by authenticated Supabase sessions."}
+            </p>
           </div>
         </div>
       </div>

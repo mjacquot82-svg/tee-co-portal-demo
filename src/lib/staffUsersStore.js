@@ -7,6 +7,10 @@ import {
   setRawStorageItem,
 } from "./browserStorage";
 import { pushAuthDiagnostic } from "./authDiagnostics";
+import {
+  getOperationalAuthUser,
+  subscribeToOperationalAuth,
+} from "./operationalAuthStore";
 
 const STORAGE_KEY = "teeCoStaffUsers";
 const ACTIVE_STAFF_KEY = "teeCoActiveStaffUser";
@@ -392,6 +396,11 @@ export function clearActiveStaffSession(options = {}) {
 }
 
 export function getActiveStaffUser() {
+  const operationalAuthUser = getOperationalAuthUser();
+  if (operationalAuthUser?.id) {
+    return operationalAuthUser;
+  }
+
   if (!hasBrowserStorage()) return null;
 
   try {
@@ -656,10 +665,14 @@ export function subscribeToActiveStaffUser(listener) {
 
   window.addEventListener("storage", handleStorage);
   window.addEventListener(ACTIVE_STAFF_UPDATED_EVENT, notifyActiveStaff);
+  const unsubscribeOperationalAuth = subscribeToOperationalAuth(() => {
+    notifyActiveStaff();
+  });
 
   return () => {
     window.removeEventListener("storage", handleStorage);
     window.removeEventListener(ACTIVE_STAFF_UPDATED_EVENT, notifyActiveStaff);
+    unsubscribeOperationalAuth();
   };
 }
 

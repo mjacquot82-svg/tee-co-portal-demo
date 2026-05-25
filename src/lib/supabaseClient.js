@@ -56,8 +56,10 @@ if (!isSupabaseConfigured) {
   try {
     supabaseClient = createClient(supabaseUrl, supabasePublishableKey, {
       auth: {
-        persistSession: false,
-        autoRefreshToken: false,
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+        storageKey: "tee-co-supabase-auth",
       },
     });
   } catch (error) {
