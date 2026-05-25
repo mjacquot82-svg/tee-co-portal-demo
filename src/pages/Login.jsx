@@ -12,7 +12,6 @@ import {
   getOperationalAuthUser,
   isOperationalAuthLoading,
   signInToOperationalWorkspace,
-  signOutOperationalWorkspace,
   subscribeToOperationalAuth,
 } from "../lib/operationalAuthStore";
 import {
@@ -52,6 +51,14 @@ const buttonStyle = {
   fontSize: "15px",
   cursor: "pointer",
   boxShadow: "0 10px 20px rgba(15, 23, 42, 0.12)",
+};
+
+const secondaryButtonStyle = {
+  ...buttonStyle,
+  background: "#f8fafc",
+  color: "#0f172a",
+  border: "1px solid #cbd5e1",
+  boxShadow: "none",
 };
 
 export default function Login() {
@@ -173,7 +180,7 @@ export default function Login() {
     }
 
     if (targetNeedsManagement) {
-      setStaffError("Use account sign-in below to open this page.");
+      setStaffError("Use email and password sign-in to open this page.");
       setStaffPin("");
       return;
     }
@@ -193,7 +200,7 @@ export default function Login() {
     const normalizedEmail = workspaceEmail.trim();
 
     if (!normalizedEmail || !workspacePassword) {
-      setWorkspaceError("Enter your workspace email and password.");
+      setWorkspaceError("Enter your email and password.");
       return;
     }
 
@@ -231,7 +238,7 @@ export default function Login() {
       style={{
         minHeight: "100vh",
         background:
-          "radial-gradient(circle at top left, rgba(226, 232, 240, 0.78), transparent 34%), linear-gradient(180deg, #fafaf9 0%, #f5f5f4 100%)",
+          "radial-gradient(circle at top left, rgba(191, 219, 254, 0.42), transparent 28%), radial-gradient(circle at bottom right, rgba(253, 230, 138, 0.2), transparent 26%), linear-gradient(180deg, #fafaf9 0%, #f8fafc 100%)",
         padding: "40px 24px",
         boxSizing: "border-box",
         display: "flex",
@@ -241,51 +248,51 @@ export default function Login() {
       <section
         style={{
           width: "100%",
-          maxWidth: "460px",
+          maxWidth: "980px",
           margin: "0 auto",
-          background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
-          borderRadius: "28px",
+          background: "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248,250,252,0.96) 100%)",
+          borderRadius: "32px",
           border: "1px solid #e2e8f0",
-          padding: "32px",
-          boxShadow: "0 20px 45px rgba(15, 23, 42, 0.07)",
+          padding: "32px 32px 28px",
+          boxShadow: "0 24px 64px rgba(15, 23, 42, 0.08)",
           display: "grid",
-          gap: "22px",
+          gap: "28px",
         }}
       >
-        <div style={{ display: "grid", gap: "10px" }}>
+        <div style={{ display: "grid", gap: "12px", maxWidth: "620px" }}>
           <p
             style={{
               margin: 0,
-              color: "#64748b",
+              color: "#475569",
               fontSize: "12px",
               fontWeight: 900,
-              letterSpacing: "0.08em",
+              letterSpacing: "0.14em",
               textTransform: "uppercase",
             }}
           >
-            Tee &amp; Co Operations
+            Tee &amp; Co
           </p>
           <h1
             style={{
               margin: 0,
               color: "#0f172a",
-              fontSize: "40px",
-              lineHeight: 1.02,
+              fontSize: "42px",
+              lineHeight: 1.04,
               letterSpacing: "-0.03em",
             }}
           >
-            Sign in
+            Choose how you work today.
           </h1>
           <p
             style={{
               margin: 0,
               color: "#475569",
-              fontSize: "15px",
+              fontSize: "16px",
               lineHeight: 1.6,
             }}
           >
-            Use a PIN for quick workstation access or sign in with your account. We&apos;ll open the
-            right workspace for you.
+            Customers sign in to the portal for approvals, invoices, payments, and order updates.
+            Staff use a PIN for fast access at the counter, in production, or at dispatch.
           </p>
         </div>
 
@@ -293,33 +300,139 @@ export default function Login() {
           style={{
             display: "grid",
             gap: "18px",
+            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+            alignItems: "start",
           }}
         >
           <div
             style={{
               display: "grid",
-              gap: "14px",
-              padding: "18px",
-              borderRadius: "20px",
-              border: "1px solid #e2e8f0",
-              background: "#ffffff",
+              gap: "16px",
+              padding: "22px",
+              borderRadius: "24px",
+              border: "1px solid #dbeafe",
+              background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+              boxShadow: "0 14px 34px rgba(15, 23, 42, 0.05)",
             }}
           >
             <div style={{ display: "grid", gap: "6px" }}>
               <p
                 style={{
                   margin: 0,
-                  color: "#64748b",
+                  color: "#0369a1",
                   fontSize: "12px",
                   fontWeight: 900,
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
                 }}
               >
-                Quick Access
+                Customer Portal
               </p>
+              <h2
+                style={{
+                  margin: 0,
+                  color: "#0f172a",
+                  fontSize: "28px",
+                  lineHeight: 1.1,
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                Customer Sign In
+              </h2>
               <p style={{ margin: 0, color: "#475569", fontSize: "14px", lineHeight: 1.6 }}>
-                Choose the operator at this station and enter the 4-digit PIN.
+                Open your portal to review quotes, check invoices, make payments, and follow order
+                progress.
+              </p>
+            </div>
+
+            <form onSubmit={handleWorkspaceLogin} style={{ display: "grid", gap: "14px" }}>
+              <div>
+                <label style={labelStyle}>Email</label>
+                <input
+                  type="email"
+                  value={workspaceEmail}
+                  onChange={(event) => {
+                    setWorkspaceError("");
+                    setWorkspaceEmail(event.target.value);
+                  }}
+                  placeholder="you@example.com"
+                  style={inputStyle}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Password</label>
+                <input
+                  type="password"
+                  value={workspacePassword}
+                  onChange={(event) => {
+                    setWorkspaceError("");
+                    setWorkspacePassword(event.target.value);
+                  }}
+                  placeholder="Enter password"
+                  style={inputStyle}
+                />
+              </div>
+
+              {workspaceError ? (
+                <p style={{ margin: 0, color: "#b91c1c", fontWeight: 700 }}>{workspaceError}</p>
+              ) : null}
+
+              <button
+                type="submit"
+                disabled={workspaceSubmitting}
+                style={{
+                  ...secondaryButtonStyle,
+                  background: workspaceSubmitting ? "#e2e8f0" : "#f8fafc",
+                  color: workspaceSubmitting ? "#475569" : "#0f172a",
+                  cursor: workspaceSubmitting ? "wait" : "pointer",
+                }}
+              >
+                {workspaceSubmitting ? "Signing In..." : "Open Portal"}
+              </button>
+            </form>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gap: "16px",
+              padding: "22px",
+              borderRadius: "24px",
+              border: "1px solid #e2e8f0",
+              background: "#ffffff",
+              boxShadow: "0 14px 34px rgba(15, 23, 42, 0.05)",
+            }}
+          >
+            <div style={{ display: "grid", gap: "6px" }}>
+              <p
+                style={{
+                  margin: 0,
+                  color: "#475569",
+                  fontSize: "12px",
+                  fontWeight: 900,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Shared Workstation
+              </p>
+              <h2
+                style={{
+                  margin: 0,
+                  color: "#0f172a",
+                  fontSize: "28px",
+                  lineHeight: 1.1,
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                Staff PIN Access
+              </h2>
+              <p style={{ margin: 0, color: "#475569", fontSize: "14px", lineHeight: 1.6 }}>
+                Select the operator at this station, enter the 4-digit PIN, and continue straight
+                into the workspace.
               </p>
             </div>
 
@@ -334,11 +447,15 @@ export default function Login() {
                   }}
                   style={inputStyle}
                 >
-                  {staffOptions.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name} ({user.role})
-                    </option>
-                  ))}
+                  {staffOptions.length ? (
+                    staffOptions.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">No operators available</option>
+                  )}
                 </select>
               </div>
 
@@ -369,89 +486,9 @@ export default function Login() {
                   ...buttonStyle,
                   background: staffOptions.length ? "#171717" : "#94a3b8",
                   cursor: staffOptions.length ? "pointer" : "not-allowed",
-                  boxShadow: "0 10px 20px rgba(15, 23, 42, 0.12)",
                 }}
               >
-                Continue with PIN
-              </button>
-            </form>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gap: "14px",
-              padding: "18px",
-              borderRadius: "20px",
-              border: "1px solid #e2e8f0",
-              background: "#ffffff",
-            }}
-          >
-            <div style={{ display: "grid", gap: "6px" }}>
-              <p
-                style={{
-                  margin: 0,
-                  color: "#64748b",
-                  fontSize: "12px",
-                  fontWeight: 900,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                }}
-              >
-                Account Sign-In
-              </p>
-              <p style={{ margin: 0, color: "#475569", fontSize: "14px", lineHeight: 1.6 }}>
-                Use your email and password for personal access, protected tools, or account-based
-                work.
-              </p>
-            </div>
-
-            <form onSubmit={handleWorkspaceLogin} style={{ display: "grid", gap: "14px" }}>
-              <div>
-                <label style={labelStyle}>Email</label>
-                <input
-                  type="email"
-                  value={workspaceEmail}
-                  onChange={(event) => {
-                    setWorkspaceError("");
-                    setWorkspaceEmail(event.target.value);
-                  }}
-                  placeholder="you@teeandco.com"
-                  style={inputStyle}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                />
-              </div>
-
-              <div>
-                <label style={labelStyle}>Password</label>
-                <input
-                  type="password"
-                  value={workspacePassword}
-                  onChange={(event) => {
-                    setWorkspaceError("");
-                    setWorkspacePassword(event.target.value);
-                  }}
-                  placeholder="Enter password"
-                  style={inputStyle}
-                />
-              </div>
-
-              {workspaceError ? (
-                <p style={{ margin: 0, color: "#b91c1c", fontWeight: 700 }}>{workspaceError}</p>
-              ) : null}
-
-              <button
-                type="submit"
-                disabled={workspaceSubmitting}
-                style={{
-                  ...buttonStyle,
-                  background: workspaceSubmitting ? "#334155" : "#171717",
-                  cursor: workspaceSubmitting ? "wait" : "pointer",
-                  boxShadow: "none",
-                }}
-              >
-                {workspaceSubmitting ? "Signing In..." : "Continue with Account"}
+                Enter Workspace
               </button>
             </form>
           </div>
@@ -466,8 +503,8 @@ export default function Login() {
           }}
         >
           {targetNeedsManagement
-            ? "This page needs an account sign-in."
-            : "PIN keeps shared workstations moving. Account sign-in follows you across sessions."}
+            ? "Use email and password sign-in to continue to this page."
+            : "Customer sign-in is for portal access. Staff PIN access is for in-shop workflows."}
         </p>
       </section>
     </div>
