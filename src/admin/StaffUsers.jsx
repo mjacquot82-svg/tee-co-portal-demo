@@ -307,9 +307,9 @@ export default function StaffUsers() {
               lineHeight: 1.5,
             }}
           >
-            Add managers and staff members here for day-to-day operational sign-in. The
-            owner/admin account is managed separately and does not appear in the staff PIN
-            login list.
+            Add managers and staff members here for day-to-day PIN access. Account sign-in
+            stays available for roles that need broader access, while the quick operator list
+            stays focused on shared-workstation use.
           </div>
 
           <form
@@ -436,8 +436,8 @@ export default function StaffUsers() {
               Status: <strong style={{ color: "#171717" }}>{ownerAccount?.status || "Active"}</strong>
             </p>
             <p style={{ margin: "10px 0 0", color: "#57534e", lineHeight: 1.5, fontSize: "14px" }}>
-              This account signs in through the dedicated owner/admin login path and is kept
-              separate from operational staff users.
+              This account uses email and password sign-in. PIN-based operator switching stays
+              separate so shared workstations remain fast and simple.
             </p>
           </div>
 

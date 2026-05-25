@@ -1142,7 +1142,7 @@ function AdminWorkspaceHeader({ staffUser, authenticatedUser }) {
   const initials = getUserInitials(viewer?.name);
   const displayName = viewer?.name || "Operations";
   const displayRole = viewer?.role || "Workspace";
-  const managementUnlocked =
+  const hasAccountSession =
     Boolean(authenticatedUser?.id) && isAdminWorkspaceView(authenticatedUser);
 
   async function handleLockWorkstation() {
@@ -1155,10 +1155,6 @@ function AdminWorkspaceHeader({ staffUser, authenticatedUser }) {
       target: "/login",
     });
     navigate("/login", { replace: true });
-  }
-
-  async function handleExitManagement() {
-    await signOutOperationalWorkspace();
   }
 
   return (
@@ -1253,44 +1249,9 @@ function AdminWorkspaceHeader({ staffUser, authenticatedUser }) {
             staffUser={staffUser}
           />
 
-          {managementUnlocked ? (
-            <>
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  borderRadius: "999px",
-                  padding: "8px 10px",
-                  background: "#ecfdf5",
-                  border: "1px solid #bbf7d0",
-                  color: "#166534",
-                  fontSize: "12px",
-                  fontWeight: 800,
-                }}
-              >
-                Management unlocked
-              </span>
-
-              <button
-                type="button"
-                onClick={handleExitManagement}
-                style={{
-                  background: "#ffffff",
-                  color: "#171717",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: "12px",
-                  padding: "10px 14px",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                  flexShrink: 0,
-                }}
-              >
-                Exit Management
-              </button>
-            </>
-          ) : (
+          {!hasAccountSession ? (
             <Link
-              to={`/login?mode=management&redirectTo=${encodeURIComponent(location.pathname + location.search)}`}
+              to={`/login?redirectTo=${encodeURIComponent(location.pathname + location.search)}`}
               style={{
                 background: "#fafaf9",
                 color: "#171717",
@@ -1302,9 +1263,9 @@ function AdminWorkspaceHeader({ staffUser, authenticatedUser }) {
                 flexShrink: 0,
               }}
             >
-              Management Sign In
+              Sign In with Account
             </Link>
-          )}
+          ) : null}
 
           {staffUser ? (
             <button
@@ -1377,7 +1338,7 @@ function AdminAuthLoadingState() {
           Restoring session
         </h1>
         <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
-          Checking management access.
+          Checking access.
         </p>
       </div>
     </div>
@@ -1520,7 +1481,7 @@ export default function Layout() {
         pathname: location.pathname,
       });
       navigate(
-        `/login?mode=management&redirectTo=${encodeURIComponent(location.pathname + location.search)}`,
+        `/login?redirectTo=${encodeURIComponent(location.pathname + location.search)}`,
         { replace: true }
       );
       return;

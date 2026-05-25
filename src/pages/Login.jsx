@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
+  canAccessOwnerWorkspace,
   isAdminWorkspaceView,
   requiresProtectedManagementAccess,
 } from "../admin/adminRoleView";
@@ -74,11 +75,9 @@ export default function Login() {
 
   const searchParams = new URLSearchParams(location.search);
   const redirectTo = searchParams.get("redirectTo");
-  const requestedMode = searchParams.get("mode");
   const resolvedRedirectTarget =
     redirectTo && redirectTo.startsWith("/admin") ? redirectTo : "/admin";
   const targetNeedsManagement = requiresProtectedManagementAccess(resolvedRedirectTarget);
-  const managementMode = requestedMode === "management" || targetNeedsManagement;
 
   useEffect(() => {
     void ensureOperationalAuthInitialized().then((snapshot) => {
@@ -129,7 +128,7 @@ export default function Login() {
   useEffect(() => {
     if (operationalAuthLoading) return;
 
-    if (managementMode) {
+    if (targetNeedsManagement) {
       if (!isAdminWorkspaceView(activeOperationalUser)) return;
       navigate(resolvedRedirectTarget, { replace: true });
       return;
@@ -140,10 +139,10 @@ export default function Login() {
   }, [
     activeOperationalUser,
     activeStaffUser,
-    managementMode,
     navigate,
     operationalAuthLoading,
     resolvedRedirectTarget,
+    targetNeedsManagement,
   ]);
 
   function handleStaffLogin(event) {
@@ -169,6 +168,12 @@ export default function Login() {
 
     if (!loginResult.ok) {
       setStaffError(loginResult.message);
+      setStaffPin("");
+      return;
+    }
+
+    if (targetNeedsManagement) {
+      setStaffError("Use account sign-in below to open this page.");
       setStaffPin("");
       return;
     }
@@ -208,20 +213,17 @@ export default function Login() {
       return;
     }
 
-    if (!isAdminWorkspaceView(loginResult.user)) {
-      await signOutOperationalWorkspace();
-      setWorkspaceError("This account does not have management access.");
-      setWorkspacePassword("");
-      return;
-    }
+    const nextTarget = canAccessOwnerWorkspace(resolvedRedirectTarget, loginResult.user)
+      ? resolvedRedirectTarget
+      : "/admin";
 
     pushAuthDiagnostic("login-redirect", {
       actorType: "staff",
       userId: loginResult.user?.id || "",
       role: loginResult.user?.role || "",
-      target: resolvedRedirectTarget,
+      target: nextTarget,
     });
-    navigate(resolvedRedirectTarget, { replace: true });
+    navigate(nextTarget, { replace: true });
   }
 
   return (
@@ -272,7 +274,7 @@ export default function Login() {
               letterSpacing: "-0.03em",
             }}
           >
-            Sign in to the workspace
+            Sign in
           </h1>
           <p
             style={{
@@ -282,168 +284,191 @@ export default function Login() {
               lineHeight: 1.6,
             }}
           >
-            {managementMode
-              ? "Enter management access with your owner or admin account."
-              : "Enter a staff PIN to keep the workstation moving. Management access stays separate."}
+            Use a PIN for quick workstation access or sign in with your account. We&apos;ll open the
+            right workspace for you.
           </p>
         </div>
-
-        {!managementMode ? (
-          <form onSubmit={handleStaffLogin} style={{ display: "grid", gap: "14px" }}>
-            <div>
-              <label style={labelStyle}>Operator</label>
-              <select
-                value={selectedStaffUserId}
-                onChange={(event) => {
-                  setStaffError("");
-                  setSelectedStaffUserId(event.target.value);
-                }}
-                style={inputStyle}
-              >
-                {staffOptions.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name} ({user.role})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label style={labelStyle}>PIN</label>
-              <input
-                type="password"
-                inputMode="numeric"
-                autoComplete="off"
-                value={staffPin}
-                onChange={(event) => {
-                  setStaffError("");
-                  setStaffPin(event.target.value.replace(/\D/g, "").slice(0, 4));
-                }}
-                placeholder="4-digit PIN"
-                style={inputStyle}
-              />
-            </div>
-
-            {staffError ? (
-              <p style={{ margin: 0, color: "#b91c1c", fontWeight: 700 }}>{staffError}</p>
-            ) : null}
-
-            <button
-              type="submit"
-              disabled={!staffOptions.length}
-              style={{
-                ...buttonStyle,
-                background: staffOptions.length ? "#171717" : "#94a3b8",
-                cursor: staffOptions.length ? "pointer" : "not-allowed",
-                boxShadow: "0 10px 20px rgba(15, 23, 42, 0.12)",
-              }}
-            >
-              Start Working
-            </button>
-
-            <p
-              style={{
-                margin: "2px 0 0",
-                color: "#64748b",
-                fontSize: "13px",
-                lineHeight: 1.5,
-              }}
-            >
-              Current operator changes stay fast on shared stations.
-            </p>
-          </form>
-        ) : null}
 
         <section
           style={{
             display: "grid",
-            gap: "14px",
-            padding: "18px",
-            borderRadius: "20px",
-            border: "1px solid #e2e8f0",
-            background: "#ffffff",
+            gap: "18px",
           }}
         >
-          <div style={{ display: "grid", gap: "6px" }}>
-            <p
-              style={{
-                margin: 0,
-                color: "#64748b",
-                fontSize: "12px",
-                fontWeight: 900,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-              }}
-            >
-              Management Access
-            </p>
-            <p style={{ margin: 0, color: "#475569", fontSize: "14px", lineHeight: 1.6 }}>
-              Sign in with your owner or admin account for settings, oversight, and protected tools.
-            </p>
-          </div>
-
-          <form onSubmit={handleWorkspaceLogin} style={{ display: "grid", gap: "14px" }}>
-            <div>
-              <label style={labelStyle}>Email</label>
-              <input
-                type="email"
-                value={workspaceEmail}
-                onChange={(event) => {
-                  setWorkspaceError("");
-                  setWorkspaceEmail(event.target.value);
-                }}
-                placeholder="owner@teeandco.com"
-                style={inputStyle}
-                autoCapitalize="none"
-                autoCorrect="off"
-              />
-            </div>
-
-            <div>
-              <label style={labelStyle}>Password</label>
-              <input
-                type="password"
-                value={workspacePassword}
-                onChange={(event) => {
-                  setWorkspaceError("");
-                  setWorkspacePassword(event.target.value);
-                }}
-                placeholder="Enter password"
-                style={inputStyle}
-              />
-            </div>
-
-            {workspaceError ? (
-              <p style={{ margin: 0, color: "#b91c1c", fontWeight: 700 }}>{workspaceError}</p>
-            ) : null}
-
-            <button
-              type="submit"
-              disabled={workspaceSubmitting}
-              style={{
-                ...buttonStyle,
-                background: workspaceSubmitting ? "#334155" : "#171717",
-                cursor: workspaceSubmitting ? "wait" : "pointer",
-                boxShadow: "none",
-              }}
-            >
-              {workspaceSubmitting ? "Signing In..." : "Open Management"}
-            </button>
-          </form>
-        </section>
-
-        {!managementMode ? (
-          <p
+          <div
             style={{
-              margin: 0,
-              color: "#64748b",
-              fontSize: "13px",
-              lineHeight: 1.5,
+              display: "grid",
+              gap: "14px",
+              padding: "18px",
+              borderRadius: "20px",
+              border: "1px solid #e2e8f0",
+              background: "#ffffff",
             }}
           >
-            Need protected access instead? Use the management sign-in below.
-          </p>
-        ) : null}
+            <div style={{ display: "grid", gap: "6px" }}>
+              <p
+                style={{
+                  margin: 0,
+                  color: "#64748b",
+                  fontSize: "12px",
+                  fontWeight: 900,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Quick Access
+              </p>
+              <p style={{ margin: 0, color: "#475569", fontSize: "14px", lineHeight: 1.6 }}>
+                Choose the operator at this station and enter the 4-digit PIN.
+              </p>
+            </div>
+
+            <form onSubmit={handleStaffLogin} style={{ display: "grid", gap: "14px" }}>
+              <div>
+                <label style={labelStyle}>Operator</label>
+                <select
+                  value={selectedStaffUserId}
+                  onChange={(event) => {
+                    setStaffError("");
+                    setSelectedStaffUserId(event.target.value);
+                  }}
+                  style={inputStyle}
+                >
+                  {staffOptions.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} ({user.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={labelStyle}>PIN</label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={staffPin}
+                  onChange={(event) => {
+                    setStaffError("");
+                    setStaffPin(event.target.value.replace(/\D/g, "").slice(0, 4));
+                  }}
+                  placeholder="4-digit PIN"
+                  style={inputStyle}
+                />
+              </div>
+
+              {staffError ? (
+                <p style={{ margin: 0, color: "#b91c1c", fontWeight: 700 }}>{staffError}</p>
+              ) : null}
+
+              <button
+                type="submit"
+                disabled={!staffOptions.length}
+                style={{
+                  ...buttonStyle,
+                  background: staffOptions.length ? "#171717" : "#94a3b8",
+                  cursor: staffOptions.length ? "pointer" : "not-allowed",
+                  boxShadow: "0 10px 20px rgba(15, 23, 42, 0.12)",
+                }}
+              >
+                Continue with PIN
+              </button>
+            </form>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gap: "14px",
+              padding: "18px",
+              borderRadius: "20px",
+              border: "1px solid #e2e8f0",
+              background: "#ffffff",
+            }}
+          >
+            <div style={{ display: "grid", gap: "6px" }}>
+              <p
+                style={{
+                  margin: 0,
+                  color: "#64748b",
+                  fontSize: "12px",
+                  fontWeight: 900,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Account Sign-In
+              </p>
+              <p style={{ margin: 0, color: "#475569", fontSize: "14px", lineHeight: 1.6 }}>
+                Use your email and password for personal access, protected tools, or account-based
+                work.
+              </p>
+            </div>
+
+            <form onSubmit={handleWorkspaceLogin} style={{ display: "grid", gap: "14px" }}>
+              <div>
+                <label style={labelStyle}>Email</label>
+                <input
+                  type="email"
+                  value={workspaceEmail}
+                  onChange={(event) => {
+                    setWorkspaceError("");
+                    setWorkspaceEmail(event.target.value);
+                  }}
+                  placeholder="you@teeandco.com"
+                  style={inputStyle}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Password</label>
+                <input
+                  type="password"
+                  value={workspacePassword}
+                  onChange={(event) => {
+                    setWorkspaceError("");
+                    setWorkspacePassword(event.target.value);
+                  }}
+                  placeholder="Enter password"
+                  style={inputStyle}
+                />
+              </div>
+
+              {workspaceError ? (
+                <p style={{ margin: 0, color: "#b91c1c", fontWeight: 700 }}>{workspaceError}</p>
+              ) : null}
+
+              <button
+                type="submit"
+                disabled={workspaceSubmitting}
+                style={{
+                  ...buttonStyle,
+                  background: workspaceSubmitting ? "#334155" : "#171717",
+                  cursor: workspaceSubmitting ? "wait" : "pointer",
+                  boxShadow: "none",
+                }}
+              >
+                {workspaceSubmitting ? "Signing In..." : "Continue with Account"}
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <p
+          style={{
+            margin: 0,
+            color: "#64748b",
+            fontSize: "13px",
+            lineHeight: 1.5,
+          }}
+        >
+          {targetNeedsManagement
+            ? "This page needs an account sign-in."
+            : "PIN keeps shared workstations moving. Account sign-in follows you across sessions."}
+        </p>
       </section>
     </div>
   );
