@@ -160,6 +160,13 @@ function resolveStorefrontCategoryOption(
   ) || null;
 }
 
+function mergeStorefrontCategorySources(...sources) {
+  return buildStorefrontCategoryRegistry(
+    [],
+    sources.flatMap((source) => (Array.isArray(source) ? source : []))
+  );
+}
+
 function resolveProductMode(product = {}, matchedItem = null) {
   return matchedItem || product?.garment_library_item_id
     ? PRODUCT_MODES.APPAREL
@@ -293,7 +300,8 @@ function buildFormFromProduct(
     resolveStorefrontCategoryOption(
       storefrontCategories,
       product?.storefront_category_lookup_id,
-      product?.storefront_category
+      product?.storefront_category,
+      product?.category
     ) || null;
   const placements = getProductPlacementConfig(product).map((placement) => placement.label);
   const productionMethods = Array.isArray(product?.production_methods) && product.production_methods.length
@@ -397,6 +405,7 @@ export default function Products() {
   const [isSavingBrand, setIsSavingBrand] = useState(false);
   const [isCreatingStorefrontCategory, setIsCreatingStorefrontCategory] = useState(false);
   const [isCreatingBrand, setIsCreatingBrand] = useState(false);
+  const [localStorefrontCategories, setLocalStorefrontCategories] = useState([]);
   const [saveError, setSaveError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [creationNotice, setCreationNotice] = useState("");
@@ -452,9 +461,13 @@ export default function Products() {
     [products, libraryItems]
   );
   const placementOptions = normalizeListInput(form.placementsText);
+  const storefrontCategorySource = useMemo(
+    () => mergeStorefrontCategorySources(storefrontCategories, localStorefrontCategories),
+    [localStorefrontCategories, storefrontCategories]
+  );
   const activeStorefrontCategories = useMemo(
-    () => buildStorefrontCategoryRegistry(products, storefrontCategories),
-    [products, storefrontCategories]
+    () => buildStorefrontCategoryRegistry(products, storefrontCategorySource),
+    [products, storefrontCategorySource]
   );
   const activeStorefrontCategory = useMemo(
     () =>
@@ -464,7 +477,34 @@ export default function Products() {
       ) || null,
     [activeStorefrontCategories, form.storefront_category_lookup_id]
   );
-  const activeStorefrontCategoryLabel = activeStorefrontCategory?.name || "";
+  const resolvedEditorStorefrontCategory = useMemo(
+    () =>
+      activeStorefrontCategory ||
+      resolveStorefrontCategoryOption(
+        storefrontCategorySource,
+        form.storefront_category_lookup_id,
+        editingProduct?.storefront_category,
+        editingProduct?.category || form.category
+      ) ||
+      null,
+    [
+      activeStorefrontCategory,
+      editingProduct?.category,
+      editingProduct?.storefront_category,
+      form.category,
+      form.storefront_category_lookup_id,
+      storefrontCategorySource,
+    ]
+  );
+  const storefrontCategoryOptions = useMemo(
+    () =>
+      mergeStorefrontCategorySources(
+        activeStorefrontCategories,
+        resolvedEditorStorefrontCategory ? [resolvedEditorStorefrontCategory] : []
+      ),
+    [activeStorefrontCategories, resolvedEditorStorefrontCategory]
+  );
+  const activeStorefrontCategoryLabel = resolvedEditorStorefrontCategory?.name || "";
   const brandFilterOptions = useMemo(
     () =>
       Array.from(
@@ -483,7 +523,7 @@ export default function Products() {
     return products.filter((product) => {
       const storefrontCategory = resolveStorefrontCategoryAssignment(
         product,
-        storefrontCategories
+        storefrontCategorySource
       );
       const storefrontCategoryName = normalizeText(storefrontCategory?.name);
       const brandName = normalizeText(product?.brand_model);
@@ -527,7 +567,7 @@ export default function Products() {
     selectedStatus,
     selectedStorefrontCategory,
     selectedBrand,
-    storefrontCategories,
+    storefrontCategorySource,
     selectedProductMode,
   ]);
 
@@ -907,7 +947,7 @@ export default function Products() {
         brands,
         categories,
         garmentModels,
-        storefrontCategories
+        storefrontCategorySource
       );
       console.info("[Products] created fresh storefront draft from garment template", {
         garmentId: item?.id || null,
@@ -924,7 +964,7 @@ export default function Products() {
     const supplierCategory = findLookupById(categories, item.category_lookup_id);
     const storefrontCategory =
       resolveStorefrontCategoryOption(
-        storefrontCategories,
+        storefrontCategorySource,
         item?.storefront_category_lookup_id,
         item?.storefront_category,
         supplierCategory?.name || item?.category
@@ -983,7 +1023,7 @@ export default function Products() {
         brands,
         categories,
         garmentModels,
-        storefrontCategories,
+        storefrontCategorySource,
         storefrontSetup
       )
     );
@@ -1001,7 +1041,7 @@ export default function Products() {
     location.state,
     navigate,
     sizes,
-    storefrontCategories,
+    storefrontCategorySource,
   ]);
 
   useEffect(() => {
@@ -1166,7 +1206,7 @@ export default function Products() {
         brands,
         categories,
         garmentModels,
-        storefrontCategories
+        storefrontCategorySource
       )
     );
     focusEditorNameField();
@@ -1176,7 +1216,7 @@ export default function Products() {
     const nextName = normalizeText(newStorefrontCategoryName);
     if (!nextName) return;
 
-    const existingCategory = storefrontCategories.find(
+    const existingCategory = storefrontCategorySource.find(
       (category) => normalizeText(category?.name).toLowerCase() === nextName.toLowerCase()
     );
 
@@ -1198,6 +1238,9 @@ export default function Products() {
         name: nextName,
         active: true,
       });
+      setLocalStorefrontCategories((current) =>
+        mergeStorefrontCategorySources(current, [createdCategory])
+      );
       setNewStorefrontCategoryName("");
       setIsCreatingStorefrontCategory(false);
       setForm((current) => ({
@@ -1271,7 +1314,13 @@ export default function Products() {
     const storefrontCategory = findStorefrontCategoryBySelectionValue(
       activeStorefrontCategories,
       form.storefront_category_lookup_id
-    );
+    ) ||
+      resolveStorefrontCategoryOption(
+        storefrontCategorySource,
+        form.storefront_category_lookup_id,
+        editingProduct?.storefront_category,
+        editingProduct?.category || form.category
+      );
     const flatPrice = Number(form.flat_price || 0);
     const selectedSizes =
       !isManualProductMode && selectedGarmentItem && isOneSizeOnly(selectedGarmentItem.sizes || [])
@@ -1584,7 +1633,7 @@ export default function Products() {
                   const linkedGarment = findLinkedGarmentLibraryItem(product, libraryItems);
                   const storefrontCategory = resolveStorefrontCategoryAssignment(
                     product,
-                    storefrontCategories
+                    storefrontCategorySource
                   );
                   const renderIdentity = buildProductRenderIdentity(product, index);
                   const isActiveCard =
@@ -1725,14 +1774,14 @@ export default function Products() {
             className={`products-editor products-editor-sheet ${editingProduct ? "is-editing" : ""}`}
           >
             <div className="products-editor-intro">
-              <p className="products-eyebrow">Product Editor</p>
+              <p className="products-eyebrow">Storefront Composer</p>
               <h2 style={{ margin: 0 }}>
-                {editingProduct ? `Edit ${editingProduct.name}` : "Storefront Product Details"}
+                {editingProduct ? `Edit ${editingProduct.name}` : "Storefront Product"}
               </h2>
               <p style={{ margin: 0, color: "#64748b" }}>
                 {editingProduct
-                  ? "Update the customer-facing details here without leaving the catalog."
-                  : "Keep creation focused on the essentials. Open advanced settings only when you need them."}
+                  ? "Update what shoppers see here without leaving the catalog."
+                  : "Keep setup focused on the essentials first. Open extra controls only when you need them."}
               </p>
               <div className="products-editor-topbar">
                 <button
@@ -1747,8 +1796,8 @@ export default function Products() {
                 </button>
               </div>
               <div className="products-editor-utility-row">
-                <span>Garment templates live in the <Link to="/admin/garments">Garment Library</Link>.</span>
-                <span>Manual products can still be created here.</span>
+                <span>Start from a <Link to="/admin/garments">Garment Library</Link> template when you want reusable product setup.</span>
+                <span>Manual products still work here too.</span>
               </div>
             </div>
 
@@ -1761,7 +1810,7 @@ export default function Products() {
                   <p className="products-section-step">Storefront</p>
                   <h2>Product Header</h2>
                 </div>
-                <p>Lead with the storefront presentation: image, title, category, price, and visibility.</p>
+                <p>Focus on what shoppers see first: image, name, category, price, and visibility.</p>
               </div>
 
               <div className="products-storefront-header">
@@ -1773,7 +1822,7 @@ export default function Products() {
                 <div className="products-storefront-header-main">
                   <div className="products-storefront-header-topline">
                     <span className="products-summary-label">
-                      {isManualProductMode ? "Manual storefront item" : "Garment-linked storefront item"}
+                      {isManualProductMode ? "Manual product" : "Template-backed product"}
                     </span>
                     <div className="products-storefront-status-group">
                       <div className="products-segmented-toggle" role="group" aria-label="Storefront status">
@@ -1851,7 +1900,7 @@ export default function Products() {
                           style={fieldStyle}
                         >
                           <option value="">Uncategorized for now</option>
-                          {activeStorefrontCategories.map((category) => (
+                          {storefrontCategoryOptions.map((category) => (
                             <option
                               key={category.lookupId || category.id}
                               value={buildStorefrontCategorySelectionValue(category)}
@@ -1913,7 +1962,7 @@ export default function Products() {
                         <span>
                           {activeStorefrontCategoryLabel
                             ? `Selected: ${activeStorefrontCategoryLabel}`
-                            : "Keeps the product uncategorized until you assign one."}
+                            : "Choose a storefront category to group this product in the shop."}
                         </span>
                       </div>
 
@@ -2021,7 +2070,7 @@ export default function Products() {
                       onSelect={handleGarmentSelect}
                       options={libraryItems.filter((item) => item.active !== false)}
                       placeholder="Search garment library"
-                      helperText="The template supplies brand, category, colors, sizes, and production defaults."
+                      helperText="The template fills in brand, category, colors, sizes, and production defaults."
                       action={
                         <Link className="products-inline-action-link" to="/admin/garments">
                           Open Garment Library
