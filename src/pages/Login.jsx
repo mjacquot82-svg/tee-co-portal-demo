@@ -1,17 +1,12 @@
-import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import {
-  getActiveOperationalStaffUsers,
-  subscribeToStaffUsers,
-} from "../lib/staffUsersStore";
+import { useLocation, useNavigate } from "react-router-dom";
+import { getActiveOperationalStaffUsers, subscribeToStaffUsers } from "../lib/staffUsersStore";
 import { pushAuthDiagnostic } from "../lib/authDiagnostics";
 import { clearAllAuthSessions } from "../lib/authSessionStore";
-import { setActiveCustomerSession } from "../lib/customerSessionStore";
 import {
   ensureOperationalAuthInitialized,
   getOperationalAuthUser,
   signInToOperationalWorkspace,
-  signOutOperationalWorkspace,
   subscribeToOperationalAuth,
 } from "../lib/operationalAuthStore";
 
@@ -23,47 +18,37 @@ const inputStyle = {
   fontSize: "15px",
   outline: "none",
   boxSizing: "border-box",
+  background: "#ffffff",
 };
 
 const labelStyle = {
   display: "block",
   marginBottom: "8px",
-  fontWeight: "600",
+  fontWeight: "700",
   color: "#292524",
 };
 
-const sectionEyebrowStyle = {
-  margin: 0,
-  fontSize: "12px",
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
-  color: "#78716c",
-};
-
-const primaryButtonStyle = {
+const buttonStyle = {
   width: "100%",
   background: "#171717",
   color: "#ffffff",
   border: "none",
   borderRadius: "14px",
   padding: "14px 18px",
-  fontWeight: "700",
+  fontWeight: "800",
   fontSize: "15px",
   cursor: "pointer",
-  boxShadow: "0 10px 20px rgba(0,0,0,0.10)",
+  boxShadow: "0 10px 20px rgba(15, 23, 42, 0.12)",
 };
 
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [staffUsers, setStaffUsers] = useState(() => getActiveOperationalStaffUsers());
-  const [customerError, setCustomerError] = useState("");
   const [workspaceEmail, setWorkspaceEmail] = useState("");
   const [workspacePassword, setWorkspacePassword] = useState("");
   const [workspaceError, setWorkspaceError] = useState("");
   const [workspaceSubmitting, setWorkspaceSubmitting] = useState(false);
+  const [staffCount, setStaffCount] = useState(() => getActiveOperationalStaffUsers().length);
   const [activeOperationalUser, setActiveOperationalUser] = useState(() =>
     getOperationalAuthUser()
   );
@@ -73,15 +58,14 @@ export default function Login() {
     redirectTo && redirectTo.startsWith("/admin") ? redirectTo : "/admin";
 
   useEffect(() => {
-    function syncStaffUsers(nextUsers) {
-      const activeUsers = nextUsers.filter(
-        (user) => user.status !== "Inactive" && user.role !== "Owner"
-      );
-      setStaffUsers(activeUsers);
+    function syncStaffCount(nextUsers = getActiveOperationalStaffUsers()) {
+      setStaffCount(nextUsers.length);
     }
 
-    syncStaffUsers(getActiveOperationalStaffUsers());
-    return subscribeToStaffUsers(syncStaffUsers);
+    syncStaffCount();
+    return subscribeToStaffUsers((nextUsers) => {
+      syncStaffCount(nextUsers.filter((user) => user.status !== "Inactive" && user.role !== "Owner"));
+    });
   }, []);
 
   useEffect(() => {
@@ -96,38 +80,8 @@ export default function Login() {
 
   useEffect(() => {
     if (!activeOperationalUser?.id) return;
-
     navigate(resolvedRedirectTarget, { replace: true });
   }, [activeOperationalUser, navigate, resolvedRedirectTarget]);
-
-  function handleCustomerLogin(e) {
-    e.preventDefault();
-    const normalizedEmail = email.trim();
-    const normalizedPassword = password.trim();
-
-    if (!normalizedEmail || !normalizedPassword) {
-      setCustomerError("Enter your email and password to start a new customer session.");
-      pushAuthDiagnostic("customer-login-blocked", {
-        reason: "missing-credentials",
-        emailPresent: Boolean(normalizedEmail),
-        passwordPresent: Boolean(normalizedPassword),
-      });
-      return;
-    }
-
-    const startCustomerSession = async () => {
-      await signOutOperationalWorkspace();
-      clearAllAuthSessions("customer-login-start");
-      setActiveCustomerSession({ email: normalizedEmail }, { source: "customer-login" });
-      pushAuthDiagnostic("login-redirect", {
-        actorType: "customer",
-        target: "/my-orders",
-      });
-      navigate("/my-orders");
-    };
-
-    void startCustomerSession();
-  }
 
   async function handleWorkspaceLogin(event) {
     event.preventDefault();
@@ -167,276 +121,189 @@ export default function Login() {
   return (
     <div
       style={{
-        maxWidth: "1040px",
-        margin: "0 auto",
+        minHeight: "100vh",
+        background:
+          "radial-gradient(circle at top left, rgba(226, 232, 240, 0.9), transparent 38%), linear-gradient(180deg, #f8fafc 0%, #f5f5f4 100%)",
         padding: "40px 24px 56px",
-        fontFamily:
-          'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        boxSizing: "border-box",
       }}
     >
-      <div style={{ marginBottom: "24px" }}>
-        <p style={{ ...sectionEyebrowStyle, marginBottom: "12px" }}>Tee &amp; Co Access</p>
-        <h1
-          style={{
-            margin: "0 0 10px",
-            fontSize: "40px",
-            lineHeight: 1.02,
-            color: "#1c1917",
-            letterSpacing: "-0.03em",
-          }}
-        >
-          One platform, two access points
-        </h1>
-        <p
-          style={{
-            margin: 0,
-            maxWidth: "760px",
-            color: "#57534e",
-            lineHeight: 1.65,
-            fontSize: "15px",
-          }}
-        >
-          Customers sign in to their portal for orders and updates. Internal users enter the
-          same workspace and the system applies the right operational access after sign-in.
-        </p>
-      </div>
-
       <div
         style={{
+          maxWidth: "1040px",
+          margin: "0 auto",
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
           gap: "24px",
           alignItems: "stretch",
         }}
       >
-        <div
+        <section
           style={{
-            background: "linear-gradient(145deg, #ffffff 0%, #f5f5f4 100%)",
+            background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
             borderRadius: "28px",
-            padding: "36px",
-            border: "1px solid #e7e5e4",
-            boxShadow: "0 18px 40px rgba(0,0,0,0.06)",
+            border: "1px solid #e2e8f0",
+            padding: "34px",
+            boxShadow: "0 20px 45px rgba(15, 23, 42, 0.07)",
+            display: "grid",
+            gap: "24px",
           }}
         >
-          <p style={sectionEyebrowStyle}>Customer Portal</p>
+          <div style={{ display: "grid", gap: "12px" }}>
+            <p
+              style={{
+                margin: 0,
+                color: "#64748b",
+                fontSize: "12px",
+                fontWeight: 900,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+              }}
+            >
+              Tee &amp; Co Operations
+            </p>
+            <h1
+              style={{
+                margin: 0,
+                color: "#0f172a",
+                fontSize: "40px",
+                lineHeight: 1.02,
+                letterSpacing: "-0.03em",
+              }}
+            >
+              Sign in to the workspace
+            </h1>
+            <p
+              style={{
+                margin: 0,
+                color: "#475569",
+                fontSize: "15px",
+                lineHeight: 1.65,
+                maxWidth: "560px",
+              }}
+            >
+              Use your authenticated owner or admin account to open the operational workspace.
+              Staff PIN switching stays available inside the workspace for quick handoffs on
+              shared stations.
+            </p>
+          </div>
 
-          <h2
-            style={{
-              marginTop: "10px",
-              marginBottom: "10px",
-              fontSize: "36px",
-              lineHeight: 1.05,
-              color: "#1c1917",
-            }}
-          >
-            Sign in to your portal
-          </h2>
-
-          <p
-            style={{
-              marginTop: 0,
-              color: "#57534e",
-              lineHeight: 1.6,
-              marginBottom: "28px",
-              maxWidth: "520px",
-            }}
-          >
-            View your order history, track status updates, and respond to payment requests
-            from Tee &amp; Co.
-          </p>
-
-          <form onSubmit={handleCustomerLogin}>
-            <div style={{ marginBottom: "16px" }}>
-              <label style={labelStyle}>Email</label>
+          <form onSubmit={handleWorkspaceLogin} style={{ display: "grid", gap: "14px" }}>
+            <div>
+              <label style={labelStyle}>Workspace Email</label>
               <input
                 type="email"
-                value={email}
-                onChange={(e) => {
-                  setCustomerError("");
-                  setEmail(e.target.value);
+                value={workspaceEmail}
+                onChange={(event) => {
+                  setWorkspaceError("");
+                  setWorkspaceEmail(event.target.value);
                 }}
-                placeholder="you@example.com"
+                placeholder="owner@teeandco.com"
                 style={inputStyle}
+                autoCapitalize="none"
+                autoCorrect="off"
               />
             </div>
 
-            <div style={{ marginBottom: "12px" }}>
+            <div>
               <label style={labelStyle}>Password</label>
               <input
                 type="password"
-                value={password}
-                onChange={(e) => {
-                  setCustomerError("");
-                  setPassword(e.target.value);
+                value={workspacePassword}
+                onChange={(event) => {
+                  setWorkspaceError("");
+                  setWorkspacePassword(event.target.value);
                 }}
                 placeholder="Enter password"
                 style={inputStyle}
               />
             </div>
 
-            {customerError ? (
-              <p style={{ margin: "0 0 14px", color: "#b91c1c", fontWeight: 700 }}>
-                {customerError}
+            {workspaceError ? (
+              <p style={{ margin: 0, color: "#b91c1c", fontWeight: 700 }}>
+                {workspaceError}
               </p>
             ) : null}
 
-            <div
+            <button
+              type="submit"
+              disabled={workspaceSubmitting}
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "22px",
-                gap: "12px",
-                flexWrap: "wrap",
+                ...buttonStyle,
+                background: workspaceSubmitting ? "#334155" : "#171717",
+                cursor: workspaceSubmitting ? "wait" : "pointer",
               }}
             >
-              <Link
-                to="/signup"
-                style={{
-                  color: "#171717",
-                  textDecoration: "none",
-                  fontWeight: "600",
-                  fontSize: "14px",
-                }}
-              >
-                Create account
-              </Link>
-
-              <button
-                type="button"
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#57534e",
-                  cursor: "pointer",
-                  padding: 0,
-                  fontSize: "14px",
-                }}
-              >
-                Forgot password?
-              </button>
-            </div>
-
-            <button type="submit" style={primaryButtonStyle}>
-              Sign In
+              {workspaceSubmitting ? "Signing In..." : "Enter Workspace"}
             </button>
           </form>
-        </div>
+        </section>
 
-        <div
+        <aside
           style={{
-            background: "linear-gradient(180deg, #fffdf8 0%, #ffffff 100%)",
+            background: "#ffffff",
             borderRadius: "28px",
+            border: "1px solid #e2e8f0",
             padding: "30px",
-            border: "1px solid #e7e5e4",
-            boxShadow: "0 18px 40px rgba(0,0,0,0.05)",
+            boxShadow: "0 20px 45px rgba(15, 23, 42, 0.05)",
             display: "grid",
-            gap: "22px",
+            gap: "16px",
             alignContent: "start",
           }}
         >
-          <div>
-            <p style={sectionEyebrowStyle}>Internal Workspace</p>
-            <h2 style={{ margin: "10px 0 8px", fontSize: "26px", color: "#1c1917" }}>
-              Workspace sign-in
-            </h2>
-            <p style={{ margin: 0, color: "#57534e", lineHeight: 1.6 }}>
-              Owners and admins enter the operational workspace with their assigned email
-              address and password. The current authenticated Supabase user is treated as
-              the foundational owner/admin session.
+          <div
+            style={{
+              borderRadius: "18px",
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              padding: "18px",
+            }}
+          >
+            <p
+              style={{
+                margin: "0 0 6px",
+                color: "#0f172a",
+                fontSize: "15px",
+                fontWeight: 800,
+              }}
+            >
+              After sign-in
+            </p>
+            <p style={{ margin: 0, color: "#475569", fontSize: "14px", lineHeight: 1.6 }}>
+              The authenticated session stays active in the background. Inside the workspace,
+              staff can switch operational identity with a 4-digit PIN for faster shared-terminal
+              use.
             </p>
           </div>
 
           <div
             style={{
+              borderRadius: "18px",
+              background: "#fffdf8",
               border: "1px solid #e7e5e4",
-              borderRadius: "22px",
-              padding: "22px",
-              background: "#ffffff",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.65)",
+              padding: "18px",
             }}
           >
-            <div style={{ marginBottom: "18px" }}>
-              <p style={{ margin: "0 0 6px", fontWeight: 700, color: "#292524" }}>
-                Operational access
-              </p>
-              <p
-                style={{
-                  margin: 0,
-                  color: "#57534e",
-                  lineHeight: 1.5,
-                  fontSize: "14px",
-                }}
-              >
-                Use your Supabase-authenticated workspace account. Session restore and logout
-                are handled automatically for the admin workspace.
-              </p>
-            </div>
-
-            <form onSubmit={handleWorkspaceLogin}>
-              <div style={{ marginBottom: "12px" }}>
-                <label style={labelStyle}>Workspace Email</label>
-                <input
-                  type="email"
-                  value={workspaceEmail}
-                  onChange={(event) => {
-                    setWorkspaceError("");
-                    setWorkspaceEmail(event.target.value);
-                  }}
-                  placeholder="owner@teeandco.com"
-                  style={inputStyle}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                />
-              </div>
-
-              <div style={{ marginBottom: "12px" }}>
-                <label style={labelStyle}>Password</label>
-                <input
-                  type="password"
-                  value={workspacePassword}
-                  onChange={(event) => {
-                    setWorkspaceError("");
-                    setWorkspacePassword(event.target.value);
-                  }}
-                  placeholder="Enter password"
-                  style={inputStyle}
-                />
-              </div>
-
-              {workspaceError ? (
-                <p style={{ margin: "0 0 14px", color: "#b91c1c", fontWeight: 700 }}>
-                  {workspaceError}
-                </p>
-              ) : null}
-
-              <button
-                type="submit"
-                disabled={workspaceSubmitting}
-                style={{
-                  ...primaryButtonStyle,
-                  background: workspaceSubmitting ? "#44403c" : primaryButtonStyle.background,
-                  cursor: workspaceSubmitting ? "wait" : "pointer",
-                }}
-              >
-                {workspaceSubmitting ? "Signing In..." : "Enter Workspace"}
-              </button>
-            </form>
-
             <p
               style={{
-                margin: "14px 0 0",
-                color: "#78716c",
-                fontSize: "13px",
-                lineHeight: 1.5,
+                margin: "0 0 6px",
+                color: "#0f172a",
+                fontSize: "15px",
+                fontWeight: 800,
               }}
             >
-              {staffUsers.length
-                ? `${staffUsers.length} local staff profiles remain available for workflow data, while access control now runs through authenticated Supabase sessions.`
-                : "Operational workflow data remains intact while access control is now handled by authenticated Supabase sessions."}
+              Operational setup
+            </p>
+            <p style={{ margin: "0 0 10px", color: "#57534e", fontSize: "14px", lineHeight: 1.6 }}>
+              {staffCount
+                ? `${staffCount} active staff profile${staffCount === 1 ? "" : "s"} ready for PIN-based workstation switching.`
+                : "Staff profiles can still be managed inside the workspace when you need them."}
+            </p>
+            <p style={{ margin: 0, color: "#78716c", fontSize: "13px", lineHeight: 1.5 }}>
+              Use this screen for real workspace authentication only.
             </p>
           </div>
-        </div>
+        </aside>
       </div>
     </div>
   );

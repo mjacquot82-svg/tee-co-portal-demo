@@ -14,8 +14,12 @@ import {
   resolveOperationalRole,
 } from "../admin/adminRoleView";
 import {
+  attemptStaffLogin,
+  clearActiveStaffSession,
+  getActiveOperationalStaffUsers,
   getActiveStaffUser,
   subscribeToActiveStaffUser,
+  subscribeToStaffUsers,
 } from "../lib/staffUsersStore";
 import {
   getActiveCustomerSession,
@@ -29,6 +33,7 @@ import { useStaffAssignmentAttention } from "../lib/staffAssignmentAttentionStor
 import { buildStaffAssignmentAttentionItems } from "../staff/buildStaffAssignmentAttentionItems";
 import {
   ensureOperationalAuthInitialized,
+  getOperationalAuthUser,
   isOperationalAuthLoading,
   signOutOperationalWorkspace,
   subscribeToOperationalAuth,
@@ -837,7 +842,232 @@ function PublicHeader() {
   );
 }
 
-function AdminWorkspaceHeader({ staffUser }) {
+function OperationalIdentitySwitcher({ staffUser, authenticatedUser }) {
+  const [staffOptions, setStaffOptions] = useState(() => getActiveOperationalStaffUsers());
+  const [selectedStaffUserId, setSelectedStaffUserId] = useState("");
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+
+  const canQuickSwitch =
+    Boolean(authenticatedUser?.id) && isAdminWorkspaceView(authenticatedUser);
+  const isOwnerMode = !staffUser?.id || staffUser.id === authenticatedUser?.id;
+
+  useEffect(() => {
+    function syncStaffOptions(nextUsers = getActiveOperationalStaffUsers()) {
+      setStaffOptions(nextUsers);
+    }
+
+    syncStaffOptions();
+    return subscribeToStaffUsers((nextUsers) => {
+      syncStaffOptions(nextUsers.filter((user) => user.status !== "Inactive" && user.role !== "Owner"));
+    });
+  }, []);
+
+  if (!canQuickSwitch) return null;
+
+  const resolvedSelectedStaffUserId =
+    staffUser?.id && staffOptions.some((user) => user.id === staffUser.id)
+      ? staffUser.id
+      : staffOptions.some((user) => user.id === selectedStaffUserId)
+        ? selectedStaffUserId
+        : staffOptions[0]?.id || "";
+
+  function handleSwitch(event) {
+    event.preventDefault();
+
+    if (!resolvedSelectedStaffUserId) {
+      setError("Select a staff profile first.");
+      return;
+    }
+
+    if (String(pin).replace(/\D/g, "").length !== 4) {
+      setError("Enter the 4-digit staff PIN.");
+      return;
+    }
+
+    const result = attemptStaffLogin({
+      staffUserId: resolvedSelectedStaffUserId,
+      pin,
+      persistSession: true,
+    });
+
+    if (!result.ok) {
+      setError(result.message);
+      setPin("");
+      return;
+    }
+
+    setError("");
+    setPin("");
+  }
+
+  function handleReturnToOwner() {
+    clearActiveStaffSession({ reason: "return-to-owner-session" });
+    setError("");
+    setPin("");
+  }
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: "12px",
+        width: "100%",
+        minWidth: "min(100%, 320px)",
+      }}
+    >
+      <div
+        style={{
+          border: "1px solid #e2e8f0",
+          borderRadius: "16px",
+          background: "#f8fafc",
+          padding: "14px",
+          display: "grid",
+          gap: "6px",
+        }}
+      >
+        <p
+          style={{
+            margin: 0,
+            color: "#64748b",
+            fontSize: "11px",
+            fontWeight: 900,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+          }}
+        >
+          Workstation Access
+        </p>
+        <p style={{ margin: 0, color: "#171717", fontSize: "14px", fontWeight: 700 }}>
+          Authenticated as {authenticatedUser?.email || authenticatedUser?.name || "Owner / Admin"}
+        </p>
+        <p style={{ margin: 0, color: "#475569", fontSize: "13px", lineHeight: 1.5 }}>
+          Use PIN switching for counter, production, and pickup handoffs without replacing the
+          authenticated admin session.
+        </p>
+      </div>
+
+      <form
+        onSubmit={handleSwitch}
+        style={{
+          display: "grid",
+          gap: "10px",
+          border: "1px solid #e2e8f0",
+          borderRadius: "16px",
+          background: "#ffffff",
+          padding: "14px",
+        }}
+      >
+        <div style={{ display: "grid", gap: "4px" }}>
+          <label
+            htmlFor="workstation-staff-user"
+            style={{ color: "#171717", fontSize: "13px", fontWeight: 800 }}
+          >
+            Operate as
+          </label>
+          <select
+            id="workstation-staff-user"
+            value={resolvedSelectedStaffUserId}
+            onChange={(event) => {
+              setError("");
+              setSelectedStaffUserId(event.target.value);
+            }}
+            style={{
+              width: "100%",
+              padding: "11px 12px",
+              borderRadius: "12px",
+              border: "1px solid #cbd5e1",
+              background: "#ffffff",
+              fontSize: "14px",
+              color: "#171717",
+            }}
+          >
+            {staffOptions.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.name} ({user.role})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ display: "grid", gap: "4px" }}>
+          <label
+            htmlFor="workstation-staff-pin"
+            style={{ color: "#171717", fontSize: "13px", fontWeight: 800 }}
+          >
+            Staff PIN
+          </label>
+          <input
+            id="workstation-staff-pin"
+            type="password"
+            inputMode="numeric"
+            autoComplete="off"
+            value={pin}
+            onChange={(event) => {
+              setError("");
+              setPin(event.target.value.replace(/\D/g, "").slice(0, 4));
+            }}
+            placeholder="4-digit PIN"
+            style={{
+              width: "100%",
+              padding: "11px 12px",
+              borderRadius: "12px",
+              border: "1px solid #cbd5e1",
+              background: "#ffffff",
+              fontSize: "14px",
+              color: "#171717",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
+
+        {error ? (
+          <p style={{ margin: 0, color: "#b91c1c", fontSize: "13px", fontWeight: 700 }}>
+            {error}
+          </p>
+        ) : null}
+
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button
+            type="submit"
+            disabled={!staffOptions.length}
+            style={{
+              background: staffOptions.length ? "#171717" : "#94a3b8",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: "12px",
+              padding: "10px 14px",
+              fontWeight: 800,
+              cursor: staffOptions.length ? "pointer" : "not-allowed",
+            }}
+          >
+            Switch With PIN
+          </button>
+
+          {!isOwnerMode ? (
+            <button
+              type="button"
+              onClick={handleReturnToOwner}
+              style={{
+                background: "#ffffff",
+                color: "#171717",
+                border: "1px solid #cbd5e1",
+                borderRadius: "12px",
+                padding: "10px 14px",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              Return To Owner
+            </button>
+          ) : null}
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function AdminWorkspaceHeader({ staffUser, authenticatedUser }) {
   const navigate = useNavigate();
   const viewer = getAdminViewer(staffUser);
   const initials = getUserInitials(viewer?.name);
@@ -947,6 +1177,11 @@ function AdminWorkspaceHeader({ staffUser }) {
               ({displayRole})
             </p>
           </div>
+
+          <OperationalIdentitySwitcher
+            staffUser={staffUser}
+            authenticatedUser={authenticatedUser}
+          />
 
           {staffUser ? (
             <button
@@ -1086,6 +1321,9 @@ export default function Layout() {
   const navigate = useNavigate();
   const isAdmin = location.pathname.startsWith("/admin");
   const requiresCustomerSession = location.pathname === "/my-orders";
+  const [authenticatedOperationalUser, setAuthenticatedOperationalUser] = useState(() =>
+    getOperationalAuthUser()
+  );
   const [activeStaffUser, setActiveStaffUser] = useState(() => getActiveStaffUser());
   const [operationalAuthLoading, setOperationalAuthLoading] = useState(() =>
     isOperationalAuthLoading()
@@ -1097,12 +1335,14 @@ export default function Layout() {
   useEffect(() => {
     void ensureOperationalAuthInitialized().then((snapshot) => {
       setOperationalAuthLoading(snapshot.isLoading);
-      setActiveStaffUser(snapshot.operationalUser);
+      setAuthenticatedOperationalUser(snapshot.operationalUser);
+      setActiveStaffUser(getActiveStaffUser());
     });
 
     return subscribeToOperationalAuth((snapshot) => {
       setOperationalAuthLoading(snapshot.isLoading);
-      setActiveStaffUser(snapshot.operationalUser);
+      setAuthenticatedOperationalUser(snapshot.operationalUser);
+      setActiveStaffUser(getActiveStaffUser());
     });
   }, []);
 
@@ -1136,6 +1376,8 @@ export default function Layout() {
 
     pushAuthDiagnostic("role-resolution", {
       pathname: location.pathname,
+      authenticatedUserId: authenticatedOperationalUser?.id || "",
+      authenticatedUserRole: authenticatedOperationalUser?.role || "",
       currentUserId: activeStaffUser?.id || "",
       currentUserRole: activeStaffUser?.role || "",
       workspaceAccess: canAccessOwnerWorkspace(location.pathname, activeStaffUser)
@@ -1143,11 +1385,11 @@ export default function Layout() {
         : "blocked",
     });
 
-    if (!hasOperationalSession(activeStaffUser)) {
+    if (!hasOperationalSession(authenticatedOperationalUser)) {
       pushAuthDiagnostic("login-redirect", {
         actorType: "staff",
         target: "/login",
-        reason: "missing-operational-session",
+        reason: "missing-authenticated-session",
         pathname: location.pathname,
       });
       navigate(`/login?redirectTo=${encodeURIComponent(location.pathname + location.search)}`, {
@@ -1155,6 +1397,8 @@ export default function Layout() {
       });
       return;
     }
+
+    if (!hasOperationalSession(activeStaffUser)) return;
     if (canAccessOwnerWorkspace(location.pathname, activeStaffUser)) return;
     pushAuthDiagnostic("login-redirect", {
       actorType: "staff",
@@ -1165,7 +1409,15 @@ export default function Layout() {
       pathname: location.pathname,
     });
     navigate("/admin", { replace: true });
-  }, [activeStaffUser, isAdmin, location.pathname, location.search, navigate, operationalAuthLoading]);
+  }, [
+    activeStaffUser,
+    authenticatedOperationalUser,
+    isAdmin,
+    location.pathname,
+    location.search,
+    navigate,
+    operationalAuthLoading,
+  ]);
 
   useEffect(() => {
     if (!requiresCustomerSession) return;
@@ -1263,7 +1515,10 @@ export default function Layout() {
             />
 
             <div style={{ flex: 1, minWidth: 0 }}>
-              <AdminWorkspaceHeader staffUser={visibleStaffUser} />
+              <AdminWorkspaceHeader
+                staffUser={visibleStaffUser}
+                authenticatedUser={authenticatedOperationalUser}
+              />
 
               <main style={{ minWidth: 0 }}>
                 <Outlet />

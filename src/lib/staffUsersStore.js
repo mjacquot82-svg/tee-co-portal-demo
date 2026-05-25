@@ -395,12 +395,7 @@ export function clearActiveStaffSession(options = {}) {
   setActiveStaffUser(null, options);
 }
 
-export function getActiveStaffUser() {
-  const operationalAuthUser = getOperationalAuthUser();
-  if (operationalAuthUser?.id) {
-    return operationalAuthUser;
-  }
-
+function getStoredActiveStaffUser() {
   if (!hasBrowserStorage()) return null;
 
   try {
@@ -487,6 +482,21 @@ export function getActiveStaffUser() {
     });
     return null;
   }
+}
+
+export function getActiveStaffUser() {
+  const operationalAuthUser = getOperationalAuthUser();
+  const storedActiveStaffUser = getStoredActiveStaffUser();
+
+  if (storedActiveStaffUser?.id) {
+    return storedActiveStaffUser;
+  }
+
+  if (operationalAuthUser?.id) {
+    return operationalAuthUser;
+  }
+
+  return null;
 }
 
 export function attemptStaffLogin({ staffUserId, pin, persistSession = true }) {
