@@ -415,6 +415,7 @@ export default function Products() {
   const [editingProductId, setEditingProductId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [selectedFeaturedState, setSelectedFeaturedState] = useState("all");
   const [selectedStorefrontCategory, setSelectedStorefrontCategory] = useState("all");
   const [selectedBrand, setSelectedBrand] = useState("all");
   const [selectedProductMode, setSelectedProductMode] = useState("all");
@@ -575,9 +576,15 @@ export default function Products() {
         (selectedStatus === "active"
           ? normalizeStatusValue(product?.status) === "active"
           : normalizeStatusValue(product?.status) !== "active");
+      const matchesFeaturedState =
+        selectedFeaturedState === "all" ||
+        (selectedFeaturedState === "featured"
+          ? Boolean(product?.is_featured)
+          : !product?.is_featured);
       return (
         matchesSearch &&
         matchesStatus &&
+        matchesFeaturedState &&
         matchesStorefrontCategory &&
         matchesBrand &&
         matchesProductMode
@@ -587,6 +594,7 @@ export default function Products() {
     products,
     searchTerm,
     selectedStatus,
+    selectedFeaturedState,
     selectedStorefrontCategory,
     selectedBrand,
     storefrontCategorySource,
@@ -596,6 +604,7 @@ export default function Products() {
   const activeCount = products.filter((product) => normalizeStatusValue(product?.status) === "active").length;
   const hasActiveFilters =
     Boolean(searchTerm.trim()) ||
+    selectedFeaturedState !== "all" ||
     selectedStorefrontCategory !== "all" ||
     selectedBrand !== "all" ||
     selectedProductMode !== "all" ||
@@ -1645,11 +1654,24 @@ export default function Products() {
                 <span>
                   {hasActiveFilters
                     ? "Refine the visible catalog list."
-                    : "Open filters for category, brand, type, mode, and status."}
+                    : "Open filters for category, featured state, brand, mode, and status."}
                 </span>
               </summary>
 
               <div className="products-toolbar">
+                <label className="products-toolbar-field">
+                  <span>Merchandising</span>
+                  <select
+                    value={selectedFeaturedState}
+                    onChange={(event) => setSelectedFeaturedState(event.target.value)}
+                    style={fieldStyle}
+                  >
+                    <option value="all">All Products</option>
+                    <option value="featured">Featured Only</option>
+                    <option value="non-featured">Non-Featured</option>
+                  </select>
+                </label>
+
                 <label className="products-toolbar-field">
                   <span>Storefront Category</span>
                   <select
@@ -1721,6 +1743,7 @@ export default function Products() {
                 className="products-clear-filters"
                 onClick={() => {
                   setSearchTerm("");
+                  setSelectedFeaturedState("all");
                   setSelectedStorefrontCategory("all");
                   setSelectedBrand("all");
                   setSelectedProductMode("all");
@@ -2035,13 +2058,13 @@ export default function Products() {
                         aria-pressed={form.is_featured}
                       >
                         <span className="products-storefront-feature-toggle-copy">
-                          <strong>Featured product</strong>
+                          <strong>★ Featured Product</strong>
                           <span>
-                            Manually place this item into homepage merchandising and curated storefront highlights.
+                            Manually place this item into curated storefront highlights. This stays fully manual.
                           </span>
                         </span>
                         <span className="products-storefront-feature-toggle-state">
-                          {form.is_featured ? "Featured" : "Standard"}
+                          {form.is_featured ? "ON" : "OFF"}
                         </span>
                       </button>
 
