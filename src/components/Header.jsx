@@ -80,7 +80,7 @@ export default function Header() {
           }}
         >
           <Link
-            to="/my-orders"
+            to="/portal/orders"
             style={{
               textDecoration: "none",
               color: "#171717",

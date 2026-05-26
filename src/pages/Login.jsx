@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   canAccessOperationalWorkspace,
   canAccessProtectedManagementRoute,
@@ -91,11 +91,15 @@ export default function Login() {
   const searchParams = new URLSearchParams(location.search);
   const redirectTo = searchParams.get("redirectTo");
   const resolvedRedirectTarget =
-    redirectTo === "/my-orders" || (redirectTo && redirectTo.startsWith("/admin"))
+    redirectTo === "/my-orders" ||
+    (redirectTo && redirectTo.startsWith("/portal")) ||
+    (redirectTo && redirectTo.startsWith("/admin"))
       ? redirectTo
       : "/admin";
   const targetIsAdminRoute = resolvedRedirectTarget.startsWith("/admin");
-  const targetIsCustomerRoute = resolvedRedirectTarget === "/my-orders";
+  const targetIsCustomerRoute =
+    resolvedRedirectTarget === "/my-orders" ||
+    resolvedRedirectTarget.startsWith("/portal");
   const targetNeedsManagement =
     targetIsAdminRoute && requiresProtectedManagementAccess(resolvedRedirectTarget);
   const routeAccessUser = getRouteAccessUser({
@@ -187,13 +191,13 @@ export default function Login() {
       }
 
       if (activeCustomerSession) {
-        navigate("/my-orders", { replace: true });
+        navigate("/portal/orders", { replace: true });
       }
       return;
     }
 
     if (activeCustomerSession) {
-      navigate("/my-orders", { replace: true });
+      navigate("/portal/orders", { replace: true });
       return;
     }
 
@@ -288,7 +292,11 @@ export default function Login() {
 
     const nextTarget =
       loginResult.actorType === "customer"
-        ? "/my-orders"
+        ? targetIsCustomerRoute
+          ? resolvedRedirectTarget === "/my-orders"
+            ? "/portal/orders"
+            : resolvedRedirectTarget
+          : "/portal/orders"
         : canAccessProtectedManagementRoute(resolvedRedirectTarget, postLoginAccessUser)
           ? resolvedRedirectTarget
           : targetIsAdminRoute &&
@@ -464,6 +472,20 @@ export default function Login() {
               >
                 {workspaceSubmitting ? "Signing In..." : "Open Portal"}
               </button>
+
+              <p style={{ margin: 0, color: "#64748b", fontSize: "13px", lineHeight: 1.6 }}>
+                New customer?{" "}
+                <Link
+                  to="/signup"
+                  style={{
+                    color: "#0f766e",
+                    fontWeight: 800,
+                    textDecoration: "none",
+                  }}
+                >
+                  Create your account
+                </Link>
+              </p>
             </form>
           </div>
 

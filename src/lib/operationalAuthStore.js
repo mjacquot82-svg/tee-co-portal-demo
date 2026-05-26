@@ -90,12 +90,15 @@ function buildCustomerSession(user) {
 
   const firstName = String(user?.user_metadata?.first_name || "").trim();
   const lastName = String(user?.user_metadata?.last_name || "").trim();
+  const phone = String(user?.user_metadata?.phone || "").trim();
   const displayName = buildCustomerDisplayName(user);
 
   return {
+    id: user.id,
     firstName,
     lastName,
     email: user.email || "",
+    phone,
     displayName,
     authMode: "supabase-session",
     isSupabaseAuthSession: true,
@@ -256,6 +259,73 @@ export async function signInToOperationalWorkspace({ email, password }) {
     user: operationalUser,
     customerSession,
     actorType: operationalUser ? "operational" : customerSession ? "customer" : "",
+  };
+}
+
+export async function signUpCustomerAccount({
+  firstName,
+  lastName,
+  email,
+  phone,
+  password,
+}) {
+  if (!isSupabaseConfigured || !supabase) {
+    return {
+      ok: false,
+      message: "Supabase authentication is not configured for this workspace.",
+    };
+  }
+
+  const normalizedFirstName = String(firstName || "").trim();
+  const normalizedLastName = String(lastName || "").trim();
+  const normalizedEmail = String(email || "").trim();
+  const normalizedPhone = String(phone || "").trim();
+  const displayName = [normalizedFirstName, normalizedLastName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  const { data, error } = await supabase.auth.signUp({
+    email: normalizedEmail,
+    password: String(password || ""),
+    options: {
+      data: {
+        first_name: normalizedFirstName,
+        last_name: normalizedLastName,
+        phone: normalizedPhone,
+        display_name: displayName,
+        full_name: displayName,
+      },
+    },
+  });
+
+  if (error) {
+    pushAuthDiagnostic("supabase-signup-failed", {
+      message: error.message,
+    });
+
+    return {
+      ok: false,
+      message: error.message || "Unable to create account.",
+    };
+  }
+
+  applyOperationalSession(data?.session || null);
+
+  const resolvedUser = data?.user || data?.session?.user || null;
+  const customerSession = buildCustomerSession(resolvedUser);
+
+  pushAuthDiagnostic("supabase-signup-succeeded", {
+    userId: resolvedUser?.id || "",
+    hasSession: Boolean(data?.session),
+  });
+
+  return {
+    ok: true,
+    session: data?.session || null,
+    user: resolvedUser,
+    customerSession,
+    requiresEmailConfirmation: Boolean(resolvedUser) && !data?.session,
   };
 }
 

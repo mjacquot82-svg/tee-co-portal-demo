@@ -1,10 +1,38 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
-import { setActiveCustomerSession } from "../lib/customerSessionStore";
+import { useEffect, useState } from "react";
+import { ensureCustomerProfile } from "../lib/customerProfileStore";
+import {
+  getActiveCustomerSession,
+  subscribeToActiveCustomerSession,
+} from "../lib/customerSessionStore";
+import { signUpCustomerAccount } from "../lib/operationalAuthStore";
+
+const fieldStyle = {
+  width: "100%",
+  padding: "14px 16px",
+  borderRadius: "14px",
+  border: "1px solid #d6d3d1",
+  fontSize: "15px",
+  outline: "none",
+  boxSizing: "border-box",
+  background: "#ffffff",
+};
+
+const labelStyle = {
+  display: "block",
+  marginBottom: "8px",
+  fontWeight: "700",
+  color: "#292524",
+};
 
 export default function Signup() {
   const navigate = useNavigate();
-
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [activeCustomerSession, setActiveCustomerSession] = useState(() =>
+    getActiveCustomerSession()
+  );
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -14,293 +42,264 @@ export default function Signup() {
     confirmPassword: "",
   });
 
+  useEffect(() => {
+    function syncActiveCustomer(nextSession = getActiveCustomerSession()) {
+      setActiveCustomerSession(nextSession);
+    }
+
+    syncActiveCustomer();
+
+    return subscribeToActiveCustomerSession((nextSession) => {
+      syncActiveCustomer(nextSession);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (activeCustomerSession) {
+      navigate("/portal/orders", { replace: true });
+    }
+  }, [activeCustomerSession, navigate]);
+
   function updateField(field, value) {
+    setErrorMessage("");
+    setSuccessMessage("");
     setForm((prev) => ({
       ...prev,
       [field]: value,
     }));
   }
 
-  function handleSubmit(e) {
-    e.preventDefault();
-    setActiveCustomerSession({
+  async function handleSubmit(event) {
+    event.preventDefault();
+
+    const normalizedEmail = form.email.trim();
+    if (!form.firstName.trim() || !form.lastName.trim() || !normalizedEmail || !form.password) {
+      setErrorMessage("Complete all required fields.");
+      return;
+    }
+
+    if (form.password.length < 8) {
+      setErrorMessage("Use at least 8 characters for your password.");
+      return;
+    }
+
+    if (form.password !== form.confirmPassword) {
+      setErrorMessage("Passwords do not match.");
+      return;
+    }
+
+    setSubmitting(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const signupResult = await signUpCustomerAccount({
       firstName: form.firstName,
       lastName: form.lastName,
-      email: form.email,
+      email: normalizedEmail,
+      phone: form.phone,
+      password: form.password,
     });
-    navigate("/my-orders");
+
+    setSubmitting(false);
+
+    if (!signupResult.ok) {
+      setErrorMessage(signupResult.message);
+      return;
+    }
+
+    if (signupResult.customerSession) {
+      ensureCustomerProfile(signupResult.customerSession);
+      navigate("/portal/orders", { replace: true });
+      return;
+    }
+
+    setSuccessMessage(
+      signupResult.requiresEmailConfirmation
+        ? "Your account was created. Check your email to confirm access, then sign in."
+        : "Your account was created. Sign in to open your portal."
+    );
   }
 
   return (
     <div
       style={{
-        maxWidth: "560px",
-        margin: "0 auto",
-        padding: "24px",
-        fontFamily:
-          'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        minHeight: "100vh",
+        background:
+          "radial-gradient(circle at top left, rgba(191, 219, 254, 0.32), transparent 30%), radial-gradient(circle at bottom right, rgba(167, 243, 208, 0.24), transparent 28%), linear-gradient(180deg, #fafaf9 0%, #f8fafc 100%)",
+        padding: "40px 24px",
+        boxSizing: "border-box",
       }}
     >
       <div
         style={{
+          maxWidth: "620px",
+          margin: "0 auto",
           background: "#ffffff",
-          borderRadius: "24px",
-          padding: "32px",
-          border: "1px solid #e7e5e4",
-          boxShadow: "0 14px 30px rgba(0,0,0,0.06)",
+          borderRadius: "28px",
+          padding: "34px",
+          border: "1px solid #e2e8f0",
+          boxShadow: "0 24px 60px rgba(15, 23, 42, 0.08)",
         }}
       >
         <p
           style={{
             margin: 0,
             fontSize: "12px",
-            letterSpacing: "0.08em",
+            fontWeight: 900,
+            letterSpacing: "0.12em",
             textTransform: "uppercase",
-            color: "#78716c",
+            color: "#0f766e",
           }}
         >
-          Customer Signup
+          Customer Portal
         </p>
 
         <h1
           style={{
             marginTop: "10px",
             marginBottom: "10px",
-            fontSize: "32px",
-            lineHeight: 1.1,
+            fontSize: "34px",
+            lineHeight: 1.05,
+            letterSpacing: "-0.03em",
+            color: "#0f172a",
           }}
         >
-          Create your portal account
+          Create your Tee &amp; Co account
         </h1>
 
         <p
           style={{
             marginTop: 0,
-            color: "#57534e",
-            lineHeight: 1.6,
-            marginBottom: "24px",
+            color: "#475569",
+            lineHeight: 1.7,
+            marginBottom: "26px",
           }}
         >
-          Set up your Tee &amp; Co account to place orders, upload artwork,
-          track status updates, and respond to deposit requests.
+          Keep your customer access simple: sign in, review orders, check quotes and invoices,
+          and understand where your account stands.
         </p>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} style={{ display: "grid", gap: "16px" }}>
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 1fr",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
               gap: "16px",
-              marginBottom: "16px",
             }}
           >
             <div>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "8px",
-                  fontWeight: "600",
-                  color: "#292524",
-                }}
-              >
-                First Name
-              </label>
+              <label style={labelStyle}>First Name</label>
               <input
                 type="text"
                 value={form.firstName}
-                onChange={(e) => updateField("firstName", e.target.value)}
+                onChange={(event) => updateField("firstName", event.target.value)}
                 placeholder="First name"
-                style={{
-                  width: "100%",
-                  padding: "14px 16px",
-                  borderRadius: "14px",
-                  border: "1px solid #d6d3d1",
-                  fontSize: "15px",
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
+                style={fieldStyle}
               />
             </div>
 
             <div>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "8px",
-                  fontWeight: "600",
-                  color: "#292524",
-                }}
-              >
-                Last Name
-              </label>
+              <label style={labelStyle}>Last Name</label>
               <input
                 type="text"
                 value={form.lastName}
-                onChange={(e) => updateField("lastName", e.target.value)}
+                onChange={(event) => updateField("lastName", event.target.value)}
                 placeholder="Last name"
-                style={{
-                  width: "100%",
-                  padding: "14px 16px",
-                  borderRadius: "14px",
-                  border: "1px solid #d6d3d1",
-                  fontSize: "15px",
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
+                style={fieldStyle}
               />
             </div>
           </div>
 
-          <div style={{ marginBottom: "16px" }}>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "8px",
-                fontWeight: "600",
-                color: "#292524",
-              }}
-            >
-              Email
-            </label>
+          <div>
+            <label style={labelStyle}>Email</label>
             <input
               type="email"
               value={form.email}
-              onChange={(e) => updateField("email", e.target.value)}
+              onChange={(event) => updateField("email", event.target.value)}
               placeholder="you@example.com"
-              style={{
-                width: "100%",
-                padding: "14px 16px",
-                borderRadius: "14px",
-                border: "1px solid #d6d3d1",
-                fontSize: "15px",
-                outline: "none",
-                boxSizing: "border-box",
-              }}
+              style={fieldStyle}
+              autoCapitalize="none"
+              autoCorrect="off"
             />
           </div>
 
-          <div style={{ marginBottom: "16px" }}>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "8px",
-                fontWeight: "600",
-                color: "#292524",
-              }}
-            >
-              Phone
-            </label>
+          <div>
+            <label style={labelStyle}>Phone</label>
             <input
               type="tel"
               value={form.phone}
-              onChange={(e) => updateField("phone", e.target.value)}
-              placeholder="(555) 555-5555"
-              style={{
-                width: "100%",
-                padding: "14px 16px",
-                borderRadius: "14px",
-                border: "1px solid #d6d3d1",
-                fontSize: "15px",
-                outline: "none",
-                boxSizing: "border-box",
-              }}
+              onChange={(event) => updateField("phone", event.target.value)}
+              placeholder="Optional"
+              style={fieldStyle}
             />
           </div>
 
-          <div style={{ marginBottom: "16px" }}>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "8px",
-                fontWeight: "600",
-                color: "#292524",
-              }}
-            >
-              Password
-            </label>
-            <input
-              type="password"
-              value={form.password}
-              onChange={(e) => updateField("password", e.target.value)}
-              placeholder="Create password"
-              style={{
-                width: "100%",
-                padding: "14px 16px",
-                borderRadius: "14px",
-                border: "1px solid #d6d3d1",
-                fontSize: "15px",
-                outline: "none",
-                boxSizing: "border-box",
-              }}
-            />
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: "16px",
+            }}
+          >
+            <div>
+              <label style={labelStyle}>Password</label>
+              <input
+                type="password"
+                value={form.password}
+                onChange={(event) => updateField("password", event.target.value)}
+                placeholder="At least 8 characters"
+                style={fieldStyle}
+              />
+            </div>
+
+            <div>
+              <label style={labelStyle}>Confirm Password</label>
+              <input
+                type="password"
+                value={form.confirmPassword}
+                onChange={(event) => updateField("confirmPassword", event.target.value)}
+                placeholder="Re-enter password"
+                style={fieldStyle}
+              />
+            </div>
           </div>
 
-          <div style={{ marginBottom: "22px" }}>
-            <label
-              style={{
-                display: "block",
-                marginBottom: "8px",
-                fontWeight: "600",
-                color: "#292524",
-              }}
-            >
-              Confirm Password
-            </label>
-            <input
-              type="password"
-              value={form.confirmPassword}
-              onChange={(e) => updateField("confirmPassword", e.target.value)}
-              placeholder="Re-enter password"
-              style={{
-                width: "100%",
-                padding: "14px 16px",
-                borderRadius: "14px",
-                border: "1px solid #d6d3d1",
-                fontSize: "15px",
-                outline: "none",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
+          {errorMessage ? (
+            <p style={{ margin: 0, color: "#b91c1c", fontWeight: 700 }}>{errorMessage}</p>
+          ) : null}
+
+          {successMessage ? (
+            <p style={{ margin: 0, color: "#166534", fontWeight: 700 }}>{successMessage}</p>
+          ) : null}
 
           <button
             type="submit"
+            disabled={submitting}
             style={{
               width: "100%",
-              background: "#171717",
+              background: submitting ? "#94a3b8" : "#0f172a",
               color: "#ffffff",
               border: "none",
-              borderRadius: "14px",
-              padding: "14px 18px",
-              fontWeight: "700",
+              borderRadius: "16px",
+              padding: "15px 18px",
+              fontWeight: "800",
               fontSize: "15px",
-              cursor: "pointer",
-              boxShadow: "0 10px 20px rgba(0,0,0,0.10)",
+              cursor: submitting ? "wait" : "pointer",
+              boxShadow: "0 14px 28px rgba(15, 23, 42, 0.14)",
             }}
           >
-            Create Account
+            {submitting ? "Creating Account..." : "Create Account"}
           </button>
         </form>
 
-        <div
-          style={{
-            marginTop: "22px",
-            textAlign: "center",
-          }}
-        >
-          <p
-            style={{
-              margin: 0,
-              color: "#57534e",
-              fontSize: "14px",
-            }}
-          >
+        <div style={{ marginTop: "24px", textAlign: "center" }}>
+          <p style={{ margin: 0, color: "#475569", fontSize: "14px" }}>
             Already have an account?{" "}
             <Link
               to="/login"
               style={{
-                color: "#171717",
-                fontWeight: "600",
+                color: "#0f766e",
+                fontWeight: "700",
                 textDecoration: "none",
               }}
             >

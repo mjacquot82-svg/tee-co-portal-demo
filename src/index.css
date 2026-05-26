@@ -226,6 +226,28 @@ aside img:not(.tee-co-logo) {
   display: grid;
 }
 
+.customer-portal-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.customer-portal-sidebar {
+  position: sticky;
+  top: 108px;
+}
+
+@media (max-width: 900px) {
+  .customer-portal-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .customer-portal-sidebar {
+    position: static;
+  }
+}
+
 .storefront-rail {
   display: none;
   align-content: start;

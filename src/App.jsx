@@ -1,5 +1,10 @@
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout";
+import CustomerPortalShell from "./customer-portal/CustomerPortalShell";
+import CustomerPortalOrders from "./customer-portal/CustomerPortalOrders";
+import CustomerPortalQuotes from "./customer-portal/CustomerPortalQuotes";
+import CustomerPortalInvoices from "./customer-portal/CustomerPortalInvoices";
+import CustomerPortalAccount from "./customer-portal/CustomerPortalAccount";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -7,7 +12,6 @@ import CategoryView from "./pages/CategoryView";
 import GarmentView from "./pages/GarmentView";
 import OrderPreview from "./pages/OrderPreview";
 import OrderSubmitted from "./pages/OrderSubmitted";
-import MyOrders from "./pages/MyOrders";
 import DepositPayment from "./pages/DepositPayment";
 import PaymentConfirmed from "./pages/PaymentConfirmed";
 import ApprovalReview from "./pages/ApprovalReview";
@@ -46,7 +50,7 @@ export default function App() {
             <Route path="garment/:garmentId" element={<GarmentView />} />
             <Route path="order-preview" element={<OrderPreview />} />
             <Route path="order-submitted" element={<OrderSubmitted />} />
-            <Route path="my-orders" element={<MyOrders />} />
+            <Route path="my-orders" element={<Navigate to="/portal/orders" replace />} />
             <Route path="deposit-payment" element={<DepositPayment />} />
             <Route path="payment-confirmed" element={<PaymentConfirmed />} />
             <Route path="approval/:orderNumber" element={<ApprovalReview />} />
@@ -85,6 +89,14 @@ export default function App() {
               path="admin/staff-users"
               element={<StaffUsers />}
             />
+          </Route>
+
+          <Route path="/portal" element={<CustomerPortalShell />}>
+            <Route index element={<Navigate to="orders" replace />} />
+            <Route path="orders" element={<CustomerPortalOrders />} />
+            <Route path="quotes" element={<CustomerPortalQuotes />} />
+            <Route path="invoices" element={<CustomerPortalInvoices />} />
+            <Route path="account" element={<CustomerPortalAccount />} />
           </Route>
         </Routes>
       </AppSplash>

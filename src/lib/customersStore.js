@@ -1,6 +1,16 @@
-import { getJsonStorageItem, hasBrowserStorage, setJsonStorageItem } from "./browserStorage";
+import { useSyncExternalStore } from "react";
+import {
+  getJsonStorageItem,
+  hasBrowserStorage,
+  setJsonStorageItem,
+} from "./browserStorage";
 
 const STORAGE_KEY = "teeCoCustomers";
+const customerListeners = new Set();
+
+function emitCustomersUpdated() {
+  customerListeners.forEach((listener) => listener());
+}
 
 export function getStoredCustomers() {
   if (!hasBrowserStorage()) return [];
@@ -9,7 +19,46 @@ export function getStoredCustomers() {
 
 export function saveStoredCustomers(customers) {
   if (!hasBrowserStorage()) return;
-  return setJsonStorageItem(STORAGE_KEY, customers);
+  const saved = setJsonStorageItem(STORAGE_KEY, customers);
+  if (saved) {
+    emitCustomersUpdated();
+  }
+  return saved;
+}
+
+export function subscribeToStoredCustomers(listener) {
+  if (typeof listener !== "function") {
+    return () => {};
+  }
+
+  customerListeners.add(listener);
+
+  if (typeof window === "undefined") {
+    return () => {
+      customerListeners.delete(listener);
+    };
+  }
+
+  const handleStorage = (event) => {
+    if (!event.key || event.key === STORAGE_KEY) {
+      listener();
+    }
+  };
+
+  window.addEventListener("storage", handleStorage);
+
+  return () => {
+    customerListeners.delete(listener);
+    window.removeEventListener("storage", handleStorage);
+  };
+}
+
+export function useStoredCustomers() {
+  return useSyncExternalStore(
+    subscribeToStoredCustomers,
+    getStoredCustomers,
+    () => []
+  );
 }
 
 export function createStoredCustomer(customerInput) {
@@ -22,6 +71,8 @@ export function createStoredCustomer(customerInput) {
     company: customerInput.company || "",
     phone: customerInput.phone || "",
     email: customerInput.email || "",
+    auth_user_id: customerInput.auth_user_id || "",
+    external_reference: customerInput.external_reference || "",
     notes: customerInput.notes || "",
     order_numbers: customerInput.order_numbers || [],
     created_at: createdAt,

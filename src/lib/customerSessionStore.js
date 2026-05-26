@@ -19,17 +19,23 @@ function emitCustomerSessionUpdated() {
 }
 
 function normalizeCustomerSession(session = {}) {
+  const id = String(session.id || session.userId || "").trim();
   const firstName = String(session.firstName || "").trim();
   const lastName = String(session.lastName || "").trim();
   const email = String(session.email || "").trim();
+  const phone = String(session.phone || "").trim();
   const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
   const displayName = fullName || firstName || email || "Customer Account";
 
   return {
+    id,
     firstName,
     lastName,
     email,
+    phone,
     displayName,
+    authMode: session.authMode || "",
+    isSupabaseAuthSession: session.isSupabaseAuthSession === true,
   };
 }
 
