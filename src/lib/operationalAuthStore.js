@@ -11,6 +11,8 @@ let authSnapshot = {
   session: null,
   user: null,
   operationalUser: null,
+  customerSession: null,
+  actorType: "",
   error: "",
 };
 
@@ -19,19 +21,29 @@ function emitOperationalAuthUpdated() {
   window.dispatchEvent(new CustomEvent(OPERATIONAL_AUTH_UPDATED_EVENT));
 }
 
+function normalizeRoleValue(value) {
+  const normalizedValue = String(value || "").trim().toLowerCase();
+
+  if (normalizedValue === "owner") return "Owner";
+  if (normalizedValue === "manager") return "Manager";
+  if (normalizedValue === "staff") return "Staff";
+
+  return "";
+}
+
 function normalizeOperationalRole(user) {
   const metadataRole =
     user?.app_metadata?.operational_role ||
     user?.app_metadata?.role ||
     user?.user_metadata?.operational_role ||
     user?.user_metadata?.role;
-  const normalizedRole = String(metadataRole || "").trim();
+  const normalizedRole = normalizeRoleValue(metadataRole);
 
   if (VALID_OPERATIONAL_ROLES.has(normalizedRole)) {
     return normalizedRole;
   }
 
-  return "Owner";
+  return "";
 }
 
 function buildOperationalDisplayName(user) {
@@ -53,13 +65,52 @@ function buildOperationalDisplayName(user) {
   return "Owner / Admin";
 }
 
+function buildCustomerDisplayName(user) {
+  const metadataName =
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.display_name ||
+    user?.user_metadata?.name ||
+    user?.app_metadata?.full_name ||
+    user?.app_metadata?.name;
+
+  if (metadataName) {
+    return String(metadataName).trim();
+  }
+
+  if (user?.email) {
+    return String(user.email).trim();
+  }
+
+  return "Customer Account";
+}
+
+function buildCustomerSession(user) {
+  if (!user?.id) return null;
+  if (normalizeOperationalRole(user)) return null;
+
+  const firstName = String(user?.user_metadata?.first_name || "").trim();
+  const lastName = String(user?.user_metadata?.last_name || "").trim();
+  const displayName = buildCustomerDisplayName(user);
+
+  return {
+    firstName,
+    lastName,
+    email: user.email || "",
+    displayName,
+    authMode: "supabase-session",
+    isSupabaseAuthSession: true,
+  };
+}
+
 function buildOperationalUser(user) {
   if (!user?.id) return null;
+  const role = normalizeOperationalRole(user);
+  if (!role) return null;
 
   return {
     id: user.id,
     name: buildOperationalDisplayName(user),
-    role: normalizeOperationalRole(user),
+    role,
     email: user.email || "",
     authMode: "supabase-session",
     isSupabaseAuthSession: true,
@@ -69,12 +120,15 @@ function buildOperationalUser(user) {
 function applyOperationalSession(session, errorMessage = "") {
   const user = session?.user || null;
   const operationalUser = buildOperationalUser(user);
+  const customerSession = buildCustomerSession(user);
 
   authSnapshot = {
     isLoading: false,
     session: session || null,
     user,
     operationalUser,
+    customerSession,
+    actorType: operationalUser ? "operational" : customerSession ? "customer" : "",
     error: errorMessage,
   };
 
@@ -105,6 +159,14 @@ export function getOperationalAuthUser() {
   return authSnapshot.operationalUser;
 }
 
+export function getAuthenticatedCustomerSession() {
+  return authSnapshot.customerSession || null;
+}
+
+export function getAuthenticatedActorType() {
+  return authSnapshot.actorType || "";
+}
+
 export function isOperationalAuthLoading() {
   return authSnapshot.isLoading;
 }
@@ -116,6 +178,8 @@ export async function ensureOperationalAuthInitialized() {
       session: null,
       user: null,
       operationalUser: null,
+      customerSession: null,
+      actorType: "",
       error: "",
     };
     return authSnapshot;
@@ -177,15 +241,21 @@ export async function signInToOperationalWorkspace({ email, password }) {
 
   applyOperationalSession(data?.session || null);
 
+  const resolvedUser = data?.user || data?.session?.user;
+  const operationalUser = buildOperationalUser(resolvedUser);
+  const customerSession = buildCustomerSession(resolvedUser);
+
   pushAuthDiagnostic("supabase-login-succeeded", {
     userId: data?.user?.id || data?.session?.user?.id || "",
-    resolvedRole: buildOperationalUser(data?.user || data?.session?.user)?.role || "",
+    resolvedRole: operationalUser?.role || "",
   });
 
   return {
     ok: true,
     session: data?.session || null,
-    user: buildOperationalUser(data?.user || data?.session?.user),
+    user: operationalUser,
+    customerSession,
+    actorType: operationalUser ? "operational" : customerSession ? "customer" : "",
   };
 }
 

@@ -22,6 +22,10 @@ import {
   subscribeToActiveStaffUser,
   subscribeToStaffUsers,
 } from "../lib/staffUsersStore";
+import {
+  getActiveCustomerSession,
+  subscribeToActiveCustomerSession,
+} from "../lib/customerSessionStore";
 
 const inputStyle = {
   width: "100%",
@@ -80,12 +84,20 @@ export default function Login() {
   const [operationalAuthLoading, setOperationalAuthLoading] = useState(() =>
     isOperationalAuthLoading()
   );
+  const [activeCustomerSession, setActiveCustomerSession] = useState(() =>
+    getActiveCustomerSession()
+  );
 
   const searchParams = new URLSearchParams(location.search);
   const redirectTo = searchParams.get("redirectTo");
   const resolvedRedirectTarget =
-    redirectTo && redirectTo.startsWith("/admin") ? redirectTo : "/admin";
-  const targetNeedsManagement = requiresProtectedManagementAccess(resolvedRedirectTarget);
+    redirectTo === "/my-orders" || (redirectTo && redirectTo.startsWith("/admin"))
+      ? redirectTo
+      : "/admin";
+  const targetIsAdminRoute = resolvedRedirectTarget.startsWith("/admin");
+  const targetIsCustomerRoute = resolvedRedirectTarget === "/my-orders";
+  const targetNeedsManagement =
+    targetIsAdminRoute && requiresProtectedManagementAccess(resolvedRedirectTarget);
 
   useEffect(() => {
     void ensureOperationalAuthInitialized().then((snapshot) => {
@@ -132,6 +144,18 @@ export default function Login() {
   }, []);
 
   useEffect(() => {
+    function syncActiveCustomer(nextCustomerSession = getActiveCustomerSession()) {
+      setActiveCustomerSession(nextCustomerSession);
+    }
+
+    syncActiveCustomer();
+
+    return subscribeToActiveCustomerSession((nextCustomerSession) => {
+      syncActiveCustomer(nextCustomerSession);
+    });
+  }, []);
+
+  useEffect(() => {
     if (operationalAuthLoading) return;
 
     if (targetNeedsManagement) {
@@ -140,14 +164,49 @@ export default function Login() {
       return;
     }
 
-    if (!activeStaffUser?.id) return;
-    navigate(resolvedRedirectTarget, { replace: true });
+    if (targetIsCustomerRoute) {
+      if (!activeCustomerSession) return;
+      navigate(resolvedRedirectTarget, { replace: true });
+      return;
+    }
+
+    if (targetIsAdminRoute) {
+      if (activeStaffUser?.id && canAccessOperationalWorkspace(resolvedRedirectTarget, activeStaffUser)) {
+        navigate(resolvedRedirectTarget, { replace: true });
+        return;
+      }
+
+      if (
+        activeOperationalUser?.id &&
+        canAccessOperationalWorkspace(resolvedRedirectTarget, activeOperationalUser)
+      ) {
+        navigate(resolvedRedirectTarget, { replace: true });
+        return;
+      }
+
+      if (activeCustomerSession) {
+        navigate("/my-orders", { replace: true });
+      }
+      return;
+    }
+
+    if (activeCustomerSession) {
+      navigate("/my-orders", { replace: true });
+      return;
+    }
+
+    if (activeStaffUser?.id) {
+      navigate("/admin", { replace: true });
+    }
   }, [
+    activeCustomerSession,
     activeOperationalUser,
     activeStaffUser,
     navigate,
     operationalAuthLoading,
     resolvedRedirectTarget,
+    targetIsAdminRoute,
+    targetIsCustomerRoute,
     targetNeedsManagement,
   ]);
 
@@ -219,15 +278,19 @@ export default function Login() {
       return;
     }
 
-    const nextTarget = canAccessProtectedManagementRoute(
-      resolvedRedirectTarget,
-      loginResult.user
-    )
-      ? resolvedRedirectTarget
-      : "/admin";
+    clearAllAuthSessions("workspace-login-session-reset");
+
+    const nextTarget =
+      loginResult.actorType === "customer"
+        ? "/my-orders"
+        : canAccessProtectedManagementRoute(resolvedRedirectTarget, loginResult.user)
+          ? resolvedRedirectTarget
+          : targetIsAdminRoute && canAccessOperationalWorkspace(resolvedRedirectTarget, loginResult.user)
+            ? resolvedRedirectTarget
+            : "/admin";
 
     pushAuthDiagnostic("login-redirect", {
-      actorType: "staff",
+      actorType: loginResult.actorType || "staff",
       userId: loginResult.user?.id || "",
       role: loginResult.user?.role || "",
       target: nextTarget,

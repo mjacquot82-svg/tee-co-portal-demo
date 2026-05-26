@@ -5,6 +5,10 @@ import {
   setJsonStorageItem,
 } from "./browserStorage";
 import { pushAuthDiagnostic } from "./authDiagnostics";
+import {
+  getAuthenticatedCustomerSession,
+  subscribeToOperationalAuth,
+} from "./operationalAuthStore";
 
 const STORAGE_KEY = "teeCoActiveCustomerSession";
 const CUSTOMER_SESSION_UPDATED_EVENT = "tee-co-customer-session-updated";
@@ -30,24 +34,37 @@ function normalizeCustomerSession(session = {}) {
 }
 
 export function getActiveCustomerSession() {
-  if (!hasBrowserStorage()) return null;
+  const storedSession = hasBrowserStorage()
+    ? getJsonStorageItem(STORAGE_KEY, null, { storage: "session" })
+    : null;
 
-  const storedSession = getJsonStorageItem(STORAGE_KEY, null, { storage: "session" });
-  if (!storedSession || typeof storedSession !== "object") {
+  if (storedSession && typeof storedSession === "object") {
+    const hydratedSession = normalizeCustomerSession(storedSession);
     pushAuthDiagnostic("customer-session-hydrated", {
-      hydrationResult: "empty",
+      hydrationResult: "restored",
+      email: hydratedSession.email,
+      displayName: hydratedSession.displayName,
     });
-    return null;
+
+    return hydratedSession;
   }
 
-  const hydratedSession = normalizeCustomerSession(storedSession);
-  pushAuthDiagnostic("customer-session-hydrated", {
-    hydrationResult: "restored",
-    email: hydratedSession.email,
-    displayName: hydratedSession.displayName,
-  });
+  const authenticatedCustomerSession = getAuthenticatedCustomerSession();
+  if (authenticatedCustomerSession) {
+    const hydratedSession = normalizeCustomerSession(authenticatedCustomerSession);
+    pushAuthDiagnostic("customer-session-hydrated", {
+      hydrationResult: "restored-supabase-session",
+      email: hydratedSession.email,
+      displayName: hydratedSession.displayName,
+    });
 
-  return hydratedSession;
+    return hydratedSession;
+  }
+
+  pushAuthDiagnostic("customer-session-hydrated", {
+    hydrationResult: "empty",
+  });
+  return null;
 }
 
 export function setActiveCustomerSession(session, options = {}) {
@@ -83,8 +100,12 @@ export function subscribeToActiveCustomerSession(listener) {
   }
 
   window.addEventListener(CUSTOMER_SESSION_UPDATED_EVENT, handleSessionUpdated);
+  const unsubscribeOperationalAuth = subscribeToOperationalAuth(() => {
+    handleSessionUpdated();
+  });
 
   return () => {
     window.removeEventListener(CUSTOMER_SESSION_UPDATED_EVENT, handleSessionUpdated);
+    unsubscribeOperationalAuth();
   };
 }

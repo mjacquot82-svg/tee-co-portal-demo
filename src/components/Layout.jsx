@@ -639,7 +639,8 @@ function PublicHeader() {
     });
   }, []);
 
-  function handleCustomerLogout() {
+  async function handleCustomerLogout() {
+    await signOutOperationalWorkspace();
     clearAllAuthSessions("customer-logout");
     pushAuthDiagnostic("login-redirect", {
       actorType: "customer",
@@ -1457,6 +1458,17 @@ export default function Layout() {
     });
 
     if (!hasOperationalSession(activeStaffUser)) {
+      if (activeCustomerSession) {
+        pushAuthDiagnostic("login-redirect", {
+          actorType: "customer",
+          target: "/my-orders",
+          reason: "customer-session-cannot-open-admin",
+          pathname: location.pathname,
+        });
+        navigate("/my-orders", { replace: true });
+        return;
+      }
+
       pushAuthDiagnostic("login-redirect", {
         actorType: "staff",
         target: "/login",
@@ -1473,6 +1485,17 @@ export default function Layout() {
       requiresManagementAccess &&
       !canAccessProtectedManagementRoute(location.pathname, authenticatedOperationalUser)
     ) {
+      if (activeCustomerSession) {
+        pushAuthDiagnostic("login-redirect", {
+          actorType: "customer",
+          target: "/my-orders",
+          reason: "customer-session-cannot-open-management",
+          pathname: location.pathname,
+        });
+        navigate("/my-orders", { replace: true });
+        return;
+      }
+
       pushAuthDiagnostic("login-redirect", {
         actorType: "staff",
         userId: activeStaffUser?.id || "",
@@ -1499,6 +1522,7 @@ export default function Layout() {
     });
     navigate("/admin", { replace: true });
   }, [
+    activeCustomerSession,
     activeStaffUser,
     authenticatedOperationalUser,
     isAdmin,
