@@ -217,7 +217,7 @@ export function getOwnerAdminAccount() {
 }
 
 export function getOperationalStaffUsers() {
-  return getStoredStaffUsers().filter((user) => !isProtectedStaffUser(user));
+  return getStoredStaffUsers();
 }
 
 export function getActiveOperationalStaffUsers() {

@@ -95,7 +95,7 @@ export default function StaffUsers() {
     setStaff(getOperationalStaffUsers());
     return subscribeToStaffUsers((users) => {
       setOwnerAccount(users.find((user) => user.role === "Owner") || null);
-      setStaff(users.filter((user) => user.role !== "Owner"));
+      setStaff(users);
     });
   }, []);
 
@@ -264,8 +264,8 @@ export default function StaffUsers() {
             fontSize: "15px",
           }}
         >
-          Keep the owner/admin account distinct from operational staff accounts used for
-          production and counter work.
+          Keep staff access direct and visible so everyone using the shop can understand who has
+          PIN access and what role they carry.
         </p>
       </div>
 
@@ -308,8 +308,8 @@ export default function StaffUsers() {
             }}
           >
             Add managers and staff members here for day-to-day PIN access. Account sign-in
-            stays available for roles that need broader access, while the quick operator list
-            stays focused on shared-workstation use.
+            stays available for protected management access, while PIN access stays fast for
+            shared-workstation use.
           </div>
 
           <form
@@ -436,8 +436,8 @@ export default function StaffUsers() {
               Status: <strong style={{ color: "#171717" }}>{ownerAccount?.status || "Active"}</strong>
             </p>
             <p style={{ margin: "10px 0 0", color: "#57534e", lineHeight: 1.5, fontSize: "14px" }}>
-              This account uses email and password sign-in. PIN-based operator switching stays
-              separate so shared workstations remain fast and simple.
+              This account stays visible in staff access alongside the rest of the team, with
+              direct PIN entry available where operational access is needed.
             </p>
           </div>
 
@@ -655,7 +655,7 @@ export default function StaffUsers() {
               fontSize: "20px",
             }}
           >
-            Operational Staff Users
+            Staff Access
           </h2>
 
           {staff.length ? (
@@ -684,6 +684,7 @@ export default function StaffUsers() {
                 <tbody>
                   {staff.map((user) => {
                     const isInactive = user.status === "Inactive";
+                    const isProtectedOwner = user.role === "Owner";
                     const draft = drafts[user.id] || {
                       name: user.name,
                       pin: user.pin,
@@ -758,22 +759,24 @@ export default function StaffUsers() {
                         <td style={{ padding: "12px" }}>
                           <select
                             value={user.role}
-                            onChange={(e) =>
-                              handleRoleChange(
-                                user.id,
-                                e.target.value
-                              )
-                            }
+                            onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                            disabled={isProtectedOwner}
                             style={{
                               ...inputStyle,
                               minWidth: "140px",
+                              background: isProtectedOwner ? "#f5f5f4" : inputStyle.background,
+                              color: isProtectedOwner ? "#78716c" : "#171717",
                             }}
                           >
-                            {STAFF_ROLES.filter((role) => role !== "Owner").map((role) => (
-                              <option key={role} value={role}>
-                                {role}
-                              </option>
-                            ))}
+                            {isProtectedOwner ? (
+                              <option value="Owner">Owner</option>
+                            ) : (
+                              STAFF_ROLES.filter((role) => role !== "Owner").map((role) => (
+                                <option key={role} value={role}>
+                                  {role}
+                                </option>
+                              ))
+                            )}
                           </select>
                         </td>
 
@@ -782,20 +785,38 @@ export default function StaffUsers() {
                         </td>
 
                         <td style={{ padding: "12px" }}>
-                          <button
-                            onClick={() =>
-                              isInactive
-                                ? handleReactivate(user.id)
-                                : handleDisable(user.id)
-                            }
-                            style={{
-                              ...buttonStyle,
-                              background: isInactive ? "#16a34a" : "#dc2626",
-                              color: "#ffffff",
-                            }}
-                          >
-                            {isInactive ? "Reactivate" : "Disable"}
-                          </button>
+                          {isProtectedOwner ? (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                padding: "8px 10px",
+                                borderRadius: "999px",
+                                background: "#f5f5f4",
+                                border: "1px solid #e7e5e4",
+                                color: "#57534e",
+                                fontSize: "12px",
+                                fontWeight: 800,
+                              }}
+                            >
+                              Protected
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() =>
+                                isInactive
+                                  ? handleReactivate(user.id)
+                                  : handleDisable(user.id)
+                              }
+                              style={{
+                                ...buttonStyle,
+                                background: isInactive ? "#16a34a" : "#dc2626",
+                                color: "#ffffff",
+                              }}
+                            >
+                              {isInactive ? "Reactivate" : "Disable"}
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -814,8 +835,8 @@ export default function StaffUsers() {
                 lineHeight: 1.6,
               }}
             >
-              No operational staff users have been added yet. Create a manager or staff account
-              to enable staff PIN sign-in.
+              No staff accounts are available yet. Create a manager or staff account to enable
+              direct PIN sign-in.
             </div>
           )}
         </section>

@@ -17,11 +17,8 @@ import {
   resolveOperationalRole,
 } from "../admin/adminRoleView";
 import {
-  attemptStaffLogin,
-  getPinAccessibleStaffUsers,
   getActiveStaffUser,
   subscribeToActiveStaffUser,
-  subscribeToStaffUsers,
 } from "../lib/staffUsersStore";
 import {
   getActiveCustomerSession,
@@ -908,267 +905,6 @@ function PublicHeader() {
   );
 }
 
-function OperationalIdentitySwitcher({ staffUser }) {
-  const [staffOptions, setStaffOptions] = useState(() => getPinAccessibleStaffUsers());
-  const [selectedStaffUserId, setSelectedStaffUserId] = useState("");
-  const [pin, setPin] = useState("");
-  const [error, setError] = useState("");
-  const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => {
-    function syncStaffOptions(nextUsers = getPinAccessibleStaffUsers()) {
-      setStaffOptions(nextUsers);
-    }
-
-    syncStaffOptions();
-    return subscribeToStaffUsers((nextUsers) => {
-      syncStaffOptions(nextUsers.filter((user) => user.status !== "Inactive"));
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!isOpen) return undefined;
-
-    function handleEscape(event) {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-        setError("");
-        setPin("");
-      }
-    }
-
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [isOpen]);
-
-  const resolvedSelectedStaffUserId =
-    staffUser?.id && staffOptions.some((user) => user.id === staffUser.id)
-      ? staffUser.id
-      : staffOptions.some((user) => user.id === selectedStaffUserId)
-        ? selectedStaffUserId
-        : staffOptions[0]?.id || "";
-
-  function handleSwitch(event) {
-    event.preventDefault();
-
-    if (!resolvedSelectedStaffUserId) {
-      setError("Select a staff profile first.");
-      return;
-    }
-
-    if (String(pin).replace(/\D/g, "").length !== 4) {
-      setError("Enter the 4-digit staff PIN.");
-      return;
-    }
-
-    const result = attemptStaffLogin({
-      staffUserId: resolvedSelectedStaffUserId,
-      pin,
-      persistSession: true,
-    });
-
-    if (!result.ok) {
-      setError(result.message);
-      setPin("");
-      return;
-    }
-
-    setSelectedStaffUserId(result.user?.id || resolvedSelectedStaffUserId);
-    setError("");
-    setPin("");
-    setIsOpen(false);
-  }
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        style={{
-          background: "#eff6ff",
-          color: "#1d4ed8",
-          border: "1px solid #bfdbfe",
-          borderRadius: "12px",
-          padding: "10px 14px",
-          fontWeight: 800,
-          cursor: "pointer",
-          flexShrink: 0,
-        }}
-      >
-        Switch Operator
-      </button>
-
-      {isOpen ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Switch operator"
-          onClick={() => {
-            setIsOpen(false);
-            setError("");
-            setPin("");
-          }}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.28)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "24px",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            onClick={(event) => event.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: "420px",
-              borderRadius: "24px",
-              border: "1px solid #dbe4ee",
-              background: "#ffffff",
-              boxShadow: "0 24px 60px rgba(15, 23, 42, 0.18)",
-              padding: "24px",
-              display: "grid",
-              gap: "16px",
-            }}
-          >
-            <div style={{ display: "grid", gap: "6px" }}>
-              <p
-                style={{
-                  margin: 0,
-                  color: "#64748b",
-                  fontSize: "11px",
-                  fontWeight: 900,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                }}
-              >
-                Workstation
-              </p>
-              <h2 style={{ margin: 0, color: "#171717", fontSize: "24px", lineHeight: 1.1 }}>
-                Switch operator
-              </h2>
-              <p style={{ margin: 0, color: "#475569", fontSize: "14px", lineHeight: 1.55 }}>
-                Select the next operator and enter the PIN.
-              </p>
-            </div>
-
-            <form onSubmit={handleSwitch} style={{ display: "grid", gap: "10px" }}>
-              <div style={{ display: "grid", gap: "4px" }}>
-                <label
-                  htmlFor="workstation-staff-user"
-                  style={{ color: "#171717", fontSize: "13px", fontWeight: 800 }}
-                >
-                  Switch to
-                </label>
-                <select
-                  id="workstation-staff-user"
-                  value={resolvedSelectedStaffUserId}
-                  onChange={(event) => {
-                    setError("");
-                    setSelectedStaffUserId(event.target.value);
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "11px 12px",
-                    borderRadius: "12px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
-                    fontSize: "14px",
-                    color: "#171717",
-                  }}
-                >
-                  {staffOptions.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name} ({user.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: "grid", gap: "4px" }}>
-                <label
-                  htmlFor="workstation-staff-pin"
-                  style={{ color: "#171717", fontSize: "13px", fontWeight: 800 }}
-                >
-                  Staff PIN
-                </label>
-                <input
-                  id="workstation-staff-pin"
-                  type="password"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  value={pin}
-                  onChange={(event) => {
-                    setError("");
-                    setPin(event.target.value.replace(/\D/g, "").slice(0, 4));
-                  }}
-                  placeholder="4-digit PIN"
-                  style={{
-                    width: "100%",
-                    padding: "11px 12px",
-                    borderRadius: "12px",
-                    border: "1px solid #cbd5e1",
-                    background: "#ffffff",
-                    fontSize: "14px",
-                    color: "#171717",
-                    boxSizing: "border-box",
-                  }}
-                />
-              </div>
-
-              {error ? (
-                <p style={{ margin: 0, color: "#b91c1c", fontSize: "13px", fontWeight: 700 }}>
-                  {error}
-                </p>
-              ) : null}
-
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                <button
-                  type="submit"
-                  disabled={!staffOptions.length}
-                  style={{
-                    background: staffOptions.length ? "#171717" : "#94a3b8",
-                    color: "#ffffff",
-                    border: "none",
-                    borderRadius: "12px",
-                    padding: "10px 14px",
-                    fontWeight: 800,
-                    cursor: staffOptions.length ? "pointer" : "not-allowed",
-                  }}
-                >
-                  Switch Operator
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsOpen(false);
-                    setError("");
-                    setPin("");
-                  }}
-                  style={{
-                    background: "#f8fafc",
-                    color: "#475569",
-                    border: "1px solid #e2e8f0",
-                    borderRadius: "12px",
-                    padding: "10px 14px",
-                    fontWeight: 800,
-                    cursor: "pointer",
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
-    </>
-  );
-}
-
 function AdminWorkspaceHeader({ staffUser }) {
   const navigate = useNavigate();
   const initials = getUserInitials(staffUser?.name);
@@ -1256,7 +992,7 @@ function AdminWorkspaceHeader({ staffUser }) {
                   textTransform: "uppercase",
                 }}
               >
-                Workstation
+                Signed In
               </span>
               <p
                 style={{
@@ -1278,8 +1014,6 @@ function AdminWorkspaceHeader({ staffUser }) {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-            <OperationalIdentitySwitcher staffUser={staffUser} />
-
             {staffUser ? (
               <button
                 type="button"
@@ -1710,7 +1444,7 @@ export default function Layout() {
     return (
       <AdminDiagnosticsPanel
         title="Admin route blocked by runtime workspace access"
-        message="This admin route was denied by the workspace guard. The route-guard console logs include the target route, active operator, resolved access identity, classification, and exact block reason."
+        message="This admin route was denied by the workspace guard. The route-guard console logs include the target route, active staff identity, resolved access identity, classification, and exact block reason."
         staffUser={visibleStaffUser}
         pathname={location.pathname}
         workspaceAccess={workspaceAccess}

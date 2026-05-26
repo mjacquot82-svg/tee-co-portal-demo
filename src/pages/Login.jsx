@@ -217,7 +217,7 @@ export default function Login() {
     event.preventDefault();
 
     if (!selectedStaffUserId) {
-      setStaffError("Select an operator.");
+      setStaffError("Select a staff account.");
       return;
     }
 
@@ -503,14 +503,14 @@ export default function Login() {
                 Staff PIN Access
               </h2>
               <p style={{ margin: 0, color: "#475569", fontSize: "14px", lineHeight: 1.6 }}>
-                Select the operator at this station, enter the 4-digit PIN, and continue straight
-                into the workspace.
+                Select your staff account, enter the 4-digit PIN, and continue straight into the
+                workspace.
               </p>
             </div>
 
             <form onSubmit={handleStaffLogin} style={{ display: "grid", gap: "14px" }}>
               <div>
-                <label style={labelStyle}>Operator</label>
+                <label style={labelStyle}>Staff Account</label>
                 <select
                   value={selectedStaffUserId}
                   onChange={(event) => {
@@ -526,7 +526,7 @@ export default function Login() {
                       </option>
                     ))
                   ) : (
-                    <option value="">No operators available</option>
+                    <option value="">No staff accounts available</option>
                   )}
                 </select>
               </div>
