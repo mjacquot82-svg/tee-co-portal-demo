@@ -175,7 +175,7 @@ export default function Customers() {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
 
     if (!form.name.trim()) {
@@ -183,9 +183,14 @@ export default function Customers() {
       return;
     }
 
-    createStoredCustomer(form);
-    setCustomers(getStoredCustomers());
-    setForm({ name: "", company: "", phone: "", email: "", notes: "" });
+    try {
+      await createStoredCustomer(form);
+      setCustomers(getStoredCustomers());
+      setForm({ name: "", company: "", phone: "", email: "", notes: "" });
+    } catch (error) {
+      console.error("Unable to create customer", error);
+      alert(error?.message || "Unable to create customer.");
+    }
   }
 
   return (

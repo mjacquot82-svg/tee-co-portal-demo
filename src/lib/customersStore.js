@@ -5,18 +5,100 @@ import {
   hasBrowserStorage,
   setJsonStorageItem,
 } from "./browserStorage";
+import { supabase } from "./supabase";
 
 const STORAGE_KEY = "teeCoCustomers";
+const SUPABASE_TABLE = "Customers";
+const SUPABASE_SELECT_FIELDS =
+  "id, name, email, phone, company, notes, created_at, updated_at";
 const customerListeners = new Set();
 const EMPTY_CUSTOMERS = [];
+
 let cachedCustomersRaw = null;
 let cachedCustomersSnapshot = EMPTY_CUSTOMERS;
+let customersHydrationPromise = null;
+let hasLoggedFallbackActivation = false;
 
 function emitCustomersUpdated() {
   customerListeners.forEach((listener) => listener());
 }
 
-export function getStoredCustomers() {
+function shouldUseSupabase() {
+  return Boolean(supabase?.from);
+}
+
+function normalizeOrderNumbers(orderNumbers) {
+  if (!Array.isArray(orderNumbers)) return [];
+  return orderNumbers.filter(Boolean);
+}
+
+function normalizeCustomer(customer = {}, fallbackTimestamp = new Date().toISOString()) {
+  const createdAt = customer.created_at || fallbackTimestamp;
+
+  return {
+    ...customer,
+    id: customer.id || `customer-${Date.now()}`,
+    name: customer.name || "New Customer",
+    company: customer.company || "",
+    phone: customer.phone || "",
+    email: customer.email || "",
+    auth_user_id: customer.auth_user_id || "",
+    external_reference: customer.external_reference || "",
+    notes: customer.notes || "",
+    order_numbers: normalizeOrderNumbers(customer.order_numbers),
+    created_at: createdAt,
+    updated_at: customer.updated_at || createdAt,
+  };
+}
+
+function normalizeCustomers(customers) {
+  if (!Array.isArray(customers)) return EMPTY_CUSTOMERS;
+  return customers.map((customer) => normalizeCustomer(customer));
+}
+
+function logFallbackActivation(reason, error) {
+  console.warn("[customersStore] fallback activation", {
+    reason,
+    hasError: Boolean(error),
+    table: SUPABASE_TABLE,
+    error,
+  });
+
+  if (error) {
+    console.error(`[customersStore] Supabase failure during ${reason}`, error);
+  } else {
+    console.error(`[customersStore] Supabase failure during ${reason}`);
+  }
+
+  if (hasLoggedFallbackActivation) return;
+
+  hasLoggedFallbackActivation = true;
+  console.warn("[customersStore] Local fallback activated");
+}
+
+function syncCachedCustomersRaw(customers) {
+  cachedCustomersRaw = JSON.stringify(customers);
+}
+
+function persistCustomersSnapshot(customers, options = {}) {
+  const { emit = true, writeStorage = true } = options;
+  const normalizedCustomers = normalizeCustomers(customers);
+
+  cachedCustomersSnapshot = normalizedCustomers;
+  syncCachedCustomersRaw(normalizedCustomers);
+
+  if (writeStorage && hasBrowserStorage()) {
+    setJsonStorageItem(STORAGE_KEY, normalizedCustomers);
+  }
+
+  if (emit) {
+    emitCustomersUpdated();
+  }
+
+  return normalizedCustomers;
+}
+
+function readCustomersFromStorage() {
   if (!hasBrowserStorage()) return EMPTY_CUSTOMERS;
 
   try {
@@ -29,7 +111,7 @@ export function getStoredCustomers() {
 
     const customers = getJsonStorageItem(STORAGE_KEY, EMPTY_CUSTOMERS);
     cachedCustomersRaw = normalizedRawCustomers;
-    cachedCustomersSnapshot = Array.isArray(customers) ? customers : EMPTY_CUSTOMERS;
+    cachedCustomersSnapshot = normalizeCustomers(customers);
     return cachedCustomersSnapshot;
   } catch (error) {
     console.error("Unable to read stored Tee & Co customers", error);
@@ -39,14 +121,238 @@ export function getStoredCustomers() {
   }
 }
 
-export function saveStoredCustomers(customers) {
-  if (!hasBrowserStorage()) return;
-  const saved = setJsonStorageItem(STORAGE_KEY, customers);
-  if (saved) {
-    cachedCustomersRaw = null;
-    emitCustomersUpdated();
+function mapSupabaseRowToCustomer(row, localCustomer) {
+  return normalizeCustomer({
+    ...localCustomer,
+    id: row?.id || localCustomer?.id,
+    name: row?.name ?? localCustomer?.name,
+    company: row?.company ?? localCustomer?.company,
+    phone: row?.phone ?? localCustomer?.phone,
+    email: row?.email ?? localCustomer?.email,
+    notes: row?.notes ?? localCustomer?.notes,
+    created_at: row?.created_at || localCustomer?.created_at,
+    updated_at: row?.updated_at || localCustomer?.updated_at,
+  });
+}
+
+function mergeHydratedCustomers(remoteRows, localCustomers) {
+  const localCustomersById = new Map(
+    normalizeCustomers(localCustomers).map((customer) => [customer.id, customer])
+  );
+  const remoteCustomers = remoteRows.map((row) => {
+    const localCustomer = localCustomersById.get(row?.id);
+    localCustomersById.delete(row?.id);
+    return mapSupabaseRowToCustomer(row, localCustomer);
+  });
+  const localOnlyCustomers = Array.from(localCustomersById.values());
+
+  if (localOnlyCustomers.length > 0) {
+    console.warn("[customersStore] Hydration preserved local-only fallback customers", {
+      count: localOnlyCustomers.length,
+    });
   }
-  return saved;
+
+  return [...remoteCustomers, ...localOnlyCustomers];
+}
+
+function buildSupabaseCustomerPayload(customer) {
+  return {
+    id: customer.id,
+    name: customer.name || "New Customer",
+    email: customer.email || "",
+    phone: customer.phone || "",
+    company: customer.company || "",
+    notes: customer.notes || "",
+    created_at: customer.created_at || new Date().toISOString(),
+    updated_at: customer.updated_at || new Date().toISOString(),
+  };
+}
+
+async function persistCustomerToSupabase(customer, operation) {
+  console.info("[customersStore] persistCustomerToSupabase entry", {
+    operation,
+    table: SUPABASE_TABLE,
+    customer,
+    hasSupabaseClient: Boolean(supabase),
+    hasFromMethod: Boolean(supabase?.from),
+  });
+
+  if (!shouldUseSupabase()) {
+    const error = new Error("Supabase client unavailable");
+    console.error("[customersStore] persistence skipped before network start", {
+      operation,
+      table: SUPABASE_TABLE,
+      customer,
+      error,
+    });
+    logFallbackActivation(operation, error);
+    throw error;
+  }
+
+  console.info(`[customersStore] ${operation} started`, {
+    customerId: customer.id,
+  });
+
+  try {
+    const payload = buildSupabaseCustomerPayload(customer);
+    console.info("[customersStore] upsert before", {
+      operation,
+      table: SUPABASE_TABLE,
+      payload,
+    });
+    console.info("[customersStore] immediately before supabase.from(...)", {
+      operation,
+      table: SUPABASE_TABLE,
+      payload,
+    });
+    const upsertQuery = supabase.from(SUPABASE_TABLE).upsert(payload, { onConflict: "id" });
+    console.info("[customersStore] upsert after", {
+      operation,
+      table: SUPABASE_TABLE,
+      queryConstructed: Boolean(upsertQuery),
+    });
+
+    console.info("[customersStore] select before", {
+      operation,
+      table: SUPABASE_TABLE,
+      selectFields: SUPABASE_SELECT_FIELDS,
+    });
+    const { data, error } = await upsertQuery
+      .select(SUPABASE_SELECT_FIELDS)
+      .single();
+    console.info("[customersStore] select after", {
+      operation,
+      table: SUPABASE_TABLE,
+      data,
+      error,
+    });
+
+    if (error) {
+      logFallbackActivation(operation, error);
+      console.error("[customersStore] Supabase upsert/select returned error", {
+        operation,
+        table: SUPABASE_TABLE,
+        payload,
+        data,
+        error,
+      });
+      throw error;
+    }
+
+    const currentCustomers = readCustomersFromStorage();
+    const localCustomer = currentCustomers.find((entry) => entry.id === customer.id) || customer;
+    const persistedCustomer = mapSupabaseRowToCustomer(data, localCustomer);
+    const hasExistingCustomer = currentCustomers.some(
+      (entry) => entry.id === persistedCustomer.id
+    );
+    const nextCustomers = hasExistingCustomer
+      ? currentCustomers.map((entry) =>
+          entry.id === persistedCustomer.id ? persistedCustomer : entry
+        )
+      : [persistedCustomer, ...currentCustomers];
+
+    persistCustomersSnapshot(nextCustomers, { emit: true, writeStorage: true });
+
+    console.info(`[customersStore] ${operation} succeeded`, {
+      customerId: persistedCustomer.id,
+      table: SUPABASE_TABLE,
+      data,
+    });
+
+    return persistedCustomer;
+  } catch (error) {
+    console.error("[customersStore] persistence aborted", {
+      operation,
+      table: SUPABASE_TABLE,
+      customer,
+      error,
+    });
+    logFallbackActivation(operation, error);
+    console.error("[customersStore] Supabase persistence threw", {
+      operation,
+      table: SUPABASE_TABLE,
+      customer,
+      error,
+    });
+    throw error;
+  }
+}
+
+export function ensureCustomersHydrated() {
+  if (customersHydrationPromise) {
+    return customersHydrationPromise;
+  }
+
+  if (!shouldUseSupabase()) {
+    logFallbackActivation("hydration", new Error("Supabase client unavailable"));
+    customersHydrationPromise = Promise.resolve(getStoredCustomers());
+    return customersHydrationPromise;
+  }
+
+  customersHydrationPromise = (async () => {
+    const localCustomers = readCustomersFromStorage();
+
+    console.info("[customersStore] hydration started", {
+      localCount: localCustomers.length,
+      table: SUPABASE_TABLE,
+    });
+
+    try {
+      console.info("[customersStore] hydration before select", {
+        table: SUPABASE_TABLE,
+        selectFields: SUPABASE_SELECT_FIELDS,
+      });
+      const { data, error } = await supabase
+        .from(SUPABASE_TABLE)
+        .select(SUPABASE_SELECT_FIELDS)
+        .order("created_at", { ascending: false });
+      console.info("[customersStore] hydration after select", {
+        table: SUPABASE_TABLE,
+        data,
+        error,
+      });
+
+      if (error) {
+        logFallbackActivation("hydration", error);
+        console.error("[customersStore] Hydration select returned error", {
+          table: SUPABASE_TABLE,
+          data,
+          error,
+        });
+        return localCustomers;
+      }
+
+      const hydratedCustomers = mergeHydratedCustomers(data || [], readCustomersFromStorage());
+      persistCustomersSnapshot(hydratedCustomers, { emit: true, writeStorage: true });
+
+      console.info("[customersStore] hydration succeeded", {
+        table: SUPABASE_TABLE,
+        remoteCount: Array.isArray(data) ? data.length : 0,
+        hydratedCount: hydratedCustomers.length,
+      });
+
+      return hydratedCustomers;
+    } catch (error) {
+      logFallbackActivation("hydration", error);
+      return localCustomers;
+    }
+  })();
+
+  return customersHydrationPromise;
+}
+
+export function getStoredCustomers() {
+  const customers = readCustomersFromStorage();
+
+  if (typeof window !== "undefined") {
+    void ensureCustomersHydrated();
+  }
+
+  return customers;
+}
+
+export function saveStoredCustomers(customers) {
+  return persistCustomersSnapshot(customers, { emit: true, writeStorage: true });
 }
 
 export function subscribeToStoredCustomers(listener) {
@@ -64,6 +370,7 @@ export function subscribeToStoredCustomers(listener) {
 
   const handleStorage = (event) => {
     if (!event.key || event.key === STORAGE_KEY) {
+      cachedCustomersRaw = null;
       listener();
     }
   };
@@ -77,6 +384,10 @@ export function subscribeToStoredCustomers(listener) {
 }
 
 export function useStoredCustomers() {
+  if (typeof window !== "undefined") {
+    void ensureCustomersHydrated();
+  }
+
   return useSyncExternalStore(
     subscribeToStoredCustomers,
     getStoredCustomers,
@@ -84,54 +395,78 @@ export function useStoredCustomers() {
   );
 }
 
-export function createStoredCustomer(customerInput) {
+export async function createStoredCustomer(customerInput) {
+  console.info("[customersStore] createStoredCustomer entry", {
+    table: SUPABASE_TABLE,
+    customerInput,
+  });
+
   const currentCustomers = getStoredCustomers();
   const createdAt = new Date().toISOString();
 
-  const customer = {
-    id: `customer-${Date.now()}`,
-    name: customerInput.name || "New Customer",
-    company: customerInput.company || "",
-    phone: customerInput.phone || "",
-    email: customerInput.email || "",
-    auth_user_id: customerInput.auth_user_id || "",
-    external_reference: customerInput.external_reference || "",
-    notes: customerInput.notes || "",
-    order_numbers: customerInput.order_numbers || [],
-    created_at: createdAt,
-    updated_at: createdAt,
-  };
+  try {
+    const customer = normalizeCustomer({
+      id: `customer-${Date.now()}`,
+      name: customerInput.name || "New Customer",
+      company: customerInput.company || "",
+      phone: customerInput.phone || "",
+      email: customerInput.email || "",
+      auth_user_id: customerInput.auth_user_id || "",
+      external_reference: customerInput.external_reference || "",
+      notes: customerInput.notes || "",
+      order_numbers: customerInput.order_numbers || [],
+      created_at: createdAt,
+      updated_at: createdAt,
+    });
 
-  const nextCustomers = [customer, ...currentCustomers];
-  if (!saveStoredCustomers(nextCustomers)) {
-    throw new Error("Unable to save customer. Browser storage write failed.");
+    persistCustomersSnapshot([customer, ...currentCustomers], {
+      emit: true,
+      writeStorage: true,
+    });
+
+    console.info("[customersStore] before persistCustomerToSupabase call", {
+      operation: "create",
+      table: SUPABASE_TABLE,
+      customer,
+    });
+
+    return await persistCustomerToSupabase(customer, "create");
+  } catch (error) {
+    console.error("[customersStore] createStoredCustomer aborted before completion", {
+      table: SUPABASE_TABLE,
+      customerInput,
+      error,
+    });
+    throw error;
   }
-  return customer;
 }
 
-export function updateStoredCustomer(customerId, updates) {
+export async function updateStoredCustomer(customerId, updates) {
   const currentCustomers = getStoredCustomers();
+  const existingCustomer = currentCustomers.find((customer) => customer.id === customerId);
+
+  if (!existingCustomer) {
+    return null;
+  }
+
+  const nextCustomer = normalizeCustomer({
+    ...existingCustomer,
+    ...updates,
+    updated_at: new Date().toISOString(),
+  });
   const nextCustomers = currentCustomers.map((customer) =>
-    customer.id === customerId
-      ? {
-          ...customer,
-          ...updates,
-          updated_at: new Date().toISOString(),
-        }
-      : customer
+    customer.id === customerId ? nextCustomer : customer
   );
 
-  if (!saveStoredCustomers(nextCustomers)) {
-    throw new Error("Unable to update customer. Browser storage write failed.");
-  }
-  return nextCustomers.find((customer) => customer.id === customerId);
+  persistCustomersSnapshot(nextCustomers, { emit: true, writeStorage: true });
+  return persistCustomerToSupabase(nextCustomer, "update");
 }
 
 export function findStoredCustomer(customerId) {
   return getStoredCustomers().find((customer) => customer.id === customerId);
 }
 
-export function linkOrderToCustomer(customerId, orderNumber) {
+export async function linkOrderToCustomer(customerId, orderNumber) {
   const customer = findStoredCustomer(customerId);
   if (!customer) return null;
 
@@ -141,4 +476,8 @@ export function linkOrderToCustomer(customerId, orderNumber) {
   return updateStoredCustomer(customerId, {
     order_numbers: Array.from(orderNumbers),
   });
+}
+
+if (typeof window !== "undefined") {
+  void ensureCustomersHydrated();
 }

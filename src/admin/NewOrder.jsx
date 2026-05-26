@@ -440,13 +440,13 @@ export default function NewOrder() {
     });
   }
 
-  function resolveCustomerForOrder() {
+  async function resolveCustomerForOrder() {
     if (form.customer_id) return form.customer_id;
 
     const matchingCustomer = findMatchingCustomer(customers, form);
     if (matchingCustomer) return matchingCustomer.id;
 
-    const customer = createStoredCustomer({
+    const customer = await createStoredCustomer({
       name: form.customer_name,
       company: form.customer_company,
       phone: form.customer_phone,
@@ -487,7 +487,7 @@ export default function NewOrder() {
     setValidationFields({});
 
     try {
-      const customerId = resolveCustomerForOrder();
+      const customerId = await resolveCustomerForOrder();
       const normalizedSizes = Object.fromEntries(
         Object.entries(sizes).map(([size, value]) => [size, Number(value) || 0])
       );
@@ -577,7 +577,7 @@ export default function NewOrder() {
         quote,
       });
 
-      linkOrderToCustomer(customerId, order.order_number);
+      await linkOrderToCustomer(customerId, order.order_number);
       setSubmitState("success");
       setSubmitMessage(`Quote ${order.order_number} saved. Moving into quote workflow…`);
       returnToQuoteWorkflow({

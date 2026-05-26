@@ -108,8 +108,13 @@ export default function Signup() {
     }
 
     if (signupResult.customerSession) {
-      ensureCustomerProfile(signupResult.customerSession);
-      navigate("/portal/orders", { replace: true });
+      try {
+        await ensureCustomerProfile(signupResult.customerSession);
+        navigate("/portal/orders", { replace: true });
+      } catch (error) {
+        console.error("Unable to ensure customer profile after signup", error);
+        setErrorMessage(error?.message || "Unable to create your customer profile.");
+      }
       return;
     }
 

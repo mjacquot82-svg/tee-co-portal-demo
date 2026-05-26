@@ -122,7 +122,7 @@ export default function CustomerPortalRequestOrder() {
     setSelectedProductId(productId);
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
 
     if (!selectedProduct) {
@@ -132,7 +132,7 @@ export default function CustomerPortalRequestOrder() {
     }
 
     const normalizedQuantity = Math.max(1, Number(quantity || 1));
-    const profile = ensureCustomerProfile(customerSession);
+    const profile = await ensureCustomerProfile(customerSession);
     const decorationType = getDefaultDecorationType(selectedProduct);
     const requestPlacements = resolvedPlacement
       ? [
@@ -201,7 +201,7 @@ export default function CustomerPortalRequestOrder() {
       });
 
       if (profile?.id) {
-        linkOrderToCustomer(profile.id, createdOrder.order_number);
+        await linkOrderToCustomer(profile.id, createdOrder.order_number);
       }
 
       navigate("/portal/quotes", {

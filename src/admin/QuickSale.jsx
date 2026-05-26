@@ -788,7 +788,7 @@ export default function QuickSale() {
     setCreateCustomerError("");
   }
 
-  function handleCreateCustomer(event) {
+  async function handleCreateCustomer(event) {
     event.preventDefault();
 
     if (!createCustomerForm.name.trim()) {
@@ -799,7 +799,7 @@ export default function QuickSale() {
     let createdCustomer;
 
     try {
-      createdCustomer = createStoredCustomer({
+      createdCustomer = await createStoredCustomer({
         name: createCustomerForm.name.trim(),
         phone: createCustomerForm.phone.trim(),
         email: createCustomerForm.email.trim(),

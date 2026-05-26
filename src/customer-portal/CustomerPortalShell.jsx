@@ -103,7 +103,9 @@ export default function CustomerPortalShell() {
       return;
     }
 
-    ensureCustomerProfile(customerSession);
+    ensureCustomerProfile(customerSession).catch((error) => {
+      console.error("Unable to ensure customer profile", error);
+    });
   }, [authLoading, customerSession, location.pathname, location.search, navigate]);
 
   async function handleSignOut() {

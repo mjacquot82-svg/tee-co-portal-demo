@@ -1,7 +1,7 @@
 import {
   createStoredCustomer,
   getStoredCustomers,
-  saveStoredCustomers,
+  updateStoredCustomer,
 } from "./customersStore";
 
 function normalizeEmail(value) {
@@ -12,7 +12,7 @@ function normalizeText(value) {
   return String(value || "").trim();
 }
 
-export function ensureCustomerProfile(session = {}) {
+export async function ensureCustomerProfile(session = {}) {
   const email = normalizeEmail(session.email);
   if (!email) return null;
 
@@ -43,23 +43,13 @@ export function ensureCustomerProfile(session = {}) {
       return existingCustomer;
     }
 
-    const nextCustomer = {
-      ...existingCustomer,
+    return updateStoredCustomer(existingCustomer.id, {
       name: nextName,
       email: nextEmail,
       phone: nextPhone,
       auth_user_id: nextAuthUserId,
       external_reference: nextExternalReference,
-      updated_at: new Date().toISOString(),
-    };
-
-    saveStoredCustomers(
-      customers.map((customer) =>
-        customer.id === existingCustomer.id ? nextCustomer : customer
-      )
-    );
-
-    return nextCustomer;
+    });
   }
 
   return createStoredCustomer({
