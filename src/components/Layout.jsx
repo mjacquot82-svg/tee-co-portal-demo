@@ -4,7 +4,8 @@ import { useStoredOrders } from "../lib/ordersStore";
 import { formatShortDate } from "../lib/dateFormatting";
 import { isActiveOperationalStatus } from "../orders/orderWorkflow";
 import {
-  canAccessOwnerWorkspace,
+  canAccessOperationalWorkspace,
+  canAccessProtectedManagementRoute,
   getAdminViewer,
   getAssignedOrdersForStaff,
   getOperationalOrdersForStaff,
@@ -16,7 +17,7 @@ import {
 } from "../admin/adminRoleView";
 import {
   attemptStaffLogin,
-  getActiveOperationalStaffUsers,
+  getPinAccessibleStaffUsers,
   getActiveStaffUser,
   subscribeToActiveStaffUser,
   subscribeToStaffUsers,
@@ -843,20 +844,20 @@ function PublicHeader() {
 }
 
 function OperationalIdentitySwitcher({ staffUser }) {
-  const [staffOptions, setStaffOptions] = useState(() => getActiveOperationalStaffUsers());
+  const [staffOptions, setStaffOptions] = useState(() => getPinAccessibleStaffUsers());
   const [selectedStaffUserId, setSelectedStaffUserId] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    function syncStaffOptions(nextUsers = getActiveOperationalStaffUsers()) {
+    function syncStaffOptions(nextUsers = getPinAccessibleStaffUsers()) {
       setStaffOptions(nextUsers);
     }
 
     syncStaffOptions();
     return subscribeToStaffUsers((nextUsers) => {
-      syncStaffOptions(nextUsers.filter((user) => user.status !== "Inactive" && user.role !== "Owner"));
+      syncStaffOptions(nextUsers.filter((user) => user.status !== "Inactive"));
     });
   }, []);
 
@@ -1450,7 +1451,7 @@ export default function Layout() {
       currentUserId: activeStaffUser?.id || "",
       currentUserRole: activeStaffUser?.role || "",
       requiresManagementAccess,
-      workspaceAccess: canAccessOwnerWorkspace(location.pathname, activeStaffUser)
+      workspaceAccess: canAccessOperationalWorkspace(location.pathname, activeStaffUser)
         ? "allowed"
         : "blocked",
     });
@@ -1470,7 +1471,7 @@ export default function Layout() {
 
     if (
       requiresManagementAccess &&
-      !isAdminWorkspaceView(authenticatedOperationalUser)
+      !canAccessProtectedManagementRoute(location.pathname, authenticatedOperationalUser)
     ) {
       pushAuthDiagnostic("login-redirect", {
         actorType: "staff",
@@ -1487,7 +1488,7 @@ export default function Layout() {
       return;
     }
 
-    if (canAccessOwnerWorkspace(location.pathname, activeStaffUser)) return;
+    if (canAccessOperationalWorkspace(location.pathname, activeStaffUser)) return;
     pushAuthDiagnostic("login-redirect", {
       actorType: "staff",
       userId: activeStaffUser?.id || "",
@@ -1524,7 +1525,7 @@ export default function Layout() {
   const visibleStaffUser = isAdmin ? activeStaffUser : null;
   const resolvedStaffRole = resolveOperationalRole(visibleStaffUser);
   const workspaceAccess = isAdmin
-    ? canAccessOwnerWorkspace(location.pathname, visibleStaffUser)
+    ? canAccessOperationalWorkspace(location.pathname, visibleStaffUser)
       ? "allowed"
       : "blocked"
     : "public";

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  canAccessOwnerWorkspace,
+  canAccessOperationalWorkspace,
+  canAccessProtectedManagementRoute,
   isAdminWorkspaceView,
   requiresProtectedManagementAccess,
 } from "../admin/adminRoleView";
@@ -16,7 +17,7 @@ import {
 } from "../lib/operationalAuthStore";
 import {
   attemptStaffLogin,
-  getActiveOperationalStaffUsers,
+  getPinAccessibleStaffUsers,
   getActiveStaffUser,
   subscribeToActiveStaffUser,
   subscribeToStaffUsers,
@@ -64,8 +65,8 @@ const secondaryButtonStyle = {
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [staffOptions, setStaffOptions] = useState(() => getActiveOperationalStaffUsers());
-  const [selectedStaffUserId, setSelectedStaffUserId] = useState(() => getActiveOperationalStaffUsers()[0]?.id || "");
+  const [staffOptions, setStaffOptions] = useState(() => getPinAccessibleStaffUsers());
+  const [selectedStaffUserId, setSelectedStaffUserId] = useState(() => getPinAccessibleStaffUsers()[0]?.id || "");
   const [staffPin, setStaffPin] = useState("");
   const [staffError, setStaffError] = useState("");
   const [workspaceEmail, setWorkspaceEmail] = useState("");
@@ -99,10 +100,8 @@ export default function Login() {
   }, []);
 
   useEffect(() => {
-    function syncStaffOptions(nextUsers = getActiveOperationalStaffUsers()) {
-      const activeUsers = nextUsers.filter(
-        (user) => user.status !== "Inactive" && user.role !== "Owner"
-      );
+    function syncStaffOptions(nextUsers = getPinAccessibleStaffUsers()) {
+      const activeUsers = nextUsers.filter((user) => user.status !== "Inactive");
       setStaffOptions(activeUsers);
       setSelectedStaffUserId((currentValue) => {
         if (activeUsers.some((user) => user.id === currentValue)) {
@@ -179,7 +178,7 @@ export default function Login() {
       return;
     }
 
-    if (targetNeedsManagement) {
+    if (!canAccessOperationalWorkspace(resolvedRedirectTarget, loginResult.user)) {
       setStaffError("Use email and password sign-in to open this page.");
       setStaffPin("");
       return;
@@ -220,7 +219,10 @@ export default function Login() {
       return;
     }
 
-    const nextTarget = canAccessOwnerWorkspace(resolvedRedirectTarget, loginResult.user)
+    const nextTarget = canAccessProtectedManagementRoute(
+      resolvedRedirectTarget,
+      loginResult.user
+    )
       ? resolvedRedirectTarget
       : "/admin";
 
@@ -450,7 +452,7 @@ export default function Login() {
                   {staffOptions.length ? (
                     staffOptions.map((user) => (
                       <option key={user.id} value={user.id}>
-                        {user.name}
+                        {user.name} ({user.role})
                       </option>
                     ))
                   ) : (

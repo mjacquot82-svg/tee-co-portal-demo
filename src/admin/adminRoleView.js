@@ -32,6 +32,16 @@ export function hasOperationalSession(staffUser = getActiveStaffUser()) {
   return Boolean(staffUser?.id) && Boolean(resolveOperationalRole(staffUser));
 }
 
+export function canAccessProtectedManagementRoute(
+  pathname,
+  authenticatedUser = getActiveStaffUser()
+) {
+  return (
+    requiresProtectedManagementAccess(pathname) &&
+    isAdminWorkspaceView(authenticatedUser)
+  );
+}
+
 export function canManageArchivedQuotes(staffUser = getActiveStaffUser()) {
   return isAdminWorkspaceView(staffUser);
 }
@@ -65,6 +75,7 @@ export function getOperationalOrdersForStaff(orders = []) {
 
 export function canAccessOwnerWorkspace(pathname, staffUser = getActiveStaffUser()) {
   if (!hasOperationalSession(staffUser)) return false;
+  if (requiresProtectedManagementAccess(pathname)) return false;
   if (!isStaffWorkspaceView(staffUser)) return true;
 
   const blockedExactPaths = [
@@ -85,6 +96,10 @@ export function canAccessOwnerWorkspace(pathname, staffUser = getActiveStaffUser
     blockedExactPaths.includes(pathname) ||
     blockedPathPrefixes.some((prefix) => pathname.startsWith(prefix))
   );
+}
+
+export function canAccessOperationalWorkspace(pathname, staffUser = getActiveStaffUser()) {
+  return canAccessOwnerWorkspace(pathname, staffUser);
 }
 
 export function requiresProtectedManagementAccess(pathname = "") {

@@ -224,6 +224,10 @@ export function getActiveOperationalStaffUsers() {
   return getOperationalStaffUsers().filter((user) => user.status !== "Inactive");
 }
 
+export function getPinAccessibleStaffUsers() {
+  return getStoredStaffUsers().filter((user) => user.status !== "Inactive");
+}
+
 export function saveStoredStaffUsers(users) {
   if (!hasBrowserStorage()) return;
   const normalizedUsers = buildPersistedStaffUsers(users);
