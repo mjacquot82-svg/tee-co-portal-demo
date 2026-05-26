@@ -7,7 +7,6 @@ import {
   canAccessOperationalWorkspace,
   canAccessProtectedManagementRoute,
   classifyAdminRoute,
-  getAdminViewer,
   getAssignedOrdersForStaff,
   getRouteAccessUser,
   getOperationalOrdersForStaff,
@@ -982,54 +981,22 @@ function OperationalIdentitySwitcher({ staffUser }) {
 
   return (
     <>
-      <div
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "10px",
-          flexWrap: "wrap",
+          background: "#eff6ff",
+          color: "#1d4ed8",
+          border: "1px solid #bfdbfe",
+          borderRadius: "12px",
+          padding: "10px 14px",
+          fontWeight: 800,
+          cursor: "pointer",
+          flexShrink: 0,
         }}
       >
-        <div
-          style={{
-            display: "grid",
-            gap: "2px",
-          }}
-        >
-          <p
-            style={{
-              margin: 0,
-              color: "#64748b",
-              fontSize: "11px",
-              fontWeight: 900,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            Current Operator
-          </p>
-          <p style={{ margin: 0, color: "#171717", fontSize: "14px", fontWeight: 800 }}>
-            {staffUser?.name || "Owner / Admin"}
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setIsOpen(true)}
-          style={{
-            background: "#eff6ff",
-            color: "#1d4ed8",
-            border: "1px solid #bfdbfe",
-            borderRadius: "12px",
-            padding: "10px 14px",
-            fontWeight: 800,
-            cursor: "pointer",
-            flexShrink: 0,
-          }}
-        >
-          Switch Operator
-        </button>
-      </div>
+        Switch Operator
+      </button>
 
       {isOpen ? (
         <div
@@ -1202,15 +1169,11 @@ function OperationalIdentitySwitcher({ staffUser }) {
   );
 }
 
-function AdminWorkspaceHeader({ staffUser, authenticatedUser }) {
+function AdminWorkspaceHeader({ staffUser }) {
   const navigate = useNavigate();
-  const location = useLocation();
-  const viewer = getAdminViewer(staffUser);
-  const initials = getUserInitials(viewer?.name);
-  const displayName = viewer?.name || "Operations";
-  const displayRole = viewer?.role || "Workspace";
-  const hasAccountSession =
-    Boolean(authenticatedUser?.id) && isAdminWorkspaceView(authenticatedUser);
+  const initials = getUserInitials(staffUser?.name);
+  const displayName = staffUser?.name || "Operations";
+  const displayRole = staffUser?.role || "Workspace";
 
   async function handleLockWorkstation() {
     await signOutOperationalWorkspace();
@@ -1228,7 +1191,7 @@ function AdminWorkspaceHeader({ staffUser, authenticatedUser }) {
     <header
       style={{
         display: "flex",
-        justifyContent: "flex-end",
+        justifyContent: "flex-start",
         padding: "18px 24px 0",
         boxSizing: "border-box",
       }}
@@ -1237,121 +1200,92 @@ function AdminWorkspaceHeader({ staffUser, authenticatedUser }) {
         style={{
           width: "100%",
           display: "flex",
-          justifyContent: "flex-end",
+          justifyContent: "flex-start",
         }}
       >
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "flex-end",
+            justifyContent: "space-between",
             gap: "12px",
             flexWrap: "wrap",
             background: "#ffffff",
             border: "1px solid #e2e8f0",
             borderRadius: "16px",
-            padding: "10px 12px",
+            padding: "12px 14px",
             boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
             maxWidth: "100%",
           }}
         >
           <div
-            aria-hidden="true"
             style={{
-              width: "42px",
-              height: "42px",
-              borderRadius: "999px",
-              background: "#171717",
-              color: "#ffffff",
-              display: "inline-flex",
+              display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              fontWeight: 900,
-              fontSize: "14px",
-              flexShrink: 0,
+              gap: "12px",
+              minWidth: 0,
+              flex: "1 1 240px",
             }}
           >
-            {initials}
-          </div>
-
-          <div style={{ minWidth: 0 }}>
-            <p
+            <div
+              aria-hidden="true"
               style={{
-                margin: "0 0 4px",
-                color: "#64748b",
-                fontSize: "11px",
+                width: "42px",
+                height: "42px",
+                borderRadius: "999px",
+                background: "#171717",
+                color: "#ffffff",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
                 fontWeight: 900,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
+                fontSize: "14px",
+                flexShrink: 0,
               }}
             >
-              Current Operator
-            </p>
+              {initials}
+            </div>
+
             <p
               style={{
                 margin: 0,
                 color: "#171717",
+                fontSize: "15px",
                 fontWeight: 800,
-                lineHeight: 1.2,
+                lineHeight: 1.3,
                 wordBreak: "break-word",
               }}
             >
               {displayName}
-            </p>
-
-            <p
-              style={{
-                margin: "3px 0 0",
-                color: "#64748b",
-                fontSize: "13px",
-                fontWeight: 700,
-                lineHeight: 1.2,
-              }}
-            >
-              {displayRole}
+              <span style={{ color: "#64748b", fontWeight: 700 }}>
+                {" "}
+                ({displayRole})
+              </span>
             </p>
           </div>
 
-          <OperationalIdentitySwitcher
-            staffUser={staffUser}
-          />
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <OperationalIdentitySwitcher staffUser={staffUser} />
 
-          {!hasAccountSession ? (
-            <Link
-              to={`/login?redirectTo=${encodeURIComponent(location.pathname + location.search)}`}
-              style={{
-                background: "#fafaf9",
-                color: "#171717",
-                border: "1px solid #d6d3d1",
-                borderRadius: "12px",
-                padding: "10px 14px",
-                fontWeight: 800,
-                textDecoration: "none",
-                flexShrink: 0,
-              }}
-            >
-              Sign In with Account
-            </Link>
-          ) : null}
-
-          {staffUser ? (
-            <button
-              type="button"
-              onClick={handleLockWorkstation}
-              style={{
-                background: "#171717",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: "12px",
-                padding: "10px 14px",
-                fontWeight: 800,
-                cursor: "pointer",
-                flexShrink: 0,
-              }}
-            >
-              Lock Workstation
-            </button>
-          ) : null}
+            {staffUser ? (
+              <button
+                type="button"
+                onClick={handleLockWorkstation}
+                style={{
+                  background: "#171717",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "12px",
+                  padding: "10px 14px",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+              >
+                Lock Workstation
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
     </header>
@@ -1797,7 +1731,6 @@ export default function Layout() {
             <div style={{ flex: 1, minWidth: 0 }}>
               <AdminWorkspaceHeader
                 staffUser={currentOperator}
-                authenticatedUser={authenticatedOperationalUser}
               />
 
               <main style={{ minWidth: 0 }}>
