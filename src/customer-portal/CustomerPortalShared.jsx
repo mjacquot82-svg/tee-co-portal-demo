@@ -1,9 +1,22 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { formatShortDate } from "../lib/dateFormatting";
 import { formatCurrency } from "./useCustomerPortalData";
 
 const EMPTY_RECORDS = Object.freeze([]);
+const STATUS_FALLBACK_CACHE = new Map();
+
+function getStableStatusBadge(label, tone = "neutral") {
+  const cacheKey = `${tone}:${label}`;
+  const cachedBadge = STATUS_FALLBACK_CACHE.get(cacheKey);
+  if (cachedBadge) {
+    return cachedBadge;
+  }
+
+  const nextBadge = Object.freeze({ label, tone });
+  STATUS_FALLBACK_CACHE.set(cacheKey, nextBadge);
+  return nextBadge;
+}
 
 export function PortalPage({ eyebrow, title, description, children }) {
   return (
@@ -285,7 +298,7 @@ function resolveCustomerQuoteStatus(record = {}) {
     return STATUS_BADGES.orderCanceled;
   }
 
-  return { label: quoteStatus || "In Review", tone: "neutral" };
+  return getStableStatusBadge(quoteStatus || "In Review");
 }
 
 function resolveCustomerPaymentStatus(record = {}, options = {}) {
@@ -326,7 +339,7 @@ function resolveCustomerPaymentStatus(record = {}, options = {}) {
   }
 
   if (invoiceStatus === "Refunded" || invoiceStatus === "Void") {
-    return { label: invoiceStatus, tone: "neutral" };
+    return getStableStatusBadge(invoiceStatus);
   }
 
   if (invoiceStatus === "Draft") {
@@ -337,7 +350,7 @@ function resolveCustomerPaymentStatus(record = {}, options = {}) {
     return STATUS_BADGES.paymentBillingPending;
   }
 
-  return { label: invoiceStatus || "Billing Pending", tone: "neutral" };
+  return getStableStatusBadge(invoiceStatus || "Billing Pending");
 }
 
 function resolveTimelineNote(order) {
@@ -362,9 +375,11 @@ function resolveTimelineNote(order) {
 
 export function RecordList({ records = [], type = "orders" }) {
   const safeRecords = Array.isArray(records) ? records : EMPTY_RECORDS;
+  const renderCountRef = useRef(0);
+  renderCountRef.current += 1;
   const viewModels = useMemo(
-    () =>
-      safeRecords.map((record) => {
+    () => {
+      const nextViewModels = safeRecords.map((record) => {
         const total = formatCurrency(record.total_amount || record.total || 0);
         const balance = formatCurrency(record.balance_due || 0);
         const dueDate = record.invoice_due_date || record.due_date || "";
@@ -390,7 +405,25 @@ export function RecordList({ records = [], type = "orders" }) {
           paymentStatus,
           timelineNote: resolveTimelineNote(record),
         };
-      }),
+      });
+
+      console.debug("[portal] RecordList view models", {
+        type,
+        renderCount: renderCountRef.current,
+        recordCount: safeRecords.length,
+        statuses: nextViewModels.map(({ record, primaryStatus, paymentStatus }) => ({
+          orderNumber: record.order_number || record.id || "unknown",
+          operationalStatus: record.status || "",
+          quoteStatus: record.quote_status || "",
+          pickupStatus: record.pickup_status || "",
+          invoiceStatus: record.invoice_status || "",
+          primaryStatus: primaryStatus?.label || null,
+          paymentStatus: paymentStatus?.label || null,
+        })),
+      });
+
+      return nextViewModels;
+    },
     [safeRecords, type]
   );
 

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
   EmptyState,
@@ -11,6 +12,19 @@ import { useCustomerPortalData } from "./useCustomerPortalData";
 export default function CustomerPortalOrders() {
   const { customerSession } = useOutletContext();
   const { orders, archivedOrders, summary } = useCustomerPortalData(customerSession);
+  const renderCountRef = useRef(0);
+
+  renderCountRef.current += 1;
+
+  useEffect(() => {
+    console.debug("[portal] CustomerPortalOrders render", {
+      renderCount: renderCountRef.current,
+      activeOrderCount: orders.length,
+      archivedOrderCount: archivedOrders.length,
+      summary,
+      orderNumbers: orders.map((order) => order.order_number || order.id || "unknown"),
+    });
+  }, [archivedOrders, orders, summary]);
 
   return (
     <PortalPage

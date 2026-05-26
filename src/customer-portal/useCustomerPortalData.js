@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import {
   EMPTY_PORTAL_SUMMARY,
   buildCustomerPortalSummary,
@@ -30,9 +30,16 @@ export function formatCurrency(value) {
 export function useCustomerPortalData(session) {
   const orders = useStoredOrders();
   const customers = useStoredCustomers();
+  const renderCountRef = useRef(0);
 
   return useMemo(() => {
+    renderCountRef.current += 1;
+
     if (!session) {
+      console.debug("[portal] useCustomerPortalData render", {
+        renderCount: renderCountRef.current,
+        hasSession: false,
+      });
       return EMPTY_PORTAL_DATA;
     }
 
@@ -47,6 +54,20 @@ export function useCustomerPortalData(session) {
     const quotes = getCustomerQuotes(scopedOrders);
     const invoices = getCustomerInvoices(scopedOrders);
     const summary = buildCustomerPortalSummary(activeOrders);
+
+    console.debug("[portal] useCustomerPortalData render", {
+      renderCount: renderCountRef.current,
+      sessionId: session.id || "",
+      customerCount: customers.length,
+      orderCount: orders.length,
+      scopedOrderCount: scopedOrders.length,
+      activeOrderCount: activeOrders.length,
+      archivedOrderCount: archivedOrders.length,
+      quoteCount: quotes.length,
+      invoiceCount: invoices.length,
+      summary,
+      profileId: profile?.id || "",
+    });
 
     return {
       profile,

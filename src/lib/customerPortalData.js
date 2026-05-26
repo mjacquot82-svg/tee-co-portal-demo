@@ -152,10 +152,15 @@ export function getCustomerInvoices(orders = []) {
 
 export function buildCustomerPortalSummary(orders = []) {
   if (!Array.isArray(orders) || orders.length === 0) {
+    console.debug("[portal] buildCustomerPortalSummary", {
+      orderCount: 0,
+      readyForPickupCount: 0,
+      overdueInvoiceCount: 0,
+    });
     return EMPTY_PORTAL_SUMMARY;
   }
 
-  return orders.reduce(
+  const summary = orders.reduce(
     (summary, order) => {
       summary.orderCount += 1;
       summary.outstandingBalance += Number(order.balance_due || 0);
@@ -173,4 +178,14 @@ export function buildCustomerPortalSummary(orders = []) {
     },
     { ...EMPTY_PORTAL_SUMMARY }
   );
+
+  console.debug("[portal] buildCustomerPortalSummary", {
+    orderCount: summary.orderCount,
+    readyForPickupCount: summary.readyForPickupCount,
+    overdueInvoiceCount: summary.overdueInvoiceCount,
+    outstandingBalance: summary.outstandingBalance,
+    orderNumbers: orders.map((order) => order.order_number || order.id || "unknown"),
+  });
+
+  return summary;
 }

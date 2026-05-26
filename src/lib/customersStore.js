@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import {
   getJsonStorageItem,
+  getRawStorageItem,
   hasBrowserStorage,
   setJsonStorageItem,
 } from "./browserStorage";
@@ -8,6 +9,8 @@ import {
 const STORAGE_KEY = "teeCoCustomers";
 const customerListeners = new Set();
 const EMPTY_CUSTOMERS = [];
+let cachedCustomersRaw = null;
+let cachedCustomersSnapshot = EMPTY_CUSTOMERS;
 
 function emitCustomersUpdated() {
   customerListeners.forEach((listener) => listener());
@@ -16,14 +19,31 @@ function emitCustomersUpdated() {
 export function getStoredCustomers() {
   if (!hasBrowserStorage()) return EMPTY_CUSTOMERS;
 
-  const customers = getJsonStorageItem(STORAGE_KEY, EMPTY_CUSTOMERS);
-  return Array.isArray(customers) ? customers : EMPTY_CUSTOMERS;
+  try {
+    const rawCustomers = getRawStorageItem(STORAGE_KEY);
+    const normalizedRawCustomers = rawCustomers || "";
+
+    if (normalizedRawCustomers === cachedCustomersRaw) {
+      return cachedCustomersSnapshot;
+    }
+
+    const customers = getJsonStorageItem(STORAGE_KEY, EMPTY_CUSTOMERS);
+    cachedCustomersRaw = normalizedRawCustomers;
+    cachedCustomersSnapshot = Array.isArray(customers) ? customers : EMPTY_CUSTOMERS;
+    return cachedCustomersSnapshot;
+  } catch (error) {
+    console.error("Unable to read stored Tee & Co customers", error);
+    cachedCustomersRaw = null;
+    cachedCustomersSnapshot = EMPTY_CUSTOMERS;
+    return EMPTY_CUSTOMERS;
+  }
 }
 
 export function saveStoredCustomers(customers) {
   if (!hasBrowserStorage()) return;
   const saved = setJsonStorageItem(STORAGE_KEY, customers);
   if (saved) {
+    cachedCustomersRaw = null;
     emitCustomersUpdated();
   }
   return saved;
