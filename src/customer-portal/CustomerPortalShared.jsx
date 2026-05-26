@@ -1,6 +1,9 @@
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { formatShortDate } from "../lib/dateFormatting";
 import { formatCurrency } from "./useCustomerPortalData";
+
+const EMPTY_RECORDS = Object.freeze([]);
 
 export function PortalPage({ eyebrow, title, description, children }) {
   return (
@@ -189,6 +192,25 @@ function PortalStatusBadge({ label, tone = "neutral" }) {
   return <span style={tones[tone] || tones.neutral}>{label}</span>;
 }
 
+const STATUS_BADGES = Object.freeze({
+  orderCanceled: Object.freeze({ label: "Canceled", tone: "danger" }),
+  orderCompleted: Object.freeze({ label: "Completed", tone: "success" }),
+  orderReady: Object.freeze({ label: "Ready for Pickup", tone: "info" }),
+  orderAwaitingApproval: Object.freeze({ label: "Awaiting Approval", tone: "warning" }),
+  orderPaymentDue: Object.freeze({ label: "Payment Due", tone: "warning" }),
+  orderProduction: Object.freeze({ label: "In Production", tone: "info" }),
+  orderInProgress: Object.freeze({ label: "In Progress", tone: "neutral" }),
+  quoteApproved: Object.freeze({ label: "Approved", tone: "success" }),
+  quoteInReview: Object.freeze({ label: "In Review", tone: "neutral" }),
+  paymentPaid: Object.freeze({ label: "Paid", tone: "success" }),
+  paymentDueInfo: Object.freeze({ label: "Payment Due", tone: "info" }),
+  paymentDueWarning: Object.freeze({ label: "Payment Due", tone: "warning" }),
+  paymentDueDanger: Object.freeze({ label: "Payment Due", tone: "danger" }),
+  paymentDepositReceived: Object.freeze({ label: "Deposit Received", tone: "success" }),
+  paymentPartiallyPaid: Object.freeze({ label: "Partially Paid", tone: "success" }),
+  paymentBillingPending: Object.freeze({ label: "Billing Pending", tone: "neutral" }),
+});
+
 function resolveCustomerOrderStatus(order = {}) {
   const operationalStatus = String(order.status || "").trim();
   const quoteStatus = String(order.quote_status || "").trim();
@@ -196,23 +218,23 @@ function resolveCustomerOrderStatus(order = {}) {
   const invoiceStatus = String(order.invoice_status || "").trim();
 
   if (operationalStatus === "Canceled" || quoteStatus === "Canceled") {
-    return { label: "Canceled", tone: "danger" };
+    return STATUS_BADGES.orderCanceled;
   }
 
   if (pickupStatus === "Picked Up" || operationalStatus === "Completed") {
-    return { label: "Completed", tone: "success" };
+    return STATUS_BADGES.orderCompleted;
   }
 
   if (pickupStatus === "Ready for Pickup" || operationalStatus === "Ready for Pickup") {
-    return { label: "Ready for Pickup", tone: "info" };
+    return STATUS_BADGES.orderReady;
   }
 
   if (quoteStatus === "Awaiting Approval" || quoteStatus === "Awaiting Artwork Approval") {
-    return { label: "Awaiting Approval", tone: "warning" };
+    return STATUS_BADGES.orderAwaitingApproval;
   }
 
   if (quoteStatus === "Awaiting Deposit") {
-    return { label: "Payment Due", tone: "warning" };
+    return STATUS_BADGES.orderPaymentDue;
   }
 
   if (
@@ -222,45 +244,45 @@ function resolveCustomerOrderStatus(order = {}) {
     invoiceStatus === "Sent" ||
     invoiceStatus === "Overdue"
   ) {
-    return { label: "Payment Due", tone: "warning" };
+    return STATUS_BADGES.orderPaymentDue;
   }
 
   if (operationalStatus === "In Production" || operationalStatus === "Awaiting Production") {
-    return { label: "In Production", tone: "info" };
+    return STATUS_BADGES.orderProduction;
   }
 
   if (quoteStatus === "Approved" || quoteStatus === "Ready For Production") {
-    return { label: "In Production", tone: "info" };
+    return STATUS_BADGES.orderProduction;
   }
 
   if (operationalStatus === "New" || quoteStatus === "Sent" || quoteStatus === "Draft") {
-    return { label: "Awaiting Approval", tone: "warning" };
+    return STATUS_BADGES.orderAwaitingApproval;
   }
 
-  return { label: "In Progress", tone: "neutral" };
+  return STATUS_BADGES.orderInProgress;
 }
 
 function resolveCustomerQuoteStatus(record = {}) {
   const quoteStatus = String(record.quote_status || "").trim();
 
   if (quoteStatus === "Awaiting Approval" || quoteStatus === "Awaiting Artwork Approval") {
-    return { label: "Awaiting Approval", tone: "warning" };
+    return STATUS_BADGES.orderAwaitingApproval;
   }
 
   if (quoteStatus === "Awaiting Deposit") {
-    return { label: "Payment Due", tone: "warning" };
+    return STATUS_BADGES.orderPaymentDue;
   }
 
   if (quoteStatus === "Approved" || quoteStatus === "Ready For Production") {
-    return { label: "Approved", tone: "success" };
+    return STATUS_BADGES.quoteApproved;
   }
 
   if (quoteStatus === "Sent" || quoteStatus === "Draft") {
-    return { label: "In Review", tone: "neutral" };
+    return STATUS_BADGES.quoteInReview;
   }
 
   if (quoteStatus === "Canceled") {
-    return { label: "Canceled", tone: "danger" };
+    return STATUS_BADGES.orderCanceled;
   }
 
   return { label: quoteStatus || "In Review", tone: "neutral" };
@@ -278,15 +300,15 @@ function resolveCustomerPaymentStatus(record = {}, options = {}) {
   }
 
   if (invoiceStatus === "Paid" || balanceDue <= 0) {
-    return { label: "Paid", tone: "success" };
+    return STATUS_BADGES.paymentPaid;
   }
 
   if (invoiceStatus === "Awaiting Deposit") {
-    return { label: "Payment Due", tone: "warning" };
+    return STATUS_BADGES.paymentDueWarning;
   }
 
   if (invoiceStatus === "Overdue") {
-    return { label: "Payment Due", tone: "danger" };
+    return STATUS_BADGES.paymentDueDanger;
   }
 
   if (
@@ -294,14 +316,13 @@ function resolveCustomerPaymentStatus(record = {}, options = {}) {
     invoiceStatus === "Deposit Applied" ||
     invoiceStatus === "Deposit Paid"
   ) {
-    return {
-      label: depositAmount > 0 && totalPaid >= depositAmount ? "Deposit Received" : "Partially Paid",
-      tone: "success",
-    };
+    return depositAmount > 0 && totalPaid >= depositAmount
+      ? STATUS_BADGES.paymentDepositReceived
+      : STATUS_BADGES.paymentPartiallyPaid;
   }
 
   if (invoiceStatus === "Sent" || invoiceStatus === "Awaiting Payment" || invoiceStatus === "Awaiting Final Payment") {
-    return { label: "Payment Due", tone: "info" };
+    return STATUS_BADGES.paymentDueInfo;
   }
 
   if (invoiceStatus === "Refunded" || invoiceStatus === "Void") {
@@ -313,7 +334,7 @@ function resolveCustomerPaymentStatus(record = {}, options = {}) {
       return null;
     }
 
-    return { label: "Billing Pending", tone: "neutral" };
+    return STATUS_BADGES.paymentBillingPending;
   }
 
   return { label: invoiceStatus || "Billing Pending", tone: "neutral" };
@@ -340,9 +361,10 @@ function resolveTimelineNote(order) {
 }
 
 export function RecordList({ records = [], type = "orders" }) {
-  return (
-    <div style={{ display: "grid", gap: "14px" }}>
-      {records.map((record) => {
+  const safeRecords = Array.isArray(records) ? records : EMPTY_RECORDS;
+  const viewModels = useMemo(
+    () =>
+      safeRecords.map((record) => {
         const total = formatCurrency(record.total_amount || record.total || 0);
         const balance = formatCurrency(record.balance_due || 0);
         const dueDate = record.invoice_due_date || record.due_date || "";
@@ -359,6 +381,22 @@ export function RecordList({ records = [], type = "orders" }) {
             ? resolveCustomerPaymentStatus(record, { includeDraft: false })
             : null;
 
+        return {
+          record,
+          total,
+          balance,
+          dueDate,
+          primaryStatus,
+          paymentStatus,
+          timelineNote: resolveTimelineNote(record),
+        };
+      }),
+    [safeRecords, type]
+  );
+
+  return (
+    <div style={{ display: "grid", gap: "14px" }}>
+      {viewModels.map(({ record, total, balance, dueDate, primaryStatus, paymentStatus, timelineNote }) => {
         return (
           <article
             key={`${type}-${record.order_number || record.id}`}
@@ -435,7 +473,7 @@ export function RecordList({ records = [], type = "orders" }) {
                 paddingTop: "12px",
               }}
             >
-              {resolveTimelineNote(record)}
+              {timelineNote}
             </p>
           </article>
         );

@@ -3,6 +3,15 @@ import {
   isCompletedOperationalStatus,
 } from "../orders/orderWorkflow";
 
+const EMPTY_PORTAL_RECORDS = Object.freeze([]);
+export const EMPTY_PORTAL_SUMMARY = Object.freeze({
+  orderCount: 0,
+  outstandingBalance: 0,
+  totalValue: 0,
+  readyForPickupCount: 0,
+  overdueInvoiceCount: 0,
+});
+
 function normalizeText(value) {
   return String(value || "").trim();
 }
@@ -16,6 +25,10 @@ function normalizeName(value) {
 }
 
 function sortByRecentActivity(records = []) {
+  if (!Array.isArray(records) || records.length === 0) {
+    return EMPTY_PORTAL_RECORDS;
+  }
+
   return [...records].sort((left, right) => {
     const leftTimestamp = new Date(left?.updated_at || left?.created_at || 0).getTime();
     const rightTimestamp = new Date(right?.updated_at || right?.created_at || 0).getTime();
@@ -61,7 +74,7 @@ export function getCustomerScopedOrders({
   orders = [],
   customers = [],
 } = {}) {
-  if (!session) return [];
+  if (!session) return EMPTY_PORTAL_RECORDS;
 
   const profile = findCustomerProfileForSession(session, customers);
   const sessionEmail = normalizeEmail(session.email);
@@ -112,6 +125,10 @@ export function getCustomerArchivedOrders(orders = []) {
 }
 
 export function getCustomerQuotes(orders = []) {
+  if (!Array.isArray(orders) || orders.length === 0) {
+    return EMPTY_PORTAL_RECORDS;
+  }
+
   return orders.filter((order) => {
     const quoteStatus = normalizeText(order.quote_status);
     return Boolean(quoteStatus) && quoteStatus !== "Canceled";
@@ -119,6 +136,10 @@ export function getCustomerQuotes(orders = []) {
 }
 
 export function getCustomerInvoices(orders = []) {
+  if (!Array.isArray(orders) || orders.length === 0) {
+    return EMPTY_PORTAL_RECORDS;
+  }
+
   return orders.filter((order) => {
     const invoiceStatus = normalizeText(order.invoice_status);
     return (
@@ -130,6 +151,10 @@ export function getCustomerInvoices(orders = []) {
 }
 
 export function buildCustomerPortalSummary(orders = []) {
+  if (!Array.isArray(orders) || orders.length === 0) {
+    return EMPTY_PORTAL_SUMMARY;
+  }
+
   return orders.reduce(
     (summary, order) => {
       summary.orderCount += 1;
@@ -146,12 +171,6 @@ export function buildCustomerPortalSummary(orders = []) {
 
       return summary;
     },
-    {
-      orderCount: 0,
-      outstandingBalance: 0,
-      totalValue: 0,
-      readyForPickupCount: 0,
-      overdueInvoiceCount: 0,
-    }
+    { ...EMPTY_PORTAL_SUMMARY }
   );
 }

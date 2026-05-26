@@ -27,13 +27,29 @@ export function ensureCustomerProfile(session = {}) {
   );
 
   if (existingCustomer) {
+    const nextName = name || existingCustomer.name || "Customer Account";
+    const nextEmail = session.email || existingCustomer.email || "";
+    const nextPhone = session.phone || existingCustomer.phone || "";
+    const nextAuthUserId = session.id || existingCustomer.auth_user_id || "";
+    const nextExternalReference = session.id || existingCustomer.external_reference || "";
+    const isUnchanged =
+      existingCustomer.name === nextName &&
+      existingCustomer.email === nextEmail &&
+      existingCustomer.phone === nextPhone &&
+      existingCustomer.auth_user_id === nextAuthUserId &&
+      existingCustomer.external_reference === nextExternalReference;
+
+    if (isUnchanged) {
+      return existingCustomer;
+    }
+
     const nextCustomer = {
       ...existingCustomer,
-      name: name || existingCustomer.name || "Customer Account",
-      email: session.email || existingCustomer.email || "",
-      phone: session.phone || existingCustomer.phone || "",
-      auth_user_id: session.id || existingCustomer.auth_user_id || "",
-      external_reference: session.id || existingCustomer.external_reference || "",
+      name: nextName,
+      email: nextEmail,
+      phone: nextPhone,
+      auth_user_id: nextAuthUserId,
+      external_reference: nextExternalReference,
       updated_at: new Date().toISOString(),
     };
 

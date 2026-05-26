@@ -7,14 +7,17 @@ import {
 
 const STORAGE_KEY = "teeCoCustomers";
 const customerListeners = new Set();
+const EMPTY_CUSTOMERS = [];
 
 function emitCustomersUpdated() {
   customerListeners.forEach((listener) => listener());
 }
 
 export function getStoredCustomers() {
-  if (!hasBrowserStorage()) return [];
-  return getJsonStorageItem(STORAGE_KEY, []);
+  if (!hasBrowserStorage()) return EMPTY_CUSTOMERS;
+
+  const customers = getJsonStorageItem(STORAGE_KEY, EMPTY_CUSTOMERS);
+  return Array.isArray(customers) ? customers : EMPTY_CUSTOMERS;
 }
 
 export function saveStoredCustomers(customers) {
@@ -57,7 +60,7 @@ export function useStoredCustomers() {
   return useSyncExternalStore(
     subscribeToStoredCustomers,
     getStoredCustomers,
-    () => []
+    () => EMPTY_CUSTOMERS
   );
 }
 
