@@ -113,7 +113,7 @@ export default function StaffUsers() {
     );
   }, [staff]);
 
-  function refreshStaff() {
+  async function refreshStaff() {
     setOwnerAccount(getOwnerAdminAccount());
     setStaff(getOperationalStaffUsers());
   }
@@ -138,20 +138,20 @@ export default function StaffUsers() {
     }));
   }
 
-  function persistStaffUpdate(user, changes) {
+  async function persistStaffUpdate(user, changes) {
     try {
-      updateStoredStaffUser(user.id, changes);
-      refreshStaff();
+      await updateStoredStaffUser(user.id, changes);
+      await refreshStaff();
       return true;
     } catch (error) {
       alert(error.message || "Unable to save staff user.");
       resetDraft(user.id, user);
-      refreshStaff();
+      await refreshStaff();
       return false;
     }
   }
 
-  function handleCreate(e) {
+  async function handleCreate(e) {
     e.preventDefault();
 
     if (!form.name || !form.pin) {
@@ -160,7 +160,7 @@ export default function StaffUsers() {
     }
 
     try {
-      createStoredStaffUser({
+      await createStoredStaffUser({
         name: form.name,
         pin: form.pin,
         role: form.role,
@@ -176,38 +176,38 @@ export default function StaffUsers() {
       role: "Staff",
     });
 
-    refreshStaff();
+    await refreshStaff();
   }
 
-  function handleDisable(id) {
+  async function handleDisable(id) {
     try {
-      disableStoredStaffUser(id);
+      await disableStoredStaffUser(id);
     } catch (error) {
       alert(error.message || "Unable to disable staff user.");
       return;
     }
 
-    refreshStaff();
+    await refreshStaff();
   }
 
-  function handleReactivate(id) {
+  async function handleReactivate(id) {
     try {
-      reactivateStoredStaffUser(id);
+      await reactivateStoredStaffUser(id);
     } catch (error) {
       alert(error.message || "Unable to reactivate staff user.");
       return;
     }
 
-    refreshStaff();
+    await refreshStaff();
   }
 
-  function handleRoleChange(id, role) {
+  async function handleRoleChange(id, role) {
     const user = staff.find((staffUser) => staffUser.id === id);
     if (!user) return;
-    persistStaffUpdate(user, { role });
+    await persistStaffUpdate(user, { role });
   }
 
-  function handleFieldBlur(user, field) {
+  async function handleFieldBlur(user, field) {
     const draft = drafts[user.id];
     if (!draft) return;
 
@@ -219,14 +219,14 @@ export default function StaffUsers() {
       return;
     }
 
-    persistStaffUpdate(user, { [field]: nextValue });
+    await persistStaffUpdate(user, { [field]: nextValue });
   }
 
-  function handleResetPin(user) {
+  async function handleResetPin(user) {
     try {
       const nextPin = generateUniqueStaffPin(user.id);
       setDraftValue(user.id, "pin", nextPin);
-      persistStaffUpdate(user, { pin: nextPin });
+      await persistStaffUpdate(user, { pin: nextPin });
     } catch (error) {
       alert(error.message || "Unable to reset PIN.");
     }

@@ -217,7 +217,7 @@ export default function Login() {
     targetNeedsManagement,
   ]);
 
-  function handleStaffLogin(event) {
+  async function handleStaffLogin(event) {
     event.preventDefault();
 
     if (!selectedStaffUserId) {
@@ -232,7 +232,7 @@ export default function Login() {
 
     clearAllAuthSessions("staff-login-session-reset");
 
-    const loginResult = attemptStaffLogin({
+    const loginResult = await attemptStaffLogin({
       staffUserId: selectedStaffUserId,
       pin: staffPin,
       persistSession: true,

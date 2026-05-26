@@ -1,11 +1,15 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import {
   seedStoredOrders,
   updateStoredOrder,
   useStoredOrders,
 } from "../lib/ordersStore";
-import { getActiveStaffUser, getStoredStaffUsers } from "../lib/staffUsersStore";
+import {
+  getActiveStaffUser,
+  getOperationalStaffUsers,
+  subscribeToStaffUsers,
+} from "../lib/staffUsersStore";
 import AssignmentDispatchBoard from "../assignments/AssignmentDispatchBoard";
 import {
   isActiveOperationalStatus,
@@ -103,6 +107,9 @@ function OwnerAssignments({ allOrders, staffUsers }) {
 export default function Assignments() {
   const storedOrders = useStoredOrders();
   const staffUser = getActiveStaffUser();
+  const [staffUsers, setStaffUsers] = useState(() =>
+    getOperationalStaffUsers().filter((user) => user.status !== "Inactive")
+  );
 
   useEffect(() => {
     if (!storedOrders.length) {
@@ -110,10 +117,12 @@ export default function Assignments() {
     }
   }, [storedOrders.length]);
 
-  const staffUsers = useMemo(
-    () => getStoredStaffUsers().filter((user) => user.status !== "Inactive"),
-    []
-  );
+  useEffect(() => {
+    return subscribeToStaffUsers((nextUsers) => {
+      setStaffUsers(nextUsers.filter((user) => user.status !== "Inactive"));
+    });
+  }, []);
+
   const allOrders = useMemo(
     () => sortOrdersByOperationalStatus(storedOrders.map(normalizeOrder)),
     [storedOrders]

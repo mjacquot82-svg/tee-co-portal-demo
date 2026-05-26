@@ -1,9 +1,13 @@
 import { useParams, Link } from "react-router-dom";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./OrderDetail.css";
 import { recordStoredOrderPayment, updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
 import { useStoredProducts } from "../lib/productsStore";
-import { getActiveStaffUser, getStoredStaffUsers } from "../lib/staffUsersStore";
+import {
+  getActiveStaffUser,
+  getOperationalStaffUsers,
+  subscribeToStaffUsers,
+} from "../lib/staffUsersStore";
 import { generateQuoteSnapshot } from "../lib/quoteEngine";
 import { printProductionSheet } from "../lib/printProductionSheet";
 import PricingSummary from "../components/PricingSummary";
@@ -59,11 +63,13 @@ export default function OrderDetail() {
   const { orderNumber } = useParams();
   const storedOrders = useStoredOrders();
   const storedProducts = useStoredProducts();
+  const [staffUsers, setStaffUsers] = useState(() =>
+    getOperationalStaffUsers().filter((staffUser) => staffUser.status !== "Inactive")
+  );
   const order = useMemo(
     () => storedOrders.find((entry) => entry.order_number === orderNumber) || null,
     [orderNumber, storedOrders]
   );
-  const staffUsers = getStoredStaffUsers().filter((staffUser) => staffUser.status !== "Inactive");
   const activeStaffUser = getActiveStaffUser();
   const isStaffWorkspace = isStaffWorkspaceView(activeStaffUser);
   const canManageAssignments = isAdminWorkspaceView(activeStaffUser);
@@ -91,6 +97,12 @@ export default function OrderDetail() {
         : [],
     });
   }, [order, quoteSnapshot]);
+
+  useEffect(() => {
+    return subscribeToStaffUsers((nextUsers) => {
+      setStaffUsers(nextUsers.filter((staffUser) => staffUser.status !== "Inactive"));
+    });
+  }, []);
 
   useEffect(() => {
     if (!order || !isStaffWorkspace || !activeStaffUser?.id) return;

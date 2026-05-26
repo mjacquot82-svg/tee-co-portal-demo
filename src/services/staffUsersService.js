@@ -8,9 +8,11 @@ import { createCrudService } from "./createCrudService";
 const staffUsersService = createCrudService({
   table: "staff_users",
   local: {
-    list: () => getStoredStaffUsers(),
+    list: async () => getStoredStaffUsers(),
     getById: (staffUserId) =>
-      getStoredStaffUsers().find((staffUser) => staffUser.id === staffUserId) || null,
+      getStoredStaffUsers().then(
+        (staffUsers) => staffUsers.find((staffUser) => staffUser.id === staffUserId) || null
+      ),
     create: (staffUser) => createStoredStaffUser(staffUser),
     update: (staffUserId, updates) => updateStoredStaffUser(staffUserId, updates),
   },
@@ -23,4 +25,3 @@ export const getStaffUserById = (staffUserId) => staffUsersService.getById(staff
 export const createStaffUserRecord = (staffUser) => staffUsersService.create(staffUser);
 export const updateStaffUserRecord = (staffUserId, updates) =>
   staffUsersService.update(staffUserId, updates);
-
