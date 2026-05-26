@@ -1496,6 +1496,19 @@ export default function Layout() {
         return;
       }
 
+      if (canAccessOperationalWorkspace("/admin", activeStaffUser)) {
+        pushAuthDiagnostic("login-redirect", {
+          actorType: "staff",
+          userId: activeStaffUser?.id || "",
+          role: activeStaffUser?.role || "",
+          target: "/admin",
+          reason: "management-route-blocked-for-operational-session",
+          pathname: location.pathname,
+        });
+        navigate("/admin", { replace: true });
+        return;
+      }
+
       pushAuthDiagnostic("login-redirect", {
         actorType: "staff",
         userId: activeStaffUser?.id || "",

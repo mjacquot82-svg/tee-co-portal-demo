@@ -159,8 +159,14 @@ export default function Login() {
     if (operationalAuthLoading) return;
 
     if (targetNeedsManagement) {
-      if (!isAdminWorkspaceView(activeOperationalUser)) return;
-      navigate(resolvedRedirectTarget, { replace: true });
+      if (isAdminWorkspaceView(activeOperationalUser)) {
+        navigate(resolvedRedirectTarget, { replace: true });
+        return;
+      }
+
+      if (activeStaffUser?.id && canAccessOperationalWorkspace("/admin", activeStaffUser)) {
+        navigate("/admin", { replace: true });
+      }
       return;
     }
 
@@ -237,20 +243,18 @@ export default function Login() {
       return;
     }
 
-    if (!canAccessOperationalWorkspace(resolvedRedirectTarget, loginResult.user)) {
-      setStaffError("Use email and password sign-in to open this page.");
-      setStaffPin("");
-      return;
-    }
+    const nextTarget = canAccessOperationalWorkspace(resolvedRedirectTarget, loginResult.user)
+      ? resolvedRedirectTarget
+      : "/admin";
 
     pushAuthDiagnostic("login-redirect", {
       actorType: "staff",
       userId: loginResult.user?.id || "",
       role: loginResult.user?.role || "",
-      target: targetNeedsManagement ? "/admin" : resolvedRedirectTarget,
+      target: nextTarget,
     });
 
-    navigate(targetNeedsManagement ? "/admin" : resolvedRedirectTarget, { replace: true });
+    navigate(nextTarget, { replace: true });
   }
 
   async function handleWorkspaceLogin(event) {
