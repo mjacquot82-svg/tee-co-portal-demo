@@ -1191,16 +1191,16 @@ function AdminWorkspaceHeader({ staffUser }) {
     <header
       style={{
         display: "flex",
-        justifyContent: "flex-start",
+        justifyContent: "flex-end",
         padding: "18px 24px 0",
         boxSizing: "border-box",
       }}
     >
       <div
         style={{
-          width: "100%",
           display: "flex",
-          justifyContent: "flex-start",
+          justifyContent: "flex-end",
+          maxWidth: "100%",
         }}
       >
         <div
@@ -1212,9 +1212,9 @@ function AdminWorkspaceHeader({ staffUser }) {
             flexWrap: "wrap",
             background: "#ffffff",
             border: "1px solid #e2e8f0",
-            borderRadius: "16px",
-            padding: "12px 14px",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+            borderRadius: "14px",
+            padding: "10px 12px",
+            boxShadow: "0 6px 20px rgba(15, 23, 42, 0.06)",
             maxWidth: "100%",
           }}
         >
@@ -1230,8 +1230,8 @@ function AdminWorkspaceHeader({ staffUser }) {
             <div
               aria-hidden="true"
               style={{
-                width: "42px",
-                height: "42px",
+                width: "38px",
+                height: "38px",
                 borderRadius: "999px",
                 background: "#171717",
                 color: "#ffffff",
@@ -1239,29 +1239,42 @@ function AdminWorkspaceHeader({ staffUser }) {
                 alignItems: "center",
                 justifyContent: "center",
                 fontWeight: 900,
-                fontSize: "14px",
+                fontSize: "13px",
                 flexShrink: 0,
               }}
             >
               {initials}
             </div>
 
-            <p
-              style={{
-                margin: 0,
-                color: "#171717",
-                fontSize: "15px",
-                fontWeight: 800,
-                lineHeight: 1.3,
-                wordBreak: "break-word",
-              }}
-            >
-              {displayName}
-              <span style={{ color: "#64748b", fontWeight: 700 }}>
-                {" "}
-                ({displayRole})
+            <div style={{ display: "grid", gap: "2px", minWidth: 0 }}>
+              <span
+                style={{
+                  color: "#64748b",
+                  fontSize: "11px",
+                  fontWeight: 900,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Workstation
               </span>
-            </p>
+              <p
+                style={{
+                  margin: 0,
+                  color: "#171717",
+                  fontSize: "14px",
+                  fontWeight: 800,
+                  lineHeight: 1.25,
+                  wordBreak: "break-word",
+                }}
+              >
+                {displayName}
+                <span style={{ color: "#64748b", fontWeight: 700 }}>
+                  {" "}
+                  ({displayRole})
+                </span>
+              </p>
+            </div>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>

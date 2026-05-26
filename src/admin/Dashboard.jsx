@@ -179,29 +179,6 @@ function WorkspaceCountLink({ label, count, description, to, tone = "default" })
   );
 }
 
-function WorkspaceOverviewLink({ label, description, to }) {
-  return (
-    <Link
-      to={to}
-      className="owner-dashboard-workspace-link"
-      style={{
-        display: "grid",
-        gap: "6px",
-        padding: "12px 13px",
-        borderRadius: "14px",
-        border: "1px solid #e2e8f0",
-        background: "#f8fafc",
-        textDecoration: "none",
-        color: "#171717",
-      }}
-      >
-      <strong style={{ fontSize: "14px" }}>{label}</strong>
-      <p style={{ margin: 0, color: "#64748b", fontSize: "12px", lineHeight: 1.35 }}>{description}</p>
-      <span style={{ color: "#475569", fontWeight: 700, fontSize: "12px" }}>Open workspace</span>
-    </Link>
-  );
-}
-
 function buildOwnerAttentionItems(orders = []) {
   const snapshot = buildWorkflowSnapshotCards(orders);
   const lookup = Object.fromEntries(snapshot.map((card) => [card.label, card.value]));
@@ -253,31 +230,6 @@ function buildOwnerAttentionItems(orders = []) {
   ]
     .filter((item) => item.count > 0)
     .slice(0, 3);
-}
-
-function buildOwnerWorkspaceOverview(orders = []) {
-  return [
-    {
-      label: "Quotes",
-      description: "Pricing, approvals, deposits, and artwork readiness.",
-      to: "/admin/quotes",
-    },
-    {
-      label: "Front Counter",
-      description: "Pickup-ready orders and day-of customer transactions.",
-      to: "/admin/sales/new",
-    },
-    {
-      label: "Shop Production",
-      description: "Active production work currently moving through the floor.",
-      to: "/admin/orders",
-    },
-    {
-      label: "Financial",
-      description: "Orders with remaining balances and invoice follow-up.",
-      to: "/admin/financial",
-    },
-  ];
 }
 
 function UpcomingOrderCard({ order }) {
@@ -478,9 +430,7 @@ function buildUpcomingOperationalOrders(orders = []) {
 }
 
 function OwnerDashboard({ orders, operationalEvents }) {
-  const metrics = buildOperationalMetrics(orders);
   const attentionItems = buildOwnerAttentionItems(orders);
-  const workspaceOverview = buildOwnerWorkspaceOverview(orders);
   const upcomingOrders = buildUpcomingOperationalOrders(orders);
   const recentOperationalEvents = operationalEvents.slice(0, 6);
 
@@ -499,7 +449,7 @@ function OwnerDashboard({ orders, operationalEvents }) {
         className="owner-dashboard-layout"
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
           gap: "14px",
           alignItems: "start",
         }}
@@ -547,24 +497,10 @@ function OwnerDashboard({ orders, operationalEvents }) {
           </Section>
         </div>
 
-        <div className="owner-dashboard-secondary-column" style={{ display: "grid", gap: "14px", alignContent: "start" }}>
-          <Section
-            className="owner-dashboard-section-secondary"
-            title="Workspace Guide"
-            description="Each workspace keeps its own workflow detail so the dashboard can stay calm and quick to scan."
-          >
-            <div className="owner-dashboard-workspace-grid" style={{ display: "grid", gap: "10px" }}>
-              {workspaceOverview.map((workspace) => (
-                <WorkspaceOverviewLink
-                  key={workspace.label}
-                  label={workspace.label}
-                  description={workspace.description}
-                  to={workspace.to}
-                />
-              ))}
-            </div>
-          </Section>
-
+        <div
+          className="owner-dashboard-secondary-column"
+          style={{ display: "grid", gap: "14px", alignContent: "start", maxWidth: "420px" }}
+        >
           <Section
             className="owner-dashboard-section-secondary"
             title="Recent Operational Activity"

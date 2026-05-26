@@ -3,6 +3,8 @@ import PaymentStatusBadge from "../components/PaymentStatusBadge";
 import { formatDateTime, formatShortDate } from "../lib/dateFormatting";
 import { useStoredOrders } from "../lib/ordersStore";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
+import { isCanceledOperationalStatus } from "../orders/orderWorkflow";
+import { isQuoteCanceled } from "../quotes/quoteWorkflow";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -96,6 +98,10 @@ function buildRecentFinancialEvents(orders = [], limit = 4) {
     .slice(0, limit);
 }
 
+function isActiveFinancialWorkflowOrder(order) {
+  return !isCanceledOperationalStatus(order.status) && !isQuoteCanceled(order);
+}
+
 function QueueHint({ label, value, tone = "default" }) {
   const tones = {
     default: { background: "#f8fafc", border: "#e2e8f0", color: "#334155" },
@@ -128,16 +134,17 @@ function QueueHint({ label, value, tone = "default" }) {
 export default function InvoicesPayments() {
   const orders = useStoredOrders();
   const financialOrders = orders.map((order) => normalizeOrderFinancials(order));
-  const statusCounts = buildStatusCounts(financialOrders);
-  const overdueInvoices = financialOrders.filter((order) => order.invoice_status === "Overdue");
-  const unpaidInvoices = financialOrders.filter((order) => Number(order.balance_due || 0) > 0);
-  const partiallyPaidInvoices = financialOrders.filter(
+  const activeFinancialOrders = financialOrders.filter(isActiveFinancialWorkflowOrder);
+  const statusCounts = buildStatusCounts(activeFinancialOrders);
+  const overdueInvoices = activeFinancialOrders.filter((order) => order.invoice_status === "Overdue");
+  const unpaidInvoices = activeFinancialOrders.filter((order) => Number(order.balance_due || 0) > 0);
+  const partiallyPaidInvoices = activeFinancialOrders.filter(
     (order) => order.invoice_status === "Partial Payment"
   );
-  const awaitingDepositInvoices = financialOrders.filter(
+  const awaitingDepositInvoices = activeFinancialOrders.filter(
     (order) => order.payment_collection_state === "Awaiting Deposit"
   );
-  const paidInvoices = financialOrders.filter((order) => order.invoice_status === "Paid");
+  const paidInvoices = activeFinancialOrders.filter((order) => order.invoice_status === "Paid");
   const recentFinancialEvents = buildRecentFinancialEvents(financialOrders);
 
   return (
@@ -209,8 +216,8 @@ export default function InvoicesPayments() {
               </tr>
             </thead>
             <tbody>
-              {financialOrders.length ? (
-                financialOrders.map((order) => {
+              {activeFinancialOrders.length ? (
+                activeFinancialOrders.map((order) => {
                   const latestEvent = order.financial_history?.[0] || order.connected_timeline?.[0] || null;
 
                   return (

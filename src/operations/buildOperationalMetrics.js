@@ -7,7 +7,7 @@ import {
   isCompletedOperationalStatus,
   normalizeOperationalStatus,
 } from "../orders/orderWorkflow";
-import { isActiveQuoteWorkflowOrder } from "../quotes/quoteWorkflow";
+import { isActiveQuoteWorkflowOrder, isQuoteCanceled } from "../quotes/quoteWorkflow";
 
 export function buildOperationalMetrics(orders = []) {
   const today = new Date();
@@ -37,7 +37,7 @@ export function buildOperationalMetrics(orders = []) {
       }
     }
 
-    if (Number(order.balance_due || 0) > 0) {
+    if (!isCanceledOperationalStatus(order.status) && !isQuoteCanceled(order) && Number(order.balance_due || 0) > 0) {
       outstandingPayments += 1;
     }
 
