@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   canAccessOperationalWorkspace,
   canAccessProtectedManagementRoute,
-  isAdminWorkspaceView,
+  getRouteAccessUser,
   requiresProtectedManagementAccess,
 } from "../admin/adminRoleView";
 import { pushAuthDiagnostic } from "../lib/authDiagnostics";
@@ -98,6 +98,10 @@ export default function Login() {
   const targetIsCustomerRoute = resolvedRedirectTarget === "/my-orders";
   const targetNeedsManagement =
     targetIsAdminRoute && requiresProtectedManagementAccess(resolvedRedirectTarget);
+  const routeAccessUser = getRouteAccessUser({
+    authenticatedUser: activeOperationalUser,
+    activeStaffUser,
+  });
 
   useEffect(() => {
     void ensureOperationalAuthInitialized().then((snapshot) => {
@@ -159,12 +163,12 @@ export default function Login() {
     if (operationalAuthLoading) return;
 
     if (targetNeedsManagement) {
-      if (isAdminWorkspaceView(activeOperationalUser)) {
+      if (canAccessProtectedManagementRoute(resolvedRedirectTarget, routeAccessUser)) {
         navigate(resolvedRedirectTarget, { replace: true });
         return;
       }
 
-      if (activeStaffUser?.id && canAccessOperationalWorkspace("/admin", activeStaffUser)) {
+      if (canAccessOperationalWorkspace("/admin", routeAccessUser)) {
         navigate("/admin", { replace: true });
       }
       return;
@@ -177,15 +181,7 @@ export default function Login() {
     }
 
     if (targetIsAdminRoute) {
-      if (activeStaffUser?.id && canAccessOperationalWorkspace(resolvedRedirectTarget, activeStaffUser)) {
-        navigate(resolvedRedirectTarget, { replace: true });
-        return;
-      }
-
-      if (
-        activeOperationalUser?.id &&
-        canAccessOperationalWorkspace(resolvedRedirectTarget, activeOperationalUser)
-      ) {
+      if (canAccessOperationalWorkspace(resolvedRedirectTarget, routeAccessUser)) {
         navigate(resolvedRedirectTarget, { replace: true });
         return;
       }
@@ -201,7 +197,7 @@ export default function Login() {
       return;
     }
 
-    if (activeStaffUser?.id) {
+    if (routeAccessUser?.id) {
       navigate("/admin", { replace: true });
     }
   }, [
@@ -211,6 +207,7 @@ export default function Login() {
     navigate,
     operationalAuthLoading,
     resolvedRedirectTarget,
+    routeAccessUser,
     targetIsAdminRoute,
     targetIsCustomerRoute,
     targetNeedsManagement,
@@ -284,12 +281,18 @@ export default function Login() {
 
     clearAllAuthSessions("workspace-login-session-reset");
 
+    const postLoginAccessUser = getRouteAccessUser({
+      authenticatedUser: loginResult.user,
+      activeStaffUser: getActiveStaffUser(),
+    });
+
     const nextTarget =
       loginResult.actorType === "customer"
         ? "/my-orders"
-        : canAccessProtectedManagementRoute(resolvedRedirectTarget, loginResult.user)
+        : canAccessProtectedManagementRoute(resolvedRedirectTarget, postLoginAccessUser)
           ? resolvedRedirectTarget
-          : targetIsAdminRoute && canAccessOperationalWorkspace(resolvedRedirectTarget, loginResult.user)
+          : targetIsAdminRoute &&
+              canAccessOperationalWorkspace(resolvedRedirectTarget, postLoginAccessUser)
             ? resolvedRedirectTarget
             : "/admin";
 

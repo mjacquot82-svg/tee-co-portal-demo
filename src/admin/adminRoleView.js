@@ -1,5 +1,11 @@
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 
+const OPERATIONAL_ROLE_RANK = {
+  Staff: 1,
+  Manager: 2,
+  Owner: 3,
+};
+
 export function resolveOperationalRole(staffUser = getActiveStaffUser()) {
   if (!staffUser?.id) return "";
 
@@ -30,6 +36,28 @@ export function isStaffWorkspaceView(staffUser = getActiveStaffUser()) {
 
 export function hasOperationalSession(staffUser = getActiveStaffUser()) {
   return Boolean(staffUser?.id) && Boolean(resolveOperationalRole(staffUser));
+}
+
+function getOperationalRoleRank(staffUser) {
+  return OPERATIONAL_ROLE_RANK[resolveOperationalRole(staffUser)] || 0;
+}
+
+export function getRouteAccessUser({
+  authenticatedUser = null,
+  activeStaffUser = getActiveStaffUser(),
+} = {}) {
+  const authenticatedRank = getOperationalRoleRank(authenticatedUser);
+  const activeStaffRank = getOperationalRoleRank(activeStaffUser);
+
+  if (authenticatedRank >= activeStaffRank && authenticatedRank > 0) {
+    return authenticatedUser;
+  }
+
+  if (activeStaffRank > 0) {
+    return activeStaffUser;
+  }
+
+  return authenticatedUser || activeStaffUser || null;
 }
 
 export function canAccessProtectedManagementRoute(

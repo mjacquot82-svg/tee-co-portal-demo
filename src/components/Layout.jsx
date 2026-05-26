@@ -8,6 +8,7 @@ import {
   canAccessProtectedManagementRoute,
   getAdminViewer,
   getAssignedOrdersForStaff,
+  getRouteAccessUser,
   getOperationalOrdersForStaff,
   hasOperationalSession,
   isAdminWorkspaceView,
@@ -1402,6 +1403,12 @@ export default function Layout() {
   const [activeCustomerSession, setActiveCustomerSession] = useState(() =>
     getActiveCustomerSession()
   );
+  const routeAccessUser = isAdmin
+    ? getRouteAccessUser({
+        authenticatedUser: authenticatedOperationalUser,
+        activeStaffUser,
+      })
+    : null;
 
   useEffect(() => {
     void ensureOperationalAuthInitialized().then((snapshot) => {
@@ -1451,13 +1458,15 @@ export default function Layout() {
       authenticatedUserRole: authenticatedOperationalUser?.role || "",
       currentUserId: activeStaffUser?.id || "",
       currentUserRole: activeStaffUser?.role || "",
+      accessUserId: routeAccessUser?.id || "",
+      accessUserRole: routeAccessUser?.role || "",
       requiresManagementAccess,
-      workspaceAccess: canAccessOperationalWorkspace(location.pathname, activeStaffUser)
+      workspaceAccess: canAccessOperationalWorkspace(location.pathname, routeAccessUser)
         ? "allowed"
         : "blocked",
     });
 
-    if (!hasOperationalSession(activeStaffUser)) {
+    if (!hasOperationalSession(routeAccessUser)) {
       if (activeCustomerSession) {
         pushAuthDiagnostic("login-redirect", {
           actorType: "customer",
@@ -1483,7 +1492,7 @@ export default function Layout() {
 
     if (
       requiresManagementAccess &&
-      !canAccessProtectedManagementRoute(location.pathname, authenticatedOperationalUser)
+      !canAccessProtectedManagementRoute(location.pathname, routeAccessUser)
     ) {
       if (activeCustomerSession) {
         pushAuthDiagnostic("login-redirect", {
@@ -1496,11 +1505,11 @@ export default function Layout() {
         return;
       }
 
-      if (canAccessOperationalWorkspace("/admin", activeStaffUser)) {
+      if (canAccessOperationalWorkspace("/admin", routeAccessUser)) {
         pushAuthDiagnostic("login-redirect", {
           actorType: "staff",
-          userId: activeStaffUser?.id || "",
-          role: activeStaffUser?.role || "",
+          userId: routeAccessUser?.id || "",
+          role: routeAccessUser?.role || "",
           target: "/admin",
           reason: "management-route-blocked-for-operational-session",
           pathname: location.pathname,
@@ -1511,8 +1520,8 @@ export default function Layout() {
 
       pushAuthDiagnostic("login-redirect", {
         actorType: "staff",
-        userId: activeStaffUser?.id || "",
-        role: activeStaffUser?.role || "",
+        userId: routeAccessUser?.id || "",
+        role: routeAccessUser?.role || "",
         target: "/login",
         reason: "missing-management-session",
         pathname: location.pathname,
@@ -1524,11 +1533,11 @@ export default function Layout() {
       return;
     }
 
-    if (canAccessOperationalWorkspace(location.pathname, activeStaffUser)) return;
+    if (canAccessOperationalWorkspace(location.pathname, routeAccessUser)) return;
     pushAuthDiagnostic("login-redirect", {
       actorType: "staff",
-      userId: activeStaffUser?.id || "",
-      role: activeStaffUser?.role || "",
+      userId: routeAccessUser?.id || "",
+      role: routeAccessUser?.role || "",
       target: "/admin",
       reason: "workspace-blocked",
       pathname: location.pathname,
@@ -1543,6 +1552,7 @@ export default function Layout() {
     location.search,
     navigate,
     operationalAuthLoading,
+    routeAccessUser,
     requiresManagementAccess,
   ]);
 
@@ -1559,7 +1569,8 @@ export default function Layout() {
     navigate("/login", { replace: true });
   }, [activeCustomerSession, location.pathname, navigate, requiresCustomerSession]);
 
-  const visibleStaffUser = isAdmin ? activeStaffUser : null;
+  const visibleStaffUser = isAdmin ? routeAccessUser : null;
+  const currentOperator = isAdmin ? activeStaffUser || routeAccessUser : null;
   const resolvedStaffRole = resolveOperationalRole(visibleStaffUser);
   const workspaceAccess = isAdmin
     ? canAccessOperationalWorkspace(location.pathname, visibleStaffUser)
@@ -1643,7 +1654,7 @@ export default function Layout() {
 
             <div style={{ flex: 1, minWidth: 0 }}>
               <AdminWorkspaceHeader
-                staffUser={visibleStaffUser}
+                staffUser={currentOperator}
                 authenticatedUser={authenticatedOperationalUser}
               />
 
