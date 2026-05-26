@@ -6,6 +6,7 @@ import { isActiveOperationalStatus } from "../orders/orderWorkflow";
 import {
   canAccessOperationalWorkspace,
   canAccessProtectedManagementRoute,
+  classifyAdminRoute,
   getAdminViewer,
   getAssignedOrdersForStaff,
   getRouteAccessUser,
@@ -45,6 +46,69 @@ const ADMIN_LOGO_SRC = "/tee&co512x512.png";
 const FACEBOOK_URL =
   "https://www.facebook.com/p/Tee-Co-Ltd-100078145951464/";
 const INSTAGRAM_URL = "https://www.instagram.com/teeandcodesigns/";
+
+function summarizeRouteGuardUser(user) {
+  if (!user) {
+    return {
+      exists: false,
+      id: "",
+      role: "",
+      name: "",
+      authMode: "",
+    };
+  }
+
+  return {
+    exists: true,
+    id: user.id || "",
+    role: user.role || "",
+    name: user.name || "",
+    authMode: user.authMode || "",
+  };
+}
+
+function buildAdminRouteGuardSnapshot({
+  pathname,
+  search,
+  authenticatedOperationalUser,
+  activeStaffUser,
+  routeAccessUser,
+  operationalAuthLoading,
+}) {
+  const routeClassification = classifyAdminRoute(pathname);
+
+  return {
+    targetRoute: `${pathname}${search || ""}`,
+    activeAuthenticatedUser: summarizeRouteGuardUser(authenticatedOperationalUser),
+    activeOperator: summarizeRouteGuardUser(activeStaffUser),
+    resolvedAccessIdentity: summarizeRouteGuardUser(routeAccessUser),
+    routeClassification,
+    canAccessOperationalWorkspaceResult: canAccessOperationalWorkspace(
+      pathname,
+      routeAccessUser
+    ),
+    canAccessProtectedManagementRouteResult: canAccessProtectedManagementRoute(
+      pathname,
+      routeAccessUser
+    ),
+    hasOperationalSession: hasOperationalSession(routeAccessUser),
+    operationalAuthLoading,
+  };
+}
+
+function logAdminRouteGuard(event, snapshot, details = {}) {
+  if (!snapshot) return;
+
+  const entry = {
+    event,
+    ...snapshot,
+    redirectReason: details.redirectReason || "",
+    fallbackTrigger: details.fallbackTrigger || "",
+  };
+
+  pushAuthDiagnostic(`route-guard-${event}`, entry);
+  console.info("[route-guard]", entry);
+}
 
 function FacebookIcon() {
   return (
@@ -1409,6 +1473,16 @@ export default function Layout() {
         activeStaffUser,
       })
     : null;
+  const adminRouteGuardSnapshot = isAdmin
+    ? buildAdminRouteGuardSnapshot({
+        pathname: location.pathname,
+        search: location.search,
+        authenticatedOperationalUser,
+        activeStaffUser,
+        routeAccessUser,
+        operationalAuthLoading,
+      })
+    : null;
 
   useEffect(() => {
     void ensureOperationalAuthInitialized().then((snapshot) => {
@@ -1452,6 +1526,8 @@ export default function Layout() {
     if (!isAdmin) return;
     if (operationalAuthLoading && requiresManagementAccess) return;
 
+    logAdminRouteGuard("evaluate", adminRouteGuardSnapshot);
+
     pushAuthDiagnostic("role-resolution", {
       pathname: location.pathname,
       authenticatedUserId: authenticatedOperationalUser?.id || "",
@@ -1460,13 +1536,25 @@ export default function Layout() {
       currentUserRole: activeStaffUser?.role || "",
       accessUserId: routeAccessUser?.id || "",
       accessUserRole: routeAccessUser?.role || "",
+      routeClassification: adminRouteGuardSnapshot?.routeClassification?.classification || "",
+      matchedManagementRule:
+        adminRouteGuardSnapshot?.routeClassification?.matchedManagementRule || "",
       requiresManagementAccess,
-      workspaceAccess: canAccessOperationalWorkspace(location.pathname, routeAccessUser)
+      workspaceAccess: adminRouteGuardSnapshot?.canAccessOperationalWorkspaceResult
+        ? "allowed"
+        : "blocked",
+      managementAccess: adminRouteGuardSnapshot?.canAccessProtectedManagementRouteResult
         ? "allowed"
         : "blocked",
     });
 
     if (!hasOperationalSession(routeAccessUser)) {
+      logAdminRouteGuard("redirect", adminRouteGuardSnapshot, {
+        redirectReason: activeCustomerSession
+          ? "customer-session-cannot-open-admin"
+          : "missing-operational-session",
+      });
+
       if (activeCustomerSession) {
         pushAuthDiagnostic("login-redirect", {
           actorType: "customer",
@@ -1494,6 +1582,19 @@ export default function Layout() {
       requiresManagementAccess &&
       !canAccessProtectedManagementRoute(location.pathname, routeAccessUser)
     ) {
+      logAdminRouteGuard("fallback", adminRouteGuardSnapshot, {
+        redirectReason: activeCustomerSession
+          ? "customer-session-cannot-open-management"
+          : canAccessOperationalWorkspace("/admin", routeAccessUser)
+            ? "management-route-blocked-for-operational-session"
+            : "missing-management-session",
+        fallbackTrigger: activeCustomerSession
+          ? "customer-redirect"
+          : canAccessOperationalWorkspace("/admin", routeAccessUser)
+            ? "management-classification-block"
+            : "login-redirect",
+      });
+
       if (activeCustomerSession) {
         pushAuthDiagnostic("login-redirect", {
           actorType: "customer",
@@ -1506,15 +1607,6 @@ export default function Layout() {
       }
 
       if (canAccessOperationalWorkspace("/admin", routeAccessUser)) {
-        pushAuthDiagnostic("login-redirect", {
-          actorType: "staff",
-          userId: routeAccessUser?.id || "",
-          role: routeAccessUser?.role || "",
-          target: "/admin",
-          reason: "management-route-blocked-for-operational-session",
-          pathname: location.pathname,
-        });
-        navigate("/admin", { replace: true });
         return;
       }
 
@@ -1534,18 +1626,24 @@ export default function Layout() {
     }
 
     if (canAccessOperationalWorkspace(location.pathname, routeAccessUser)) return;
+
+    logAdminRouteGuard("fallback", adminRouteGuardSnapshot, {
+      redirectReason: "workspace-blocked",
+      fallbackTrigger: "workspace-classification-block",
+    });
+
     pushAuthDiagnostic("login-redirect", {
       actorType: "staff",
       userId: routeAccessUser?.id || "",
       role: routeAccessUser?.role || "",
-      target: "/admin",
+      target: "",
       reason: "workspace-blocked",
       pathname: location.pathname,
     });
-    navigate("/admin", { replace: true });
   }, [
     activeCustomerSession,
     activeStaffUser,
+    adminRouteGuardSnapshot,
     authenticatedOperationalUser,
     isAdmin,
     location.pathname,
@@ -1577,9 +1675,36 @@ export default function Layout() {
       ? "allowed"
       : "blocked"
     : "public";
+  const managementAccess = isAdmin
+    ? canAccessProtectedManagementRoute(location.pathname, visibleStaffUser)
+      ? "allowed"
+      : "blocked"
+    : "public";
 
   if (isAdmin && requiresManagementAccess && operationalAuthLoading) {
     return <AdminAuthLoadingState />;
+  }
+
+  if (
+    isAdmin &&
+    visibleStaffUser &&
+    requiresManagementAccess &&
+    !canAccessProtectedManagementRoute(location.pathname, visibleStaffUser)
+  ) {
+    console.warn("[route-guard] visible fallback", {
+      ...adminRouteGuardSnapshot,
+      redirectReason: "management-route-blocked-for-operational-session",
+      fallbackTrigger: "management-classification-block",
+    });
+    return (
+      <AdminDiagnosticsPanel
+        title="Management route blocked by runtime classification"
+        message="This admin route is being rejected at runtime even though an operational session exists. Check the route-guard console logs for the exact classification and identity that caused the block."
+        staffUser={visibleStaffUser}
+        pathname={location.pathname}
+        workspaceAccess={`${workspaceAccess} / management ${managementAccess}`}
+      />
+    );
   }
 
   if (isAdmin && location.pathname.startsWith("/admin/garments")) {
@@ -1622,6 +1747,23 @@ export default function Layout() {
       <AdminDiagnosticsPanel
         title="Operational role could not be resolved"
         message="A staff session exists, but its role is not one of Owner, Manager, or Staff, so the workspace has been paused before rendering."
+        staffUser={visibleStaffUser}
+        pathname={location.pathname}
+        workspaceAccess={workspaceAccess}
+      />
+    );
+  }
+
+  if (isAdmin && workspaceAccess !== "allowed") {
+    console.warn("[route-guard] visible fallback", {
+      ...adminRouteGuardSnapshot,
+      redirectReason: "workspace-blocked",
+      fallbackTrigger: "workspace-classification-block",
+    });
+    return (
+      <AdminDiagnosticsPanel
+        title="Admin route blocked by runtime workspace access"
+        message="This admin route was denied by the workspace guard. The route-guard console logs include the target route, active operator, resolved access identity, classification, and exact block reason."
         staffUser={visibleStaffUser}
         pathname={location.pathname}
         workspaceAccess={workspaceAccess}

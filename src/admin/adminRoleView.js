@@ -6,6 +6,26 @@ const OPERATIONAL_ROLE_RANK = {
   Owner: 3,
 };
 
+export const MANAGEMENT_EXACT_PATHS = [
+  "/admin/customers",
+  "/admin/financial",
+  "/admin/records/canceled",
+  "/admin/sales",
+  "/admin/staff-users",
+  "/admin/quotes/archived",
+];
+
+export const MANAGEMENT_PATH_PREFIXES = [
+  "/admin/customers/",
+  "/admin/financial/",
+  "/admin/garments",
+  "/admin/products",
+];
+
+function normalizeRoutePathname(pathname = "") {
+  return String(pathname || "").trim() || "/";
+}
+
 export function resolveOperationalRole(staffUser = getActiveStaffUser()) {
   if (!staffUser?.id) return "";
 
@@ -103,27 +123,10 @@ export function getOperationalOrdersForStaff(orders = []) {
 
 export function canAccessOwnerWorkspace(pathname, staffUser = getActiveStaffUser()) {
   if (!hasOperationalSession(staffUser)) return false;
-  if (requiresProtectedManagementAccess(pathname)) return false;
-  if (!isStaffWorkspaceView(staffUser)) return true;
+  if (isAdminWorkspaceView(staffUser)) return true;
+  if (!isStaffWorkspaceView(staffUser)) return false;
 
-  const blockedExactPaths = [
-    "/admin/financial",
-    "/admin/sales",
-    "/admin/customers",
-    "/admin/staff-users",
-  ];
-  const blockedPathPrefixes = [
-    "/admin/financial/",
-    "/admin/garments",
-    "/admin/products",
-    "/admin/quotes/archived",
-    "/admin/records/canceled",
-  ];
-
-  return !(
-    blockedExactPaths.includes(pathname) ||
-    blockedPathPrefixes.some((prefix) => pathname.startsWith(prefix))
-  );
+  return !requiresProtectedManagementAccess(pathname);
 }
 
 export function canAccessOperationalWorkspace(pathname, staffUser = getActiveStaffUser()) {
@@ -131,23 +134,39 @@ export function canAccessOperationalWorkspace(pathname, staffUser = getActiveSta
 }
 
 export function requiresProtectedManagementAccess(pathname = "") {
-  const managementExactPaths = [
-    "/admin/customers",
-    "/admin/financial",
-    "/admin/records/canceled",
-    "/admin/sales",
-    "/admin/staff-users",
-    "/admin/quotes/archived",
-  ];
-  const managementPathPrefixes = [
-    "/admin/customers/",
-    "/admin/financial/",
-    "/admin/garments",
-    "/admin/products",
-  ];
+  const normalizedPathname = normalizeRoutePathname(pathname);
 
   return (
-    managementExactPaths.includes(pathname) ||
-    managementPathPrefixes.some((prefix) => pathname.startsWith(prefix))
+    MANAGEMENT_EXACT_PATHS.includes(normalizedPathname) ||
+    MANAGEMENT_PATH_PREFIXES.some((prefix) => normalizedPathname.startsWith(prefix))
   );
+}
+
+export function classifyAdminRoute(pathname = "") {
+  const normalizedPathname = normalizeRoutePathname(pathname);
+  const matchedExactManagementRule = MANAGEMENT_EXACT_PATHS.includes(normalizedPathname)
+    ? normalizedPathname
+    : "";
+  const matchedPrefixManagementRule =
+    MANAGEMENT_PATH_PREFIXES.find((prefix) => normalizedPathname.startsWith(prefix)) || "";
+  const requiresManagementAccess = Boolean(
+    matchedExactManagementRule || matchedPrefixManagementRule
+  );
+
+  return {
+    pathname: normalizedPathname,
+    isAdminRoute: normalizedPathname.startsWith("/admin"),
+    classification: requiresManagementAccess
+      ? "protected-management"
+      : normalizedPathname.startsWith("/admin")
+        ? "operational"
+        : "non-admin",
+    requiresManagementAccess,
+    matchedManagementRuleType: matchedExactManagementRule
+      ? "exact"
+      : matchedPrefixManagementRule
+        ? "prefix"
+        : "",
+    matchedManagementRule: matchedExactManagementRule || matchedPrefixManagementRule || "",
+  };
 }
