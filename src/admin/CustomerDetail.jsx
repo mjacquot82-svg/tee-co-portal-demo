@@ -1,6 +1,6 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { findStoredCustomer } from "../lib/customersStore";
+import { updateStoredCustomer, useStoredCustomers } from "../lib/customersStore";
 import { duplicateStoredOrder, getStoredOrders } from "../lib/ordersStore";
 import { getStoredQuickSales } from "../lib/salesStore";
 import StatusBadge from "../components/StatusBadge";
@@ -92,18 +92,61 @@ const summaryCardStyle = {
   gap: "6px",
 };
 
+const fieldStyle = {
+  border: "1px solid #cbd5e1",
+  borderRadius: "12px",
+  padding: "12px 14px",
+  fontSize: "15px",
+  width: "100%",
+  boxSizing: "border-box",
+  background: "#ffffff",
+};
+
+const labelStyle = {
+  display: "grid",
+  gap: "8px",
+  fontWeight: 600,
+  color: "#292524",
+};
+
+function buildCustomerForm(customer) {
+  return {
+    name: customer?.name || "",
+    company: customer?.company || "",
+    phone: customer?.phone || "",
+    email: customer?.email || "",
+    notes: customer?.notes || "",
+  };
+}
+
 export default function CustomerDetail() {
   const { customerId } = useParams();
   const navigate = useNavigate();
-  const [customer, setCustomer] = useState(null);
+  const customers = useStoredCustomers();
   const [orders, setOrders] = useState([]);
   const [sales, setSales] = useState([]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState(() => buildCustomerForm());
+  const [saveState, setSaveState] = useState("idle");
+  const [saveError, setSaveError] = useState("");
+  const [archiveState, setArchiveState] = useState("idle");
+  const [archiveError, setArchiveError] = useState("");
 
   useEffect(() => {
-    setCustomer(findStoredCustomer(customerId));
     setOrders(getStoredOrders());
     setSales(getStoredQuickSales());
   }, [customerId]);
+
+  const customer = useMemo(
+    () => customers.find((entry) => entry.id === customerId) || null,
+    [customerId, customers]
+  );
+
+  useEffect(() => {
+    if (!isEditing) {
+      setEditForm(buildCustomerForm(customer));
+    }
+  }, [customer, isEditing]);
 
   const customerOrders = useMemo(() => {
     if (!customer) return [];
@@ -184,6 +227,85 @@ export default function CustomerDetail() {
     }
   }
 
+  function updateEditForm(field, value) {
+    setEditForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function openEditor() {
+    setEditForm(buildCustomerForm(customer));
+    setSaveError("");
+    setArchiveError("");
+    setIsEditing(true);
+  }
+
+  function closeEditor() {
+    setEditForm(buildCustomerForm(customer));
+    setSaveError("");
+    setIsEditing(false);
+  }
+
+  async function handleSave(event) {
+    event.preventDefault();
+
+    if (saveState === "saving") return;
+
+    const nextName = editForm.name.trim();
+    if (!nextName) {
+      setSaveError("Customer name is required.");
+      return;
+    }
+
+    setSaveState("saving");
+    setSaveError("");
+
+    try {
+      const updatedCustomer = await updateStoredCustomer(customerId, {
+        name: nextName,
+        company: editForm.company.trim(),
+        phone: editForm.phone.trim(),
+        email: editForm.email.trim(),
+        notes: editForm.notes.trim(),
+      });
+      if (!updatedCustomer) {
+        throw new Error("Customer record could not be found.");
+      }
+      setIsEditing(false);
+    } catch (error) {
+      console.error("Unable to update customer", error);
+      setSaveError(error?.message || "Unable to save customer changes.");
+    } finally {
+      setSaveState("idle");
+    }
+  }
+
+  async function handleArchiveToggle() {
+    if (!customer || archiveState === "saving") return;
+
+    setArchiveState("saving");
+    setArchiveError("");
+
+    try {
+      const updatedCustomer = await updateStoredCustomer(customer.id, {
+        archived: !customer.archived,
+        archived_at: customer.archived ? null : new Date().toISOString(),
+      });
+      if (!updatedCustomer) {
+        throw new Error("Customer record could not be found.");
+      }
+    } catch (error) {
+      console.error("Unable to archive customer", error);
+      setArchiveError(
+        error?.message ||
+          `Unable to ${customer.archived ? "restore" : "archive"} customer right now.`
+      );
+    } finally {
+      setArchiveState("idle");
+    }
+  }
+
   if (!customer) {
     return (
       <div style={{ maxWidth: "900px", margin: "0 auto", padding: "24px" }}>
@@ -230,6 +352,27 @@ export default function CustomerDetail() {
           <p style={{ margin: 0, color: "#64748b" }}>
             Review linked production orders, counter sales, artwork history, and amounts due before the next handoff.
           </p>
+          {customer.archived ? (
+            <div
+              style={{
+                marginTop: "10px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                borderRadius: "999px",
+                border: "1px solid #fecaca",
+                background: "#fff1f2",
+                color: "#9f1239",
+                padding: "7px 12px",
+                fontSize: "12px",
+                fontWeight: 800,
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+              }}
+            >
+              Archived Customer
+            </div>
+          ) : null}
         </div>
 
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
@@ -246,6 +389,24 @@ export default function CustomerDetail() {
           >
             Back to Customers
           </Link>
+          <button
+            type="button"
+            onClick={openEditor}
+            disabled={saveState === "saving" || archiveState === "saving"}
+            style={{
+              border: "1px solid #cbd5e1",
+              background: "#ffffff",
+              borderRadius: "12px",
+              padding: "11px 14px",
+              color: "#0f172a",
+              fontWeight: 700,
+              cursor:
+                saveState === "saving" || archiveState === "saving" ? "not-allowed" : "pointer",
+              opacity: saveState === "saving" || archiveState === "saving" ? 0.65 : 1,
+            }}
+          >
+            Edit Customer
+          </button>
           <Link
             to="/admin/quotes/new"
             style={{
@@ -320,12 +481,261 @@ export default function CustomerDetail() {
       </section>
 
       <div style={{ display: "grid", gap: "18px" }}>
+        {isEditing ? (
+          <section style={sectionCardStyle}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "12px",
+                flexWrap: "wrap",
+                alignItems: "center",
+                marginBottom: "16px",
+              }}
+            >
+              <div>
+                <h2 style={{ margin: 0 }}>Edit Customer</h2>
+                <p style={{ margin: "4px 0 0", color: "#64748b" }}>
+                  Update the saved customer record without leaving the detail view.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeEditor}
+                disabled={saveState === "saving" || archiveState === "saving"}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  background: "#ffffff",
+                  borderRadius: "12px",
+                  padding: "10px 12px",
+                  color: "#0f172a",
+                  fontWeight: 700,
+                  cursor:
+                    saveState === "saving" || archiveState === "saving" ? "not-allowed" : "pointer",
+                  opacity: saveState === "saving" || archiveState === "saving" ? 0.65 : 1,
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+
+            <form onSubmit={handleSave} style={{ display: "grid", gap: "16px" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                  gap: "14px",
+                }}
+              >
+                <label style={labelStyle}>
+                  Name
+                  <input
+                    value={editForm.name}
+                    onChange={(event) => updateEditForm("name", event.target.value)}
+                    style={fieldStyle}
+                    placeholder="Customer name"
+                    disabled={saveState === "saving"}
+                  />
+                </label>
+                <label style={labelStyle}>
+                  Company
+                  <input
+                    value={editForm.company}
+                    onChange={(event) => updateEditForm("company", event.target.value)}
+                    style={fieldStyle}
+                    placeholder="Company"
+                    disabled={saveState === "saving"}
+                  />
+                </label>
+                <label style={labelStyle}>
+                  Phone
+                  <input
+                    value={editForm.phone}
+                    onChange={(event) => updateEditForm("phone", event.target.value)}
+                    style={fieldStyle}
+                    placeholder="Phone"
+                    disabled={saveState === "saving"}
+                  />
+                </label>
+                <label style={labelStyle}>
+                  Email
+                  <input
+                    type="email"
+                    value={editForm.email}
+                    onChange={(event) => updateEditForm("email", event.target.value)}
+                    style={fieldStyle}
+                    placeholder="Email"
+                    disabled={saveState === "saving"}
+                  />
+                </label>
+              </div>
+
+              <label style={labelStyle}>
+                Notes
+                <textarea
+                  value={editForm.notes}
+                  onChange={(event) => updateEditForm("notes", event.target.value)}
+                  style={{ ...fieldStyle, minHeight: "120px", resize: "vertical" }}
+                  placeholder="Operational notes, relationship context, or follow-up details."
+                  disabled={saveState === "saving"}
+                />
+              </label>
+
+              {saveError ? (
+                <div
+                  style={{
+                    border: "1px solid #fecaca",
+                    background: "#fff1f2",
+                    color: "#9f1239",
+                    borderRadius: "14px",
+                    padding: "12px 14px",
+                    fontWeight: 600,
+                  }}
+                >
+                  {saveError}
+                </div>
+              ) : null}
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                }}
+              >
+                <div style={{ color: "#64748b", fontSize: "14px", fontWeight: 600 }}>
+                  {saveState === "saving" ? "Saving customer changes..." : "Changes save to the live customer record."}
+                </div>
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={handleArchiveToggle}
+                    disabled={saveState === "saving" || archiveState === "saving"}
+                    style={{
+                      border: "1px solid #fca5a5",
+                      background: "#fff1f2",
+                      color: "#9f1239",
+                      borderRadius: "12px",
+                      padding: "11px 14px",
+                      fontWeight: 700,
+                      cursor:
+                        saveState === "saving" || archiveState === "saving"
+                          ? "not-allowed"
+                          : "pointer",
+                      opacity: saveState === "saving" || archiveState === "saving" ? 0.65 : 1,
+                    }}
+                  >
+                    {archiveState === "saving"
+                      ? customer.archived
+                        ? "Restoring..."
+                        : "Archiving..."
+                      : customer.archived
+                        ? "Restore Customer"
+                        : "Archive Customer"}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saveState === "saving" || archiveState === "saving"}
+                    style={{
+                      border: "none",
+                      background: "#171717",
+                      color: "#ffffff",
+                      borderRadius: "12px",
+                      padding: "11px 16px",
+                      fontWeight: 700,
+                      cursor:
+                        saveState === "saving" || archiveState === "saving"
+                          ? "not-allowed"
+                          : "pointer",
+                      opacity: saveState === "saving" || archiveState === "saving" ? 0.8 : 1,
+                    }}
+                  >
+                    {saveState === "saving" ? "Saving..." : "Save Changes"}
+                  </button>
+                </div>
+              </div>
+
+              {archiveError ? (
+                <div
+                  style={{
+                    border: "1px solid #fecaca",
+                    background: "#fff1f2",
+                    color: "#9f1239",
+                    borderRadius: "14px",
+                    padding: "12px 14px",
+                    fontWeight: 600,
+                  }}
+                >
+                  {archiveError}
+                </div>
+              ) : null}
+            </form>
+          </section>
+        ) : null}
+
         <section style={sectionCardStyle}>
-          <h2 style={{ marginTop: 0 }}>Contact Information</h2>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: "12px",
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
+            <h2 style={{ marginTop: 0, marginBottom: 0 }}>Contact Information</h2>
+            <button
+              type="button"
+              onClick={handleArchiveToggle}
+              disabled={saveState === "saving" || archiveState === "saving"}
+              style={{
+                border: customer.archived ? "1px solid #86efac" : "1px solid #fca5a5",
+                background: customer.archived ? "#f0fdf4" : "#fff1f2",
+                color: customer.archived ? "#166534" : "#9f1239",
+                borderRadius: "12px",
+                padding: "10px 12px",
+                fontWeight: 700,
+                cursor:
+                  saveState === "saving" || archiveState === "saving" ? "not-allowed" : "pointer",
+                opacity: saveState === "saving" || archiveState === "saving" ? 0.65 : 1,
+              }}
+            >
+              {archiveState === "saving"
+                ? customer.archived
+                  ? "Restoring..."
+                  : "Archiving..."
+                : customer.archived
+                  ? "Restore Customer"
+                  : "Archive Customer"}
+            </button>
+          </div>
           <p><strong>Company:</strong> {customer.company || "—"}</p>
           <p><strong>Phone:</strong> {customer.phone || "—"}</p>
           <p><strong>Email:</strong> {customer.email || "—"}</p>
           {customer.notes && <p><strong>Notes:</strong> {customer.notes}</p>}
+          {archiveError ? (
+            <div
+              style={{
+                marginTop: "14px",
+                border: "1px solid #fecaca",
+                background: "#fff1f2",
+                color: "#9f1239",
+                borderRadius: "14px",
+                padding: "12px 14px",
+                fontWeight: 600,
+              }}
+            >
+              {archiveError}
+            </div>
+          ) : null}
+          {customer.archived_at ? (
+            <p style={{ color: "#64748b", marginBottom: 0 }}>
+              <strong>Status:</strong> {customer.archived ? "Archived" : "Active"}
+              {customer.archived ? ` on ${formatDateTime(customer.archived_at)}` : ""}
+            </p>
+          ) : null}
         </section>
 
         <section style={sectionCardStyle}>

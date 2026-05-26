@@ -46,6 +46,8 @@ function normalizeCustomer(customer = {}, fallbackTimestamp = new Date().toISOSt
     external_reference: customer.external_reference || "",
     notes: customer.notes || "",
     order_numbers: normalizeOrderNumbers(customer.order_numbers),
+    archived: Boolean(customer.archived),
+    archived_at: customer.archived ? customer.archived_at || customer.updated_at || createdAt : null,
     created_at: createdAt,
     updated_at: customer.updated_at || createdAt,
   };
@@ -130,6 +132,8 @@ function mapSupabaseRowToCustomer(row, localCustomer) {
     phone: row?.phone ?? localCustomer?.phone,
     email: row?.email ?? localCustomer?.email,
     notes: row?.notes ?? localCustomer?.notes,
+    archived: row?.archived ?? localCustomer?.archived,
+    archived_at: row?.archived_at ?? localCustomer?.archived_at,
     created_at: row?.created_at || localCustomer?.created_at,
     updated_at: row?.updated_at || localCustomer?.updated_at,
   });
