@@ -5,6 +5,7 @@ import CustomerPortalOrders from "./customer-portal/CustomerPortalOrders";
 import CustomerPortalQuotes from "./customer-portal/CustomerPortalQuotes";
 import CustomerPortalInvoices from "./customer-portal/CustomerPortalInvoices";
 import CustomerPortalAccount from "./customer-portal/CustomerPortalAccount";
+import CustomerPortalRequestOrder from "./customer-portal/CustomerPortalRequestOrder";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -93,6 +94,7 @@ export default function App() {
 
           <Route path="/portal" element={<CustomerPortalShell />}>
             <Route index element={<Navigate to="orders" replace />} />
+            <Route path="request-order" element={<CustomerPortalRequestOrder />} />
             <Route path="orders" element={<CustomerPortalOrders />} />
             <Route path="quotes" element={<CustomerPortalQuotes />} />
             <Route path="invoices" element={<CustomerPortalInvoices />} />

@@ -65,7 +65,9 @@ export default function CustomerPortalOrders() {
         ) : (
           <EmptyState
             title="No active orders right now"
-            description="When a new order tied to your customer email or linked customer record moves into progress, it will appear here automatically."
+            description="Start a new request whenever you are ready. Once Tee & Co opens it inside the workflow, it will appear here automatically."
+            actionLabel="Start New Order"
+            actionTo="/portal/request-order"
           />
         )}
       </SectionCard>

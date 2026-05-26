@@ -15,6 +15,7 @@ import {
 } from "../lib/operationalAuthStore";
 
 const portalLinks = [
+  { to: "/portal/request-order", label: "Start New Order" },
   { to: "/portal/orders", label: "My Orders" },
   { to: "/portal/quotes", label: "Quotes" },
   { to: "/portal/invoices", label: "Invoices" },
@@ -170,6 +171,24 @@ export default function CustomerPortalShell() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <NavLink
+              to="/portal/request-order"
+              style={({ isActive }) => ({
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: "44px",
+                borderRadius: "999px",
+                padding: "11px 18px",
+                textDecoration: "none",
+                fontWeight: 800,
+                background: isActive ? "#115e59" : "#0f766e",
+                color: "#ffffff",
+                boxShadow: "0 12px 24px rgba(15, 118, 110, 0.18)",
+              })}
+            >
+              Start New Order
+            </NavLink>
             <div
               style={{
                 width: "42px",
@@ -245,10 +264,42 @@ export default function CustomerPortalShell() {
                 color: "#64748b",
               }}
             >
+              Primary Action
+            </p>
+
+            <NavLink
+              to="/portal/request-order"
+              style={({ isActive }) => ({
+                textDecoration: "none",
+                borderRadius: "18px",
+                padding: "14px 16px",
+                color: "#ffffff",
+                background: isActive
+                  ? "linear-gradient(135deg, #115e59 0%, #0f766e 100%)"
+                  : "linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)",
+                border: "1px solid rgba(255,255,255,0.18)",
+                boxShadow: "0 16px 28px rgba(15, 118, 110, 0.16)",
+                fontWeight: 800,
+              })}
+            >
+              Start New Order
+            </NavLink>
+
+            <p
+              style={{
+                margin: "8px 0 4px",
+                fontSize: "11px",
+                fontWeight: 900,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "#64748b",
+              }}
+            >
               Portal Sections
             </p>
 
             {portalLinks.map((link) => (
+              link.to === "/portal/request-order" ? null : (
               <NavLink
                 key={link.to}
                 to={link.to}
@@ -264,6 +315,7 @@ export default function CustomerPortalShell() {
               >
                 {link.label}
               </NavLink>
+              )
             ))}
           </aside>
 
