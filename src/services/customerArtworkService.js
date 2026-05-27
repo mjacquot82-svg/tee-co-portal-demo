@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
+import { mergeArtworkCollectionWithOperationalFields } from "../lib/customerArtworkStore";
 import { getOperationalAuthUser } from "../lib/operationalAuthStore";
 
 export const CUSTOMER_ARTWORK_BUCKET = "customer-artwork";
@@ -94,7 +95,9 @@ export async function listCustomerArtwork(customerId) {
     rows.map((row) => createSignedUrl(row.storage_path))
   );
 
-  return rows.map((row, index) => normalizeArtworkRow(row, signedUrls[index] || ""));
+  return mergeArtworkCollectionWithOperationalFields(
+    rows.map((row, index) => normalizeArtworkRow(row, signedUrls[index] || ""))
+  );
 }
 
 export async function uploadCustomerArtwork(customerId, file) {
@@ -154,5 +157,5 @@ export async function uploadCustomerArtwork(customerId, file) {
   }
 
   const signedUrl = await createSignedUrl(storagePath);
-  return normalizeArtworkRow(data, signedUrl);
+  return mergeArtworkCollectionWithOperationalFields([normalizeArtworkRow(data, signedUrl)])[0];
 }

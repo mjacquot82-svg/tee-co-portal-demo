@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured } from "../lib/supabaseClient";
+import { getArtworkUsageCount } from "../lib/customerArtworkStore";
 import {
   getArtworkUploadAcceptValue,
   isSupportedArtworkFile,
@@ -54,6 +55,23 @@ function buildFileTypeGlyph(extension) {
   }
 }
 
+function formatCompactMetaLabel(value, fallback) {
+  const normalizedValue = String(value || "").trim();
+  return normalizedValue || fallback;
+}
+
+function buildArtworkUsageSummary(file) {
+  const orderCount = Array.isArray(file.linkedOrderIds) ? file.linkedOrderIds.length : 0;
+  const quoteCount = Array.isArray(file.linkedQuoteIds) ? file.linkedQuoteIds.length : 0;
+  const usageCount = getArtworkUsageCount(file);
+
+  return {
+    usageCount,
+    orderCount,
+    quoteCount,
+  };
+}
+
 function ArtworkPreview({ file }) {
   if (file.is_previewable_image && file.preview_url) {
     return <img src={file.preview_url} alt={file.file_name} className="customer-artwork-preview-image" />;
@@ -87,16 +105,148 @@ function ArtworkSkeletonCard() {
   );
 }
 
-function ArtworkLibrary({ artwork, uploading }) {
+function ArtworkMetadataBadges({ file }) {
+  const { usageCount } = buildArtworkUsageSummary(file);
+
+  return (
+    <div className="customer-artwork-meta-row">
+      <span className="customer-artwork-meta-badge">
+        {formatCompactMetaLabel(file.artworkType, "Artwork")}
+      </span>
+      <span className="customer-artwork-meta-badge customer-artwork-meta-badge-status">
+        {formatCompactMetaLabel(file.artworkStatus, "Library")}
+      </span>
+      {usageCount ? (
+        <span className="customer-artwork-meta-badge customer-artwork-meta-badge-usage">
+          {usageCount} link{usageCount === 1 ? "" : "s"}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function ArtworkDetailModal({ file, onClose }) {
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  const { usageCount, orderCount, quoteCount } = buildArtworkUsageSummary(file);
+  const uploadedAt = formatDateTime(file.uploaded_at || file.created_at);
+  const previewHref = file.open_url || file.download_url || file.preview_url || "";
+
+  return (
+    <div className="customer-artwork-modal-backdrop" onClick={onClose} role="presentation">
+      <div
+        className="customer-artwork-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Artwork details for ${file.file_name}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="customer-artwork-modal-header">
+          <div className="customer-artwork-modal-copy">
+            <p className="customer-artwork-modal-kicker">Artwork Detail</p>
+            <h3>{file.file_name}</h3>
+            <p>{uploadedAt || "Upload date unavailable"}</p>
+          </div>
+
+          <button type="button" className="customer-artwork-modal-close" onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        <div className="customer-artwork-modal-preview">
+          <ArtworkPreview file={file} />
+        </div>
+
+        <div className="customer-artwork-modal-metadata">
+          <div className="customer-artwork-modal-stat">
+            <span>Orders linked</span>
+            <strong>{orderCount}</strong>
+          </div>
+          <div className="customer-artwork-modal-stat">
+            <span>Quotes linked</span>
+            <strong>{quoteCount}</strong>
+          </div>
+          <div className="customer-artwork-modal-stat">
+            <span>Total usage</span>
+            <strong>{usageCount}</strong>
+          </div>
+        </div>
+
+        <div className="customer-artwork-modal-section">
+          <strong>Metadata</strong>
+          <ArtworkMetadataBadges file={file} />
+          <div className="customer-artwork-modal-detail-grid">
+            <span>Filename</span>
+            <strong>{file.file_name || "Unavailable"}</strong>
+            <span>Last used</span>
+            <strong>{formatDateTime(file.lastUsedAt) || "Not linked yet"}</strong>
+          </div>
+        </div>
+
+        <div className="customer-artwork-modal-section">
+          <strong>Revisions / History</strong>
+          <div className="customer-artwork-modal-placeholder">
+            Revision history and operational notes will surface here in a later step.
+          </div>
+        </div>
+
+        <div className="customer-artwork-card-actions">
+          <a
+            href={previewHref || "#"}
+            target="_blank"
+            rel="noreferrer"
+            className={`customer-artwork-action-link ${previewHref ? "" : "is-disabled"}`}
+            aria-disabled={!previewHref}
+            onClick={(event) => {
+              if (!previewHref) event.preventDefault();
+            }}
+          >
+            Open
+          </a>
+          <a
+            href={file.download_url || previewHref || "#"}
+            download={file.file_name}
+            className={`customer-artwork-action-link ${
+              file.download_url || previewHref ? "" : "is-disabled"
+            }`}
+            aria-disabled={!file.download_url && !previewHref}
+            onClick={(event) => {
+              if (!file.download_url && !previewHref) event.preventDefault();
+            }}
+          >
+            Download
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ArtworkLibrary({ artwork, uploading, onSelectArtwork }) {
   return (
     <div className="customer-artwork-library-scroll">
       <div className="customer-artwork-grid">
         {uploading ? <ArtworkSkeletonCard /> : null}
         {artwork.map((file) => (
           <article key={file.id} className="customer-artwork-card">
-            <div className="customer-artwork-preview-shell">
-              <ArtworkPreview file={file} />
-            </div>
+            <button
+              type="button"
+              className="customer-artwork-preview-button"
+              onClick={() => onSelectArtwork(file)}
+            >
+              <div className="customer-artwork-preview-shell">
+                <ArtworkPreview file={file} />
+              </div>
+            </button>
 
             <div className="customer-artwork-card-body">
               <div className="customer-artwork-card-copy">
@@ -107,6 +257,8 @@ function ArtworkLibrary({ artwork, uploading }) {
                   {formatDateTime(file.uploaded_at) || "Upload date unavailable"}
                 </span>
               </div>
+
+              <ArtworkMetadataBadges file={file} />
 
               <div className="customer-artwork-card-actions">
                 <a
@@ -152,6 +304,7 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
   const [uploadState, setUploadState] = useState("idle");
   const [loadError, setLoadError] = useState("");
   const [uploadError, setUploadError] = useState("");
+  const [selectedArtworkId, setSelectedArtworkId] = useState("");
 
   useEffect(() => {
     let isActive = true;
@@ -184,11 +337,17 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
         const loadedArtwork = await listCustomerArtwork(customerId);
         if (!isActive) return;
         setArtwork(loadedArtwork);
+        setSelectedArtworkId((currentSelectedArtworkId) =>
+          loadedArtwork.some((entry) => entry.id === currentSelectedArtworkId)
+            ? currentSelectedArtworkId
+            : ""
+        );
         setLoadState("loaded");
       } catch (error) {
         if (!isActive) return;
         console.error("Unable to load customer artwork", error);
         setArtwork([]);
+        setSelectedArtworkId("");
         setLoadState("error");
         setLoadError(error?.message || "Unable to load artwork right now.");
       }
@@ -218,6 +377,7 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
     try {
       const uploadedArtwork = await uploadCustomerArtwork(customerId, selectedFile);
       setArtwork((currentArtwork) => [uploadedArtwork, ...currentArtwork]);
+      setSelectedArtworkId(uploadedArtwork.id || "");
     } catch (error) {
       console.error("Unable to upload customer artwork", error);
       setUploadError(error?.message || "Unable to upload artwork right now.");
@@ -228,6 +388,10 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
 
   const isLoading = loadState === "loading";
   const isUploading = uploadState === "uploading";
+  const selectedArtwork = useMemo(
+    () => artwork.find((file) => file.id === selectedArtworkId) || null,
+    [artwork, selectedArtworkId]
+  );
 
   return (
     <section style={sectionCardStyle}>
@@ -325,15 +489,27 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
           <ArtworkSkeletonCard />
         </div>
       ) : artwork.length ? (
-        <ArtworkLibrary artwork={artwork} uploading={isUploading} />
+        <ArtworkLibrary
+          artwork={artwork}
+          uploading={isUploading}
+          onSelectArtwork={(file) => setSelectedArtworkId(file.id || "")}
+        />
       ) : isUploading ? (
-        <ArtworkLibrary artwork={artwork} uploading={isUploading} />
+        <ArtworkLibrary
+          artwork={artwork}
+          uploading={isUploading}
+          onSelectArtwork={(file) => setSelectedArtworkId(file.id || "")}
+        />
       ) : (
         <div className="customer-artwork-empty-state">
           <strong>No artwork uploaded yet.</strong>
           <span>Upload the first customer file to start a reusable artwork library.</span>
         </div>
       )}
+
+      {selectedArtwork ? (
+        <ArtworkDetailModal file={selectedArtwork} onClose={() => setSelectedArtworkId("")} />
+      ) : null}
     </section>
   );
 }
