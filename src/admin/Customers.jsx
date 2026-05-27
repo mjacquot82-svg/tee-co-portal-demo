@@ -370,11 +370,13 @@ export default function Customers() {
           </div>
 
           {filteredCustomers.length ? (
-            <div style={{ display: "grid", gap: "12px" }}>
+            <div style={{ display: "grid", gap: "12px" }} data-testid="customer-records-list">
               {filteredCustomers.map((customer) => (
                 <Link
                   key={customer.id}
                   to={`/admin/customers/${customer.id}`}
+                  data-testid="customer-record-link"
+                  data-customer-id={customer.id}
                   style={{
                     display: "grid",
                     gridTemplateColumns: "minmax(220px, 1.4fr) repeat(2, minmax(160px, 0.8fr)) auto",

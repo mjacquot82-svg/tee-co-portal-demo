@@ -534,6 +534,7 @@ export default function Login() {
               <div>
                 <label style={labelStyle}>Staff Account</label>
                 <select
+                  data-testid="staff-pin-account-select"
                   value={selectedStaffUserId}
                   onChange={(event) => {
                     setStaffError("");
@@ -557,6 +558,7 @@ export default function Login() {
                 <label style={labelStyle}>PIN</label>
                 <input
                   type="password"
+                  data-testid="staff-pin-input"
                   inputMode="numeric"
                   autoComplete="off"
                   value={staffPin}
@@ -575,6 +577,7 @@ export default function Login() {
 
               <button
                 type="submit"
+                data-testid="staff-pin-submit"
                 disabled={!staffOptions.length}
                 style={{
                   ...buttonStyle,
