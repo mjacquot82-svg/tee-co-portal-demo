@@ -3,6 +3,7 @@ import {
   getStoredCustomers,
   updateStoredCustomer,
 } from "./customersStore";
+import { normalizeCustomerId } from "./customerIds";
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
@@ -44,6 +45,7 @@ export async function ensureCustomerProfile(session = {}) {
     }
 
     return updateStoredCustomer(existingCustomer.id, {
+      id: normalizeCustomerId(existingCustomer.id),
       name: nextName,
       email: nextEmail,
       phone: nextPhone,

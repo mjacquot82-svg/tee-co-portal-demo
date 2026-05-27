@@ -24,6 +24,7 @@ import { getRawStorageItem, hasBrowserStorage, setRawStorageItem } from "./brows
 import { formatShortDate, toIsoTimestamp } from "./dateFormatting";
 import { getArtworkDisplayName, getOrderArtworkFiles } from "./orderArtwork";
 import { createOperationalEvent } from "./operationalEventsStore";
+import { normalizeCustomerId } from "./customerIds";
 import { addCustomerTimelineEvent } from "./customerTimelineStore";
 import { resolveCustomerForRecord } from "./customerRecordMatching";
 import { deriveOperationalWorkflowState } from "./operationalWorkflow";
@@ -209,6 +210,8 @@ function normalizeStoredOrder(order = {}) {
   return normalizeOrderFinancials({
     ...order,
     ...timestamps,
+    customer_id:
+      normalizeCustomerId(order.customer_id) || resolveCustomerForRecord(order)?.id || "",
     date: order.date || formatShortDate(timestamps.created_at),
     status,
     quote_status: quoteStatus,
@@ -1317,7 +1320,7 @@ export function createStoredOrder(orderInput) {
     ...orderInput,
     ...createdAuditFields,
     order_number: orderNumber,
-    customer_id: orderInput.customer_id || matchedCustomer?.id || "",
+    customer_id: normalizeCustomerId(orderInput.customer_id || matchedCustomer?.id) || "",
     customer_email:
       orderInput.customer_email || orderInput.email || matchedCustomer?.email || "",
     status: normalizeOperationalStatus(orderInput.status || "New"),
@@ -1401,8 +1404,7 @@ export function updateStoredOrder(orderNumber, updates) {
       ...order,
       ...cleanUpdates,
       customer_id:
-        cleanUpdates.customer_id ||
-        order.customer_id ||
+        normalizeCustomerId(cleanUpdates.customer_id || order.customer_id) ||
         resolveCustomerForRecord({ ...order, ...cleanUpdates })?.id ||
         "",
       ...buildStaffAuditFields("updated"),

@@ -15,6 +15,7 @@ import {
   getStoredCustomers,
   linkOrderToCustomer,
 } from "../lib/customersStore";
+import { customerIdsEqual } from "../lib/customerIds";
 import { createStoredOrder } from "../lib/ordersStore";
 import { useStoredProducts } from "../lib/productsStore";
 import { generateQuoteSnapshot } from "../lib/quoteEngine";
@@ -298,7 +299,7 @@ export default function NewOrder() {
   }
 
   function selectCustomerById(customerId) {
-    const customer = customers.find((item) => item.id === customerId);
+    const customer = customers.find((item) => customerIdsEqual(item.id, customerId));
     if (!customer) return;
 
     setSelectedCustomerId(customer.id);

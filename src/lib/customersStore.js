@@ -6,6 +6,11 @@ import {
   setJsonStorageItem,
 } from "./browserStorage";
 import { addCustomerTimelineEvent } from "./customerTimelineStore";
+import {
+  customerIdsEqual,
+  ensureCanonicalCustomerId,
+  normalizeCustomerId,
+} from "./customerIds";
 import { supabase } from "./supabase";
 
 const STORAGE_KEY = "teeCoCustomers";
@@ -35,10 +40,15 @@ function normalizeOrderNumbers(orderNumbers) {
 
 function normalizeCustomer(customer = {}, fallbackTimestamp = new Date().toISOString()) {
   const createdAt = customer.created_at || fallbackTimestamp;
+  const canonicalCustomerId = ensureCanonicalCustomerId(
+    customer.id || customer.customer_id,
+    createdAt
+  );
 
   return {
     ...customer,
-    id: customer.id || `customer-${Date.now()}`,
+    id: canonicalCustomerId,
+    customer_id: canonicalCustomerId,
     name: customer.name || "New Customer",
     company: customer.company || "",
     phone: customer.phone || "",
@@ -191,11 +201,12 @@ function mapSupabaseRowToCustomer(row, localCustomer) {
 
 function mergeHydratedCustomers(remoteRows, localCustomers) {
   const localCustomersById = new Map(
-    normalizeCustomers(localCustomers).map((customer) => [customer.id, customer])
+    normalizeCustomers(localCustomers).map((customer) => [normalizeCustomerId(customer.id), customer])
   );
   const remoteCustomers = remoteRows.map((row) => {
-    const localCustomer = localCustomersById.get(row?.id);
-    localCustomersById.delete(row?.id);
+    const canonicalCustomerId = normalizeCustomerId(row?.id);
+    const localCustomer = localCustomersById.get(canonicalCustomerId);
+    localCustomersById.delete(canonicalCustomerId);
     return mapSupabaseRowToCustomer(row, localCustomer);
   });
   const localOnlyCustomers = Array.from(localCustomersById.values());
@@ -210,15 +221,17 @@ function mergeHydratedCustomers(remoteRows, localCustomers) {
 }
 
 function buildSupabaseCustomerPayload(customer) {
+  const canonicalCustomer = normalizeCustomer(customer);
+
   return {
-    id: customer.id,
-    name: customer.name || "New Customer",
-    email: customer.email || "",
-    phone: customer.phone || "",
-    company: customer.company || "",
-    notes: customer.notes || "",
-    created_at: customer.created_at || new Date().toISOString(),
-    updated_at: customer.updated_at || new Date().toISOString(),
+    id: canonicalCustomer.id,
+    name: canonicalCustomer.name || "New Customer",
+    email: canonicalCustomer.email || "",
+    phone: canonicalCustomer.phone || "",
+    company: canonicalCustomer.company || "",
+    notes: canonicalCustomer.notes || "",
+    created_at: canonicalCustomer.created_at || new Date().toISOString(),
+    updated_at: canonicalCustomer.updated_at || new Date().toISOString(),
   };
 }
 
@@ -294,14 +307,15 @@ async function persistCustomerToSupabase(customer, operation) {
     }
 
     const currentCustomers = readCustomersFromStorage();
-    const localCustomer = currentCustomers.find((entry) => entry.id === customer.id) || customer;
+    const localCustomer =
+      currentCustomers.find((entry) => customerIdsEqual(entry.id, customer.id)) || customer;
     const persistedCustomer = mapSupabaseRowToCustomer(data, localCustomer);
     const hasExistingCustomer = currentCustomers.some(
-      (entry) => entry.id === persistedCustomer.id
+      (entry) => customerIdsEqual(entry.id, persistedCustomer.id)
     );
     const nextCustomers = hasExistingCustomer
       ? currentCustomers.map((entry) =>
-          entry.id === persistedCustomer.id ? persistedCustomer : entry
+          customerIdsEqual(entry.id, persistedCustomer.id) ? persistedCustomer : entry
         )
       : [persistedCustomer, ...currentCustomers];
 
@@ -460,7 +474,7 @@ export async function createStoredCustomer(customerInput) {
 
   try {
     const customer = normalizeCustomer({
-      id: `customer-${Date.now()}`,
+      id: ensureCanonicalCustomerId(customerInput.id, createdAt),
       name: customerInput.name || "New Customer",
       company: customerInput.company || "",
       phone: customerInput.phone || "",
@@ -508,7 +522,10 @@ export async function createStoredCustomer(customerInput) {
 
 export async function updateStoredCustomer(customerId, updates, options = {}) {
   const currentCustomers = getStoredCustomers();
-  const existingCustomer = currentCustomers.find((customer) => customer.id === customerId);
+  const normalizedCustomerId = normalizeCustomerId(customerId);
+  const existingCustomer = currentCustomers.find((customer) =>
+    customerIdsEqual(customer.id, normalizedCustomerId)
+  );
 
   if (!existingCustomer) {
     return null;
@@ -517,10 +534,11 @@ export async function updateStoredCustomer(customerId, updates, options = {}) {
   const nextCustomer = normalizeCustomer({
     ...existingCustomer,
     ...updates,
+    id: updates.id || existingCustomer.id,
     updated_at: new Date().toISOString(),
   });
   const nextCustomers = currentCustomers.map((customer) =>
-    customer.id === customerId ? nextCustomer : customer
+    customerIdsEqual(customer.id, normalizedCustomerId) ? nextCustomer : customer
   );
 
   persistCustomersSnapshot(nextCustomers, { emit: true, writeStorage: true });
@@ -546,7 +564,8 @@ export async function updateStoredCustomer(customerId, updates, options = {}) {
 }
 
 export function findStoredCustomer(customerId) {
-  return getStoredCustomers().find((customer) => customer.id === customerId);
+  const normalizedCustomerId = normalizeCustomerId(customerId);
+  return getStoredCustomers().find((customer) => customerIdsEqual(customer.id, normalizedCustomerId));
 }
 
 export async function linkOrderToCustomer(customerId, orderNumber) {
@@ -556,7 +575,7 @@ export async function linkOrderToCustomer(customerId, orderNumber) {
   const orderNumbers = new Set(customer.order_numbers || []);
   orderNumbers.add(orderNumber);
 
-  return updateStoredCustomer(customerId, {
+  return updateStoredCustomer(customer.id, {
     order_numbers: Array.from(orderNumbers),
   }, {
     suppressTimelineEvent: true,

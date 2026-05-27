@@ -1,4 +1,5 @@
 import { getJsonStorageItem, hasBrowserStorage, setJsonStorageItem } from "./browserStorage";
+import { customerIdsEqual, normalizeCustomerId } from "./customerIds";
 import { addCustomerTimelineEvent } from "./customerTimelineStore";
 import { getArtworkDisplayName } from "./orderArtwork";
 
@@ -70,6 +71,7 @@ export function normalizeArtworkRecord(artwork = {}) {
 
   return {
     ...artwork,
+    customer_id: normalizeCustomerId(artwork.customer_id),
     linkedOrderIds,
     linkedQuoteIds,
     artworkType:
@@ -205,12 +207,15 @@ export function saveAllCustomerArtwork(artwork) {
 }
 
 export function getCustomerArtwork(customerId) {
+  const normalizedCustomerId = normalizeCustomerId(customerId);
+
   return getAllCustomerArtwork()
-    .filter((item) => item.customer_id === customerId)
+    .filter((item) => customerIdsEqual(item.customer_id, normalizedCustomerId))
     .map((item) => mergeArtworkWithOperationalFields(item));
 }
 
 export function saveCustomerArtwork(customerId, artworkInput) {
+  const normalizedCustomerId = normalizeCustomerId(customerId);
   const currentArtwork = getAllCustomerArtwork();
   const createdAt = new Date().toISOString();
   const displayName = getArtworkDisplayName(artworkInput);
@@ -219,7 +224,7 @@ export function saveCustomerArtwork(customerId, artworkInput) {
 
   const artwork = {
     id: `artwork-${Date.now()}`,
-    customer_id: customerId,
+    customer_id: normalizedCustomerId,
     name: displayName,
     display_name: artworkInput.display_name || displayName,
     file_name: artworkInput.file_name || artworkInput.original_filename || displayName,
@@ -267,7 +272,7 @@ export function saveCustomerArtwork(customerId, artworkInput) {
     throw new Error("Unable to save artwork. Browser storage write failed.");
   }
 
-  addCustomerTimelineEvent(customerId, {
+  addCustomerTimelineEvent(normalizedCustomerId, {
     eventType: "artwork_uploaded",
     summary: `Artwork uploaded: ${normalizedArtwork.file_name || normalizedArtwork.name || "Untitled file"}.`,
     metadata: {

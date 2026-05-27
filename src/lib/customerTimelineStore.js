@@ -9,6 +9,7 @@ import {
   removeStorageItem,
   setRawStorageItem,
 } from "./browserStorage";
+import { customerIdsEqual, normalizeCustomerId } from "./customerIds";
 import { getActiveStaffUser } from "./staffUsersStore";
 
 const STORAGE_KEY = "teeCoCustomerOperationalTimeline";
@@ -74,7 +75,7 @@ function normalizeCustomerTimelineEvent(event = {}) {
 
   return {
     id: String(event.id || "").trim() || buildTimelineEventId(),
-    customerId: String(event.customerId || event.customer_id || "").trim(),
+    customerId: normalizeCustomerId(event.customerId || event.customer_id),
     eventType:
       String(event.eventType || event.event_type || "customer_updated").trim() ||
       "customer_updated",
@@ -182,7 +183,7 @@ export function listCustomerTimelineEvents() {
 }
 
 export function addCustomerTimelineEvent(customerId, eventInput = {}) {
-  const normalizedCustomerId = String(customerId || eventInput.customerId || "").trim();
+  const normalizedCustomerId = normalizeCustomerId(customerId || eventInput.customerId);
 
   if (!normalizedCustomerId) {
     throw new Error("A customerId is required to add a customer timeline event.");
@@ -203,15 +204,17 @@ export function addCustomerTimelineEvent(customerId, eventInput = {}) {
 }
 
 export function getCustomerTimeline(customerId) {
-  const normalizedCustomerId = String(customerId || "").trim();
+  const normalizedCustomerId = normalizeCustomerId(customerId);
   if (!normalizedCustomerId) return [];
 
-  return listCustomerTimelineEvents().filter((event) => event.customerId === normalizedCustomerId);
+  return listCustomerTimelineEvents().filter((event) =>
+    customerIdsEqual(event.customerId, normalizedCustomerId)
+  );
 }
 
 export function deleteCustomerTimelineEvent(customerId, eventId) {
   const normalizedEventId = String(eventId || "").trim();
-  const normalizedCustomerId = String(customerId || "").trim();
+  const normalizedCustomerId = normalizeCustomerId(customerId);
 
   if (!normalizedEventId) return false;
 
@@ -219,7 +222,7 @@ export function deleteCustomerTimelineEvent(customerId, eventId) {
   const nextEvents = currentEvents.filter((event) => {
     if (event.id !== normalizedEventId) return true;
     if (!normalizedCustomerId) return false;
-    return event.customerId !== normalizedCustomerId;
+    return !customerIdsEqual(event.customerId, normalizedCustomerId);
   });
 
   if (nextEvents.length === currentEvents.length) {
@@ -284,8 +287,8 @@ export function useCustomerTimeline(customerId) {
     listCustomerTimelineEvents,
     () => EMPTY_EVENTS
   );
-  const normalizedCustomerId = String(customerId || "").trim();
+  const normalizedCustomerId = normalizeCustomerId(customerId);
 
   if (!normalizedCustomerId) return EMPTY_EVENTS;
-  return timelineEvents.filter((event) => event.customerId === normalizedCustomerId);
+  return timelineEvents.filter((event) => customerIdsEqual(event.customerId, normalizedCustomerId));
 }

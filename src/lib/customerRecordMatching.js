@@ -1,4 +1,5 @@
 import { getStoredCustomers } from "./customersStore";
+import { customerIdsEqual } from "./customerIds";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -11,7 +12,7 @@ function normalizePhone(value) {
 export function matchesCustomerRecord(customer, record) {
   if (!customer) return false;
 
-  if (customer.id && record.customer_id && customer.id === record.customer_id) {
+  if (customer.id && record.customer_id && customerIdsEqual(customer.id, record.customer_id)) {
     return true;
   }
 

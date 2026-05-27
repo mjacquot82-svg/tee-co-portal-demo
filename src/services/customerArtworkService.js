@@ -5,6 +5,11 @@ import {
   mergeArtworkCollectionWithOperationalFields,
   normalizeArtworkRecord,
 } from "../lib/customerArtworkStore";
+import {
+  buildCustomerIdLookupCandidates,
+  customerIdsEqual,
+  normalizeCustomerId,
+} from "../lib/customerIds";
 import { addCustomerTimelineEvent } from "../lib/customerTimelineStore";
 import { getOperationalAuthUser } from "../lib/operationalAuthStore";
 import { getArtworkDisplayName } from "../lib/orderArtwork";
@@ -15,24 +20,6 @@ export const CUSTOMER_ARTWORK_TABLE = "customer_artwork";
 
 const SUPPORTED_ARTWORK_EXTENSIONS = new Set(["png", "jpg", "jpeg", "pdf", "svg", "ai"]);
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
-
-function normalizeCustomerId(value) {
-  return String(value || "").trim();
-}
-
-function buildCustomerIdLookupCandidates(customerId) {
-  const normalizedCustomerId = normalizeCustomerId(customerId);
-  if (!normalizedCustomerId) return [];
-
-  const candidates = [normalizedCustomerId];
-  if (/^\d+$/.test(normalizedCustomerId)) {
-    candidates.push(`customer-${normalizedCustomerId}`);
-  } else if (/^customer-\d+$/.test(normalizedCustomerId)) {
-    candidates.push(normalizedCustomerId.replace(/^customer-/, ""));
-  }
-
-  return Array.from(new Set(candidates.filter(Boolean)));
-}
 
 function ensureSupabaseArtworkReady() {
   if (!isSupabaseConfigured || !supabase) {
@@ -64,7 +51,7 @@ function isPreviewableImage(fileName) {
 
 function buildStoragePath(customerId, fileName) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return `${customerId}/${timestamp}-${sanitizeFileName(fileName)}`;
+  return `${normalizeCustomerId(customerId)}/${timestamp}-${sanitizeFileName(fileName)}`;
 }
 
 function looksLikeUuid(value) {
@@ -154,7 +141,6 @@ async function fetchCustomerArtworkRowsById(customerId) {
 
 async function fetchCustomerArtworkRows(customerId) {
   const lookupCandidates = buildCustomerIdLookupCandidates(customerId);
-  let matchedCustomerId = "";
 
   for (const lookupCustomerId of lookupCandidates) {
     console.info("[customerArtworkService] fetchCustomerArtworkRows lookup", {
@@ -165,10 +151,9 @@ async function fetchCustomerArtworkRows(customerId) {
 
     const rows = await fetchCustomerArtworkRowsById(lookupCustomerId);
     if (rows.length > 0) {
-      matchedCustomerId = lookupCustomerId;
       console.info("[customerArtworkService] fetchCustomerArtworkRows matched", {
         requestedCustomerId: normalizeCustomerId(customerId),
-        matchedCustomerId,
+        matchedCustomerId: lookupCustomerId,
         rowCount: rows.length,
         rowCustomerIds: Array.from(
           new Set(rows.map((row) => normalizeCustomerId(row?.customer_id)).filter(Boolean))
@@ -184,6 +169,57 @@ async function fetchCustomerArtworkRows(customerId) {
   });
 
   return [];
+}
+
+async function migrateArtworkRowsToCanonicalCustomerId(rows, canonicalCustomerId) {
+  const rowsNeedingMigration = (Array.isArray(rows) ? rows : []).filter((row) => {
+    const normalizedRowCustomerId = normalizeCustomerId(row?.customer_id);
+    return (
+      row?.id &&
+      normalizedRowCustomerId &&
+      normalizedRowCustomerId === canonicalCustomerId &&
+      row?.customer_id !== canonicalCustomerId
+    );
+  });
+
+  if (!rowsNeedingMigration.length) {
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  console.info("[customerArtworkService] migrating artwork customer IDs", {
+    canonicalCustomerId,
+    rowCount: rowsNeedingMigration.length,
+    rowIds: rowsNeedingMigration.map((row) => row.id),
+  });
+
+  const migratedRows = await Promise.all(
+    rowsNeedingMigration.map(async (row) => {
+      const { data, error } = await supabase
+        .from(CUSTOMER_ARTWORK_TABLE)
+        .update({
+          customer_id: canonicalCustomerId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", row.id)
+        .select("*")
+        .single();
+
+      if (error) {
+        console.warn("[customerArtworkService] artwork customer ID migration skipped", {
+          artworkId: row.id,
+          fromCustomerId: row.customer_id,
+          toCustomerId: canonicalCustomerId,
+          error,
+        });
+        return row;
+      }
+
+      return data || row;
+    })
+  );
+
+  const migratedRowsById = new Map(migratedRows.map((row) => [row.id, row]));
+  return rows.map((row) => migratedRowsById.get(row.id) || row);
 }
 
 function buildArtworkInsertPayload(customerId, storagePath, file, options = {}) {
@@ -205,7 +241,7 @@ function buildArtworkInsertPayload(customerId, storagePath, file, options = {}) 
     (usageCount ? "Linked" : "Library");
 
   return {
-    customer_id: customerId,
+    customer_id: normalizeCustomerId(customerId),
     file_name: file.name,
     display_name: displayName,
     original_filename: originalFilename,
@@ -257,7 +293,9 @@ function buildLegacyArtworkRecords(customerId) {
   const normalizedCustomerId = normalizeCustomerId(customerId);
 
   return getAllCustomerArtwork()
-    .filter((artwork) => !normalizedCustomerId || artwork.customer_id === normalizedCustomerId)
+    .filter(
+      (artwork) => !normalizedCustomerId || customerIdsEqual(artwork.customer_id, normalizedCustomerId)
+    )
     .map((artwork) =>
       normalizeArtworkRecord({
         ...artwork,
@@ -464,9 +502,11 @@ export async function listCustomerArtwork(customerId) {
   });
 
   let rows = await fetchCustomerArtworkRows(normalizedCustomerId);
+  rows = await migrateArtworkRowsToCanonicalCustomerId(rows, normalizedCustomerId);
   const migratedCount = await migrateLegacyArtworkForCustomer(normalizedCustomerId, rows);
   if (migratedCount) {
     rows = await fetchCustomerArtworkRows(normalizedCustomerId);
+    rows = await migrateArtworkRowsToCanonicalCustomerId(rows, normalizedCustomerId);
   }
 
   console.info("[customerArtworkService] listCustomerArtwork complete", {
@@ -496,7 +536,12 @@ export async function uploadCustomerArtwork(customerId, file, options = {}) {
     throw new Error("Supported artwork formats are PNG, JPG, PDF, SVG, and AI.");
   }
 
-  const storagePath = buildStoragePath(customerId, options.fileName || file.name);
+  const normalizedCustomerId = normalizeCustomerId(customerId);
+  if (!normalizedCustomerId) {
+    throw new Error("A canonical customer ID is required before artwork can be uploaded.");
+  }
+
+  const storagePath = buildStoragePath(normalizedCustomerId, options.fileName || file.name);
 
   const { error: uploadError } = await supabase.storage
     .from(CUSTOMER_ARTWORK_BUCKET)
@@ -510,7 +555,7 @@ export async function uploadCustomerArtwork(customerId, file, options = {}) {
     throw new Error(uploadError.message || "Unable to upload artwork file.");
   }
 
-  const insertPayload = buildArtworkInsertPayload(customerId, storagePath, file, options);
+  const insertPayload = buildArtworkInsertPayload(normalizedCustomerId, storagePath, file, options);
   const { data, error } = await supabase
     .from(CUSTOMER_ARTWORK_TABLE)
     .insert(insertPayload)
@@ -535,7 +580,7 @@ export async function uploadCustomerArtwork(customerId, file, options = {}) {
   if (!options.skipTimelineEvent) {
     const operationalUser = getOperationalAuthUser();
 
-    addCustomerTimelineEvent(customerId, {
+    addCustomerTimelineEvent(normalizedCustomerId, {
       eventType: "artwork_uploaded",
       actor: operationalUser
         ? {

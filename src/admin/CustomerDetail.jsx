@@ -1,5 +1,6 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
+import { customerIdsEqual, normalizeCustomerId } from "../lib/customerIds";
 import { updateStoredCustomer, useStoredCustomers } from "../lib/customersStore";
 import { duplicateStoredOrder, getStoredOrders } from "../lib/ordersStore";
 import { getStoredQuickSales } from "../lib/salesStore";
@@ -99,6 +100,7 @@ function buildCustomerForm(customer) {
 
 export default function CustomerDetail() {
   const { customerId } = useParams();
+  const normalizedRouteCustomerId = normalizeCustomerId(customerId);
   const navigate = useNavigate();
   const customers = useStoredCustomers();
   const [orders, setOrders] = useState([]);
@@ -116,8 +118,8 @@ export default function CustomerDetail() {
   }, [customerId]);
 
   const customer = useMemo(
-    () => customers.find((entry) => entry.id === customerId) || null,
-    [customerId, customers]
+    () => customers.find((entry) => customerIdsEqual(entry.id, normalizedRouteCustomerId)) || null,
+    [customers, normalizedRouteCustomerId]
   );
 
   useEffect(() => {

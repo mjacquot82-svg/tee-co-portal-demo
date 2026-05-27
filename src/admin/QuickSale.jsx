@@ -10,6 +10,7 @@ import {
 } from "../lib/ordersStore";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 import { validatePaymentAmount } from "../lib/financialValidation";
+import { customerIdsEqual } from "../lib/customerIds";
 import PaymentStatusBadge from "../components/PaymentStatusBadge";
 import { PAYMENT_METHOD_OPTIONS } from "../orders/orderFinancials";
 import { isStaffWorkspaceView } from "./adminRoleView";
@@ -307,7 +308,11 @@ function buildCustomerOrders(selectedCustomer, orders) {
   const orderNumbers = new Set(selectedCustomer.order_numbers || []);
 
   return orders.filter((order) => {
-    if (selectedCustomer.source === "saved" && selectedCustomer.id && order.customer_id === selectedCustomer.id) {
+    if (
+      selectedCustomer.source === "saved" &&
+      selectedCustomer.id &&
+      customerIdsEqual(order.customer_id, selectedCustomer.id)
+    ) {
       return true;
     }
 

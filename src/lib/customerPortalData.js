@@ -2,6 +2,7 @@ import {
   isCanceledOperationalStatus,
   isCompletedOperationalStatus,
 } from "../orders/orderWorkflow";
+import { customerIdsEqual, normalizeCustomerId } from "./customerIds";
 
 const EMPTY_PORTAL_RECORDS = Object.freeze([]);
 export const EMPTY_PORTAL_SUMMARY = Object.freeze({
@@ -79,19 +80,22 @@ export function getCustomerScopedOrders({
   const profile = findCustomerProfileForSession(session, customers);
   const sessionEmail = normalizeEmail(session.email);
   const customerIds = new Set(
-    [profile?.id, profile?.customer_id].map((value) => normalizeText(value)).filter(Boolean)
+    [profile?.id, profile?.customer_id].map((value) => normalizeCustomerId(value)).filter(Boolean)
   );
 
   return sortByRecentActivity(
     orders.filter((order) => {
-      const orderCustomerId = normalizeText(order.customer_id);
+      const orderCustomerId = normalizeCustomerId(order.customer_id);
       const orderCustomerEmail = normalizeEmail(order.customer_email);
 
       if (sessionEmail && orderCustomerEmail && orderCustomerEmail === sessionEmail) {
         return true;
       }
 
-      if (orderCustomerId && customerIds.has(orderCustomerId)) {
+      if (
+        orderCustomerId &&
+        Array.from(customerIds).some((customerId) => customerIdsEqual(customerId, orderCustomerId))
+      ) {
         return true;
       }
 

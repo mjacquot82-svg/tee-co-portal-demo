@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { customerIdsEqual } from "../lib/customerIds";
 import { createStoredCustomer, getStoredCustomers } from "../lib/customersStore";
 import { getStoredOrders } from "../lib/ordersStore";
 import { getStoredQuickSales } from "../lib/salesStore";
@@ -59,7 +60,7 @@ function buildSearchText(customer) {
 function matchesSavedCustomer(customer, record) {
   if (!customer) return false;
 
-  if (customer.id && record.customer_id && customer.id === record.customer_id) {
+  if (customer.id && record.customer_id && customerIdsEqual(customer.id, record.customer_id)) {
     return true;
   }
 

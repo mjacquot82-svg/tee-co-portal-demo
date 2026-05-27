@@ -1,5 +1,6 @@
 import { buildStaffAuditFields } from "./staffUsersStore";
 import { getJsonStorageItem, hasBrowserStorage, setJsonStorageItem } from "./browserStorage";
+import { normalizeCustomerId } from "./customerIds";
 import { validatePaymentAmount } from "./financialValidation";
 
 const STORAGE_KEY = "teeCoQuickSales";
@@ -12,7 +13,10 @@ function buildPaymentValidationError(validation) {
 
 export function getStoredQuickSales() {
   if (!hasBrowserStorage()) return [];
-  return getJsonStorageItem(STORAGE_KEY, []);
+  return getJsonStorageItem(STORAGE_KEY, []).map((sale) => ({
+    ...sale,
+    customer_id: normalizeCustomerId(sale.customer_id),
+  }));
 }
 
 export function saveStoredQuickSales(sales) {
@@ -60,7 +64,7 @@ export function createStoredQuickSale(saleInput) {
   const sale = {
     id: `quick-sale-${Date.now()}`,
     sale_number: saleNumber,
-    customer_id: saleInput.customer_id || "",
+    customer_id: normalizeCustomerId(saleInput.customer_id),
     customer_name: saleInput.customer_name || "Walk-in Customer",
     payment_method: saleInput.payment_method || "Not Recorded",
     payment_status: saleInput.payment_status || "Paid",
