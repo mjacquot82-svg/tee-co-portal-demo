@@ -6,6 +6,7 @@ import StatusBadge from "../components/StatusBadge";
 import ActivityTimeline from "../order-detail/ActivityTimeline";
 import { demoOrders as seededDemoOrders } from "../data/demoOrders";
 import { formatDateTime, formatShortDate } from "../lib/dateFormatting";
+import { normalizeOperationalStatus } from "../orders/orderWorkflow";
 import { useStoredOrders } from "../lib/ordersStore";
 import {
   getArtworkAssetUrl,
@@ -133,6 +134,8 @@ function buildDetailRows(order) {
 }
 
 function renderReadinessMessage(order) {
+  const operationalStatus = normalizeOperationalStatus(order.status);
+
   if (order.pickup_status === "Picked Up") {
     return "This order has already been released to you.";
   }
@@ -149,7 +152,7 @@ function renderReadinessMessage(order) {
     return `${money(order.amount_due_now)} is due next to keep this order moving.`;
   }
 
-  if (order.status === "In Production") {
+  if (["Printing", "Embroidery", "QC / Finishing", "Ready For Production"].includes(operationalStatus)) {
     return "Production is underway. Timeline updates will appear below as work progresses.";
   }
 

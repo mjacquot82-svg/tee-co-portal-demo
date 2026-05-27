@@ -7,6 +7,7 @@ import {
   buildDepositRequestMailto,
 } from "../orders/depositRequests";
 import PaymentStatusBadge from "../components/PaymentStatusBadge";
+import { normalizeOperationalStatus } from "../orders/orderWorkflow";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -60,7 +61,8 @@ export default function FinancialSummaryPanel({
   onMarkPickedUp,
   onSendDepositRequest,
 }) {
-  const canceled = order.status === "Canceled";
+  const operationalStatus = normalizeOperationalStatus(order.status);
+  const canceled = operationalStatus === "Canceled";
   const [paymentFormOpen, setPaymentFormOpen] = useState(false);
   const [depositRequestOpen, setDepositRequestOpen] = useState(false);
   const [depositRequestStatus, setDepositRequestStatus] = useState("");
@@ -80,7 +82,7 @@ export default function FinancialSummaryPanel({
   const canMarkPickedUp =
     !canceled &&
     order.pickup_status !== "Picked Up" &&
-    ["Ready for Pickup", "Picked Up", "Completed"].includes(order.status);
+    ["Ready For Pickup", "Completed"].includes(operationalStatus);
 
   function resetPaymentForm(nextAmount = "") {
     setAmount(nextAmount);

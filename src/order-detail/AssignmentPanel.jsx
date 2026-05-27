@@ -1,8 +1,4 @@
-import {
-  canAdvanceOperationalStatus,
-  getNextOperationalStatus,
-  isCanceledOperationalStatus,
-} from "../orders/orderWorkflow";
+import { isCanceledOperationalStatus } from "../orders/orderWorkflow";
 
 function formatAssignedAt(value) {
   if (!value) return "Not assigned yet";
@@ -17,11 +13,10 @@ export default function AssignmentPanel({
   order,
   staffUsers = [],
   onAssign,
-  onAdvanceStatus,
+  workflowActions = [],
+  onRunWorkflowAction,
   canManageAssignments = true,
 }) {
-  const canAdvance = canAdvanceOperationalStatus(order.status);
-  const nextStatus = canAdvance ? getNextOperationalStatus(order.status) : null;
   const assignedWorker = order.assigned_to_staff_name || "Unassigned";
   const canceled = isCanceledOperationalStatus(order.status);
 
@@ -63,6 +58,28 @@ export default function AssignmentPanel({
           <strong>Assigned At</strong>
           <div style={{ marginTop: "6px" }}>
             {formatAssignedAt(order.assigned_at)}
+          </div>
+        </div>
+
+        <div>
+          <strong>Production Owner</strong>
+          <div style={{ marginTop: "8px" }}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                borderRadius: "999px",
+                padding: "7px 11px",
+                fontWeight: 800,
+                background: order.production_owner_staff_id ? "#eff6ff" : "#f8fafc",
+                color: order.production_owner_staff_id ? "#1d4ed8" : "#64748b",
+                border: order.production_owner_staff_id
+                  ? "1px solid #bfdbfe"
+                  : "1px solid #e2e8f0",
+              }}
+            >
+              {order.production_owner_staff_name || "Unassigned"}
+            </span>
           </div>
         </div>
 
@@ -118,11 +135,8 @@ export default function AssignmentPanel({
 
         <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: "10px",
-            flexWrap: "wrap",
+            display: "grid",
+            gap: "12px",
             padding: "12px 14px",
             borderRadius: "14px",
             background: "#f8fafc",
@@ -134,24 +148,32 @@ export default function AssignmentPanel({
             <div style={{ marginTop: "4px", color: "#475569" }}>{order.status}</div>
           </div>
 
-          {canAdvance && !canceled ? (
-            <button
-              type="button"
-              onClick={onAdvanceStatus}
-              style={{
-                background: "#171717",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: "12px",
-                padding: "10px 14px",
-                fontWeight: 700,
-              }}
-            >
-              Mark {nextStatus}
-            </button>
+          {!canceled && workflowActions.length ? (
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              {workflowActions.map((action) => (
+                <button
+                  key={action.key}
+                  type="button"
+                  onClick={() => onRunWorkflowAction?.(action, order)}
+                  style={{
+                    background: action.targetStatus === "On Hold" ? "#fff1f2" : "#171717",
+                    color: action.targetStatus === "On Hold" ? "#be123c" : "#ffffff",
+                    border:
+                      action.targetStatus === "On Hold"
+                        ? "1px solid #fecdd3"
+                        : "1px solid #171717",
+                    borderRadius: "12px",
+                    padding: "10px 14px",
+                    fontWeight: 700,
+                  }}
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
           ) : (
             <span style={{ color: "#64748b", fontWeight: 700 }}>
-              Final status reached
+              {canceled ? "Workflow actions disabled on canceled records." : "Final status reached"}
             </span>
           )}
         </div>

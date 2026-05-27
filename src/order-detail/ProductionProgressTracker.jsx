@@ -1,10 +1,12 @@
 import {
-  getOperationalStatusIndex,
-  OPERATIONAL_ORDER_STATUSES,
+  getOperationalProgressStageIndex,
+  isOnHoldOperationalStatus,
+  OPERATIONAL_STATUS_PROGRESS_STAGES,
 } from "../orders/orderWorkflow";
 
 export default function ProductionProgressTracker({ order }) {
-  const currentStage = Math.max(0, getOperationalStatusIndex(order.status));
+  const currentStage = Math.max(0, getOperationalProgressStageIndex(order.status));
+  const isOnHold = isOnHoldOperationalStatus(order.status);
 
   return (
     <section
@@ -24,24 +26,23 @@ export default function ProductionProgressTracker({ order }) {
           gap: "10px",
         }}
       >
-        {OPERATIONAL_ORDER_STATUSES.map((stage, index) => {
+        {OPERATIONAL_STATUS_PROGRESS_STAGES.map((stage, index) => {
           const complete = index < currentStage;
           const active = index === currentStage;
-          const canceled = stage === "Canceled";
 
           return (
             <div
               key={stage}
               style={{
                 border: active
-                  ? canceled
+                  ? isOnHold
                     ? "1px solid #b91c1c"
                     : "1px solid #171717"
                   : complete
                   ? "1px solid #86efac"
                   : "1px solid #e2e8f0",
                 background: active
-                  ? canceled
+                  ? isOnHold
                     ? "#b91c1c"
                     : "#171717"
                   : complete
@@ -63,6 +64,22 @@ export default function ProductionProgressTracker({ order }) {
           );
         })}
       </div>
+
+      {isOnHold ? (
+        <div
+          style={{
+            marginTop: "12px",
+            borderRadius: "14px",
+            border: "1px solid #fecaca",
+            background: "#fef2f2",
+            padding: "12px 14px",
+            color: "#991b1b",
+            fontWeight: 700,
+          }}
+        >
+          This order is currently on hold. Resume it from the workflow actions when production can continue.
+        </div>
+      ) : null}
     </section>
   );
 }

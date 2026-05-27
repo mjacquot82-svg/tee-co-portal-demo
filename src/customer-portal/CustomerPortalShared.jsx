@@ -224,8 +224,16 @@ const STATUS_BADGES = Object.freeze({
   paymentBillingPending: Object.freeze({ label: "Billing Pending", tone: "neutral" }),
 });
 
+function normalizeOperationalStatusValue(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (normalized === "ready for pickup") return "Ready For Pickup";
+  if (normalized === "awaiting production") return "Ready For Production";
+  if (normalized === "in production") return "Printing";
+  return String(status || "").trim();
+}
+
 function resolveCustomerOrderStatus(order = {}) {
-  const operationalStatus = String(order.status || "").trim();
+  const operationalStatus = normalizeOperationalStatusValue(order.status);
   const quoteStatus = String(order.quote_status || "").trim();
   const pickupStatus = String(order.pickup_status || "").trim();
   const invoiceStatus = String(order.invoice_status || "").trim();
@@ -238,7 +246,7 @@ function resolveCustomerOrderStatus(order = {}) {
     return STATUS_BADGES.orderCompleted;
   }
 
-  if (pickupStatus === "Ready for Pickup" || operationalStatus === "Ready for Pickup") {
+  if (pickupStatus === "Ready for Pickup" || operationalStatus === "Ready For Pickup") {
     return STATUS_BADGES.orderReady;
   }
 
@@ -260,7 +268,11 @@ function resolveCustomerOrderStatus(order = {}) {
     return STATUS_BADGES.orderPaymentDue;
   }
 
-  if (operationalStatus === "In Production" || operationalStatus === "Awaiting Production") {
+  if (
+    ["Ready For Production", "Printing", "Embroidery", "QC / Finishing"].includes(
+      operationalStatus
+    )
+  ) {
     return STATUS_BADGES.orderProduction;
   }
 

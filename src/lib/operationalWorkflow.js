@@ -6,12 +6,16 @@ const WORKFLOW_STATE_ALIASES = {
   "awaiting artwork approval": "Awaiting Approval",
   "awaiting artwork": "Awaiting Approval",
   approved: "Approved",
-  "ready for production": "Approved",
-  "awaiting production": "Approved",
+  "ready for production": "Ready For Production",
+  "awaiting production": "Ready For Production",
   "awaiting deposit": "Awaiting Deposit",
-  "in production": "In Production",
+  printing: "Printing",
+  embroidery: "Embroidery",
+  "in production": "Printing",
+  "qc / finishing": "QC / Finishing",
   "ready for pickup": "Ready For Pickup",
   "picked up": "Completed",
+  "on hold": "On Hold",
   completed: "Completed",
   archived: "Archived",
   canceled: "Canceled",
@@ -22,8 +26,12 @@ export const OPERATIONAL_WORKFLOW_STATES = [
   "Awaiting Approval",
   "Approved",
   "Awaiting Deposit",
-  "In Production",
+  "Ready For Production",
+  "Printing",
+  "Embroidery",
+  "QC / Finishing",
   "Ready For Pickup",
+  "On Hold",
   "Completed",
   "Archived",
 ];
@@ -53,8 +61,8 @@ export function isWorkflowArchivedState(state) {
 }
 
 export function isWorkflowActiveState(state) {
-  const normalized = normalizeWorkflowState(state);
-  return !["Completed", "Archived", "Canceled"].includes(normalized);
+  const normalizedState = normalizeWorkflowState(state);
+  return !["Completed", "Archived", "Canceled"].includes(normalizedState);
 }
 
 export function getWorkflowStateIndex(state) {
@@ -100,11 +108,18 @@ export function getWorkflowStateTone(state) {
     case "Awaiting Deposit":
       return { background: "#fff7ed", border: "#fed7aa", color: "#9a3412" };
     case "Approved":
+    case "Ready For Production":
       return { background: "#eff6ff", border: "#bfdbfe", color: "#1d4ed8" };
-    case "In Production":
+    case "Printing":
       return { background: "#eef2ff", border: "#c7d2fe", color: "#4338ca" };
+    case "Embroidery":
+      return { background: "#f5f3ff", border: "#ddd6fe", color: "#6d28d9" };
+    case "QC / Finishing":
+      return { background: "#fef3c7", border: "#fde68a", color: "#92400e" };
     case "Ready For Pickup":
       return { background: "#e0f2fe", border: "#bae6fd", color: "#0369a1" };
+    case "On Hold":
+      return { background: "#fef2f2", border: "#fecaca", color: "#b91c1c" };
     case "Completed":
       return { background: "#ecfdf5", border: "#bbf7d0", color: "#166534" };
     case "Archived":

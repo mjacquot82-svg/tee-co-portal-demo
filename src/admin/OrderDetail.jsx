@@ -18,10 +18,11 @@ import ActivityTimeline from "../order-detail/ActivityTimeline";
 import ProductionInstructionsPanel from "../order-detail/ProductionInstructionsPanel";
 import FinancialSummaryPanel from "../order-detail/FinancialSummaryPanel";
 import { buildOrderUrgency } from "../order-detail/buildOrderUrgency";
+import { buildWorkflowActionUpdates } from "../orders/buildWorkflowActionUpdates";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
 import { formatDateTimeParts } from "../lib/dateFormatting";
 import {
-  getNextOperationalStatus,
+  getAvailableProductionActions,
   isCanceledOperationalStatus,
   normalizeOperationalStatus,
 } from "../orders/orderWorkflow";
@@ -97,6 +98,10 @@ export default function OrderDetail() {
         : [],
     });
   }, [order, quoteSnapshot]);
+  const workflowActions = useMemo(
+    () => (order ? getAvailableProductionActions(order) : []),
+    [order]
+  );
 
   useEffect(() => {
     return subscribeToStaffUsers((nextUsers) => {
@@ -168,27 +173,12 @@ export default function OrderDetail() {
     });
   }
 
-  function handleAdvanceStatus() {
+  function handleWorkflowAction(action) {
     if (isCanceledOperationalStatus(order.status)) return;
 
-    const nextStatus = getNextOperationalStatus(order.status);
-    const now = new Date().toISOString();
-    const nextUpdates = {
-      status: nextStatus,
-      activity_type: "status_change",
-      activity_note: `Status changed to ${nextStatus}.`,
-    };
-
-    if (normalizeOperationalStatus(nextStatus) === "In Production") {
-      nextUpdates.production_started_at = order.production_started_at || now;
-      nextUpdates.production_ready = true;
-    }
-
-    if (normalizeOperationalStatus(nextStatus) === "Completed") {
-      nextUpdates.completed_at = now;
-    }
-
-    saveOrderUpdates(nextUpdates);
+    const updates = buildWorkflowActionUpdates(order, action);
+    if (!updates) return;
+    saveOrderUpdates(updates);
   }
 
   function handlePrintTicket() {
@@ -220,8 +210,8 @@ export default function OrderDetail() {
       pickup_status: "Picked Up",
       picked_up_at: order.picked_up_at || now,
       status:
-        normalizeOperationalStatus(order.status) === "Ready for Pickup"
-          ? "Picked Up"
+        normalizeOperationalStatus(order.status) === "Ready For Pickup"
+          ? "Completed"
           : order.status,
       activity_type: "pickup",
       activity_note: `Order marked as picked up.${balanceNote}`,
@@ -599,7 +589,8 @@ export default function OrderDetail() {
           order={order}
           staffUsers={staffUsers}
           onAssign={handleAssign}
-          onAdvanceStatus={handleAdvanceStatus}
+          workflowActions={workflowActions}
+          onRunWorkflowAction={handleWorkflowAction}
           canManageAssignments={canManageAssignments}
         />
 

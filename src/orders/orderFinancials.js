@@ -766,10 +766,14 @@ export function deriveOrderFinancials(order = {}, options = {}) {
   let pickupStatus = PICKUP_STATUS_OPTIONS.includes(order.pickup_status)
     ? order.pickup_status
     : "Pending";
+  const normalizedStatus = String(order.status || "").trim();
 
-  if (order.status === "Picked Up" || order.status === "Completed") {
+  if (normalizedStatus === "Picked Up" || normalizedStatus === "Completed") {
     pickupStatus = "Picked Up";
-  } else if (order.status === "Ready for Pickup" && pickupStatus !== "Picked Up") {
+  } else if (
+    (normalizedStatus === "Ready for Pickup" || normalizedStatus === "Ready For Pickup") &&
+    pickupStatus !== "Picked Up"
+  ) {
     pickupStatus = "Ready for Pickup";
   }
 

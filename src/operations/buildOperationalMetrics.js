@@ -64,11 +64,11 @@ export function buildOperationalMetrics(orders = []) {
       }
     }
 
-    if (["Awaiting Production", "In Production"].includes(status)) {
+    if (["Ready For Production", "Printing", "Embroidery", "QC / Finishing"].includes(status)) {
       activeProduction += 1;
     }
 
-    if (status === "Ready for Pickup") {
+    if (status === "Ready For Pickup") {
       readyForPickup += 1;
     }
 

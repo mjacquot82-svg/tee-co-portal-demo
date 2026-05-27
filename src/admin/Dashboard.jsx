@@ -188,7 +188,7 @@ function buildOwnerAttentionItems(orders = []) {
     return !isCompletedOperationalStatus(status) && !isCanceledOperationalStatus(status);
   });
   const readyForPickup = activeOrders.filter(
-    (order) => normalizeOperationalStatus(order.status) === "Ready for Pickup"
+    (order) => normalizeOperationalStatus(order.status) === "Ready For Pickup"
   ).length;
 
   return [
@@ -301,7 +301,7 @@ function eventTone(eventType) {
     };
   }
 
-  if (["order_ready_for_pickup", "deposit_request_sent"].includes(eventType)) {
+  if (["ready_for_pickup", "order_ready_for_pickup", "deposit_request_sent"].includes(eventType)) {
     return {
       border: "#bfdbfe",
       background: "#eff6ff",

@@ -1,18 +1,24 @@
 import { normalizeProductionType } from "../constants/productionTypes";
 import { formatShortDate } from "../lib/dateFormatting";
 import {
+  getAvailableProductionActions,
   isActiveOperationalStatus,
   isCanceledOperationalStatus,
   isCompletedOperationalStatus,
+  isOnHoldOperationalStatus,
   normalizeOperationalStatus,
 } from "../orders/orderWorkflow";
 import { buildQueuePriority } from "../queue/buildQueuePriority";
 
 export const PRODUCTION_STATUS_FILTERS = [
   { key: "active", label: "All Active Work" },
-  { key: "awaiting-production", label: "Awaiting Production" },
-  { key: "in-production", label: "In Production" },
+  { key: "awaiting-deposit", label: "Awaiting Deposit" },
+  { key: "ready-for-production", label: "Ready For Production" },
+  { key: "printing", label: "Printing" },
+  { key: "embroidery", label: "Embroidery" },
+  { key: "qc-finishing", label: "QC / Finishing" },
   { key: "ready-for-pickup", label: "Ready For Pickup" },
+  { key: "on-hold", label: "On Hold" },
   { key: "completed", label: "Completed" },
   { key: "canceled", label: "Canceled" },
   { key: "unassigned", label: "Unassigned Work" },
@@ -44,13 +50,29 @@ export function normalizeLookup(value) {
 }
 
 export function normalizeProductionOrder(order) {
+  const normalizedStatus = normalizeOperationalStatus(order.status || "New");
+  const queuePriority = buildQueuePriority({ ...order, status: normalizedStatus });
+
   return {
     ...order,
     customer_name: order.customer_name || "Walk-in Customer",
     garment: order.garment || order.item || "Custom garment",
     assigned_to_staff_name: order.assigned_to_staff_name || "Unassigned",
+    production_owner_staff_name:
+      order.production_owner_staff_name || order.assigned_to_staff_name || "Unassigned",
     decoration_type: normalizeProductionType(order.decoration_type),
-    status: normalizeOperationalStatus(order.status || "New"),
+    status: normalizedStatus,
+    artwork_count:
+      Number(order.artwork_count) ||
+      (Array.isArray(order.artwork_files) ? order.artwork_files.length : 0) ||
+      (order.customer_artwork_id ? 1 : 0),
+    linked_artwork: Boolean(
+      (Array.isArray(order.artwork_files) && order.artwork_files.length) || order.customer_artwork_id
+    ),
+    rush_active:
+      typeof order.is_rush === "boolean" ? order.is_rush : queuePriority.overdue || queuePriority.dueSoon,
+    queue_priority: queuePriority,
+    available_actions: getAvailableProductionActions({ ...order, status: normalizedStatus }, { compact: true }),
   };
 }
 
@@ -184,16 +206,32 @@ export function matchesProductionStatus(order, activeStatus) {
     );
   }
 
-  if (activeStatus === "awaiting-production") {
-    return normalizedStatus === "Awaiting Production";
+  if (activeStatus === "awaiting-deposit") {
+    return normalizedStatus === "Awaiting Deposit";
   }
 
-  if (activeStatus === "in-production") {
-    return normalizedStatus === "In Production";
+  if (activeStatus === "ready-for-production") {
+    return normalizedStatus === "Ready For Production";
+  }
+
+  if (activeStatus === "printing") {
+    return normalizedStatus === "Printing";
+  }
+
+  if (activeStatus === "embroidery") {
+    return normalizedStatus === "Embroidery";
+  }
+
+  if (activeStatus === "qc-finishing") {
+    return normalizedStatus === "QC / Finishing";
   }
 
   if (activeStatus === "ready-for-pickup") {
-    return normalizedStatus === "Ready for Pickup";
+    return normalizedStatus === "Ready For Pickup";
+  }
+
+  if (activeStatus === "on-hold") {
+    return isOnHoldOperationalStatus(normalizedStatus);
   }
 
   if (activeStatus === "completed") {
@@ -259,11 +297,19 @@ export function buildProductionWorkspaceSummary(orders = []) {
   const canceledOrders = orders.filter((order) =>
     matchesProductionStatus(order, "canceled")
   );
+  const onHoldOrders = orders.filter((order) =>
+    matchesProductionStatus(order, "on-hold")
+  );
+  const readyForProductionOrders = orders.filter((order) =>
+    matchesProductionStatus(order, "ready-for-production")
+  );
 
   return {
     activeOrders: activeOrders.length,
     urgentOrders: urgentOrders.length,
     unassignedOrders: unassignedOrders.length,
+    readyForProductionOrders: readyForProductionOrders.length,
+    onHoldOrders: onHoldOrders.length,
     completedOrders: completedOrders.length,
     canceledOrders: canceledOrders.length,
   };

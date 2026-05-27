@@ -3,6 +3,7 @@ import { demoOrders } from "../data/demoOrders";
 import { normalizeProductionType } from "../constants/productionTypes";
 import {
   isActiveOperationalStatus,
+  isProductionExecutionStatus,
   isReadyForProductionStatus,
   normalizeOperationalStatus,
 } from "../orders/orderWorkflow";
@@ -132,6 +133,12 @@ function normalizeStoredOrder(order = {}) {
   const assignedToStaffId = order.assigned_to_staff_id || "";
   const assignedToStaffName = order.assigned_to_staff_name || "";
   const hasAssignedStaff = Boolean(assignedToStaffId);
+  const productionOwnerStaffId =
+    order.production_owner_staff_id || assignedToStaffId || "";
+  const productionOwnerStaffName =
+    order.production_owner_staff_name || assignedToStaffName || "";
+  const productionOwnerStaffRole =
+    order.production_owner_staff_role || order.assigned_to_staff_role || "";
   const status = normalizeOperationalStatus(order.status || "New");
   const quoteStatus = normalizeQuoteStatus(
     order.quote_status || (order.operational_visible === false ? "Draft" : "Ready For Production")
@@ -165,10 +172,23 @@ function normalizeStoredOrder(order = {}) {
     assigned_to_staff_id: assignedToStaffId,
     assigned_to_staff_name: assignedToStaffName,
     assigned_to_staff_role: order.assigned_to_staff_role || "",
+    production_owner_staff_id: productionOwnerStaffId,
+    production_owner_staff_name: productionOwnerStaffName,
+    production_owner_staff_role: productionOwnerStaffRole,
+    production_owner_assigned_at:
+      order.production_owner_assigned_at || order.assigned_at || null,
     needs_assignment:
       typeof order.needs_assignment === "boolean"
         ? order.needs_assignment
         : !hasAssignedStaff,
+    is_rush:
+      typeof order.is_rush === "boolean"
+        ? order.is_rush
+        : typeof order.rush_requested === "boolean"
+        ? order.rush_requested
+        : typeof order.rush === "boolean"
+        ? order.rush
+        : false,
     production_ready:
       typeof order.production_ready === "boolean"
         ? order.production_ready
@@ -248,7 +268,11 @@ function buildAssignmentUpdates(currentOrder, updates) {
     Object.prototype.hasOwnProperty.call(updates, "assigned_to_staff_name") ||
     Object.prototype.hasOwnProperty.call(updates, "assigned_to_staff_role") ||
     Object.prototype.hasOwnProperty.call(updates, "assigned_at") ||
-    Object.prototype.hasOwnProperty.call(updates, "needs_assignment");
+    Object.prototype.hasOwnProperty.call(updates, "needs_assignment") ||
+    Object.prototype.hasOwnProperty.call(updates, "production_owner_staff_id") ||
+    Object.prototype.hasOwnProperty.call(updates, "production_owner_staff_name") ||
+    Object.prototype.hasOwnProperty.call(updates, "production_owner_staff_role") ||
+    Object.prototype.hasOwnProperty.call(updates, "production_owner_assigned_at");
 
   if (!hasAssignmentFields) return updates;
 
@@ -274,6 +298,31 @@ function buildAssignmentUpdates(currentOrder, updates) {
   const nextStatus = normalizeOperationalStatus(
     updates.status || currentOrder.status
   );
+  const defaultProductionOwnerId =
+    currentOrder.production_owner_staff_id || currentOrder.assigned_to_staff_id || "";
+  const defaultProductionOwnerName =
+    currentOrder.production_owner_staff_name || currentOrder.assigned_to_staff_name || "";
+  const defaultProductionOwnerRole =
+    currentOrder.production_owner_staff_role || currentOrder.assigned_to_staff_role || "";
+  const productionOwnerStaffId = Object.prototype.hasOwnProperty.call(
+    updates,
+    "production_owner_staff_id"
+  )
+    ? updates.production_owner_staff_id || ""
+    : defaultProductionOwnerId || assignedToStaffId;
+  const productionOwnerStaffName = Object.prototype.hasOwnProperty.call(
+    updates,
+    "production_owner_staff_name"
+  )
+    ? updates.production_owner_staff_name || ""
+    : defaultProductionOwnerName || assignedToStaffName;
+  const productionOwnerStaffRole = Object.prototype.hasOwnProperty.call(
+    updates,
+    "production_owner_staff_role"
+  )
+    ? updates.production_owner_staff_role || ""
+    : defaultProductionOwnerRole || assignedToStaffRole;
+  const hasProductionOwner = Boolean(productionOwnerStaffId);
 
   return {
     ...updates,
@@ -288,6 +337,15 @@ function buildAssignmentUpdates(currentOrder, updates) {
         : null,
     needs_assignment: assigned ? false : true,
     status: nextStatus,
+    production_owner_staff_id: productionOwnerStaffId,
+    production_owner_staff_name: hasProductionOwner ? productionOwnerStaffName : "",
+    production_owner_staff_role: hasProductionOwner ? productionOwnerStaffRole : "",
+    production_owner_assigned_at:
+      Object.prototype.hasOwnProperty.call(updates, "production_owner_assigned_at")
+        ? updates.production_owner_assigned_at
+        : hasProductionOwner
+        ? currentOrder.production_owner_assigned_at || currentOrder.assigned_at || new Date().toISOString()
+        : null,
     production_ready:
       Object.prototype.hasOwnProperty.call(updates, "production_ready")
         ? updates.production_ready
@@ -356,6 +414,12 @@ function describeOrderUpdate(updates) {
   if (updates.status === "Canceled" || updates.quote_status === "Canceled") {
     return "Workflow canceled while preserving operational and financial history.";
   }
+  if (updates.status === "On Hold") return "Order placed on hold.";
+  if (updates.status === "Ready For Production") return "Order moved into the production queue.";
+  if (updates.status === "Printing") return "Printing started.";
+  if (updates.status === "Embroidery") return "Embroidery started.";
+  if (updates.status === "QC / Finishing") return "Order moved into QC and finishing.";
+  if (updates.status === "Ready For Pickup") return "Order marked ready for pickup.";
   if (updates.status) return `Status changed to ${updates.status}.`;
   if (updates.pickup_status === "Picked Up") return "Order marked as picked up.";
   if (updates.pickup_status === "Ready for Pickup") return "Order marked ready for pickup.";
@@ -374,6 +438,12 @@ function describeActivityType(updates) {
   if (updates.activity_type) return updates.activity_type;
   if (Object.prototype.hasOwnProperty.call(updates, "quote_archived")) return "quote_archive";
   if (updates.status === "Canceled" || updates.quote_status === "Canceled") return "canceled";
+  if (
+    Object.prototype.hasOwnProperty.call(updates, "assigned_to_staff_id") ||
+    Object.prototype.hasOwnProperty.call(updates, "production_owner_staff_id")
+  ) {
+    return "assignment";
+  }
   if (updates.status) return "status_change";
   if (updates.pickup_status) return "pickup";
   if (updates.payment_history) return "payment";
@@ -469,6 +539,12 @@ function emitOperationalEventsForOrderUpdate(previousOrder, nextOrder, updates =
   const nextDepositApplied = Number(nextFinancials.deposit_applied || 0);
   const depositRecordedAmount = Math.max(0, nextDepositApplied - previousDepositApplied);
   const eventRecords = [];
+  const assignmentChanged =
+    previousOrder.assigned_to_staff_id !== nextOrder.assigned_to_staff_id ||
+    previousOrder.assigned_to_staff_name !== nextOrder.assigned_to_staff_name;
+  const productionOwnerChanged =
+    previousOrder.production_owner_staff_id !== nextOrder.production_owner_staff_id ||
+    previousOrder.production_owner_staff_name !== nextOrder.production_owner_staff_name;
 
   if (
     Array.isArray(updates.payment_history) &&
@@ -529,6 +605,147 @@ function emitOperationalEventsForOrderUpdate(previousOrder, nextOrder, updates =
   }
 
   if (
+    normalizedPreviousStatus !== "Ready For Production" &&
+    normalizedNextStatus === "Ready For Production"
+  ) {
+    emitCustomerTimelineEventForOrder(
+      nextOrder,
+      "moved_to_production",
+      `Order ${nextOrder.order_number} moved to production.`,
+      {
+        previousStatus: previousOrder.status,
+        nextStatus: nextOrder.status,
+      },
+      timestamp
+    );
+
+    eventRecords.push(
+      buildOperationalEventRecord(
+        nextOrder,
+        "moved_to_production",
+        "Order released into the production queue.",
+        {
+          createdAt: timestamp,
+          workflowLabel: "Production Workflow",
+        }
+      )
+    );
+  }
+
+  if (
+    !isProductionExecutionStatus(normalizedPreviousStatus) &&
+    ["Printing", "Embroidery"].includes(normalizedNextStatus)
+  ) {
+    emitCustomerTimelineEventForOrder(
+      nextOrder,
+      "production_started",
+      `${normalizedNextStatus} started for order ${nextOrder.order_number}.`,
+      {
+        previousStatus: previousOrder.status,
+        nextStatus: nextOrder.status,
+        productionStage: normalizedNextStatus,
+      },
+      timestamp
+    );
+
+    eventRecords.push(
+      buildOperationalEventRecord(
+        nextOrder,
+        "production_started",
+        `${normalizedNextStatus} started${nextOrder.assigned_to_staff_name ? ` by ${nextOrder.assigned_to_staff_name}` : ""}.`,
+        {
+          createdAt: timestamp,
+          workflowLabel: "Production Workflow",
+        }
+      )
+    );
+  }
+
+  if (
+    normalizedPreviousStatus !== "QC / Finishing" &&
+    normalizedNextStatus === "QC / Finishing"
+  ) {
+    emitCustomerTimelineEventForOrder(
+      nextOrder,
+      "moved_to_qc",
+      `Order ${nextOrder.order_number} moved to QC / finishing.`,
+      {
+        previousStatus: previousOrder.status,
+        nextStatus: nextOrder.status,
+      },
+      timestamp
+    );
+
+    eventRecords.push(
+      buildOperationalEventRecord(
+        nextOrder,
+        "moved_to_qc",
+        "Order moved into QC and finishing.",
+        {
+          createdAt: timestamp,
+          workflowLabel: "Production Workflow",
+        }
+      )
+    );
+  }
+
+  if (
+    normalizedPreviousStatus !== "Ready For Pickup" &&
+    normalizedNextStatus === "Ready For Pickup"
+  ) {
+    emitCustomerTimelineEventForOrder(
+      nextOrder,
+      "ready_for_pickup",
+      `Order ${nextOrder.order_number} is ready for pickup.`,
+      {
+        previousStatus: previousOrder.status,
+        nextStatus: nextOrder.status,
+      },
+      timestamp
+    );
+
+    eventRecords.push(
+      buildOperationalEventRecord(
+        nextOrder,
+        "ready_for_pickup",
+        "Order marked ready for pickup.",
+        {
+          createdAt: timestamp,
+          workflowLabel: "Pickup Handling",
+        }
+      )
+    );
+  }
+
+  if (
+    normalizedPreviousStatus !== "On Hold" &&
+    normalizedNextStatus === "On Hold"
+  ) {
+    emitCustomerTimelineEventForOrder(
+      nextOrder,
+      "order_on_hold",
+      `Order ${nextOrder.order_number} was placed on hold.`,
+      {
+        previousStatus: previousOrder.status,
+        nextStatus: nextOrder.status,
+      },
+      timestamp
+    );
+
+    eventRecords.push(
+      buildOperationalEventRecord(
+        nextOrder,
+        "order_on_hold",
+        "Order placed on hold.",
+        {
+          createdAt: timestamp,
+          workflowLabel: "Production Workflow",
+        }
+      )
+    );
+  }
+
+  if (
     normalizedPreviousStatus !== "Completed" &&
     normalizedNextStatus === "Completed"
   ) {
@@ -571,39 +788,6 @@ function emitOperationalEventsForOrderUpdate(previousOrder, nextOrder, updates =
   }
 
   if (
-    normalizedPreviousStatus !== "In Production" &&
-    normalizedNextStatus === "In Production"
-  ) {
-    emitCustomerTimelineEventForOrder(
-      nextOrder,
-      "production_started",
-      `Production started for order ${nextOrder.order_number}.`,
-      {
-        previousStatus: previousOrder.status,
-        nextStatus: nextOrder.status,
-      },
-      timestamp
-    );
-  }
-
-  if (
-    normalizedPreviousStatus !== "Ready for Pickup" &&
-    normalizedNextStatus === "Ready for Pickup"
-  ) {
-    eventRecords.push(
-      buildOperationalEventRecord(
-        nextOrder,
-        "order_ready_for_pickup",
-        "Order moved to ready-for-pickup status.",
-        {
-          createdAt: timestamp,
-          workflowLabel: "Pickup Handling",
-        }
-      )
-    );
-  }
-
-  if (
     previousPickupStatus !== "Picked Up" &&
     nextPickupStatus === "Picked Up"
   ) {
@@ -615,6 +799,45 @@ function emitOperationalEventsForOrderUpdate(previousOrder, nextOrder, updates =
         {
           createdAt: timestamp,
           workflowLabel: "Pickup Handling",
+        }
+      )
+    );
+  }
+
+  if (assignmentChanged) {
+    emitCustomerTimelineEventForOrder(
+      nextOrder,
+      "production_assignment_changed",
+      `Production assignment updated for order ${nextOrder.order_number}.`,
+      {
+        previousAssignedStaff: previousOrder.assigned_to_staff_name || "Unassigned",
+        nextAssignedStaff: nextOrder.assigned_to_staff_name || "Unassigned",
+      },
+      timestamp
+    );
+
+    eventRecords.push(
+      buildOperationalEventRecord(
+        nextOrder,
+        "production_assignment_changed",
+        `Assigned staff changed from ${previousOrder.assigned_to_staff_name || "Unassigned"} to ${nextOrder.assigned_to_staff_name || "Unassigned"}.`,
+        {
+          createdAt: timestamp,
+          workflowLabel: "Assignments",
+        }
+      )
+    );
+  }
+
+  if (productionOwnerChanged) {
+    eventRecords.push(
+      buildOperationalEventRecord(
+        nextOrder,
+        "production_owner_changed",
+        `Production owner changed from ${previousOrder.production_owner_staff_name || "Unassigned"} to ${nextOrder.production_owner_staff_name || "Unassigned"}.`,
+        {
+          createdAt: timestamp,
+          workflowLabel: "Assignments",
         }
       )
     );

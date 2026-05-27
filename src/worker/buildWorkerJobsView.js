@@ -31,12 +31,12 @@ export function buildWorkerJobsView(orders = [], worker = "") {
       return;
     }
 
-    if (status === "In Production") {
+    if (["Printing", "Embroidery", "QC / Finishing"].includes(status)) {
       grouped.inProgress.push(order);
       return;
     }
 
-    if (status === "Ready for Pickup") {
+    if (status === "Ready For Pickup") {
       grouped.paused.push(order);
       return;
     }

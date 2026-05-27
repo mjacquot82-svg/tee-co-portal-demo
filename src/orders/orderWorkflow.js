@@ -1,32 +1,143 @@
+import { normalizeProductionType } from "../constants/productionTypes";
+
 export const OPERATIONAL_ORDER_STATUSES = [
   "New",
-  "Awaiting Production",
-  "In Production",
-  "Ready for Pickup",
-  "Picked Up",
+  "Awaiting Deposit",
+  "Ready For Production",
+  "Printing",
+  "Embroidery",
+  "QC / Finishing",
+  "Ready For Pickup",
+  "On Hold",
   "Completed",
   "Canceled",
+];
+
+export const OPERATIONAL_STATUS_PROGRESS_STAGES = [
+  "Awaiting Deposit",
+  "Ready For Production",
+  "Printing",
+  "Embroidery",
+  "QC / Finishing",
+  "Ready For Pickup",
+  "Completed",
+];
+
+export const PRODUCTION_WORKFLOW_EVENT_TYPES = [
+  "moved_to_production",
+  "production_started",
+  "moved_to_qc",
+  "ready_for_pickup",
+  "order_completed",
+  "order_on_hold",
+  "production_assignment_changed",
+];
+
+export const PRODUCTION_WORKFLOW_ACTIONS = [
+  "move_to_production",
+  "mark_printing_started",
+  "mark_embroidery_started",
+  "move_to_qc",
+  "mark_qc_complete",
+  "mark_ready_for_pickup",
+  "complete_order",
+  "put_on_hold",
 ];
 
 const ACTIVE_OPERATIONAL_STATUSES = new Set(
   OPERATIONAL_ORDER_STATUSES.filter((status) => !["Completed", "Canceled"].includes(status))
 );
 const TERMINAL_OPERATIONAL_STATUSES = new Set(["Completed", "Canceled"]);
+const DIRECT_ADVANCE_SEQUENCE = [
+  "New",
+  "Awaiting Deposit",
+  "Ready For Production",
+  "Printing",
+  "Embroidery",
+  "QC / Finishing",
+  "Ready For Pickup",
+  "Completed",
+];
 
 const STATUS_ALIASES = {
   submitted: "New",
   paid: "New",
-  approved: "Awaiting Production",
-  "ready for production": "Awaiting Production",
+  approved: "Ready For Production",
+  "ready for production": "Ready For Production",
+  "awaiting production": "Ready For Production",
   "awaiting artwork": "New",
-  "awaiting deposit": "New",
   "awaiting approval": "New",
   "mockup sent": "New",
-  printing: "In Production",
+  "awaiting deposit": "Awaiting Deposit",
+  printing: "Printing",
+  embroidery: "Embroidery",
+  "in production": "Printing",
+  "qc": "QC / Finishing",
+  "qc / finishing": "QC / Finishing",
+  "qc and finishing": "QC / Finishing",
+  "ready for pickup": "Ready For Pickup",
+  "picked up": "Completed",
+  "on hold": "On Hold",
+  hold: "On Hold",
+};
+
+const ACTION_DEFINITIONS = {
+  move_to_production: {
+    key: "move_to_production",
+    label: "Move To Production",
+    targetStatus: "Ready For Production",
+    eventType: "moved_to_production",
+  },
+  mark_printing_started: {
+    key: "mark_printing_started",
+    label: "Mark Printing Started",
+    targetStatus: "Printing",
+    eventType: "production_started",
+  },
+  mark_embroidery_started: {
+    key: "mark_embroidery_started",
+    label: "Mark Embroidery Started",
+    targetStatus: "Embroidery",
+    eventType: "production_started",
+  },
+  move_to_qc: {
+    key: "move_to_qc",
+    label: "Move To QC",
+    targetStatus: "QC / Finishing",
+    eventType: "moved_to_qc",
+  },
+  mark_qc_complete: {
+    key: "mark_qc_complete",
+    label: "Mark QC Complete",
+    targetStatus: "Ready For Pickup",
+    eventType: "ready_for_pickup",
+  },
+  mark_ready_for_pickup: {
+    key: "mark_ready_for_pickup",
+    label: "Mark Ready For Pickup",
+    targetStatus: "Ready For Pickup",
+    eventType: "ready_for_pickup",
+  },
+  complete_order: {
+    key: "complete_order",
+    label: "Complete Order",
+    targetStatus: "Completed",
+    eventType: "order_completed",
+  },
+  put_on_hold: {
+    key: "put_on_hold",
+    label: "Put On Hold",
+    targetStatus: "On Hold",
+    eventType: "order_on_hold",
+  },
 };
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function buildDecorationLookup(order = {}) {
+  return normalizeProductionType(order.decoration_type || order.production_type || "");
 }
 
 export function normalizeOperationalStatus(status) {
@@ -41,6 +152,10 @@ export function getOperationalStatusIndex(status) {
   return OPERATIONAL_ORDER_STATUSES.indexOf(normalizeOperationalStatus(status));
 }
 
+export function getOperationalProgressStageIndex(status) {
+  return OPERATIONAL_STATUS_PROGRESS_STAGES.indexOf(normalizeOperationalStatus(status));
+}
+
 export function isCompletedOperationalStatus(status) {
   return normalizeOperationalStatus(status) === "Completed";
 }
@@ -49,13 +164,29 @@ export function isCanceledOperationalStatus(status) {
   return normalizeOperationalStatus(status) === "Canceled";
 }
 
+export function isOnHoldOperationalStatus(status) {
+  return normalizeOperationalStatus(status) === "On Hold";
+}
+
 export function isActiveOperationalStatus(status) {
   const normalizedStatus = normalizeOperationalStatus(status);
   return ACTIVE_OPERATIONAL_STATUSES.has(normalizedStatus);
 }
 
 export function isReadyForProductionStatus(status) {
-  return ["Awaiting Production", "In Production", "Ready for Pickup", "Picked Up", "Completed"].includes(
+  return [
+    "Ready For Production",
+    "Printing",
+    "Embroidery",
+    "QC / Finishing",
+    "Ready For Pickup",
+    "On Hold",
+    "Completed",
+  ].includes(normalizeOperationalStatus(status));
+}
+
+export function isProductionExecutionStatus(status) {
+  return ["Printing", "Embroidery", "QC / Finishing"].includes(
     normalizeOperationalStatus(status)
   );
 }
@@ -63,18 +194,88 @@ export function isReadyForProductionStatus(status) {
 export function canAdvanceOperationalStatus(status) {
   const normalizedStatus = normalizeOperationalStatus(status);
   if (TERMINAL_OPERATIONAL_STATUSES.has(normalizedStatus)) return false;
+  if (normalizedStatus === "On Hold") return false;
 
-  const index = getOperationalStatusIndex(normalizedStatus);
-  return index >= 0 && index < OPERATIONAL_ORDER_STATUSES.length - 1;
+  const index = DIRECT_ADVANCE_SEQUENCE.indexOf(normalizedStatus);
+  return index >= 0 && index < DIRECT_ADVANCE_SEQUENCE.length - 1;
 }
 
 export function getNextOperationalStatus(status) {
   const normalizedStatus = normalizeOperationalStatus(status);
   if (TERMINAL_OPERATIONAL_STATUSES.has(normalizedStatus)) return normalizedStatus;
+  if (normalizedStatus === "On Hold") return "Ready For Production";
 
-  const index = getOperationalStatusIndex(normalizedStatus);
-  if (index < 0) return "Awaiting Production";
-  return OPERATIONAL_ORDER_STATUSES[Math.min(index + 1, OPERATIONAL_ORDER_STATUSES.length - 1)];
+  const index = DIRECT_ADVANCE_SEQUENCE.indexOf(normalizedStatus);
+  if (index < 0) return "Ready For Production";
+  return DIRECT_ADVANCE_SEQUENCE[Math.min(index + 1, DIRECT_ADVANCE_SEQUENCE.length - 1)];
+}
+
+export function getPreferredProductionStartAction(order = {}) {
+  const decorationType = buildDecorationLookup(order);
+  return decorationType === "Embroidery"
+    ? ACTION_DEFINITIONS.mark_embroidery_started
+    : ACTION_DEFINITIONS.mark_printing_started;
+}
+
+export function getProductionWorkflowAction(actionKey) {
+  return ACTION_DEFINITIONS[actionKey] || null;
+}
+
+export function getAvailableProductionActions(order = {}, options = {}) {
+  const status = normalizeOperationalStatus(order.status);
+  const compact = options.compact === true;
+  const actions = [];
+  const preferredStartAction = getPreferredProductionStartAction(order);
+
+  if (["Completed", "Canceled"].includes(status)) {
+    return actions;
+  }
+
+  if (status === "On Hold") {
+    actions.push(ACTION_DEFINITIONS.move_to_production);
+    if (!compact) {
+      actions.push(ACTION_DEFINITIONS.complete_order);
+    }
+    return actions;
+  }
+
+  if (["New", "Awaiting Deposit"].includes(status)) {
+    actions.push(ACTION_DEFINITIONS.move_to_production);
+  } else if (status === "Ready For Production") {
+    actions.push(preferredStartAction);
+    if (!compact) {
+      const alternateStartAction =
+        preferredStartAction.key === "mark_printing_started"
+          ? ACTION_DEFINITIONS.mark_embroidery_started
+          : ACTION_DEFINITIONS.mark_printing_started;
+      actions.push(alternateStartAction);
+    }
+  } else if (["Printing", "Embroidery"].includes(status)) {
+    actions.push(ACTION_DEFINITIONS.move_to_qc);
+    if (!compact) {
+      actions.push(ACTION_DEFINITIONS.mark_ready_for_pickup);
+    }
+  } else if (status === "QC / Finishing") {
+    actions.push(ACTION_DEFINITIONS.mark_qc_complete);
+  } else if (status === "Ready For Pickup") {
+    actions.push(ACTION_DEFINITIONS.complete_order);
+  } else if (canAdvanceOperationalStatus(status)) {
+    actions.push({
+      key: `advance_to_${getNextOperationalStatus(status)}`,
+      label: `Mark ${getNextOperationalStatus(status)}`,
+      targetStatus: getNextOperationalStatus(status),
+      eventType: "production_state_changed",
+    });
+  }
+
+  if (
+    !compact &&
+    !["Completed", "Canceled", "On Hold", "Ready For Pickup"].includes(status)
+  ) {
+    actions.push(ACTION_DEFINITIONS.put_on_hold);
+  }
+
+  return actions;
 }
 
 export function sortOrdersByOperationalStatus(orders = []) {

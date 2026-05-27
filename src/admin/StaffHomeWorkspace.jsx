@@ -128,15 +128,15 @@ function buildStaffWorkspaceSummary(orders = []) {
         summary.active += 1;
       }
 
-      if (status === "Awaiting Production" || status === "New") {
+      if (["Ready For Production", "Awaiting Deposit", "New"].includes(status)) {
         summary.ready += 1;
       }
 
-      if (status === "In Production") {
+      if (["Printing", "Embroidery", "QC / Finishing"].includes(status)) {
         summary.inProduction += 1;
       }
 
-      if (status === "Ready for Pickup") {
+      if (status === "Ready For Pickup") {
         summary.readyForPickup += 1;
       }
 
