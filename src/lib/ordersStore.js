@@ -18,10 +18,10 @@ import { getRawStorageItem, hasBrowserStorage, setRawStorageItem } from "./brows
 import { formatShortDate, toIsoTimestamp } from "./dateFormatting";
 import { getArtworkDisplayName, getOrderArtworkFiles } from "./orderArtwork";
 import { createOperationalEvent } from "./operationalEventsStore";
-import { linkArtworkToOrder, linkArtworkToQuote } from "./customerArtworkStore";
 import { addCustomerTimelineEvent } from "./customerTimelineStore";
 import { resolveCustomerForRecord } from "./customerRecordMatching";
 import { deriveOperationalWorkflowState } from "./operationalWorkflow";
+import { linkCustomerArtworkToOrder, linkCustomerArtworkToQuote } from "../services/customerArtworkService";
 
 const STORAGE_KEY = "teeCoStaffOrders";
 const orderListeners = new Set();
@@ -29,6 +29,15 @@ const EMPTY_ORDERS = [];
 
 let cachedOrdersRaw = null;
 let cachedOrdersSnapshot = EMPTY_ORDERS;
+
+function persistArtworkRelationship(promise, context) {
+  Promise.resolve(promise).catch((error) => {
+    console.error("Unable to persist artwork relationship in Supabase", {
+      context,
+      error,
+    });
+  });
+}
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -1082,9 +1091,23 @@ export function createStoredOrder(orderInput) {
 
   if (order.customer_artwork_id) {
     if (order.operational_visible === false || order.quote_status !== "Ready For Production") {
-      linkArtworkToQuote(order.customer_artwork_id, order.order_number);
+      persistArtworkRelationship(
+        linkCustomerArtworkToQuote(order.customer_artwork_id, order.order_number),
+        {
+          artworkId: order.customer_artwork_id,
+          orderNumber: order.order_number,
+          relationship: "quote",
+        }
+      );
     } else {
-      linkArtworkToOrder(order.customer_artwork_id, order.order_number);
+      persistArtworkRelationship(
+        linkCustomerArtworkToOrder(order.customer_artwork_id, order.order_number),
+        {
+          artworkId: order.customer_artwork_id,
+          orderNumber: order.order_number,
+          relationship: "order",
+        }
+      );
     }
   }
 
@@ -1145,12 +1168,34 @@ export function updateStoredOrder(orderNumber, updates) {
       updatedOrder.customer_artwork_id !== (previousOrder?.customer_artwork_id || "");
 
     if (updates.activity_type === "release_to_production") {
-      linkArtworkToOrder(updatedOrder.customer_artwork_id, updatedOrder.order_number);
+      persistArtworkRelationship(
+        linkCustomerArtworkToOrder(updatedOrder.customer_artwork_id, updatedOrder.order_number),
+        {
+          artworkId: updatedOrder.customer_artwork_id,
+          orderNumber: updatedOrder.order_number,
+          relationship: "order",
+          activityType: updates.activity_type,
+        }
+      );
     } else if (artworkIdChanged) {
       if (updatedOrder.operational_visible === false || updatedOrder.quote_status !== "Ready For Production") {
-        linkArtworkToQuote(updatedOrder.customer_artwork_id, updatedOrder.order_number);
+        persistArtworkRelationship(
+          linkCustomerArtworkToQuote(updatedOrder.customer_artwork_id, updatedOrder.order_number),
+          {
+            artworkId: updatedOrder.customer_artwork_id,
+            orderNumber: updatedOrder.order_number,
+            relationship: "quote",
+          }
+        );
       } else {
-        linkArtworkToOrder(updatedOrder.customer_artwork_id, updatedOrder.order_number);
+        persistArtworkRelationship(
+          linkCustomerArtworkToOrder(updatedOrder.customer_artwork_id, updatedOrder.order_number),
+          {
+            artworkId: updatedOrder.customer_artwork_id,
+            orderNumber: updatedOrder.order_number,
+            relationship: "order",
+          }
+        );
       }
     }
   }

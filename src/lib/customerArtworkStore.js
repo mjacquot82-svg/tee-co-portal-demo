@@ -2,8 +2,8 @@ import { getJsonStorageItem, hasBrowserStorage, setJsonStorageItem } from "./bro
 import { addCustomerTimelineEvent } from "./customerTimelineStore";
 import { getArtworkDisplayName } from "./orderArtwork";
 
-const STORAGE_KEY = "teeCoCustomerArtwork";
-const METADATA_STORAGE_KEY = "teeCoCustomerArtworkMeta";
+export const LEGACY_CUSTOMER_ARTWORK_STORAGE_KEY = "teeCoCustomerArtwork";
+export const LEGACY_CUSTOMER_ARTWORK_METADATA_STORAGE_KEY = "teeCoCustomerArtworkMeta";
 
 function normalizeStringList(values) {
   if (!Array.isArray(values)) return [];
@@ -96,13 +96,17 @@ export function getArtworkUsageCount(artwork = {}) {
 function getArtworkMetadataMap() {
   if (!hasBrowserStorage()) return {};
 
-  const metadata = getJsonStorageItem(METADATA_STORAGE_KEY, {});
+  const metadata = getJsonStorageItem(LEGACY_CUSTOMER_ARTWORK_METADATA_STORAGE_KEY, {});
   return metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata : {};
+}
+
+export function getLegacyArtworkMetadataMap() {
+  return getArtworkMetadataMap();
 }
 
 function saveArtworkMetadataMap(metadataMap) {
   if (!hasBrowserStorage()) return false;
-  return setJsonStorageItem(METADATA_STORAGE_KEY, metadataMap);
+  return setJsonStorageItem(LEGACY_CUSTOMER_ARTWORK_METADATA_STORAGE_KEY, metadataMap);
 }
 
 function getArtworkMetadataRecord(artworkId) {
@@ -152,36 +156,19 @@ function updateArtworkLinks(artworkId, relationshipKey, nextLinkedIds, options =
 }
 
 export function mergeArtworkWithOperationalFields(artwork = {}) {
-  const normalizedArtwork = normalizeArtworkRecord(artwork);
-  const metadataRecord = normalizedArtwork.id
-    ? getArtworkMetadataRecord(normalizedArtwork.id)
-    : normalizeArtworkRecord({});
-
-  return normalizeArtworkRecord({
-    ...normalizedArtwork,
-    linkedOrderIds:
-      normalizedArtwork.linkedOrderIds.length || artwork.linkedOrderIds
-        ? normalizedArtwork.linkedOrderIds
-        : metadataRecord.linkedOrderIds,
-    linkedQuoteIds:
-      normalizedArtwork.linkedQuoteIds.length || artwork.linkedQuoteIds
-        ? normalizedArtwork.linkedQuoteIds
-        : metadataRecord.linkedQuoteIds,
-    artworkType: artwork.artworkType || metadataRecord.artworkType || normalizedArtwork.artworkType,
-    artworkStatus:
-      artwork.artworkStatus || metadataRecord.artworkStatus || normalizedArtwork.artworkStatus,
-    lastUsedAt: artwork.lastUsedAt || metadataRecord.lastUsedAt || normalizedArtwork.lastUsedAt,
-  });
+  return normalizeArtworkRecord(artwork);
 }
 
 export function mergeArtworkCollectionWithOperationalFields(artworkCollection = []) {
   if (!Array.isArray(artworkCollection)) return [];
-  return artworkCollection.map((artwork) => mergeArtworkWithOperationalFields(artwork));
+  return artworkCollection.map((artwork) => normalizeArtworkRecord(artwork));
 }
 
 export function getAllCustomerArtwork() {
   if (!hasBrowserStorage()) return [];
-  return getJsonStorageItem(STORAGE_KEY, []).map((item) => normalizeArtworkRecord(item));
+  return getJsonStorageItem(LEGACY_CUSTOMER_ARTWORK_STORAGE_KEY, []).map((item) =>
+    normalizeArtworkRecord(item)
+  );
 }
 
 function findArtworkRecord(artworkId) {
@@ -193,7 +180,7 @@ function findArtworkRecord(artworkId) {
 
 export function saveAllCustomerArtwork(artwork) {
   if (!hasBrowserStorage()) return;
-  return setJsonStorageItem(STORAGE_KEY, artwork);
+  return setJsonStorageItem(LEGACY_CUSTOMER_ARTWORK_STORAGE_KEY, artwork);
 }
 
 export function getCustomerArtwork(customerId) {

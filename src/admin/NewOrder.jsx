@@ -17,8 +17,8 @@ import {
 } from "../lib/customersStore";
 import { createStoredOrder } from "../lib/ordersStore";
 import { useStoredProducts } from "../lib/productsStore";
-import { saveCustomerArtwork } from "../lib/customerArtworkStore";
 import { generateQuoteSnapshot } from "../lib/quoteEngine";
+import { uploadCustomerArtwork } from "../services/customerArtworkService";
 import "./NewOrder.css";
 
 const fallbackSizeKeys = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"];
@@ -407,6 +407,7 @@ export default function NewOrder() {
     try {
       const preview = await fileToDataUrl(file);
       setArtworkUpload({
+        file,
         name: file.name,
         file_name: file.name,
         file_type: file.type || "application/octet-stream",
@@ -458,12 +459,13 @@ export default function NewOrder() {
     return customer.id;
   }
 
-  function buildArtworkPayload(customerId) {
+  async function buildArtworkPayload(customerId) {
     if (!artworkUpload) return null;
 
-    return saveCustomerArtwork(customerId, {
-      ...artworkUpload,
-      placement_hint: selectedPlacements.join(", "),
+    return uploadCustomerArtwork(customerId, artworkUpload.file, {
+      displayName: artworkUpload.name,
+      originalFilename: artworkUpload.file_name || artworkUpload.name,
+      placementHint: selectedPlacements.join(", "),
       notes: `Uploaded during order intake for ${form.garment || "custom garment"}.`,
     });
   }
@@ -491,7 +493,7 @@ export default function NewOrder() {
       const normalizedSizes = Object.fromEntries(
         Object.entries(sizes).map(([size, value]) => [size, Number(value) || 0])
       );
-      const savedArtwork = buildArtworkPayload(customerId);
+      const savedArtwork = await buildArtworkPayload(customerId);
       const artworkFiles = savedArtwork
         ? [
             {
@@ -520,7 +522,7 @@ export default function NewOrder() {
                 savedArtwork.asset_reference ||
                 savedArtwork.id,
               placement_hint: savedArtwork.placement_hint,
-              uploaded_at: savedArtwork.created_at,
+              uploaded_at: savedArtwork.uploaded_at || savedArtwork.created_at,
               uploaded_by_staff_name: "Order Intake",
             },
           ]

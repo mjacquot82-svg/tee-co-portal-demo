@@ -20,9 +20,22 @@ create table if not exists public.customer_artwork (
   id uuid primary key default gen_random_uuid(),
   customer_id uuid not null references public.customers (id) on delete cascade,
   file_name text not null,
+  display_name text,
+  original_filename text,
+  file_type text,
+  file_size bigint not null default 0,
   storage_path text not null unique,
   uploaded_at timestamptz not null default timezone('utc', now()),
-  uploaded_by text
+  uploaded_by text,
+  placement_hint text,
+  notes text,
+  linked_order_ids text[] not null default '{}',
+  linked_quote_ids text[] not null default '{}',
+  artwork_type text not null default '',
+  artwork_status text not null default 'Library',
+  last_used_at timestamptz,
+  legacy_local_artwork_id text unique,
+  updated_at timestamptz not null default timezone('utc', now())
 );
 
 create index if not exists customer_artwork_customer_id_idx
