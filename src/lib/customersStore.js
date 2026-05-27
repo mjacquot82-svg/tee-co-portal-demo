@@ -5,6 +5,7 @@ import {
   hasBrowserStorage,
   setJsonStorageItem,
 } from "./browserStorage";
+import { addCustomerTimelineEvent } from "./customerTimelineStore";
 import { supabase } from "./supabase";
 
 const STORAGE_KEY = "teeCoCustomers";
@@ -56,6 +57,55 @@ function normalizeCustomer(customer = {}, fallbackTimestamp = new Date().toISOSt
 function normalizeCustomers(customers) {
   if (!Array.isArray(customers)) return EMPTY_CUSTOMERS;
   return customers.map((customer) => normalizeCustomer(customer));
+}
+
+function pickCustomerTimelineSnapshot(customer = {}) {
+  return {
+    name: customer.name || "",
+    company: customer.company || "",
+    phone: customer.phone || "",
+    email: customer.email || "",
+    notes: customer.notes || "",
+    archived: Boolean(customer.archived),
+  };
+}
+
+function buildCustomerChangeSet(previousCustomer = {}, nextCustomer = {}) {
+  const previousSnapshot = pickCustomerTimelineSnapshot(previousCustomer);
+  const nextSnapshot = pickCustomerTimelineSnapshot(nextCustomer);
+
+  return Object.keys(nextSnapshot).reduce((changes, field) => {
+    if (previousSnapshot[field] === nextSnapshot[field]) {
+      return changes;
+    }
+
+    return {
+      ...changes,
+      [field]: {
+        from: previousSnapshot[field],
+        to: nextSnapshot[field],
+      },
+    };
+  }, {});
+}
+
+function buildCustomerUpdateSummary(changes, customerName) {
+  const changedFields = Object.keys(changes);
+
+  if (!changedFields.length) {
+    return "";
+  }
+
+  if (changedFields.length === 1 && changedFields[0] === "archived") {
+    return changes.archived.to ? "Customer archived." : "Customer restored from archive.";
+  }
+
+  if (changedFields.length === 1) {
+    const label = changedFields[0].replace(/_/g, " ");
+    return `Customer ${label} updated${customerName ? ` for ${customerName}` : ""}.`;
+  }
+
+  return `Customer record updated${customerName ? ` for ${customerName}` : ""}.`;
 }
 
 function logFallbackActivation(reason, error) {
@@ -428,6 +478,17 @@ export async function createStoredCustomer(customerInput) {
       writeStorage: true,
     });
 
+    addCustomerTimelineEvent(customer.id, {
+      eventType: "customer_created",
+      summary: `Customer record created${customer.name ? ` for ${customer.name}` : ""}.`,
+      metadata: {
+        customerName: customer.name,
+        company: customer.company,
+        email: customer.email,
+        phone: customer.phone,
+      },
+    });
+
     console.info("[customersStore] before persistCustomerToSupabase call", {
       operation: "create",
       table: SUPABASE_TABLE,
@@ -445,7 +506,7 @@ export async function createStoredCustomer(customerInput) {
   }
 }
 
-export async function updateStoredCustomer(customerId, updates) {
+export async function updateStoredCustomer(customerId, updates, options = {}) {
   const currentCustomers = getStoredCustomers();
   const existingCustomer = currentCustomers.find((customer) => customer.id === customerId);
 
@@ -463,6 +524,24 @@ export async function updateStoredCustomer(customerId, updates) {
   );
 
   persistCustomersSnapshot(nextCustomers, { emit: true, writeStorage: true });
+
+  if (!options.suppressTimelineEvent) {
+    const changes = buildCustomerChangeSet(existingCustomer, nextCustomer);
+    const changedFields = Object.keys(changes);
+    const summary = buildCustomerUpdateSummary(changes, nextCustomer.name);
+
+    if (changedFields.length && summary) {
+      addCustomerTimelineEvent(nextCustomer.id, {
+        eventType: "customer_updated",
+        summary,
+        metadata: {
+          changedFields,
+          changes,
+        },
+      });
+    }
+  }
+
   return persistCustomerToSupabase(nextCustomer, "update");
 }
 
@@ -479,6 +558,8 @@ export async function linkOrderToCustomer(customerId, orderNumber) {
 
   return updateStoredCustomer(customerId, {
     order_numbers: Array.from(orderNumbers),
+  }, {
+    suppressTimelineEvent: true,
   });
 }
 

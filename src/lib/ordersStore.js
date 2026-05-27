@@ -17,6 +17,7 @@ import { getRawStorageItem, hasBrowserStorage, setRawStorageItem } from "./brows
 import { formatShortDate, toIsoTimestamp } from "./dateFormatting";
 import { getArtworkDisplayName, getOrderArtworkFiles } from "./orderArtwork";
 import { createOperationalEvent } from "./operationalEventsStore";
+import { linkArtworkToOrder, linkArtworkToQuote } from "./customerArtworkStore";
 
 const STORAGE_KEY = "teeCoStaffOrders";
 const orderListeners = new Set();
@@ -712,6 +713,15 @@ export function createStoredOrder(orderInput) {
   if (!saveStoredOrders(nextOrders)) {
     throw new Error("Unable to save order. Browser storage write failed.");
   }
+
+  if (order.customer_artwork_id) {
+    if (order.operational_visible === false || order.quote_status !== "Ready For Production") {
+      linkArtworkToQuote(order.customer_artwork_id, order.order_number);
+    } else {
+      linkArtworkToOrder(order.customer_artwork_id, order.order_number);
+    }
+  }
+
   return order;
 }
 
@@ -758,6 +768,22 @@ export function updateStoredOrder(orderNumber, updates) {
   }
 
   emitOperationalEventsForOrderUpdate(previousOrder, updatedOrder, updates, now);
+
+  if (updatedOrder?.customer_artwork_id) {
+    const artworkIdChanged =
+      updatedOrder.customer_artwork_id !== (previousOrder?.customer_artwork_id || "");
+
+    if (updates.activity_type === "release_to_production") {
+      linkArtworkToOrder(updatedOrder.customer_artwork_id, updatedOrder.order_number);
+    } else if (artworkIdChanged) {
+      if (updatedOrder.operational_visible === false || updatedOrder.quote_status !== "Ready For Production") {
+        linkArtworkToQuote(updatedOrder.customer_artwork_id, updatedOrder.order_number);
+      } else {
+        linkArtworkToOrder(updatedOrder.customer_artwork_id, updatedOrder.order_number);
+      }
+    }
+  }
+
   return updatedOrder;
 }
 

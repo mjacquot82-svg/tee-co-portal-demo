@@ -1,4 +1,5 @@
 import { getJsonStorageItem, hasBrowserStorage, setJsonStorageItem } from "./browserStorage";
+import { addCustomerTimelineEvent } from "./customerTimelineStore";
 import { getArtworkDisplayName } from "./orderArtwork";
 
 const STORAGE_KEY = "teeCoCustomerArtwork";
@@ -183,6 +184,13 @@ export function getAllCustomerArtwork() {
   return getJsonStorageItem(STORAGE_KEY, []).map((item) => normalizeArtworkRecord(item));
 }
 
+function findArtworkRecord(artworkId) {
+  const normalizedArtworkId = String(artworkId || "").trim();
+  if (!normalizedArtworkId) return null;
+
+  return getAllCustomerArtwork().find((item) => item.id === normalizedArtworkId) || null;
+}
+
 export function saveAllCustomerArtwork(artwork) {
   if (!hasBrowserStorage()) return;
   return setJsonStorageItem(STORAGE_KEY, artwork);
@@ -250,6 +258,20 @@ export function saveCustomerArtwork(customerId, artworkInput) {
   if (!saveAllCustomerArtwork(nextArtwork)) {
     throw new Error("Unable to save artwork. Browser storage write failed.");
   }
+
+  addCustomerTimelineEvent(customerId, {
+    eventType: "artwork_uploaded",
+    summary: `Artwork uploaded: ${normalizedArtwork.file_name || normalizedArtwork.name || "Untitled file"}.`,
+    metadata: {
+      artworkId: normalizedArtwork.id,
+      fileName: normalizedArtwork.file_name || normalizedArtwork.name,
+      fileType: normalizedArtwork.file_type,
+      fileSize: normalizedArtwork.file_size,
+      artworkType: normalizedArtwork.artworkType,
+      source: "local",
+    },
+  });
+
   return normalizedArtwork;
 }
 
@@ -285,12 +307,32 @@ export function linkArtworkToOrder(artworkId, orderId) {
   }
 
   const currentRecord = getArtworkMetadataRecord(normalizedArtworkId);
-  return updateArtworkLinks(normalizedArtworkId, "linkedOrderIds", [
-    ...currentRecord.linkedOrderIds,
-    normalizedOrderId,
-  ], {
-    touchLastUsedAt: true,
-  });
+  const alreadyLinked = currentRecord.linkedOrderIds.includes(normalizedOrderId);
+  const nextRecord = alreadyLinked
+    ? currentRecord
+    : updateArtworkLinks(
+        normalizedArtworkId,
+        "linkedOrderIds",
+        [...currentRecord.linkedOrderIds, normalizedOrderId],
+        {
+          touchLastUsedAt: true,
+        }
+      );
+  const artworkRecord = findArtworkRecord(normalizedArtworkId);
+
+  if (!alreadyLinked && artworkRecord?.customer_id) {
+    addCustomerTimelineEvent(artworkRecord.customer_id, {
+      eventType: "artwork_linked_to_order",
+      summary: `Artwork linked to order ${normalizedOrderId}.`,
+      metadata: {
+        artworkId: normalizedArtworkId,
+        artworkName: artworkRecord.file_name || artworkRecord.name,
+        orderId: normalizedOrderId,
+      },
+    });
+  }
+
+  return nextRecord;
 }
 
 export function unlinkArtworkFromOrder(artworkId, orderId) {
@@ -318,10 +360,30 @@ export function linkArtworkToQuote(artworkId, quoteId) {
   }
 
   const currentRecord = getArtworkMetadataRecord(normalizedArtworkId);
-  return updateArtworkLinks(normalizedArtworkId, "linkedQuoteIds", [
-    ...currentRecord.linkedQuoteIds,
-    normalizedQuoteId,
-  ], {
-    touchLastUsedAt: true,
-  });
+  const alreadyLinked = currentRecord.linkedQuoteIds.includes(normalizedQuoteId);
+  const nextRecord = alreadyLinked
+    ? currentRecord
+    : updateArtworkLinks(
+        normalizedArtworkId,
+        "linkedQuoteIds",
+        [...currentRecord.linkedQuoteIds, normalizedQuoteId],
+        {
+          touchLastUsedAt: true,
+        }
+      );
+  const artworkRecord = findArtworkRecord(normalizedArtworkId);
+
+  if (!alreadyLinked && artworkRecord?.customer_id) {
+    addCustomerTimelineEvent(artworkRecord.customer_id, {
+      eventType: "artwork_linked_to_quote",
+      summary: `Artwork linked to quote ${normalizedQuoteId}.`,
+      metadata: {
+        artworkId: normalizedArtworkId,
+        artworkName: artworkRecord.file_name || artworkRecord.name,
+        quoteId: normalizedQuoteId,
+      },
+    });
+  }
+
+  return nextRecord;
 }

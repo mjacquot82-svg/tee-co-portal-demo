@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
+import { addCustomerTimelineEvent } from "../lib/customerTimelineStore";
 import { mergeArtworkCollectionWithOperationalFields } from "../lib/customerArtworkStore";
 import { getOperationalAuthUser } from "../lib/operationalAuthStore";
 
@@ -157,5 +158,32 @@ export async function uploadCustomerArtwork(customerId, file) {
   }
 
   const signedUrl = await createSignedUrl(storagePath);
-  return mergeArtworkCollectionWithOperationalFields([normalizeArtworkRow(data, signedUrl)])[0];
+  const uploadedArtwork = mergeArtworkCollectionWithOperationalFields([
+    normalizeArtworkRow(data, signedUrl),
+  ])[0];
+
+  addCustomerTimelineEvent(customerId, {
+    eventType: "artwork_uploaded",
+    actor: operationalUser
+      ? {
+          id: operationalUser.id,
+          name: operationalUser.name,
+          role: operationalUser.role,
+          email: operationalUser.email,
+          type: "staff",
+        }
+      : undefined,
+    summary: `Artwork uploaded: ${uploadedArtwork.file_name || file.name}.`,
+    metadata: {
+      artworkId: uploadedArtwork.id,
+      fileName: uploadedArtwork.file_name || file.name,
+      fileType: file.type || "",
+      fileSize: file.size || 0,
+      storagePath,
+      uploadedBy,
+      source: "supabase",
+    },
+  });
+
+  return uploadedArtwork;
 }

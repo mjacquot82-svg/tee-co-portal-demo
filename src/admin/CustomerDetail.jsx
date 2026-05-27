@@ -4,6 +4,7 @@ import { updateStoredCustomer, useStoredCustomers } from "../lib/customersStore"
 import { duplicateStoredOrder, getStoredOrders } from "../lib/ordersStore";
 import { getStoredQuickSales } from "../lib/salesStore";
 import CustomerArtworkSection from "../components/CustomerArtworkSection";
+import CustomerTimelineSection from "../components/CustomerTimelineSection";
 import StatusBadge from "../components/StatusBadge";
 
 function currency(value) {
@@ -461,6 +462,8 @@ export default function CustomerDetail() {
       </section>
 
       <div style={{ display: "grid", gap: "18px" }}>
+        <CustomerTimelineSection customerId={customer.id} />
+
         {isEditing ? (
           <section style={sectionCardStyle}>
             <div
