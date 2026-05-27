@@ -6,6 +6,7 @@ import {
   listCustomerArtwork,
   uploadCustomerArtwork,
 } from "../services/customerArtworkService";
+import "./CustomerArtworkSection.css";
 
 const sectionCardStyle = {
   background: "#ffffff",
@@ -34,6 +35,114 @@ function buildFileTypeLabel(fileName) {
   const segments = normalizedName.split(".");
   const extension = segments.length > 1 ? segments.pop() : "";
   return extension ? extension.toUpperCase() : "FILE";
+}
+
+function buildFileTypeGlyph(extension) {
+  switch (String(extension || "").toLowerCase()) {
+    case "pdf":
+      return "PDF";
+    case "svg":
+      return "SVG";
+    case "ai":
+      return "AI";
+    case "png":
+    case "jpg":
+    case "jpeg":
+      return "IMG";
+    default:
+      return "FILE";
+  }
+}
+
+function ArtworkPreview({ file }) {
+  if (file.is_previewable_image && file.preview_url) {
+    return <img src={file.preview_url} alt={file.file_name} className="customer-artwork-preview-image" />;
+  }
+
+  return (
+    <div className="customer-artwork-preview-placeholder" aria-hidden="true">
+      <span className="customer-artwork-preview-glyph">
+        {buildFileTypeGlyph(file.file_extension)}
+      </span>
+      <span className="customer-artwork-preview-label">
+        {buildFileTypeLabel(file.file_name)}
+      </span>
+    </div>
+  );
+}
+
+function ArtworkSkeletonCard() {
+  return (
+    <article className="customer-artwork-card customer-artwork-card-skeleton" aria-hidden="true">
+      <div className="customer-artwork-preview-shell customer-artwork-skeleton-block" />
+      <div className="customer-artwork-card-body">
+        <div className="customer-artwork-skeleton-line customer-artwork-skeleton-line-title" />
+        <div className="customer-artwork-skeleton-line customer-artwork-skeleton-line-date" />
+        <div className="customer-artwork-card-actions">
+          <div className="customer-artwork-skeleton-pill" />
+          <div className="customer-artwork-skeleton-pill" />
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function ArtworkLibrary({ artwork, uploading }) {
+  return (
+    <div className="customer-artwork-library-scroll">
+      <div className="customer-artwork-grid">
+        {uploading ? <ArtworkSkeletonCard /> : null}
+        {artwork.map((file) => (
+          <article key={file.id} className="customer-artwork-card">
+            <div className="customer-artwork-preview-shell">
+              <ArtworkPreview file={file} />
+            </div>
+
+            <div className="customer-artwork-card-body">
+              <div className="customer-artwork-card-copy">
+                <strong className="customer-artwork-file-name" title={file.file_name}>
+                  {file.file_name}
+                </strong>
+                <span className="customer-artwork-file-date">
+                  {formatDateTime(file.uploaded_at) || "Upload date unavailable"}
+                </span>
+              </div>
+
+              <div className="customer-artwork-card-actions">
+                <a
+                  href={file.open_url || file.download_url || "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`customer-artwork-action-link ${
+                    file.open_url || file.download_url ? "" : "is-disabled"
+                  }`}
+                  aria-disabled={!file.open_url && !file.download_url}
+                  onClick={(event) => {
+                    if (!file.open_url && !file.download_url) event.preventDefault();
+                  }}
+                >
+                  Open
+                </a>
+                <a
+                  href={file.download_url || file.open_url || "#"}
+                  download={file.file_name}
+                  className={`customer-artwork-action-link ${
+                    file.download_url || file.open_url ? "" : "is-disabled"
+                  }`}
+                  aria-disabled={!file.download_url && !file.open_url}
+                  onClick={(event) => {
+                    if (!file.download_url && !file.open_url) event.preventDefault();
+                  }}
+                >
+                  Download
+                </a>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function CustomerArtworkSection({ customerId, customerName = "" }) {
@@ -117,6 +226,9 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
     }
   }
 
+  const isLoading = loadState === "loading";
+  const isUploading = uploadState === "uploading";
+
   return (
     <section style={sectionCardStyle}>
       <div
@@ -132,7 +244,7 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
         <div>
           <h2 style={{ margin: 0 }}>Artwork</h2>
           <p style={{ margin: "4px 0 0", color: "#64748b" }}>
-            Upload and reuse customer art files from one operational record.
+            Compact customer artwork library for quick file lookup and reuse.
           </p>
         </div>
 
@@ -141,7 +253,7 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={!isSupabaseConfigured || uploadState === "uploading"}
+            disabled={!isSupabaseConfigured || isUploading}
             style={{
               border: "none",
               background: "#171717",
@@ -149,14 +261,11 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
               borderRadius: "12px",
               padding: "11px 14px",
               fontWeight: 700,
-              cursor:
-                !isSupabaseConfigured || uploadState === "uploading"
-                  ? "not-allowed"
-                  : "pointer",
-              opacity: !isSupabaseConfigured || uploadState === "uploading" ? 0.7 : 1,
+              cursor: !isSupabaseConfigured || isUploading ? "not-allowed" : "pointer",
+              opacity: !isSupabaseConfigured || isUploading ? 0.7 : 1,
             }}
           >
-            {uploadState === "uploading" ? "Uploading..." : "Upload Artwork"}
+            {isUploading ? "Uploading..." : "Upload Artwork"}
           </button>
         </div>
       </div>
@@ -169,19 +278,14 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
         style={{ display: "none" }}
       />
 
-      <div
-        style={{
-          marginBottom: "14px",
-          borderRadius: "14px",
-          background: "#f8fafc",
-          border: "1px solid #e2e8f0",
-          padding: "12px 14px",
-          color: "#475569",
-          fontSize: "13px",
-        }}
-      >
-        Supported formats: PNG, JPG, PDF, SVG, and AI. Files are stored under this customer record
-        {customerName ? ` for ${customerName}` : ""}.
+      <div className="customer-artwork-toolbar">
+        <span>
+          Supported formats: PNG, JPG, PDF, SVG, and AI. Files are stored under this customer
+          record{customerName ? ` for ${customerName}` : ""}.
+        </span>
+        <span>
+          Newest first{artwork.length > 8 ? " • Scroll to browse full history" : ""}.
+        </span>
       </div>
 
       {uploadError ? (
@@ -213,114 +317,22 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
         >
           {loadError}
         </div>
-      ) : loadState === "loading" ? (
-        <p style={{ margin: 0, color: "#64748b" }}>Loading artwork library...</p>
-      ) : artwork.length ? (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-            gap: "14px",
-          }}
-        >
-          {artwork.map((file) => (
-            <article
-              key={file.id}
-              style={{
-                border: "1px solid #e2e8f0",
-                borderRadius: "16px",
-                padding: "12px",
-                background: "#f8fafc",
-              }}
-            >
-              <div
-                style={{
-                  height: "140px",
-                  borderRadius: "12px",
-                  background: "#ffffff",
-                  border: "1px solid #e2e8f0",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  overflow: "hidden",
-                  color: "#64748b",
-                  marginBottom: "10px",
-                }}
-              >
-                {file.is_previewable_image && file.preview_url ? (
-                  <img
-                    src={file.preview_url}
-                    alt={file.file_name}
-                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      display: "grid",
-                      gap: "6px",
-                      justifyItems: "center",
-                      textAlign: "center",
-                      padding: "14px",
-                    }}
-                  >
-                    <strong style={{ fontSize: "18px", color: "#0f172a" }}>
-                      {buildFileTypeLabel(file.file_name)}
-                    </strong>
-                    <span style={{ fontSize: "12px" }}>Preview not available</span>
-                  </div>
-                )}
-              </div>
-
-              <strong
-                style={{
-                  display: "block",
-                  fontSize: "14px",
-                  overflowWrap: "anywhere",
-                }}
-              >
-                {file.file_name}
-              </strong>
-
-              <span style={{ display: "block", color: "#64748b", fontSize: "12px", marginTop: "4px" }}>
-                Uploaded {formatDateTime(file.uploaded_at) || "—"}
-              </span>
-
-              {file.uploaded_by ? (
-                <span
-                  style={{ display: "block", color: "#64748b", fontSize: "12px", marginTop: "4px" }}
-                >
-                  By {file.uploaded_by}
-                </span>
-              ) : null}
-
-              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "10px" }}>
-                {file.open_url ? (
-                  <a
-                    href={file.open_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ fontSize: "12px", fontWeight: 800, color: "#0f172a" }}
-                  >
-                    Open
-                  </a>
-                ) : null}
-                {file.download_url ? (
-                  <a
-                    href={file.download_url}
-                    download={file.file_name}
-                    style={{ fontSize: "12px", fontWeight: 800, color: "#0f172a" }}
-                  >
-                    Download
-                  </a>
-                ) : null}
-              </div>
-            </article>
-          ))}
+      ) : isLoading ? (
+        <div className="customer-artwork-grid" aria-label="Loading artwork library">
+          <ArtworkSkeletonCard />
+          <ArtworkSkeletonCard />
+          <ArtworkSkeletonCard />
+          <ArtworkSkeletonCard />
         </div>
+      ) : artwork.length ? (
+        <ArtworkLibrary artwork={artwork} uploading={isUploading} />
+      ) : isUploading ? (
+        <ArtworkLibrary artwork={artwork} uploading={isUploading} />
       ) : (
-        <p style={{ margin: 0, color: "#94a3b8" }}>
-          No artwork has been uploaded for this customer yet.
-        </p>
+        <div className="customer-artwork-empty-state">
+          <strong>No artwork uploaded yet.</strong>
+          <span>Upload the first customer file to start a reusable artwork library.</span>
+        </div>
       )}
     </section>
   );
