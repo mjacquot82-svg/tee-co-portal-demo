@@ -2,134 +2,202 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "@playwright/test";
+import {
+  getOperationalConfig,
+  loginThroughOperationalPin,
+} from "./helpers/operationalPlaywright.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const APP_URL = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:5173";
-const STAFF_PIN = process.env.PLAYWRIGHT_STAFF_PIN || "1234";
-const STAFF_ACCOUNT_TEXT = process.env.PLAYWRIGHT_STAFF_ACCOUNT_TEXT || "";
-const TARGET_CUSTOMER_TEXT = process.env.PLAYWRIGHT_CUSTOMER_TEXT || "";
 const ARTWORK_FIXTURE_PATH = path.resolve(__dirname, "../public/icon-192.png");
 const ARTWORK_FIXTURE_NAME = path.basename(ARTWORK_FIXTURE_PATH);
+function getArtworkSection(page) {
+  return page.getByTestId("customer-artwork-section");
+}
 
-async function selectOperationalStaffAccount(page) {
-  const staffAccountSelect = page.getByTestId("staff-pin-account-select");
-  await expect(staffAccountSelect).toBeVisible();
-
-  const optionLabels = await staffAccountSelect.locator("option").evaluateAll((options) =>
-    options.map((option) => option.textContent?.trim() || "")
+function getArtworkCardById(scope, artworkId) {
+  return scope.locator(
+    `[data-testid="artwork-thumbnail"][data-artwork-id="${artworkId.replace(/"/g, '\\"')}"]`
   );
-
-  const preferredOption =
-    optionLabels.find((label) => STAFF_ACCOUNT_TEXT && label.includes(STAFF_ACCOUNT_TEXT)) ||
-    optionLabels.find((label) => /\((Owner|Manager)\)/.test(label)) ||
-    optionLabels[0];
-
-  if (preferredOption) {
-    await staffAccountSelect.selectOption({ label: preferredOption });
-  }
 }
 
-async function loginThroughOperationalPin(page) {
-  await selectOperationalStaffAccount(page);
-  await page.getByTestId("staff-pin-input").fill(STAFF_PIN);
-  await page.getByTestId("staff-pin-submit").click();
-
-  const loginError = page.getByText("That PIN does not match the selected staff member.");
-
-  try {
-    await Promise.race([
-      page.waitForURL((url) => url.pathname === "/admin/customers", { timeout: 10_000 }),
-      loginError.waitFor({ state: "visible", timeout: 10_000 }).then(() => {
-        throw new Error(
-          "Operational PIN login failed. Set PLAYWRIGHT_STAFF_PIN and, if needed, PLAYWRIGHT_STAFF_ACCOUNT_TEXT for a manager or owner account in this workspace."
-        );
-      }),
-    ]);
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-
-    throw new Error(
-      "Operational PIN login did not reach /admin/customers. Verify the workspace has an owner or manager account and set PLAYWRIGHT_STAFF_PIN if the default PIN does not apply."
-    );
-  }
-
-  await expect.poll(() => new URL(page.url()).pathname).toBe("/admin/customers");
-}
-
-async function openExistingCustomer(page) {
+async function openExistingCustomer(page, config) {
   const customerRecords = page.getByTestId("customer-record-link");
   await expect(customerRecords.first()).toBeVisible();
 
-  if (TARGET_CUSTOMER_TEXT) {
-    const targetedCustomer = customerRecords.filter({ hasText: TARGET_CUSTOMER_TEXT }).first();
-    await expect(targetedCustomer).toBeVisible();
-    await targetedCustomer.click();
-    return;
-  }
+  const targetedCustomer = customerRecords.filter({ hasText: config.customerText }).first();
+  await expect(
+    targetedCustomer,
+    `Unable to find a customer record containing "${config.customerText}".`
+  ).toBeVisible();
+  await targetedCustomer.click();
+}
 
-  await customerRecords.first().click();
+async function waitForArtworkLibraryReady(page) {
+  const artworkSection = getArtworkSection(page);
+  await expect(artworkSection).toBeVisible();
+  await expect(artworkSection.getByTestId("artwork-upload-button")).toBeVisible();
+  await expect(artworkSection.locator(".customer-artwork-card-skeleton")).toHaveCount(0);
+  return artworkSection;
+}
+
+async function captureArtworkSnapshot(artworkSection) {
+  return artworkSection.getByTestId("artwork-thumbnail").evaluateAll((cards) =>
+    cards.map((card) => ({
+      artworkId: card.getAttribute("data-artwork-id") || "",
+      fileName:
+        card.querySelector(".customer-artwork-file-name")?.textContent?.trim() ||
+        card.textContent?.trim() ||
+        "",
+    }))
+  );
+}
+
+async function uploadArtworkAndWaitForPersistence(artworkSection) {
+  const uploadButton = artworkSection.getByTestId("artwork-upload-button");
+  const uploadInput = artworkSection.getByTestId("artwork-upload-input");
+  const beforeUploadSnapshot = await captureArtworkSnapshot(artworkSection);
+  const knownArtworkIds = new Set(
+    beforeUploadSnapshot.map((entry) => entry.artworkId).filter(Boolean)
+  );
+  const initialFixtureCount = beforeUploadSnapshot.filter(
+    (entry) => entry.fileName === ARTWORK_FIXTURE_NAME
+  ).length;
+
+  // Upload through the real hidden input so the workflow still exercises Supabase-backed storage.
+  await uploadInput.setInputFiles(ARTWORK_FIXTURE_PATH);
+
+  // Wait for the UI upload cycle to complete before asserting persisted artwork state.
+  await expect
+    .poll(
+      async () => ({
+        label: (await uploadButton.textContent())?.trim() || "",
+        disabled: await uploadButton.isDisabled(),
+      }),
+      {
+        message: "Expected the artwork upload control to return to its idle state after upload.",
+        timeout: 30_000,
+      }
+    )
+    .toEqual({ label: "Upload Artwork", disabled: false });
+  await expect(artworkSection.locator(".customer-artwork-card-skeleton")).toHaveCount(0, {
+    timeout: 30_000,
+  });
+
+  let uploadedArtworkId = "";
+  await expect
+    .poll(
+      async () => {
+        const currentSnapshot = await captureArtworkSnapshot(artworkSection);
+        const uploadedArtwork = currentSnapshot.find(
+          (entry) =>
+            entry.fileName === ARTWORK_FIXTURE_NAME &&
+            entry.artworkId &&
+            !knownArtworkIds.has(entry.artworkId)
+        );
+
+        uploadedArtworkId = uploadedArtwork?.artworkId || "";
+        return uploadedArtworkId;
+      },
+      {
+        message:
+          "Expected a newly persisted artwork card with a fresh data-artwork-id after upload hydration.",
+        timeout: 30_000,
+      }
+    )
+    .not.toBe("");
+
+  const uploadedArtworkCard = getArtworkCardById(artworkSection, uploadedArtworkId);
+  await expect(uploadedArtworkCard).toBeVisible();
+  await expect(uploadedArtworkCard).toContainText(ARTWORK_FIXTURE_NAME);
+  await expect(uploadedArtworkCard.getByTestId("artwork-thumbnail-button")).toBeVisible();
+
+  await expect
+    .poll(
+      async () =>
+        (await captureArtworkSnapshot(artworkSection)).filter(
+          (entry) => entry.fileName === ARTWORK_FIXTURE_NAME
+        ).length,
+      {
+        message: `Expected ${ARTWORK_FIXTURE_NAME} to remain present after upload hydration completes.`,
+        timeout: 30_000,
+      }
+    )
+    .toBe(initialFixtureCount + 1);
+
+  return {
+    uploadedArtworkId,
+    expectedFixtureCount: initialFixtureCount + 1,
+  };
+}
+
+async function reloadAndWaitForPersistedArtwork(page, uploadedArtworkId, expectedFixtureCount) {
+  // Refreshing here proves the artwork survives a full read-back from Supabase instead of only local optimistic state.
+  await page.reload();
+
+  const artworkSection = await waitForArtworkLibraryReady(page);
+  const persistedArtworkCard = getArtworkCardById(artworkSection, uploadedArtworkId);
+
+  await expect
+    .poll(
+      async () =>
+        (await captureArtworkSnapshot(artworkSection)).filter(
+          (entry) => entry.fileName === ARTWORK_FIXTURE_NAME
+        ).length,
+      {
+        message: `Expected ${ARTWORK_FIXTURE_NAME} to remain visible after refresh.`,
+        timeout: 30_000,
+      }
+    )
+    .toBe(expectedFixtureCount);
+
+  await expect(
+    persistedArtworkCard,
+    `Persisted artwork card ${uploadedArtworkId} did not return after refresh.`
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(persistedArtworkCard).toContainText(ARTWORK_FIXTURE_NAME);
+  await expect(persistedArtworkCard.getByTestId("artwork-thumbnail-button")).toBeVisible();
+
+  return { artworkSection, persistedArtworkCard };
+}
+
+async function openArtworkModalAndVerify(page, artworkCard, uploadedArtworkId) {
+  // Opening the persisted card validates that downstream staff lookup still works against the exact uploaded record.
+  await artworkCard.getByTestId("artwork-thumbnail-button").click();
+
+  const artworkDetailModal = page.getByTestId("artwork-detail-modal");
+  await expect(artworkDetailModal).toBeVisible();
+  await expect(artworkDetailModal).toHaveAttribute("data-artwork-id", uploadedArtworkId);
+  await expect(artworkDetailModal).toContainText("Artwork Detail");
+  await expect(artworkDetailModal).toContainText(ARTWORK_FIXTURE_NAME);
+  await expect(artworkDetailModal.getByText("Metadata")).toBeVisible();
+  await expect(artworkDetailModal.getByTestId("artwork-metadata-badges")).toBeVisible();
+  await expect(artworkDetailModal.getByText("Filename")).toBeVisible();
+  await expect(artworkDetailModal.getByRole("link", { name: "Open" })).toBeVisible();
+  await expect(artworkDetailModal.getByRole("link", { name: "Download" })).toBeVisible();
 }
 
 test("customer artwork uploads persist across refreshes", async ({ page }) => {
-  // Step 1: Open the live local workspace so the test exercises the same entry point staff use in production.
-  await page.goto(`${APP_URL}/login?redirectTo=/admin/customers`);
+  const config = getOperationalConfig();
 
-  // Step 2: Authenticate through the operational PIN workflow instead of bypassing session creation.
-  await loginThroughOperationalPin(page);
+  // Open the real operational login entry point instead of bypassing the staff session workflow.
+  await page.goto("/login?redirectTo=/admin/customers");
 
-  // Step 3: Open an existing customer record because artwork persistence is tied to a real customer library.
-  await openExistingCustomer(page);
-  await expect(page.getByTestId("customer-artwork-section")).toBeVisible();
+  // Authenticate through the live PIN flow so this regression covers the same path staff actually use.
+  await loginThroughOperationalPin(page, config, "/admin/customers");
 
-  const artworkSection = page.getByTestId("customer-artwork-section");
-  const matchingThumbnails = artworkSection
-    .getByTestId("artwork-thumbnail")
-    .filter({ hasText: ARTWORK_FIXTURE_NAME });
-  const initialMatchingCount = await matchingThumbnails.count();
+  // Load the configured customer because artwork persistence is scoped to a real customer library record.
+  await openExistingCustomer(page, config);
+  const artworkSection = await waitForArtworkLibraryReady(page);
 
-  // Step 4: Upload a real image fixture through the actual hidden file input used by staff.
-  await artworkSection.getByTestId("artwork-upload-input").setInputFiles(ARTWORK_FIXTURE_PATH);
+  const { uploadedArtworkId, expectedFixtureCount } =
+    await uploadArtworkAndWaitForPersistence(artworkSection);
 
-  // Step 5: Confirm the uploaded artwork appears in the customer artwork library before moving on.
-  await expect
-    .poll(async () => await matchingThumbnails.count(), {
-      message: `expected a new ${ARTWORK_FIXTURE_NAME} thumbnail to appear after upload`,
-    })
-    .toBe(initialMatchingCount + 1);
+  const { persistedArtworkCard } = await reloadAndWaitForPersistedArtwork(
+    page,
+    uploadedArtworkId,
+    expectedFixtureCount
+  );
 
-  const uploadedThumbnail = matchingThumbnails.first();
-  await expect(uploadedThumbnail).toBeVisible();
-
-  // Step 6: Refresh the page to prove the artwork reloads from the persisted Supabase-backed source of truth.
-  await page.reload();
-  await expect(page.getByTestId("customer-artwork-section")).toBeVisible();
-
-  // Step 7: Verify the uploaded artwork still exists after refresh, which confirms persistence rather than optimistic UI only.
-  const persistedThumbnails = page
-    .getByTestId("customer-artwork-section")
-    .getByTestId("artwork-thumbnail")
-    .filter({ hasText: ARTWORK_FIXTURE_NAME });
-  await expect
-    .poll(async () => await persistedThumbnails.count(), {
-      message: `expected ${ARTWORK_FIXTURE_NAME} to remain visible after refresh`,
-    })
-    .toBe(initialMatchingCount + 1);
-
-  const persistedThumbnail = persistedThumbnails.first();
-  await expect(persistedThumbnail).toBeVisible();
-
-  // Step 8: Open the artwork detail modal from the persisted record to validate downstream operational access.
-  await persistedThumbnail.getByTestId("artwork-thumbnail-button").click();
-
-  // Step 9: Confirm the detail modal loads with the expected artifact metadata and actions.
-  const artworkDetailModal = page.getByTestId("artwork-detail-modal");
-  await expect(artworkDetailModal).toBeVisible();
-  await expect(artworkDetailModal).toContainText("Artwork Detail");
-  await expect(artworkDetailModal).toContainText(ARTWORK_FIXTURE_NAME);
-  await expect(artworkDetailModal.getByRole("link", { name: "Open" })).toBeVisible();
-  await expect(artworkDetailModal.getByRole("link", { name: "Download" })).toBeVisible();
+  await openArtworkModalAndVerify(page, persistedArtworkCard, uploadedArtworkId);
 });

@@ -22,6 +22,8 @@ export default function AssignmentPanel({
 
   return (
     <section
+      data-testid="order-assignment-panel"
+      data-workflow-state={order.status || ""}
       style={{
         background: "#ffffff",
         border: "1px solid #e2e8f0",
@@ -36,6 +38,7 @@ export default function AssignmentPanel({
           <strong>Assigned Staff</strong>
           <div style={{ marginTop: "8px" }}>
             <span
+              data-testid="assigned-staff-value"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -65,6 +68,7 @@ export default function AssignmentPanel({
           <strong>Production Owner</strong>
           <div style={{ marginTop: "8px" }}>
             <span
+              data-testid="production-owner-value"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -87,6 +91,7 @@ export default function AssignmentPanel({
           <label style={{ display: "grid", gap: "6px" }}>
             Assign or Reassign
             <select
+              data-testid="assignment-select"
               value={order.assigned_to_staff_id || ""}
               onChange={(event) => onAssign(event.target.value)}
               style={{
@@ -154,6 +159,9 @@ export default function AssignmentPanel({
                 <button
                   key={action.key}
                   type="button"
+                  data-testid="workflow-action-button"
+                  data-action-key={action.key}
+                  data-target-status={action.targetStatus || ""}
                   onClick={() => onRunWorkflowAction?.(action, order)}
                   style={{
                     background: action.targetStatus === "On Hold" ? "#fff1f2" : "#171717",

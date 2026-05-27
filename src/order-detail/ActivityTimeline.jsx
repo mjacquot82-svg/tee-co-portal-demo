@@ -9,6 +9,7 @@ export default function ActivityTimeline({ events = [], compact = false }) {
 
   return (
     <section
+      data-testid="activity-timeline"
       style={{
         background: "#ffffff",
         border: "1px solid #e2e8f0",
@@ -33,6 +34,8 @@ export default function ActivityTimeline({ events = [], compact = false }) {
           {events.map((event, index) => (
             <article
               key={event.id || index}
+              data-testid="activity-timeline-item"
+              data-event-type={event.type || event.event_type || ""}
               style={{
                 borderLeft: event.type === "canceled" ? "4px solid #b91c1c" : "4px solid #171717",
                 background: event.type === "canceled" ? "#fff5f5" : "#f8fafc",
@@ -40,12 +43,13 @@ export default function ActivityTimeline({ events = [], compact = false }) {
                 padding: itemPadding,
               }}
             >
-              <strong>
+              <strong data-testid="activity-timeline-item-note">
                 {event.type === "canceled" ? "Canceled: " : ""}
                 {event.note || "Order activity recorded."}
               </strong>
 
               <div
+                data-testid="activity-timeline-item-meta"
                 style={{
                   marginTop: metaMarginTop,
                   color: "#64748b",

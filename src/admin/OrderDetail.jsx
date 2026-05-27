@@ -258,7 +258,13 @@ export default function OrderDetail() {
   const sizeBreakdownEntries = buildSizeBreakdownEntries(order.size_breakdown);
   const printOrder = normalizedOrder || order;
   return (
-    <div className="order-detail-page" style={{ maxWidth: "1280px", margin: "0 auto", padding: "24px" }}>
+    <div
+      className="order-detail-page"
+      data-testid="order-detail-page"
+      data-order-number={order.order_number || orderNumber}
+      data-workflow-state={order.status || ""}
+      style={{ maxWidth: "1280px", margin: "0 auto", padding: "24px" }}
+    >
       <div
         style={{
           display: "flex",
@@ -288,6 +294,7 @@ export default function OrderDetail() {
           </h1>
 
           <div
+            data-testid="order-detail-status-summary"
             style={{
               display: "flex",
               gap: "10px",
@@ -295,7 +302,9 @@ export default function OrderDetail() {
               flexWrap: "wrap",
             }}
           >
-            <StatusBadge status={order.status} />
+            <span data-testid="order-detail-current-status" data-workflow-state={order.status || ""}>
+              <StatusBadge status={order.status} />
+            </span>
 
             <span
               style={{

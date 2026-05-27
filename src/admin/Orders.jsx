@@ -26,7 +26,7 @@ import { sortQueueByPriority } from "../queue/buildQueuePriority";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 import { getOperationalOrdersForStaff, isStaffWorkspaceView } from "./adminRoleView";
 
-function FilterPill({ active, children, count, tone = "default", onClick }) {
+function FilterPill({ active, children, count, tone = "default", onClick, testId }) {
   const activeBackground =
     tone === "warning"
       ? "#9a3412"
@@ -41,6 +41,7 @@ function FilterPill({ active, children, count, tone = "default", onClick }) {
   return (
     <button
       type="button"
+      data-testid={testId}
       onClick={onClick}
       style={{
         border: active ? `1px solid ${activeBackground}` : "1px solid #d6dbe4",
@@ -152,6 +153,9 @@ function QueueActionButton({ action, onClick, emphasis = "secondary" }) {
   return (
     <button
       type="button"
+      data-testid="production-workflow-action"
+      data-action-key={action.key}
+      data-target-status={action.targetStatus || ""}
       onClick={onClick}
       style={{
         border: isHoldAction
@@ -181,6 +185,9 @@ function QueueRow({ order, onRunAction, onOpenDetail }) {
 
   return (
     <article
+      data-testid="production-queue-row"
+      data-order-number={order.order_number || ""}
+      data-workflow-state={order.workflow_state || order.status || ""}
       style={{
         display: "grid",
         gridTemplateColumns: "minmax(0, 2.3fr) minmax(0, 0.8fr) minmax(0, 0.9fr) auto",
@@ -196,6 +203,7 @@ function QueueRow({ order, onRunAction, onOpenDetail }) {
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           <button
             type="button"
+            data-testid="production-queue-open-detail"
             onClick={() => onOpenDetail(order)}
             style={{
               border: "none",
@@ -209,6 +217,14 @@ function QueueRow({ order, onRunAction, onOpenDetail }) {
             {order.order_number}
           </button>
           <StatusBadge status={order.workflow_state || order.status} />
+          <span
+            data-testid="production-queue-row-status"
+            data-workflow-state={order.workflow_state || order.status || ""}
+            style={{ display: "none" }}
+            aria-hidden="true"
+          >
+            {order.workflow_state || order.status}
+          </span>
           {priority.overdue ? <QueueFlag label="Overdue" tone="danger" /> : null}
           {!priority.overdue && priority.dueSoon ? <QueueFlag label="Due Soon" tone="warning" /> : null}
           {order.rush_active ? <QueueFlag label="Rush" tone="warning" /> : null}
@@ -235,10 +251,10 @@ function QueueRow({ order, onRunAction, onOpenDetail }) {
           <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 800, textTransform: "uppercase" }}>
             Assignment
           </span>
-          <strong>{order.assigned_to_staff_name}</strong>
-          <span style={{ color: "#64748b", fontSize: "13px" }}>
-          Owner: {order.production_owner_staff_name || "Unassigned"}
-        </span>
+          <span data-testid="production-queue-row-assignment">{order.assigned_to_staff_name}</span>
+          <span data-testid="production-queue-row-owner" style={{ color: "#64748b", fontSize: "13px" }}>
+            Owner: {order.production_owner_staff_name || "Unassigned"}
+          </span>
       </div>
 
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
@@ -254,6 +270,7 @@ function QueueRow({ order, onRunAction, onOpenDetail }) {
             ))}
             <button
               type="button"
+              data-testid="production-queue-row-details"
               onClick={() => onOpenDetail(order)}
               style={{
                 border: "1px solid #cbd5e1",
@@ -272,6 +289,7 @@ function QueueRow({ order, onRunAction, onOpenDetail }) {
         ) : (
           <button
             type="button"
+            data-testid="production-queue-row-details"
             onClick={() => onOpenDetail(order)}
             style={{
               border: "1px solid #cbd5e1",
@@ -312,6 +330,9 @@ function ProductionDetailDrawer({
 
   return (
     <aside
+      data-testid="production-queue-detail-drawer"
+      data-order-number={order.order_number || ""}
+      data-workflow-state={order.workflow_state || order.status || ""}
       style={{
         position: "sticky",
         top: "24px",
@@ -331,6 +352,7 @@ function ProductionDetailDrawer({
         </div>
         <button
           type="button"
+          data-testid="production-queue-detail-close"
           onClick={onClose}
           style={{
             border: "1px solid #cbd5e1",
@@ -361,6 +383,7 @@ function ProductionDetailDrawer({
             Assignment
           </span>
           <select
+            data-testid="production-queue-detail-assignment-select"
             value={order.assigned_to_staff_id || ""}
             onChange={(event) => onAssign(order, event.target.value)}
             style={{
@@ -379,7 +402,9 @@ function ProductionDetailDrawer({
             ))}
           </select>
           <span style={{ color: "#64748b", fontSize: "13px" }}>
+            <span data-testid="production-queue-detail-owner">
             Owner: {order.production_owner_staff_name || "Unassigned"}
+            </span>
           </span>
         </div>
 
@@ -531,6 +556,7 @@ function ProductionDetailDrawer({
       <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
         <Link
           to={`/admin/orders/${order.order_number}`}
+          data-testid="production-queue-detail-open-full-order"
           style={{
             textDecoration: "none",
             border: "1px solid #171717",
@@ -696,7 +722,7 @@ export default function Orders() {
   }
 
   return (
-    <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "24px" }}>
+    <div data-testid="production-queue-page" style={{ maxWidth: "1280px", margin: "0 auto", padding: "24px" }}>
       <div style={{ display: "grid", gridTemplateColumns: selectedOrder ? "minmax(0, 1.8fr) minmax(320px, 0.95fr)" : "minmax(0, 1fr)", gap: "18px", alignItems: "start" }}>
         <div
           style={{
@@ -790,6 +816,7 @@ export default function Orders() {
             {PRODUCTION_STATUS_FILTERS.map((filter) => (
               <FilterPill
                 key={filter.key}
+                testId={`production-status-filter-${filter.key}`}
                 active={activeStatusFilter === filter.key}
                 count={statusCounts[filter.key] || 0}
                 tone={
@@ -868,6 +895,7 @@ export default function Orders() {
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
             <input
               type="search"
+              data-testid="production-queue-search"
               value={searchTerm}
               onChange={(event) => updateFilters({ q: event.target.value })}
               placeholder="Search order, customer, garment, artwork, staff"

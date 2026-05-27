@@ -10,6 +10,8 @@ export default function ProductionProgressTracker({ order }) {
 
   return (
     <section
+      data-testid="production-progress-tracker"
+      data-workflow-state={order.status || ""}
       style={{
         background: "#ffffff",
         border: "1px solid #e2e8f0",
@@ -33,6 +35,9 @@ export default function ProductionProgressTracker({ order }) {
           return (
             <div
               key={stage}
+              data-testid="production-progress-stage"
+              data-stage={stage}
+              data-stage-state={active ? "active" : complete ? "complete" : "pending"}
               style={{
                 border: active
                   ? isOnHold
