@@ -400,24 +400,8 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
       }
 
       try {
-        console.info("[CustomerArtworkSection] loadArtwork start", {
-          customerId,
-          customerName,
-        });
         const loadedArtwork = await listCustomerArtwork(customerId);
         if (!isActive) return;
-        console.info("[CustomerArtworkSection] loadArtwork success", {
-          customerId,
-          customerName,
-          artworkCount: loadedArtwork.length,
-          artworkCustomerIds: Array.from(
-            new Set(
-              loadedArtwork
-                .map((entry) => String(entry?.customer_id || "").trim())
-                .filter(Boolean)
-            )
-          ),
-        });
         setArtwork(loadedArtwork);
         setSelectedArtworkId((currentSelectedArtworkId) =>
           loadedArtwork.some((entry) => entry.id === currentSelectedArtworkId)
@@ -445,7 +429,7 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
     return () => {
       isActive = false;
     };
-  }, [customerId]);
+  }, [customerId, customerName]);
 
   async function handleFileSelection(event) {
     const selectedFile = event.target.files?.[0];

@@ -143,30 +143,11 @@ async function fetchCustomerArtworkRows(customerId) {
   const lookupCandidates = buildCustomerIdLookupCandidates(customerId);
 
   for (const lookupCustomerId of lookupCandidates) {
-    console.info("[customerArtworkService] fetchCustomerArtworkRows lookup", {
-      requestedCustomerId: normalizeCustomerId(customerId),
-      lookupCustomerId,
-      query: `.eq("customer_id", "${lookupCustomerId}")`,
-    });
-
     const rows = await fetchCustomerArtworkRowsById(lookupCustomerId);
     if (rows.length > 0) {
-      console.info("[customerArtworkService] fetchCustomerArtworkRows matched", {
-        requestedCustomerId: normalizeCustomerId(customerId),
-        matchedCustomerId: lookupCustomerId,
-        rowCount: rows.length,
-        rowCustomerIds: Array.from(
-          new Set(rows.map((row) => normalizeCustomerId(row?.customer_id)).filter(Boolean))
-        ),
-      });
       return rows;
     }
   }
-
-  console.warn("[customerArtworkService] fetchCustomerArtworkRows found no rows", {
-    requestedCustomerId: normalizeCustomerId(customerId),
-    lookupCandidates,
-  });
 
   return [];
 }
@@ -495,12 +476,6 @@ export async function listCustomerArtwork(customerId) {
   const normalizedCustomerId = normalizeCustomerId(customerId);
   if (!normalizedCustomerId) return [];
 
-  console.info("[customerArtworkService] listCustomerArtwork start", {
-    customerId,
-    normalizedCustomerId,
-    lookupCandidates: buildCustomerIdLookupCandidates(normalizedCustomerId),
-  });
-
   let rows = await fetchCustomerArtworkRows(normalizedCustomerId);
   rows = await migrateArtworkRowsToCanonicalCustomerId(rows, normalizedCustomerId);
   const migratedCount = await migrateLegacyArtworkForCustomer(normalizedCustomerId, rows);
@@ -508,15 +483,6 @@ export async function listCustomerArtwork(customerId) {
     rows = await fetchCustomerArtworkRows(normalizedCustomerId);
     rows = await migrateArtworkRowsToCanonicalCustomerId(rows, normalizedCustomerId);
   }
-
-  console.info("[customerArtworkService] listCustomerArtwork complete", {
-    customerId,
-    normalizedCustomerId,
-    rowCount: rows.length,
-    rowCustomerIds: Array.from(
-      new Set(rows.map((row) => normalizeCustomerId(row?.customer_id)).filter(Boolean))
-    ),
-  });
 
   return hydrateArtworkRows(rows);
 }
