@@ -1,4 +1,5 @@
 import { normalizeProductionType } from "../constants/productionTypes";
+import { normalizeWorkflowState } from "../lib/operationalWorkflow";
 
 export const OPERATIONAL_ORDER_STATUSES = [
   "New",
@@ -26,22 +27,24 @@ export const OPERATIONAL_STATUS_PROGRESS_STAGES = [
 export const PRODUCTION_WORKFLOW_EVENT_TYPES = [
   "moved_to_production",
   "production_started",
+  "moved_to_printing",
   "moved_to_qc",
   "ready_for_pickup",
   "order_completed",
   "order_on_hold",
+  "resumed_from_hold",
   "production_assignment_changed",
 ];
 
 export const PRODUCTION_WORKFLOW_ACTIONS = [
   "move_to_production",
-  "mark_printing_started",
-  "mark_embroidery_started",
+  "start_printing",
+  "start_embroidery",
   "move_to_qc",
-  "mark_qc_complete",
   "mark_ready_for_pickup",
   "complete_order",
   "put_on_hold",
+  "resume_from_hold",
 ];
 
 const ACTIVE_OPERATIONAL_STATUSES = new Set(
@@ -88,15 +91,15 @@ const ACTION_DEFINITIONS = {
     targetStatus: "Ready For Production",
     eventType: "moved_to_production",
   },
-  mark_printing_started: {
-    key: "mark_printing_started",
-    label: "Mark Printing Started",
+  start_printing: {
+    key: "start_printing",
+    label: "Start Printing",
     targetStatus: "Printing",
-    eventType: "production_started",
+    eventTypes: ["production_started", "moved_to_printing"],
   },
-  mark_embroidery_started: {
-    key: "mark_embroidery_started",
-    label: "Mark Embroidery Started",
+  start_embroidery: {
+    key: "start_embroidery",
+    label: "Start Embroidery",
     targetStatus: "Embroidery",
     eventType: "production_started",
   },
@@ -105,12 +108,6 @@ const ACTION_DEFINITIONS = {
     label: "Move To QC",
     targetStatus: "QC / Finishing",
     eventType: "moved_to_qc",
-  },
-  mark_qc_complete: {
-    key: "mark_qc_complete",
-    label: "Mark QC Complete",
-    targetStatus: "Ready For Pickup",
-    eventType: "ready_for_pickup",
   },
   mark_ready_for_pickup: {
     key: "mark_ready_for_pickup",
@@ -130,6 +127,12 @@ const ACTION_DEFINITIONS = {
     targetStatus: "On Hold",
     eventType: "order_on_hold",
   },
+  resume_from_hold: {
+    key: "resume_from_hold",
+    label: "Resume From Hold",
+    targetStatus: "Ready For Production",
+    eventType: "resumed_from_hold",
+  },
 };
 
 function normalize(value) {
@@ -146,6 +149,10 @@ export function normalizeOperationalStatus(status) {
 
   const alias = STATUS_ALIASES[normalize(trimmed)];
   return alias || trimmed;
+}
+
+export function getOrderWorkflowState(order = {}) {
+  return normalizeWorkflowState(order.workflow_state || order.status || "Draft");
 }
 
 export function getOperationalStatusIndex(status) {
@@ -213,8 +220,8 @@ export function getNextOperationalStatus(status) {
 export function getPreferredProductionStartAction(order = {}) {
   const decorationType = buildDecorationLookup(order);
   return decorationType === "Embroidery"
-    ? ACTION_DEFINITIONS.mark_embroidery_started
-    : ACTION_DEFINITIONS.mark_printing_started;
+    ? ACTION_DEFINITIONS.start_embroidery
+    : ACTION_DEFINITIONS.start_printing;
 }
 
 export function getProductionWorkflowAction(actionKey) {
@@ -222,7 +229,7 @@ export function getProductionWorkflowAction(actionKey) {
 }
 
 export function getAvailableProductionActions(order = {}, options = {}) {
-  const status = normalizeOperationalStatus(order.status);
+  const status = getOrderWorkflowState(order);
   const compact = options.compact === true;
   const actions = [];
   const preferredStartAction = getPreferredProductionStartAction(order);
@@ -232,31 +239,42 @@ export function getAvailableProductionActions(order = {}, options = {}) {
   }
 
   if (status === "On Hold") {
-    actions.push(ACTION_DEFINITIONS.move_to_production);
+    const previousStatus = String(order.production_hold_previous_status || "").trim();
+    actions.push({
+      ...ACTION_DEFINITIONS.resume_from_hold,
+      targetStatus: previousStatus
+        ? normalizeOperationalStatus(previousStatus)
+        : "Ready For Production",
+    });
     if (!compact) {
       actions.push(ACTION_DEFINITIONS.complete_order);
     }
     return actions;
   }
 
-  if (["New", "Awaiting Deposit"].includes(status)) {
+  if (["Draft", "Approved", "New", "Awaiting Deposit"].includes(status)) {
     actions.push(ACTION_DEFINITIONS.move_to_production);
   } else if (status === "Ready For Production") {
     actions.push(preferredStartAction);
     if (!compact) {
       const alternateStartAction =
-        preferredStartAction.key === "mark_printing_started"
-          ? ACTION_DEFINITIONS.mark_embroidery_started
-          : ACTION_DEFINITIONS.mark_printing_started;
+        preferredStartAction.key === "start_printing"
+          ? ACTION_DEFINITIONS.start_embroidery
+          : ACTION_DEFINITIONS.start_printing;
       actions.push(alternateStartAction);
+      actions.push(ACTION_DEFINITIONS.put_on_hold);
     }
   } else if (["Printing", "Embroidery"].includes(status)) {
     actions.push(ACTION_DEFINITIONS.move_to_qc);
     if (!compact) {
       actions.push(ACTION_DEFINITIONS.mark_ready_for_pickup);
+      actions.push(ACTION_DEFINITIONS.put_on_hold);
     }
   } else if (status === "QC / Finishing") {
-    actions.push(ACTION_DEFINITIONS.mark_qc_complete);
+    actions.push(ACTION_DEFINITIONS.mark_ready_for_pickup);
+    if (!compact) {
+      actions.push(ACTION_DEFINITIONS.put_on_hold);
+    }
   } else if (status === "Ready For Pickup") {
     actions.push(ACTION_DEFINITIONS.complete_order);
   } else if (canAdvanceOperationalStatus(status)) {
@@ -266,13 +284,6 @@ export function getAvailableProductionActions(order = {}, options = {}) {
       targetStatus: getNextOperationalStatus(status),
       eventType: "production_state_changed",
     });
-  }
-
-  if (
-    !compact &&
-    !["Completed", "Canceled", "On Hold", "Ready For Pickup"].includes(status)
-  ) {
-    actions.push(ACTION_DEFINITIONS.put_on_hold);
   }
 
   return actions;

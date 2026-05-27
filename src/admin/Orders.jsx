@@ -1,10 +1,13 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import StatusBadge from "../components/StatusBadge";
 import { formatShortDate } from "../lib/dateFormatting";
 import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
 import { buildWorkflowActionUpdates } from "../orders/buildWorkflowActionUpdates";
 import { sortOrdersByOperationalStatus } from "../orders/orderWorkflow";
+import { useCustomerTimeline } from "../lib/customerTimelineStore";
+import { getOperationalStaffUsers } from "../lib/staffUsersStore";
+import { getArtworkAssetUrl, isArtworkImage } from "../lib/orderArtwork";
 import {
   buildProductionWorkspaceSummary,
   buildResultsLabel,
@@ -142,8 +145,36 @@ function QueueFlag({ label, tone = "default" }) {
   );
 }
 
-function QueueRow({ order, onRunAction }) {
-  const primaryAction = order.available_actions?.[0] || null;
+function QueueActionButton({ action, onClick, emphasis = "secondary" }) {
+  const isHoldAction = action.targetStatus === "On Hold";
+  const isPrimary = emphasis === "primary";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        border: isHoldAction
+          ? "1px solid #fecdd3"
+          : isPrimary
+          ? "1px solid #171717"
+          : "1px solid #cbd5e1",
+        background: isHoldAction ? "#fff1f2" : isPrimary ? "#171717" : "#ffffff",
+        color: isHoldAction ? "#be123c" : isPrimary ? "#ffffff" : "#0f172a",
+        borderRadius: "10px",
+        padding: "8px 10px",
+        fontWeight: 700,
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {action.label}
+    </button>
+  );
+}
+
+function QueueRow({ order, onRunAction, onOpenDetail }) {
+  const visibleActions = order.available_actions?.slice(0, 3) || [];
   const priority = order.queue_priority || {};
   const dueTone = priority.overdue ? "danger" : priority.dueSoon ? "warning" : "default";
   const dueLabel = order.due_date ? formatShortDate(order.due_date) : "No due date";
@@ -152,7 +183,7 @@ function QueueRow({ order, onRunAction }) {
     <article
       style={{
         display: "grid",
-        gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto",
+        gridTemplateColumns: "minmax(0, 2.3fr) minmax(0, 0.8fr) minmax(0, 0.9fr) auto",
         gap: "12px",
         alignItems: "center",
         border: "1px solid #e2e8f0",
@@ -163,13 +194,21 @@ function QueueRow({ order, onRunAction }) {
     >
       <div style={{ minWidth: 0, display: "grid", gap: "6px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          <Link
-            to={`/admin/orders/${order.order_number}`}
-            style={{ color: "#0f172a", fontWeight: 800, textDecoration: "none" }}
+          <button
+            type="button"
+            onClick={() => onOpenDetail(order)}
+            style={{
+              border: "none",
+              background: "transparent",
+              padding: 0,
+              color: "#0f172a",
+              fontWeight: 800,
+              cursor: "pointer",
+            }}
           >
             {order.order_number}
-          </Link>
-          <StatusBadge status={order.status} />
+          </button>
+          <StatusBadge status={order.workflow_state || order.status} />
           {priority.overdue ? <QueueFlag label="Overdue" tone="danger" /> : null}
           {!priority.overdue && priority.dueSoon ? <QueueFlag label="Due Soon" tone="warning" /> : null}
           {order.rush_active ? <QueueFlag label="Rush" tone="warning" /> : null}
@@ -192,45 +231,343 @@ function QueueRow({ order, onRunAction }) {
         </strong>
       </div>
 
-      <div style={{ display: "grid", gap: "3px" }}>
-        <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 800, textTransform: "uppercase" }}>
-          Assignment
-        </span>
-        <strong>{order.assigned_to_staff_name}</strong>
-        <span style={{ color: "#64748b", fontSize: "13px" }}>
+        <div style={{ display: "grid", gap: "3px" }}>
+          <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 800, textTransform: "uppercase" }}>
+            Assignment
+          </span>
+          <strong>{order.assigned_to_staff_name}</strong>
+          <span style={{ color: "#64748b", fontSize: "13px" }}>
           Owner: {order.production_owner_staff_name || "Unassigned"}
         </span>
       </div>
 
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        {primaryAction ? (
+        {visibleActions.length ? (
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+            {visibleActions.map((action, index) => (
+              <QueueActionButton
+                key={action.key}
+                action={action}
+                emphasis={index === 0 ? "primary" : "secondary"}
+                onClick={() => onRunAction(order, action)}
+              />
+            ))}
+            <button
+              type="button"
+              onClick={() => onOpenDetail(order)}
+              style={{
+                border: "1px solid #cbd5e1",
+                background: "#f8fafc",
+                color: "#0f172a",
+                borderRadius: "10px",
+                padding: "8px 10px",
+                fontWeight: 700,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Details
+            </button>
+          </div>
+        ) : (
           <button
             type="button"
-            onClick={() => onRunAction(order, primaryAction)}
+            onClick={() => onOpenDetail(order)}
             style={{
-              border: primaryAction.targetStatus === "On Hold" ? "1px solid #fecdd3" : "1px solid #171717",
-              background: primaryAction.targetStatus === "On Hold" ? "#fff1f2" : "#171717",
-              color: primaryAction.targetStatus === "On Hold" ? "#be123c" : "#ffffff",
+              border: "1px solid #cbd5e1",
+              background: "#ffffff",
+              color: "#0f172a",
               borderRadius: "10px",
-              padding: "9px 12px",
+              padding: "8px 10px",
               fontWeight: 700,
               cursor: "pointer",
-              whiteSpace: "nowrap",
             }}
           >
-            {primaryAction.label}
+            Details
           </button>
-        ) : (
-          <span style={{ color: "#64748b", fontWeight: 700 }}>No action</span>
         )}
       </div>
     </article>
   );
 }
 
+function ProductionDetailDrawer({
+  order,
+  onClose,
+  onAssign,
+  onRunAction,
+  staffUsers,
+}) {
+  const customerTimeline = useCustomerTimeline(order?.customer_id);
+
+  const orderTimeline = useMemo(() => {
+    if (!order) return [];
+
+    return customerTimeline.filter((event) => event.metadata?.orderNumber === order.order_number);
+  }, [customerTimeline, order]);
+
+  if (!order) return null;
+
+  const artworkFiles = Array.isArray(order.artwork_files) ? order.artwork_files : [];
+
+  return (
+    <aside
+      style={{
+        position: "sticky",
+        top: "24px",
+        alignSelf: "start",
+        background: "#ffffff",
+        border: "1px solid #e2e8f0",
+        borderRadius: "20px",
+        padding: "18px",
+        display: "grid",
+        gap: "16px",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "flex-start" }}>
+        <div style={{ display: "grid", gap: "4px" }}>
+          <strong style={{ fontSize: "18px" }}>{order.order_number}</strong>
+          <span style={{ color: "#64748b" }}>{order.workflow_state}</span>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            border: "1px solid #cbd5e1",
+            background: "#ffffff",
+            borderRadius: "10px",
+            padding: "6px 10px",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          Close
+        </button>
+      </div>
+
+      <div style={{ display: "grid", gap: "12px" }}>
+        <div style={{ display: "grid", gap: "4px" }}>
+          <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 800, textTransform: "uppercase" }}>
+            Customer Reference
+          </span>
+          <strong>{order.customer_name}</strong>
+          <span style={{ color: "#64748b", fontSize: "13px" }}>
+            {order.customer_id ? `Customer ID ${order.customer_id}` : "No linked customer record"}
+          </span>
+        </div>
+
+        <div style={{ display: "grid", gap: "4px" }}>
+          <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 800, textTransform: "uppercase" }}>
+            Assignment
+          </span>
+          <select
+            value={order.assigned_to_staff_id || ""}
+            onChange={(event) => onAssign(order, event.target.value)}
+            style={{
+              border: "1px solid #cbd5e1",
+              borderRadius: "12px",
+              padding: "10px 12px",
+              background: "#ffffff",
+            }}
+          >
+            <option value="">Unassigned</option>
+            {staffUsers.map((staff) => (
+              <option key={staff.id} value={staff.id}>
+                {staff.name}
+                {staff.role ? ` (${staff.role})` : ""}
+              </option>
+            ))}
+          </select>
+          <span style={{ color: "#64748b", fontSize: "13px" }}>
+            Owner: {order.production_owner_staff_name || "Unassigned"}
+          </span>
+        </div>
+
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {order.available_actions?.map((action, index) => (
+            <QueueActionButton
+              key={action.key}
+              action={action}
+              emphasis={index === 0 ? "primary" : "secondary"}
+              onClick={() => onRunAction(order, action)}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gap: "8px" }}>
+        <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 800, textTransform: "uppercase" }}>
+          Linked Artwork
+        </span>
+        {artworkFiles.length ? (
+          artworkFiles.slice(0, 3).map((file) => {
+            const assetUrl = getArtworkAssetUrl(file);
+            return (
+              <div
+                key={file.id}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "56px minmax(0, 1fr)",
+                  gap: "10px",
+                  alignItems: "center",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "14px",
+                  padding: "8px",
+                  background: "#f8fafc",
+                }}
+              >
+                <div
+                  style={{
+                    width: "56px",
+                    height: "56px",
+                    borderRadius: "10px",
+                    background: "#ffffff",
+                    border: "1px solid #e2e8f0",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden",
+                    color: "#64748b",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                  }}
+                >
+                  {assetUrl && isArtworkImage(file) ? (
+                    <img
+                      src={assetUrl}
+                      alt={file.name}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    />
+                  ) : (
+                    "File"
+                  )}
+                </div>
+                <div style={{ minWidth: 0, display: "grid", gap: "2px" }}>
+                  <strong style={{ fontSize: "13px" }}>{file.name}</strong>
+                  <span style={{ color: "#64748b", fontSize: "12px" }}>
+                    {file.type || "Artwork reference"}
+                  </span>
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <div style={{ color: "#64748b", fontSize: "13px" }}>No linked artwork files on this order.</div>
+        )}
+      </div>
+
+      <div style={{ display: "grid", gap: "8px" }}>
+        <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 800, textTransform: "uppercase" }}>
+          Production Notes
+        </span>
+        <div
+          style={{
+            border: "1px dashed #cbd5e1",
+            borderRadius: "14px",
+            padding: "12px",
+            background: "#f8fafc",
+            color: "#64748b",
+            fontSize: "13px",
+          }}
+        >
+          Placeholder for production notes. Keep this operational and job-specific when note capture is expanded.
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gap: "8px" }}>
+        <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 800, textTransform: "uppercase" }}>
+          Workflow History
+        </span>
+        <div style={{ display: "grid", gap: "8px", maxHeight: "180px", overflow: "auto" }}>
+          {(order.activity_log || []).slice(0, 8).map((event) => (
+            <article
+              key={event.id}
+              style={{
+                borderLeft: "3px solid #171717",
+                background: "#f8fafc",
+                borderRadius: "10px",
+                padding: "10px 12px",
+              }}
+            >
+              <strong style={{ fontSize: "13px" }}>{event.note}</strong>
+              <div style={{ marginTop: "3px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
+                {event.staff_name || "Unknown Staff"} • {formatShortDate(event.created_at)}
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gap: "8px" }}>
+        <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 800, textTransform: "uppercase" }}>
+          Timeline Events
+        </span>
+        <div style={{ display: "grid", gap: "8px", maxHeight: "180px", overflow: "auto" }}>
+          {orderTimeline.length ? (
+            orderTimeline.slice(0, 8).map((event) => (
+              <article
+                key={event.id}
+                style={{
+                  borderLeft: "3px solid #cbd5e1",
+                  background: "#fcfcfd",
+                  borderRadius: "10px",
+                  padding: "10px 12px",
+                }}
+              >
+                <strong style={{ fontSize: "13px" }}>{event.summary}</strong>
+                <div style={{ marginTop: "3px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
+                  {event.eventType} • {formatShortDate(event.timestamp)}
+                </div>
+              </article>
+            ))
+          ) : (
+            <div style={{ color: "#64748b", fontSize: "13px" }}>
+              No customer timeline events linked to this order yet.
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+        <Link
+          to={`/admin/orders/${order.order_number}`}
+          style={{
+            textDecoration: "none",
+            border: "1px solid #171717",
+            background: "#171717",
+            color: "#ffffff",
+            borderRadius: "10px",
+            padding: "10px 12px",
+            fontWeight: 700,
+          }}
+        >
+          Open Full Order
+        </Link>
+        {order.customer_id ? (
+          <Link
+            to={`/admin/customers/${order.customer_id}`}
+            style={{
+              textDecoration: "none",
+              border: "1px solid #cbd5e1",
+              background: "#ffffff",
+              color: "#0f172a",
+              borderRadius: "10px",
+              padding: "10px 12px",
+              fontWeight: 700,
+            }}
+          >
+            Open Customer
+          </Link>
+        ) : null}
+      </div>
+    </aside>
+  );
+}
+
 export default function Orders() {
   const storedOrders = useStoredOrders();
   const staffUser = getActiveStaffUser();
+  const [selectedOrderNumber, setSelectedOrderNumber] = useState("");
   const isStaffWorkspace = isStaffWorkspaceView(staffUser);
   const [searchParams, setSearchParams] = useSearchParams();
   const activeStatusFilter = searchParams.get("status") || "active";
@@ -262,6 +599,10 @@ export default function Orders() {
     () => buildProductionWorkspaceSummary(workspaceOrders),
     [workspaceOrders]
   );
+  const staffUsers = useMemo(
+    () => getOperationalStaffUsers().filter((staff) => staff.status !== "Inactive"),
+    []
+  );
 
   const filteredOrders = useMemo(
     () =>
@@ -283,6 +624,13 @@ export default function Orders() {
       customEnd,
       searchTerm,
     ]
+  );
+  const selectedOrder = useMemo(
+    () =>
+      filteredOrders.find((order) => order.order_number === selectedOrderNumber) ||
+      workspaceOrders.find((order) => order.order_number === selectedOrderNumber) ||
+      null,
+    [filteredOrders, selectedOrderNumber, workspaceOrders]
   );
 
   function updateFilters(nextValues) {
@@ -318,19 +666,49 @@ export default function Orders() {
     updateStoredOrder(order.order_number, updates);
   }
 
+  function handleOpenDetail(order) {
+    setSelectedOrderNumber(order.order_number);
+  }
+
+  function handleAssign(order, staffId) {
+    const selectedWorker = staffUsers.find((worker) => worker.id === staffId);
+    const previousAssignment = order.assigned_to_staff_name || "";
+    const nextAssignment = selectedWorker?.name || "";
+    const activityNote = !previousAssignment && nextAssignment
+      ? `Assigned to ${nextAssignment}.`
+      : previousAssignment && !nextAssignment
+      ? `Unassigned from ${previousAssignment}.`
+      : previousAssignment && nextAssignment && previousAssignment !== nextAssignment
+      ? `Reassigned from ${previousAssignment} to ${nextAssignment}.`
+      : selectedWorker
+      ? `Assignment confirmed for ${nextAssignment}.`
+      : "Assignment cleared.";
+
+    updateStoredOrder(order.order_number, {
+      assigned_to_staff_id: selectedWorker?.id || "",
+      assigned_to_staff_name: selectedWorker?.name || "",
+      assigned_to_staff_role: selectedWorker?.role || "",
+      assigned_at: selectedWorker ? new Date().toISOString() : null,
+      needs_assignment: !selectedWorker,
+      activity_type: "assignment",
+      activity_note: activityNote,
+    });
+  }
+
   return (
     <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "24px" }}>
-      <div
-        style={{
-          background: "#ffffff",
-          borderRadius: "24px",
-          padding: "24px",
-          border: "1px solid #e8edf3",
-          display: "grid",
-          gap: "20px",
-        }}
-      >
-        <div style={{ display: "grid", gap: "6px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: selectedOrder ? "minmax(0, 1.8fr) minmax(320px, 0.95fr)" : "minmax(0, 1fr)", gap: "18px", alignItems: "start" }}>
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: "24px",
+            padding: "24px",
+            border: "1px solid #e8edf3",
+            display: "grid",
+            gap: "20px",
+          }}
+        >
+          <div style={{ display: "grid", gap: "6px" }}>
           <p
             style={{
               margin: 0,
@@ -347,67 +725,67 @@ export default function Orders() {
           <p style={{ margin: 0, color: "#64748b", maxWidth: "780px" }}>
             Compact execution view for moving jobs through production, QC, pickup readiness, and completion with clear ownership and minimal clutter.
           </p>
-        </div>
+          </div>
 
-        <section
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: "10px",
-          }}
-        >
-          <SummaryCard label="Active Work" value={workspaceSummary.activeOrders} />
-          <SummaryCard label="Ready For Production" value={workspaceSummary.readyForProductionOrders} />
-          <SummaryCard label="Urgent" value={workspaceSummary.urgentOrders} tone="warning" />
-          <SummaryCard label="On Hold" value={workspaceSummary.onHoldOrders} tone="danger" />
-          <SummaryCard label="Unassigned" value={workspaceSummary.unassignedOrders} tone="warning" />
-          <SummaryCard label="Completed" value={workspaceSummary.completedOrders} tone="success" />
-        </section>
-
-        {!isStaffWorkspace ? (
           <section
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
               gap: "10px",
             }}
           >
-            <Link
-              to="/admin/assignments"
-              style={{
-                textDecoration: "none",
-                color: "#171717",
-                border: "1px solid #fde68a",
-                background: "#fffbeb",
-                borderRadius: "16px",
-                padding: "14px 16px",
-                display: "grid",
-                gap: "4px",
-              }}
-            >
-              <strong>Assignment Dispatch</strong>
-              <span style={{ color: "#64748b" }}>{workspaceSummary.unassignedOrders} jobs still need assignment or ownership review.</span>
-            </Link>
-            <Link
-              to="/admin/orders?status=on-hold"
-              style={{
-                textDecoration: "none",
-                color: "#171717",
-                border: "1px solid #fecaca",
-                background: "#fef2f2",
-                borderRadius: "16px",
-                padding: "14px 16px",
-                display: "grid",
-                gap: "4px",
-              }}
-            >
-              <strong>Held Work</strong>
-              <span style={{ color: "#64748b" }}>{workspaceSummary.onHoldOrders} jobs are paused and need operational follow-up.</span>
-            </Link>
+            <SummaryCard label="Active Work" value={workspaceSummary.activeOrders} />
+            <SummaryCard label="Ready For Production" value={workspaceSummary.readyForProductionOrders} />
+            <SummaryCard label="Urgent" value={workspaceSummary.urgentOrders} tone="warning" />
+            <SummaryCard label="On Hold" value={workspaceSummary.onHoldOrders} tone="danger" />
+            <SummaryCard label="Unassigned" value={workspaceSummary.unassignedOrders} tone="warning" />
+            <SummaryCard label="Completed" value={workspaceSummary.completedOrders} tone="success" />
           </section>
-        ) : null}
 
-        <section style={{ display: "grid", gap: "12px" }}>
+          {!isStaffWorkspace ? (
+            <section
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: "10px",
+              }}
+            >
+              <Link
+                to="/admin/assignments"
+                style={{
+                  textDecoration: "none",
+                  color: "#171717",
+                  border: "1px solid #fde68a",
+                  background: "#fffbeb",
+                  borderRadius: "16px",
+                  padding: "14px 16px",
+                  display: "grid",
+                  gap: "4px",
+                }}
+              >
+                <strong>Assignment Dispatch</strong>
+                <span style={{ color: "#64748b" }}>{workspaceSummary.unassignedOrders} jobs still need assignment or ownership review.</span>
+              </Link>
+              <Link
+                to="/admin/orders?status=on-hold"
+                style={{
+                  textDecoration: "none",
+                  color: "#171717",
+                  border: "1px solid #fecaca",
+                  background: "#fef2f2",
+                  borderRadius: "16px",
+                  padding: "14px 16px",
+                  display: "grid",
+                  gap: "4px",
+                }}
+              >
+                <strong>Held Work</strong>
+                <span style={{ color: "#64748b" }}>{workspaceSummary.onHoldOrders} jobs are paused and need operational follow-up.</span>
+              </Link>
+            </section>
+          ) : null}
+
+          <section style={{ display: "grid", gap: "12px" }}>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
             {PRODUCTION_STATUS_FILTERS.map((filter) => (
               <FilterPill
@@ -518,29 +896,45 @@ export default function Orders() {
             ) : null}
             <strong style={{ color: "#475569" }}>{buildResultsLabel(filteredOrders.length, activeStatusFilter)}</strong>
           </div>
-        </section>
+          </section>
 
-        <section style={{ display: "grid", gap: "10px" }}>
-          {filteredOrders.length ? (
-            filteredOrders.map((order) => (
-              <QueueRow key={order.order_number} order={order} onRunAction={handleRunAction} />
-            ))
-          ) : (
-            <div
-              style={{
-                borderRadius: "16px",
-                border: "1px dashed #cbd5e1",
-                background: "#f8fafc",
-                padding: "24px",
-                color: "#64748b",
-                fontWeight: 700,
-                textAlign: "center",
-              }}
-            >
-              No production jobs match the current queue filters.
-            </div>
-          )}
-        </section>
+          <section style={{ display: "grid", gap: "10px" }}>
+            {filteredOrders.length ? (
+              filteredOrders.map((order) => (
+                <QueueRow
+                  key={order.order_number}
+                  order={order}
+                  onRunAction={handleRunAction}
+                  onOpenDetail={handleOpenDetail}
+                />
+              ))
+            ) : (
+              <div
+                style={{
+                  borderRadius: "16px",
+                  border: "1px dashed #cbd5e1",
+                  background: "#f8fafc",
+                  padding: "24px",
+                  color: "#64748b",
+                  fontWeight: 700,
+                  textAlign: "center",
+                }}
+              >
+                No production jobs match the current queue filters.
+              </div>
+            )}
+          </section>
+        </div>
+
+        {selectedOrder ? (
+          <ProductionDetailDrawer
+            order={selectedOrder}
+            onClose={() => setSelectedOrderNumber("")}
+            onAssign={handleAssign}
+            onRunAction={handleRunAction}
+            staffUsers={staffUsers}
+          />
+        ) : null}
       </div>
     </div>
   );

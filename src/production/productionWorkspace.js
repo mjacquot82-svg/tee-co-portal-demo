@@ -1,7 +1,12 @@
 import { normalizeProductionType } from "../constants/productionTypes";
 import { formatShortDate } from "../lib/dateFormatting";
 import {
+  normalizeWorkflowState,
+  getWorkflowStateTone,
+} from "../lib/operationalWorkflow";
+import {
   getAvailableProductionActions,
+  getOrderWorkflowState,
   isActiveOperationalStatus,
   isCanceledOperationalStatus,
   isCompletedOperationalStatus,
@@ -51,6 +56,9 @@ export function normalizeLookup(value) {
 
 export function normalizeProductionOrder(order) {
   const normalizedStatus = normalizeOperationalStatus(order.status || "New");
+  const workflowState = normalizeWorkflowState(
+    order.workflow_state || getOrderWorkflowState({ ...order, status: normalizedStatus })
+  );
   const queuePriority = buildQueuePriority({ ...order, status: normalizedStatus });
 
   return {
@@ -62,6 +70,8 @@ export function normalizeProductionOrder(order) {
       order.production_owner_staff_name || order.assigned_to_staff_name || "Unassigned",
     decoration_type: normalizeProductionType(order.decoration_type),
     status: normalizedStatus,
+    workflow_state: workflowState,
+    workflow_tone: getWorkflowStateTone(workflowState),
     artwork_count:
       Number(order.artwork_count) ||
       (Array.isArray(order.artwork_files) ? order.artwork_files.length : 0) ||
@@ -72,7 +82,10 @@ export function normalizeProductionOrder(order) {
     rush_active:
       typeof order.is_rush === "boolean" ? order.is_rush : queuePriority.overdue || queuePriority.dueSoon,
     queue_priority: queuePriority,
-    available_actions: getAvailableProductionActions({ ...order, status: normalizedStatus }, { compact: true }),
+    available_actions: getAvailableProductionActions(
+      { ...order, status: normalizedStatus, workflow_state: workflowState },
+      { compact: false }
+    ),
   };
 }
 
@@ -197,6 +210,7 @@ export function matchesProductionMethod(order, activeMethod) {
 
 export function matchesProductionStatus(order, activeStatus) {
   const normalizedStatus = normalizeOperationalStatus(order.status);
+  const workflowState = normalizeWorkflowState(order.workflow_state || normalizedStatus);
   const queuePriority = buildQueuePriority(order);
 
   if (activeStatus === "active") {
@@ -207,39 +221,39 @@ export function matchesProductionStatus(order, activeStatus) {
   }
 
   if (activeStatus === "awaiting-deposit") {
-    return normalizedStatus === "Awaiting Deposit";
+    return workflowState === "Awaiting Deposit";
   }
 
   if (activeStatus === "ready-for-production") {
-    return normalizedStatus === "Ready For Production";
+    return workflowState === "Ready For Production";
   }
 
   if (activeStatus === "printing") {
-    return normalizedStatus === "Printing";
+    return workflowState === "Printing";
   }
 
   if (activeStatus === "embroidery") {
-    return normalizedStatus === "Embroidery";
+    return workflowState === "Embroidery";
   }
 
   if (activeStatus === "qc-finishing") {
-    return normalizedStatus === "QC / Finishing";
+    return workflowState === "QC / Finishing";
   }
 
   if (activeStatus === "ready-for-pickup") {
-    return normalizedStatus === "Ready For Pickup";
+    return workflowState === "Ready For Pickup";
   }
 
   if (activeStatus === "on-hold") {
-    return isOnHoldOperationalStatus(normalizedStatus);
+    return workflowState === "On Hold" || isOnHoldOperationalStatus(normalizedStatus);
   }
 
   if (activeStatus === "completed") {
-    return isCompletedOperationalStatus(normalizedStatus);
+    return workflowState === "Completed" || isCompletedOperationalStatus(normalizedStatus);
   }
 
   if (activeStatus === "canceled") {
-    return isCanceledOperationalStatus(normalizedStatus) || order.workflow_state === "Canceled";
+    return isCanceledOperationalStatus(normalizedStatus) || workflowState === "Canceled";
   }
 
   if (activeStatus === "unassigned") {

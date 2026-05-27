@@ -30,6 +30,12 @@ export const CUSTOMER_NOTIFICATION_TRIGGER_DEFINITIONS = [
     channels: CUSTOMER_NOTIFICATION_CHANNELS,
   },
   {
+    eventType: "moved_to_printing",
+    label: "Moved To Printing",
+    description: "Execution-stage event when a production job enters the printing phase.",
+    channels: CUSTOMER_NOTIFICATION_CHANNELS,
+  },
+  {
     eventType: "moved_to_qc",
     label: "Moved To QC",
     description: "Checkpoint event when production work moves into QC and finishing.",
@@ -51,6 +57,12 @@ export const CUSTOMER_NOTIFICATION_TRIGGER_DEFINITIONS = [
     eventType: "order_on_hold",
     label: "Order On Hold",
     description: "Hold-state event that can later inform customers about paused production work.",
+    channels: CUSTOMER_NOTIFICATION_CHANNELS,
+  },
+  {
+    eventType: "resumed_from_hold",
+    label: "Resumed From Hold",
+    description: "Resume event when paused production work returns to active execution.",
     channels: CUSTOMER_NOTIFICATION_CHANNELS,
   },
   {

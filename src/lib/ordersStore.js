@@ -415,6 +415,7 @@ function describeOrderUpdate(updates) {
     return "Workflow canceled while preserving operational and financial history.";
   }
   if (updates.status === "On Hold") return "Order placed on hold.";
+  if (updates.activity_type === "resume_from_hold") return "Order resumed from hold.";
   if (updates.status === "Ready For Production") return "Order moved into the production queue.";
   if (updates.status === "Printing") return "Printing started.";
   if (updates.status === "Embroidery") return "Embroidery started.";
@@ -605,6 +606,7 @@ function emitOperationalEventsForOrderUpdate(previousOrder, nextOrder, updates =
   }
 
   if (
+    normalizedPreviousStatus !== "On Hold" &&
     normalizedPreviousStatus !== "Ready For Production" &&
     normalizedNextStatus === "Ready For Production"
   ) {
@@ -659,6 +661,31 @@ function emitOperationalEventsForOrderUpdate(previousOrder, nextOrder, updates =
         }
       )
     );
+
+    if (normalizedNextStatus === "Printing") {
+      emitCustomerTimelineEventForOrder(
+        nextOrder,
+        "moved_to_printing",
+        `Order ${nextOrder.order_number} moved into printing.`,
+        {
+          previousStatus: previousOrder.status,
+          nextStatus: nextOrder.status,
+        },
+        timestamp
+      );
+
+      eventRecords.push(
+        buildOperationalEventRecord(
+          nextOrder,
+          "moved_to_printing",
+          "Order moved into printing.",
+          {
+            createdAt: timestamp,
+            workflowLabel: "Production Workflow",
+          }
+        )
+      );
+    }
   }
 
   if (
@@ -737,6 +764,34 @@ function emitOperationalEventsForOrderUpdate(previousOrder, nextOrder, updates =
         nextOrder,
         "order_on_hold",
         "Order placed on hold.",
+        {
+          createdAt: timestamp,
+          workflowLabel: "Production Workflow",
+        }
+      )
+    );
+  }
+
+  if (
+    normalizedPreviousStatus === "On Hold" &&
+    normalizedNextStatus !== "On Hold"
+  ) {
+    emitCustomerTimelineEventForOrder(
+      nextOrder,
+      "resumed_from_hold",
+      `Order ${nextOrder.order_number} resumed from hold.`,
+      {
+        previousStatus: previousOrder.status,
+        nextStatus: nextOrder.status,
+      },
+      timestamp
+    );
+
+    eventRecords.push(
+      buildOperationalEventRecord(
+        nextOrder,
+        "resumed_from_hold",
+        `Order resumed from hold and returned to ${normalizedNextStatus}.`,
         {
           createdAt: timestamp,
           workflowLabel: "Production Workflow",

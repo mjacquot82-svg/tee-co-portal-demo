@@ -19,6 +19,14 @@ export function buildWorkflowActionUpdates(order, actionInput) {
     activity_note: `${action.label}.`,
   };
 
+  if (action.key === "put_on_hold") {
+    updates.production_hold_previous_status = normalizeOperationalStatus(order.status);
+  }
+
+  if (action.key === "resume_from_hold") {
+    updates.production_hold_previous_status = "";
+  }
+
   if (targetStatus === "Ready For Production") {
     updates.production_ready = true;
   }
