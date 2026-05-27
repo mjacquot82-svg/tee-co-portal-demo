@@ -1,5 +1,6 @@
 import { normalizeProductionType } from "../constants/productionTypes";
 import { normalizeWorkflowState } from "../lib/operationalWorkflow";
+import { buildProductionGatingState } from "./workflowGating";
 
 export const OPERATIONAL_ORDER_STATUSES = [
   "New",
@@ -286,7 +287,15 @@ export function getAvailableProductionActions(order = {}, options = {}) {
     });
   }
 
-  return actions;
+  return actions.map((action) => {
+    const gating = buildProductionGatingState(order, action);
+    return {
+      ...action,
+      gating,
+      blocked: gating.blocked,
+      blockedReasons: gating.blockingReasons,
+    };
+  });
 }
 
 export function sortOrdersByOperationalStatus(orders = []) {

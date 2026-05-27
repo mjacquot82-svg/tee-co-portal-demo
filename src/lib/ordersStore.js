@@ -7,6 +7,12 @@ import {
   isReadyForProductionStatus,
   normalizeOperationalStatus,
 } from "../orders/orderWorkflow";
+import {
+  getArtworkApprovalRequirement,
+  normalizeArtworkApprovalStatus,
+  normalizeDepositWorkflowStatus,
+  normalizeWorkflowOverrides,
+} from "../orders/workflowGating";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
 import {
   isQuoteReadyForProduction,
@@ -21,6 +27,7 @@ import { createOperationalEvent } from "./operationalEventsStore";
 import { addCustomerTimelineEvent } from "./customerTimelineStore";
 import { resolveCustomerForRecord } from "./customerRecordMatching";
 import { deriveOperationalWorkflowState } from "./operationalWorkflow";
+import { updateArtworkApprovalStatus } from "./customerArtworkStore";
 import { linkCustomerArtworkToOrder, linkCustomerArtworkToQuote } from "../services/customerArtworkService";
 
 const STORAGE_KEY = "teeCoStaffOrders";
@@ -36,6 +43,24 @@ function persistArtworkRelationship(promise, context) {
       context,
       error,
     });
+  });
+}
+
+function persistArtworkApprovalMetadata(artworkIds, approvalStatus) {
+  const normalizedArtworkIds = Array.from(
+    new Set((Array.isArray(artworkIds) ? artworkIds : []).map((value) => String(value || "").trim()).filter(Boolean))
+  );
+
+  normalizedArtworkIds.forEach((artworkId) => {
+    try {
+      updateArtworkApprovalStatus(artworkId, approvalStatus);
+    } catch (error) {
+      console.error("Unable to update artwork approval metadata", {
+        artworkId,
+        approvalStatus,
+        error,
+      });
+    }
   });
 }
 
@@ -157,6 +182,29 @@ function normalizeStoredOrder(order = {}) {
   const primaryPlacement = placements[0] || null;
   const primaryArtwork = artworkFiles[0] || null;
   const timestamps = normalizeOrderTimestamps(order);
+  const artworkApprovalRequired = getArtworkApprovalRequirement({
+    ...order,
+    artwork_files: artworkFiles,
+    customer_artwork_id:
+      order.customer_artwork_id || primaryArtwork?.id || primaryPlacement?.artwork_id || "",
+  });
+  const artworkApprovalStatus = normalizeArtworkApprovalStatus(
+    order.artwork_approval_status || order.approval_status,
+    { required: artworkApprovalRequired }
+  );
+  const depositRequired =
+    typeof order.deposit_required === "boolean"
+      ? order.deposit_required
+      : String(order.deposit_requirement || "").trim() === "required" ||
+        Number(order.deposit_amount || order.deposit?.amount || 0) > 0;
+  const depositWorkflowStatus = normalizeDepositWorkflowStatus(
+    order.deposit_workflow_status || order.deposit?.status,
+    {
+      ...order,
+      deposit_required: depositRequired,
+    }
+  );
+  const workflowOverrides = normalizeWorkflowOverrides(order.workflow_overrides);
 
   return normalizeOrderFinancials({
     ...order,
@@ -178,6 +226,11 @@ function normalizeStoredOrder(order = {}) {
       (primaryArtwork ? getArtworkDisplayName(primaryArtwork) : "") ||
       primaryPlacement?.artwork_name ||
       "",
+    artwork_approval_required: artworkApprovalRequired,
+    artwork_approval_status: artworkApprovalStatus,
+    deposit_required: depositRequired,
+    deposit_workflow_status: depositWorkflowStatus,
+    workflow_overrides: workflowOverrides,
     assigned_to_staff_id: assignedToStaffId,
     assigned_to_staff_name: assignedToStaffName,
     assigned_to_staff_role: order.assigned_to_staff_role || "",
@@ -213,7 +266,7 @@ function normalizeStoredOrder(order = {}) {
       operational_visible:
         typeof order.operational_visible === "boolean"
           ? order.operational_visible
-          : isQuoteReadyForProduction(quoteStatus) && isActiveOperationalStatus(status),
+        : isQuoteReadyForProduction(quoteStatus) && isActiveOperationalStatus(status),
       quote_archived: order.quote_archived,
     }),
   });
@@ -416,8 +469,28 @@ function buildWorkflowDerivedUpdates(currentOrder, updates) {
   };
 }
 
+function buildWorkflowOverrideUpdates(currentOrder, updates) {
+  if (!Object.prototype.hasOwnProperty.call(updates, "workflow_overrides")) {
+    return updates;
+  }
+
+  return {
+    ...updates,
+    workflow_overrides: normalizeWorkflowOverrides({
+      ...normalizeWorkflowOverrides(currentOrder.workflow_overrides),
+      ...(updates.workflow_overrides || {}),
+    }),
+  };
+}
+
 function describeOrderUpdate(updates) {
   if (updates.activity_note) return updates.activity_note;
+  if (updates.activity_type === "production_blocked") {
+    return "Production movement blocked until workflow requirements are satisfied.";
+  }
+  if (updates.activity_type === "gating_override_used") {
+    return "Workflow gating override used.";
+  }
   if (updates.quote_archived === true) return "Quote archived from active workflow.";
   if (updates.quote_archived === false) return "Quote restored to active workflow.";
   if (updates.status === "Canceled" || updates.quote_status === "Canceled") {
@@ -436,7 +509,12 @@ function describeOrderUpdate(updates) {
   if (updates.payment_history) return "Payment recorded.";
   if (updates.deposit?.status === "paid") return "Deposit recorded as paid.";
   if (updates.deposit?.status === "pending") return "Deposit requested.";
+  if (updates.deposit_workflow_status === "Deposit Requested") return "Deposit requested.";
+  if (updates.deposit_workflow_status === "Deposit Received") return "Deposit received.";
   if (updates.quote_status) return `Quote status changed to ${updates.quote_status}.`;
+  if (updates.artwork_approval_status === "Approved") return "Artwork approved.";
+  if (updates.artwork_approval_status === "Needs Revision") return "Artwork revision requested.";
+  if (updates.artwork_approval_status === "Pending Review") return "Artwork moved to pending review.";
   if (updates.artwork_files) return "Artwork file uploaded.";
   if (updates.size_breakdown) return "Size breakdown updated.";
   if (updates.quote) return "Quote snapshot saved.";
@@ -458,7 +536,9 @@ function describeActivityType(updates) {
   if (updates.pickup_status) return "pickup";
   if (updates.payment_history) return "payment";
   if (updates.deposit) return "deposit";
+  if (updates.deposit_workflow_status) return "deposit";
   if (updates.quote_status) return "quote_status";
+  if (updates.artwork_approval_status) return "artwork_approval";
   if (updates.artwork_files) return "artwork";
   if (updates.size_breakdown) return "sizes";
   if (updates.quote) return "quote";
@@ -548,6 +628,24 @@ function emitOperationalEventsForOrderUpdate(previousOrder, nextOrder, updates =
   const previousDepositApplied = Number(previousFinancials.deposit_applied || 0);
   const nextDepositApplied = Number(nextFinancials.deposit_applied || 0);
   const depositRecordedAmount = Math.max(0, nextDepositApplied - previousDepositApplied);
+  const previousArtworkApprovalStatus = normalizeArtworkApprovalStatus(
+    previousOrder.artwork_approval_status || previousOrder.approval_status,
+    { required: getArtworkApprovalRequirement(previousOrder) }
+  );
+  const nextArtworkApprovalStatus = normalizeArtworkApprovalStatus(
+    nextOrder.artwork_approval_status || nextOrder.approval_status,
+    { required: getArtworkApprovalRequirement(nextOrder) }
+  );
+  const previousDepositWorkflowStatus = normalizeDepositWorkflowStatus(
+    previousOrder.deposit_workflow_status || previousOrder.deposit?.status,
+    previousOrder
+  );
+  const nextDepositWorkflowStatus = normalizeDepositWorkflowStatus(
+    nextOrder.deposit_workflow_status || nextOrder.deposit?.status,
+    nextOrder
+  );
+  const previousOverrides = normalizeWorkflowOverrides(previousOrder.workflow_overrides);
+  const nextOverrides = normalizeWorkflowOverrides(nextOrder.workflow_overrides);
   const eventRecords = [];
   const assignmentChanged =
     previousOrder.assigned_to_staff_id !== nextOrder.assigned_to_staff_id ||
@@ -565,6 +663,118 @@ function emitOperationalEventsForOrderUpdate(previousOrder, nextOrder, updates =
         nextOrder,
         "deposit_recorded",
         `Deposit recorded for ${money(depositRecordedAmount)}${paymentMethod}.`,
+        {
+          createdAt: timestamp,
+          workflowLabel: "Payments",
+        }
+      )
+    );
+  }
+
+  if (
+    previousArtworkApprovalStatus !== nextArtworkApprovalStatus &&
+    nextArtworkApprovalStatus === "Approved"
+  ) {
+    emitCustomerTimelineEventForOrder(
+      nextOrder,
+      "artwork_approved",
+      `Artwork approved for order ${nextOrder.order_number}.`,
+      {
+        previousArtworkApprovalStatus,
+        nextArtworkApprovalStatus,
+      },
+      timestamp
+    );
+
+    eventRecords.push(
+      buildOperationalEventRecord(
+        nextOrder,
+        "artwork_approved",
+        "Artwork approval completed.",
+        {
+          createdAt: timestamp,
+          workflowLabel: "Artwork Workflow",
+        }
+      )
+    );
+  }
+
+  if (
+    previousArtworkApprovalStatus !== nextArtworkApprovalStatus &&
+    nextArtworkApprovalStatus === "Needs Revision"
+  ) {
+    emitCustomerTimelineEventForOrder(
+      nextOrder,
+      "artwork_revision_requested",
+      `Artwork revision requested for order ${nextOrder.order_number}.`,
+      {
+        previousArtworkApprovalStatus,
+        nextArtworkApprovalStatus,
+      },
+      timestamp
+    );
+
+    eventRecords.push(
+      buildOperationalEventRecord(
+        nextOrder,
+        "artwork_revision_requested",
+        "Artwork marked as needing revision.",
+        {
+          createdAt: timestamp,
+          workflowLabel: "Artwork Workflow",
+        }
+      )
+    );
+  }
+
+  if (
+    previousDepositWorkflowStatus !== nextDepositWorkflowStatus &&
+    nextDepositWorkflowStatus === "Deposit Requested"
+  ) {
+    emitCustomerTimelineEventForOrder(
+      nextOrder,
+      "deposit_requested",
+      `Deposit requested for order ${nextOrder.order_number}.`,
+      {
+        previousDepositWorkflowStatus,
+        nextDepositWorkflowStatus,
+      },
+      timestamp
+    );
+
+    eventRecords.push(
+      buildOperationalEventRecord(
+        nextOrder,
+        "deposit_requested",
+        "Deposit requested.",
+        {
+          createdAt: timestamp,
+          workflowLabel: "Payments",
+        }
+      )
+    );
+  }
+
+  if (
+    previousDepositWorkflowStatus !== nextDepositWorkflowStatus &&
+    nextDepositWorkflowStatus === "Deposit Received"
+  ) {
+    emitCustomerTimelineEventForOrder(
+      nextOrder,
+      "deposit_received",
+      `Deposit received for order ${nextOrder.order_number}.`,
+      {
+        previousDepositWorkflowStatus,
+        nextDepositWorkflowStatus,
+      },
+      timestamp
+    );
+
+    eventRecords.push(
+      buildOperationalEventRecord(
+        nextOrder,
+        "deposit_received",
+        "Deposit received and cleared for workflow progression.",
         {
           createdAt: timestamp,
           workflowLabel: "Payments",
@@ -939,6 +1149,57 @@ function emitOperationalEventsForOrderUpdate(previousOrder, nextOrder, updates =
     );
   }
 
+  if (updates.activity_type === "production_blocked") {
+    emitCustomerTimelineEventForOrder(
+      nextOrder,
+      "production_blocked",
+      updates.activity_note || `Production blocked for order ${nextOrder.order_number}.`,
+      {
+        blockingReasons: updates.last_production_blocked_reasons || [],
+      },
+      timestamp
+    );
+
+    eventRecords.push(
+      buildOperationalEventRecord(
+        nextOrder,
+        "production_blocked",
+        updates.activity_note || "Production blocked by workflow gating.",
+        {
+          createdAt: timestamp,
+          workflowLabel: "Production Workflow",
+        }
+      )
+    );
+  }
+
+  if (
+    updates.activity_type === "gating_override_used" ||
+    Object.keys(nextOverrides).some(
+      (key) => nextOverrides[key].active && nextOverrides[key].usedAt !== previousOverrides[key].usedAt
+    )
+  ) {
+    emitCustomerTimelineEventForOrder(
+      nextOrder,
+      "gating_override_used",
+      updates.activity_note || `Workflow gating override used for order ${nextOrder.order_number}.`,
+      {},
+      timestamp
+    );
+
+    eventRecords.push(
+      buildOperationalEventRecord(
+        nextOrder,
+        "gating_override_used",
+        updates.activity_note || "Workflow gating override used.",
+        {
+          createdAt: timestamp,
+          workflowLabel: "Production Workflow",
+        }
+      )
+    );
+  }
+
   if (
     updates.activity_type === "release_to_production" &&
     previousQuoteStatus !== "Ready For Production" &&
@@ -1130,7 +1391,10 @@ export function updateStoredOrder(orderNumber, updates) {
     previousOrder = order;
 
     const cleanUpdates = stripActivityMeta(
-      buildWorkflowDerivedUpdates(order, buildAssignmentUpdates(order, updates))
+      buildWorkflowDerivedUpdates(
+        order,
+        buildWorkflowOverrideUpdates(order, buildAssignmentUpdates(order, updates))
+      )
     );
 
     updatedOrder = normalizeStoredOrder({
@@ -1162,6 +1426,22 @@ export function updateStoredOrder(orderNumber, updates) {
   }
 
   emitOperationalEventsForOrderUpdate(previousOrder, updatedOrder, updates, now);
+
+  if (
+    updatedOrder &&
+    previousOrder &&
+    updatedOrder.artwork_approval_status !== previousOrder.artwork_approval_status
+  ) {
+    persistArtworkApprovalMetadata(
+      [
+        updatedOrder.customer_artwork_id,
+        ...(Array.isArray(updatedOrder.artwork_files)
+          ? updatedOrder.artwork_files.map((file) => file?.id)
+          : []),
+      ],
+      updatedOrder.artwork_approval_status
+    );
+  }
 
   if (updatedOrder?.customer_artwork_id) {
     const artworkIdChanged =
@@ -1243,6 +1523,11 @@ export function recordStoredOrderPayment(orderNumber, paymentInput = {}, options
 
   return updateStoredOrder(orderNumber, {
     payment_history: paymentHistory,
+    deposit_workflow_status:
+      Number(nextFinancials.deposit_amount || 0) > 0 &&
+      Number(nextFinancials.deposit_applied || 0) >= Number(nextFinancials.deposit_amount || 0)
+        ? "Deposit Received"
+        : order.deposit_workflow_status,
     activity_type: "payment",
     activity_note: `Recorded payment of ${money(paymentEntry.amount)} via ${paymentEntry.method}.${paymentNote}${statusNote}`,
   });

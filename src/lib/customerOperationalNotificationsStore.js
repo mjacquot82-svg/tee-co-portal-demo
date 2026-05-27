@@ -12,8 +12,8 @@ export const CUSTOMER_NOTIFICATION_TRIGGER_DEFINITIONS = [
     channels: CUSTOMER_NOTIFICATION_CHANNELS,
   },
   {
-    eventType: "artwork_needs_revision",
-    label: "Artwork Needs Revision",
+    eventType: "artwork_revision_requested",
+    label: "Artwork Revision Requested",
     description: "Request customer action when artwork requires updates before production.",
     channels: CUSTOMER_NOTIFICATION_CHANNELS,
   },
@@ -69,6 +69,12 @@ export const CUSTOMER_NOTIFICATION_TRIGGER_DEFINITIONS = [
     eventType: "deposit_requested",
     label: "Deposit Requested",
     description: "Payment request milestone before work advances further in the workflow.",
+    channels: CUSTOMER_NOTIFICATION_CHANNELS,
+  },
+  {
+    eventType: "deposit_received",
+    label: "Deposit Received",
+    description: "Deposit collection milestone that can later trigger customer-facing confirmation.",
     channels: CUSTOMER_NOTIFICATION_CHANNELS,
   },
 ];

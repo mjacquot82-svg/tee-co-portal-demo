@@ -3,46 +3,23 @@ function normalizeLower(value) {
 }
 
 export function buildDepositStatus(order, financials) {
-  const depositTarget = Number(financials?.deposit_amount || 0);
-  const totalPaid = Number(financials?.total_paid || financials?.amount_paid || 0);
-  const depositStatus = normalizeLower(order?.deposit?.status);
-
-  if (depositTarget <= 0) return "No deposit required";
-  if (depositStatus === "paid" || totalPaid >= depositTarget) return "Deposit received";
-  if (totalPaid > 0) return "Deposit partially received";
-  return "Deposit required";
+  return order?.deposit_workflow_status || (Number(financials?.deposit_amount || 0) > 0 ? "Awaiting Deposit" : "Deposit Not Required");
 }
 
 export function buildApprovalStatus(order) {
-  const approvalStatus = normalizeLower(order?.approval_status);
-
-  if (approvalStatus.includes("approved")) {
-    return "Approved";
-  }
-
-  if (approvalStatus.includes("revision") || approvalStatus.includes("change")) {
-    return "Changes requested";
-  }
-
-  return "Awaiting customer approval";
+  return order?.artwork_approval_status || order?.approval_status || "Pending Review";
 }
 
 export function buildArtworkStatus(order) {
-  const artworkCount = Array.isArray(order?.artwork_files) ? order.artwork_files.length : 0;
-  const artworkWaiting = normalizeLower(order?.quote_status) === "awaiting artwork approval";
-
-  if (!artworkCount) return "No artwork required";
-  if (!artworkWaiting) return "Artwork approved";
-  return "Awaiting artwork";
+  return buildApprovalStatus(order);
 }
 
 export function buildProductionReadiness(order, financials) {
   const depositTarget = Number(financials?.deposit_amount || 0);
   const totalPaid = Number(financials?.total_paid || financials?.amount_paid || 0);
-  const depositState = normalizeLower(order?.deposit?.status);
-  const approvalState = normalizeLower(order?.approval_status);
+  const depositState = normalizeLower(buildDepositStatus(order, financials));
+  const approvalState = normalizeLower(buildApprovalStatus(order));
   const artworkCount = Array.isArray(order?.artwork_files) ? order.artwork_files.length : 0;
-  const artworkWaiting = normalizeLower(order?.quote_status) === "awaiting artwork approval";
 
   const checks = [
     {
@@ -52,12 +29,15 @@ export function buildProductionReadiness(order, financials) {
     },
     {
       label: "Deposit",
-      passed: depositTarget <= 0 || depositState === "paid" || totalPaid >= depositTarget,
+      passed:
+        depositTarget <= 0 ||
+        depositState === "deposit received" ||
+        totalPaid >= depositTarget,
       detail: buildDepositStatus(order, financials),
     },
     {
       label: "Artwork",
-      passed: artworkCount === 0 || !artworkWaiting,
+      passed: artworkCount === 0 || approvalState.includes("approved"),
       detail: buildArtworkStatus(order),
     },
   ];

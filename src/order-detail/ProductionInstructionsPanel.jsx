@@ -111,14 +111,14 @@ export default function ProductionInstructionsPanel({ order = {} }) {
         <div style={{ display: "grid", gap: "2px" }}>
           <span style={rowLabelStyle}>Deposit</span>
           <span style={rowValueStyle}>
-            {order.deposit?.status || "not set"}
-            {order.deposit?.amount ? ` • ${money(order.deposit.amount)}` : ""}
+            {order.deposit_workflow_status || order.deposit?.status || "not set"}
+            {order.deposit_amount ? ` • ${money(order.deposit_amount)}` : order.deposit?.amount ? ` • ${money(order.deposit.amount)}` : ""}
           </span>
         </div>
 
         <div style={{ display: "grid", gap: "2px" }}>
           <span style={rowLabelStyle}>Approval Status</span>
-          <span style={rowValueStyle}>{order.approval_status || "Not Sent"}</span>
+          <span style={rowValueStyle}>{order.artwork_approval_status || order.approval_status || "Not Sent"}</span>
         </div>
 
         <div style={{ display: "grid", gap: "2px" }}>

@@ -3,10 +3,12 @@ import {
   isOnHoldOperationalStatus,
   OPERATIONAL_STATUS_PROGRESS_STAGES,
 } from "../orders/orderWorkflow";
+import { buildProductionGatingState } from "../orders/workflowGating";
 
 export default function ProductionProgressTracker({ order }) {
   const currentStage = Math.max(0, getOperationalProgressStageIndex(order.status));
   const isOnHold = isOnHoldOperationalStatus(order.status);
+  const gating = buildProductionGatingState(order, { targetStatus: "Ready For Production" });
 
   return (
     <section
@@ -83,6 +85,22 @@ export default function ProductionProgressTracker({ order }) {
           }}
         >
           This order is currently on hold. Resume it from the workflow actions when production can continue.
+        </div>
+      ) : null}
+
+      {gating.blocked ? (
+        <div
+          style={{
+            marginTop: "12px",
+            borderRadius: "14px",
+            border: "1px solid #fdba74",
+            background: "#fff7ed",
+            padding: "12px 14px",
+            color: "#9a3412",
+            fontWeight: 700,
+          }}
+        >
+          Production gating active. {gating.blockingReasons.join(" ")}
         </div>
       ) : null}
     </section>

@@ -385,6 +385,20 @@ function resolveTimelineNote(order) {
   return customerOrderStatus.label;
 }
 
+function resolveArtworkApprovalLabel(record = {}) {
+  const required =
+    typeof record.artwork_approval_required === "boolean"
+      ? record.artwork_approval_required
+      : Boolean(record.customer_artwork_id) ||
+        (Array.isArray(record.artwork_files) && record.artwork_files.length > 0);
+
+  return required ? record.artwork_approval_status || "Pending Review" : "Not Required";
+}
+
+function resolveDepositWorkflowLabel(record = {}) {
+  return record.deposit_workflow_status || (record.deposit_required ? "Awaiting Deposit" : "Deposit Not Required");
+}
+
 export function RecordList({ records = [], type = "orders" }) {
   const safeRecords = Array.isArray(records) ? records : EMPTY_RECORDS;
   const renderCountRef = useRef(0);
@@ -506,6 +520,8 @@ export function RecordList({ records = [], type = "orders" }) {
                 label="Due"
                 value={dueDate ? formatShortDate(dueDate) : "Scheduling in progress"}
               />
+              <DetailPair label="Artwork" value={resolveArtworkApprovalLabel(record)} />
+              <DetailPair label="Deposit" value={resolveDepositWorkflowLabel(record)} />
               <DetailPair label="Balance" value={balance} />
             </div>
 

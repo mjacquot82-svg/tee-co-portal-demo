@@ -75,7 +75,7 @@ async function findEligibleProductionOrder(page, config) {
     .getByTestId("production-queue-row")
     .filter({
       has: page.locator(
-        '[data-testid="production-workflow-action"][data-action-key="move_to_production"]'
+        '[data-testid="production-workflow-action"][data-action-key="move_to_production"][data-blocked="false"]'
       ),
     });
   const targetedRow = config.productionOrderText
@@ -269,4 +269,69 @@ test("production workflow state transitions stay consistent across queue, detail
   await expectQueueWorkflowState(queuePage, orderNumber, "completed", "Completed");
 
   await queuePage.close();
+});
+
+test("production gating blocks movement until an override is used", async ({ page }) => {
+  const config = getOperationalConfig();
+
+  await page.goto("/login?redirectTo=/admin/orders");
+  await loginThroughOperationalPin(page, config, "/admin/orders");
+
+  const blockedOrderNumber = `TC-BLOCK-${Date.now().toString().slice(-6)}`;
+  await page.evaluate((orderNumber) => {
+    const storageKey = "teeCoStaffOrders";
+    const currentOrders = JSON.parse(window.localStorage.getItem(storageKey) || "[]");
+    const seedOrder = currentOrders[0] || {};
+    const now = new Date().toISOString();
+
+    currentOrders.unshift({
+      ...seedOrder,
+      order_number: orderNumber,
+      customer_name: "Blocked Workflow Test",
+      garment: seedOrder.garment || "Test Tee",
+      status: "New",
+      workflow_state: "New",
+      operational_visible: true,
+      quote_status: "Approved",
+      artwork_approval_required: true,
+      artwork_approval_status: "Pending Review",
+      deposit_required: true,
+      deposit_amount: Number(seedOrder.deposit_amount || 50) || 50,
+      deposit_workflow_status: "Awaiting Deposit",
+      workflow_overrides: {},
+      payment_history: [],
+      total_paid: 0,
+      activity_log: [],
+      created_at: now,
+      updated_at: now,
+    });
+
+    window.localStorage.setItem(storageKey, JSON.stringify(currentOrders));
+  }, blockedOrderNumber);
+
+  await page.reload();
+  await focusQueueOnOrder(page, blockedOrderNumber, "active");
+  const row = getQueueRow(page, blockedOrderNumber);
+  await expect(row).toBeVisible();
+  await expect(
+    row.locator('[data-testid="production-workflow-action"][data-action-key="move_to_production"]')
+  ).toHaveAttribute("data-blocked", "true");
+
+  await openOrderDetailFromQueue(page, row, blockedOrderNumber);
+  const initialTimelineCount = await getTimelineItemCount(page);
+  await getWorkflowActionButton(page, "move_to_production").click();
+
+  await expect(page.getByTestId("order-detail-page")).toHaveAttribute("data-workflow-state", "New");
+  await expect
+    .poll(() => getTimelineItemCount(page), {
+      message: "Expected a production blocked event after the gated action was attempted.",
+      timeout: 15_000,
+    })
+    .toBeGreaterThan(initialTimelineCount);
+  await expectTimelineToMention(page, ["blocked", "artwork", "deposit"]);
+
+  await page.getByRole("button", { name: "Force Move To Production" }).click();
+  await expectDetailWorkflowState(page, "Ready For Production");
+  await expect(getWorkflowActionButton(page, "start_printing")).toBeVisible();
+  await expectTimelineToMention(page, ["override", "forced", "production"]);
 });

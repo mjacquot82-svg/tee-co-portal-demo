@@ -17,8 +17,9 @@ export default function ApprovalReview() {
 
   function approveMockup() {
     const updated = updateStoredOrder(orderNumber, {
-      status: "Approved",
+      quote_status: order?.deposit_required ? "Awaiting Deposit" : "Approved",
       approval_status: "Customer Approved",
+      artwork_approval_status: "Approved",
       customer_approval_note: customerNote,
       customer_approved_at: new Date().toISOString(),
     });
@@ -27,8 +28,9 @@ export default function ApprovalReview() {
 
   function requestChanges() {
     const updated = updateStoredOrder(orderNumber, {
-      status: "Awaiting Artwork",
+      quote_status: "Awaiting Artwork Approval",
       approval_status: "Customer Requested Changes",
+      artwork_approval_status: "Needs Revision",
       customer_approval_note: customerNote,
       customer_revision_requested_at: new Date().toISOString(),
     });
@@ -88,7 +90,7 @@ export default function ApprovalReview() {
           <span><strong>Garment:</strong> {order.garment}</span>
           <span><strong>Placement:</strong> {order.placement}</span>
           <span><strong>Decoration:</strong> {order.decoration_type}</span>
-          <span><strong>Status:</strong> {order.approval_status || order.status}</span>
+          <span><strong>Status:</strong> {order.artwork_approval_status || order.approval_status || order.status}</span>
         </div>
 
         <h2 style={{ marginTop: "24px" }}>Artwork / Mockup Files</h2>

@@ -26,6 +26,7 @@ import {
   isCanceledOperationalStatus,
   normalizeOperationalStatus,
 } from "../orders/orderWorkflow";
+import { buildProductionGatingState } from "../orders/workflowGating";
 import { isAdminWorkspaceView, isStaffWorkspaceView } from "./adminRoleView";
 import { markAssignmentAttentionSeen } from "../lib/staffAssignmentAttentionStore";
 
@@ -102,6 +103,10 @@ export default function OrderDetail() {
     () => (order ? getAvailableProductionActions(order) : []),
     [order]
   );
+  const productionGating = useMemo(
+    () => (order ? buildProductionGatingState(order, { targetStatus: "Ready For Production" }) : null),
+    [order]
+  );
 
   useEffect(() => {
     return subscribeToStaffUsers((nextUsers) => {
@@ -176,9 +181,146 @@ export default function OrderDetail() {
   function handleWorkflowAction(action) {
     if (isCanceledOperationalStatus(order.status)) return;
 
+    const gating = buildProductionGatingState(order, action);
+    if (gating.blocked) {
+      saveOrderUpdates({
+        activity_type: "production_blocked",
+        activity_note: `${action.label} blocked. ${gating.blockingReasons.join(" ")}`,
+        last_production_blocked_at: new Date().toISOString(),
+        last_production_blocked_reasons: gating.blockingReasons,
+      });
+      return;
+    }
+
     const updates = buildWorkflowActionUpdates(order, action);
     if (!updates) return;
     saveOrderUpdates(updates);
+  }
+
+  function handleArtworkApprovalChange(nextStatus) {
+    if (isCanceledOperationalStatus(order.status)) return;
+
+    const normalizedStatus = String(nextStatus || "").trim();
+    const now = new Date().toISOString();
+    saveOrderUpdates({
+      artwork_approval_status: normalizedStatus,
+      approval_status:
+        normalizedStatus === "Approved"
+          ? "Customer Approved"
+          : normalizedStatus === "Needs Revision"
+          ? "Revision Requested"
+          : "Pending Review",
+      quote_status:
+        order.operational_visible === false
+          ? normalizedStatus === "Approved"
+            ? order.deposit_required
+              ? "Awaiting Deposit"
+              : "Approved"
+            : "Awaiting Artwork Approval"
+          : order.quote_status,
+      customer_approved_at: normalizedStatus === "Approved" ? order.customer_approved_at || now : null,
+      customer_revision_requested_at:
+        normalizedStatus === "Needs Revision"
+          ? order.customer_revision_requested_at || now
+          : null,
+      activity_type: "artwork_approval",
+      activity_note:
+        normalizedStatus === "Approved"
+          ? "Artwork approved."
+          : normalizedStatus === "Needs Revision"
+          ? "Artwork revision requested."
+          : "Artwork moved to pending review.",
+    });
+  }
+
+  function handleDepositWorkflowChange(nextStatus) {
+    if (isCanceledOperationalStatus(order.status)) return;
+
+    const normalizedStatus = String(nextStatus || "").trim();
+    const now = new Date().toISOString();
+    const nextDeposit = {
+      ...(order.deposit || {}),
+      amount: normalizedOrder.deposit_amount,
+      updated_at: now,
+      status:
+        normalizedStatus === "Deposit Not Required"
+          ? "not_required"
+          : normalizedStatus === "Deposit Requested"
+          ? "pending"
+          : normalizedStatus === "Deposit Received"
+          ? "paid"
+          : "awaiting",
+      requested_at:
+        normalizedStatus === "Deposit Requested"
+          ? order.deposit?.requested_at || now
+          : order.deposit?.requested_at || null,
+      paid_at:
+        normalizedStatus === "Deposit Received" ? order.deposit?.paid_at || now : order.deposit?.paid_at || null,
+    };
+
+    saveOrderUpdates({
+      deposit_workflow_status: normalizedStatus,
+      deposit_required: normalizedStatus !== "Deposit Not Required",
+      quote_status:
+        order.operational_visible === false
+          ? normalizedStatus === "Deposit Requested" || normalizedStatus === "Awaiting Deposit"
+            ? "Awaiting Deposit"
+            : order.artwork_approval_status === "Approved"
+            ? "Approved"
+            : order.quote_status
+          : order.quote_status,
+      deposit: nextDeposit,
+      activity_type: "deposit_workflow",
+      activity_note:
+        normalizedStatus === "Deposit Requested"
+          ? "Deposit requested."
+          : normalizedStatus === "Deposit Received"
+          ? "Deposit received."
+          : normalizedStatus === "Deposit Not Required"
+          ? "Deposit requirement cleared."
+          : "Awaiting deposit.",
+    });
+  }
+
+  function handleGatingOverride(overrideKey) {
+    if (!canManageAssignments || isCanceledOperationalStatus(order.status)) return;
+
+    const now = new Date().toISOString();
+    const overrideLabels = {
+      forceProduction: "Force Move To Production",
+      depositRequirement: "Override Deposit Requirement",
+      artworkApprovalRequirement: "Override Artwork Approval Requirement",
+    };
+
+    saveOrderUpdates({
+      workflow_overrides: {
+        ...order.workflow_overrides,
+        [overrideKey]: {
+          active: true,
+          usedAt: now,
+          usedByName: activeStaffUser?.name || "Unknown Staff",
+          usedByRole: activeStaffUser?.role || "",
+        },
+      },
+      activity_type: "gating_override_used",
+      activity_note: `${overrideLabels[overrideKey] || "Workflow gating override"} used.`,
+    });
+  }
+
+  function handleForceMoveToProduction() {
+    handleGatingOverride("forceProduction");
+
+    const updates = buildWorkflowActionUpdates(order, {
+      key: "move_to_production",
+      label: "Move To Production",
+      targetStatus: "Ready For Production",
+    });
+    if (!updates) return;
+
+    saveOrderUpdates({
+      ...updates,
+      activity_note: "Move To Production forced with operational override.",
+    });
   }
 
   function handlePrintTicket() {
@@ -224,6 +366,8 @@ export default function OrderDetail() {
     const now = new Date().toISOString();
 
     saveOrderUpdates({
+      deposit_workflow_status: "Deposit Requested",
+      deposit_required: Number(normalizedOrder.deposit_amount || 0) > 0,
       deposit: {
         ...(order.deposit || {}),
         amount: normalizedOrder.deposit_amount,
@@ -601,6 +745,11 @@ export default function OrderDetail() {
           workflowActions={workflowActions}
           onRunWorkflowAction={handleWorkflowAction}
           canManageAssignments={canManageAssignments}
+          productionGating={productionGating}
+          onArtworkApprovalChange={handleArtworkApprovalChange}
+          onDepositWorkflowChange={handleDepositWorkflowChange}
+          onGatingOverride={handleGatingOverride}
+          onForceMoveToProduction={handleForceMoveToProduction}
         />
 
         <ActivityTimeline

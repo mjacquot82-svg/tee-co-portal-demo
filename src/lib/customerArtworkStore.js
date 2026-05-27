@@ -84,6 +84,13 @@ export function normalizeArtworkRecord(artwork = {}) {
             linkedOrderIds,
             linkedQuoteIds,
           }),
+    artworkApprovalStatus:
+      typeof artwork.artworkApprovalStatus === "string" && artwork.artworkApprovalStatus.trim()
+        ? artwork.artworkApprovalStatus.trim()
+        : typeof artwork.artwork_approval_status === "string" &&
+            artwork.artwork_approval_status.trim()
+          ? artwork.artwork_approval_status.trim()
+          : "Pending Review",
     lastUsedAt,
   };
 }
@@ -133,6 +140,20 @@ function updateArtworkMetadataRecord(artworkId, updates) {
   }
 
   return nextRecord;
+}
+
+export function updateArtworkApprovalStatus(artworkId, artworkApprovalStatus) {
+  const normalizedArtworkId = String(artworkId || "").trim();
+
+  if (!normalizedArtworkId) {
+    throw new Error("Artwork ID is required to update approval status.");
+  }
+
+  return updateArtworkMetadataRecord(normalizedArtworkId, {
+    artworkApprovalStatus,
+    artwork_approval_status: artworkApprovalStatus,
+    updated_at: new Date().toISOString(),
+  });
 }
 
 function updateArtworkLinks(artworkId, relationshipKey, nextLinkedIds, options = {}) {

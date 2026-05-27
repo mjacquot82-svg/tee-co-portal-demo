@@ -128,6 +128,13 @@ function ArtworkMetadataBadges({ file }) {
       >
         {formatCompactMetaLabel(file.artworkStatus, "Library")}
       </span>
+      <span
+        className="customer-artwork-meta-badge"
+        data-testid="artwork-metadata-badge"
+        data-artwork-id={file.id || ""}
+      >
+        {formatCompactMetaLabel(file.artworkApprovalStatus, "Pending Review")}
+      </span>
       {usageCount ? (
         <span
           className="customer-artwork-meta-badge customer-artwork-meta-badge-usage"
@@ -233,6 +240,8 @@ function ArtworkDetailModal({ file, onClose }) {
           <div className="customer-artwork-modal-detail-grid">
             <span>Filename</span>
             <strong>{file.file_name || "Unavailable"}</strong>
+            <span>Approval</span>
+            <strong>{file.artworkApprovalStatus || "Pending Review"}</strong>
             <span>Last used</span>
             <strong>{formatDateTime(file.lastUsedAt) || "Not linked yet"}</strong>
           </div>

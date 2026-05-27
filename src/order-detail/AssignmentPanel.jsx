@@ -16,9 +16,17 @@ export default function AssignmentPanel({
   workflowActions = [],
   onRunWorkflowAction,
   canManageAssignments = true,
+  productionGating = null,
+  onArtworkApprovalChange,
+  onDepositWorkflowChange,
+  onGatingOverride,
+  onForceMoveToProduction,
 }) {
   const assignedWorker = order.assigned_to_staff_name || "Unassigned";
   const canceled = isCanceledOperationalStatus(order.status);
+  const activeOverrides = Array.isArray(productionGating?.activeOverrides)
+    ? productionGating.activeOverrides
+    : [];
 
   return (
     <section
@@ -148,6 +156,161 @@ export default function AssignmentPanel({
             border: "1px solid #e2e8f0",
           }}
         >
+          <div style={{ display: "grid", gap: "10px" }}>
+            <div>
+              <strong>Operational Gates</strong>
+              <div style={{ marginTop: "8px", display: "grid", gap: "8px" }}>
+                {(productionGating?.checks || []).map((check) => (
+                  <div
+                    key={check.key}
+                    style={{
+                      borderRadius: "12px",
+                      border: check.satisfied ? "1px solid #bbf7d0" : "1px solid #fed7aa",
+                      background: check.satisfied ? "#ecfdf5" : "#fff7ed",
+                      padding: "10px 12px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "10px",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <strong>{check.label}</strong>
+                      <span style={{ color: check.satisfied ? "#166534" : "#9a3412", fontWeight: 800 }}>
+                        {check.statusLabel}
+                      </span>
+                    </div>
+                    {check.overridden ? (
+                      <div style={{ marginTop: "4px", color: "#1d4ed8", fontSize: "12px", fontWeight: 700 }}>
+                        Override active
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
+              <label style={{ display: "grid", gap: "6px", fontSize: "13px", fontWeight: 700 }}>
+                Artwork Approval
+                <select
+                  value={order.artwork_approval_status || "Pending Review"}
+                  onChange={(event) => onArtworkApprovalChange?.(event.target.value)}
+                  disabled={canceled}
+                  style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "10px" }}
+                >
+                  <option value="Pending Review">Pending Review</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Needs Revision">Needs Revision</option>
+                </select>
+              </label>
+
+              <label style={{ display: "grid", gap: "6px", fontSize: "13px", fontWeight: 700 }}>
+                Deposit Workflow
+                <select
+                  value={order.deposit_workflow_status || "Awaiting Deposit"}
+                  onChange={(event) => onDepositWorkflowChange?.(event.target.value)}
+                  disabled={canceled}
+                  style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "10px" }}
+                >
+                  <option value="Deposit Not Required">Deposit Not Required</option>
+                  <option value="Deposit Requested">Deposit Requested</option>
+                  <option value="Awaiting Deposit">Awaiting Deposit</option>
+                  <option value="Deposit Received">Deposit Received</option>
+                </select>
+              </label>
+            </div>
+
+            {productionGating?.blocked ? (
+              <div
+                style={{
+                  borderRadius: "12px",
+                  border: "1px solid #fecaca",
+                  background: "#fff5f5",
+                  padding: "12px 14px",
+                  color: "#991b1b",
+                  fontWeight: 700,
+                  lineHeight: 1.5,
+                }}
+              >
+                {productionGating.blockingReasons.join(" ")}
+              </div>
+            ) : null}
+
+            {activeOverrides.length ? (
+              <div style={{ display: "grid", gap: "6px" }}>
+                <strong>Active Overrides</strong>
+                {activeOverrides.map((override) => (
+                  <div
+                    key={override.key}
+                    style={{
+                      borderRadius: "12px",
+                      border: "1px solid #bfdbfe",
+                      background: "#eff6ff",
+                      padding: "10px 12px",
+                      color: "#1d4ed8",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {override.key}
+                    {override.usedByName ? ` • ${override.usedByName}` : ""}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {canManageAssignments && !canceled ? (
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                {productionGating?.blocked ? (
+                  <button
+                    type="button"
+                    onClick={onForceMoveToProduction}
+                    style={{
+                      background: "#0f172a",
+                      color: "#ffffff",
+                      border: "1px solid #0f172a",
+                      borderRadius: "12px",
+                      padding: "10px 14px",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Force Move To Production
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => onGatingOverride?.("artworkApprovalRequirement")}
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    borderRadius: "12px",
+                    padding: "10px 14px",
+                    fontWeight: 700,
+                  }}
+                >
+                  Override Artwork Approval
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onGatingOverride?.("depositRequirement")}
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    borderRadius: "12px",
+                    padding: "10px 14px",
+                    fontWeight: 700,
+                  }}
+                >
+                  Override Deposit Requirement
+                </button>
+              </div>
+            ) : null}
+          </div>
+
           <div>
             <strong>Current Status</strong>
             <div style={{ marginTop: "4px", color: "#475569" }}>{order.status}</div>
@@ -162,20 +325,33 @@ export default function AssignmentPanel({
                   data-testid="workflow-action-button"
                   data-action-key={action.key}
                   data-target-status={action.targetStatus || ""}
+                  data-blocked={action.blocked ? "true" : "false"}
                   onClick={() => onRunWorkflowAction?.(action, order)}
                   style={{
-                    background: action.targetStatus === "On Hold" ? "#fff1f2" : "#171717",
-                    color: action.targetStatus === "On Hold" ? "#be123c" : "#ffffff",
+                    background: action.blocked
+                      ? "#fff7ed"
+                      : action.targetStatus === "On Hold"
+                      ? "#fff1f2"
+                      : "#171717",
+                    color: action.blocked
+                      ? "#9a3412"
+                      : action.targetStatus === "On Hold"
+                      ? "#be123c"
+                      : "#ffffff",
                     border:
-                      action.targetStatus === "On Hold"
+                      action.blocked
+                        ? "1px solid #fdba74"
+                        : action.targetStatus === "On Hold"
                         ? "1px solid #fecdd3"
                         : "1px solid #171717",
                     borderRadius: "12px",
                     padding: "10px 14px",
                     fontWeight: 700,
                   }}
+                  title={action.blocked ? action.blockedReasons.join(" ") : ""}
                 >
                   {action.label}
+                  {action.blocked ? " Blocked" : ""}
                 </button>
               ))}
             </div>

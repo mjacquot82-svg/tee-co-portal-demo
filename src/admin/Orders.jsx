@@ -4,6 +4,7 @@ import StatusBadge from "../components/StatusBadge";
 import { formatShortDate } from "../lib/dateFormatting";
 import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
 import { buildWorkflowActionUpdates } from "../orders/buildWorkflowActionUpdates";
+import { buildProductionGatingState } from "../orders/workflowGating";
 import { sortOrdersByOperationalStatus } from "../orders/orderWorkflow";
 import { useCustomerTimeline } from "../lib/customerTimelineStore";
 import { getOperationalStaffUsers } from "../lib/staffUsersStore";
@@ -149,6 +150,7 @@ function QueueFlag({ label, tone = "default" }) {
 function QueueActionButton({ action, onClick, emphasis = "secondary" }) {
   const isHoldAction = action.targetStatus === "On Hold";
   const isPrimary = emphasis === "primary";
+  const isBlocked = action.blocked === true;
 
   return (
     <button
@@ -156,23 +158,28 @@ function QueueActionButton({ action, onClick, emphasis = "secondary" }) {
       data-testid="production-workflow-action"
       data-action-key={action.key}
       data-target-status={action.targetStatus || ""}
+      data-blocked={isBlocked ? "true" : "false"}
       onClick={onClick}
       style={{
-        border: isHoldAction
+        border: isBlocked
+          ? "1px solid #fdba74"
+          : isHoldAction
           ? "1px solid #fecdd3"
           : isPrimary
           ? "1px solid #171717"
           : "1px solid #cbd5e1",
-        background: isHoldAction ? "#fff1f2" : isPrimary ? "#171717" : "#ffffff",
-        color: isHoldAction ? "#be123c" : isPrimary ? "#ffffff" : "#0f172a",
+        background: isBlocked ? "#fff7ed" : isHoldAction ? "#fff1f2" : isPrimary ? "#171717" : "#ffffff",
+        color: isBlocked ? "#9a3412" : isHoldAction ? "#be123c" : isPrimary ? "#ffffff" : "#0f172a",
         borderRadius: "10px",
         padding: "8px 10px",
         fontWeight: 700,
         cursor: "pointer",
         whiteSpace: "nowrap",
       }}
+      title={isBlocked ? action.blockedReasons?.join(" ") : ""}
     >
       {action.label}
+      {isBlocked ? " Blocked" : ""}
     </button>
   );
 }
@@ -687,6 +694,17 @@ export default function Orders() {
   }
 
   function handleRunAction(order, action) {
+    const gating = buildProductionGatingState(order, action);
+    if (gating.blocked) {
+      updateStoredOrder(order.order_number, {
+        activity_type: "production_blocked",
+        activity_note: `${action.label} blocked. ${gating.blockingReasons.join(" ")}`,
+        last_production_blocked_at: new Date().toISOString(),
+        last_production_blocked_reasons: gating.blockingReasons,
+      });
+      return;
+    }
+
     const updates = buildWorkflowActionUpdates(order, action);
     if (!updates) return;
     updateStoredOrder(order.order_number, updates);
