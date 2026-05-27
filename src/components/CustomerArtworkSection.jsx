@@ -394,7 +394,7 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
   );
 
   return (
-    <section style={sectionCardStyle}>
+    <section id="customer-artwork-library" style={sectionCardStyle}>
       <div
         style={{
           display: "flex",

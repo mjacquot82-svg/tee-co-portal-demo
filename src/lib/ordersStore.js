@@ -18,6 +18,9 @@ import { formatShortDate, toIsoTimestamp } from "./dateFormatting";
 import { getArtworkDisplayName, getOrderArtworkFiles } from "./orderArtwork";
 import { createOperationalEvent } from "./operationalEventsStore";
 import { linkArtworkToOrder, linkArtworkToQuote } from "./customerArtworkStore";
+import { addCustomerTimelineEvent } from "./customerTimelineStore";
+import { resolveCustomerForRecord } from "./customerRecordMatching";
+import { deriveOperationalWorkflowState } from "./operationalWorkflow";
 
 const STORAGE_KEY = "teeCoStaffOrders";
 const orderListeners = new Set();
@@ -174,6 +177,16 @@ function normalizeStoredOrder(order = {}) {
       typeof order.operational_visible === "boolean"
         ? order.operational_visible
         : isQuoteReadyForProduction(quoteStatus) && isActiveOperationalStatus(status),
+    workflow_state: deriveOperationalWorkflowState({
+      ...order,
+      status,
+      quote_status: quoteStatus,
+      operational_visible:
+        typeof order.operational_visible === "boolean"
+          ? order.operational_visible
+          : isQuoteReadyForProduction(quoteStatus) && isActiveOperationalStatus(status),
+      quote_archived: order.quote_archived,
+    }),
   });
 }
 
@@ -420,6 +433,22 @@ function buildOperationalEventRecord(order, eventType, summary, options = {}) {
   };
 }
 
+function emitCustomerTimelineEventForOrder(order, eventType, summary, metadata = {}, timestamp) {
+  const customer = resolveCustomerForRecord(order);
+  if (!customer?.id) return;
+
+  addCustomerTimelineEvent(customer.id, {
+    eventType,
+    summary,
+    timestamp: timestamp || new Date().toISOString(),
+    metadata: {
+      orderNumber: order.order_number,
+      workflowState: order.workflow_state,
+      ...metadata,
+    },
+  });
+}
+
 function emitOperationalEventsForOrderUpdate(previousOrder, nextOrder, updates = {}, timestamp) {
   if (!previousOrder || !nextOrder) return;
 
@@ -503,6 +532,17 @@ function emitOperationalEventsForOrderUpdate(previousOrder, nextOrder, updates =
     normalizedPreviousStatus !== "Completed" &&
     normalizedNextStatus === "Completed"
   ) {
+    emitCustomerTimelineEventForOrder(
+      nextOrder,
+      "order_completed",
+      `Order ${nextOrder.order_number} completed.`,
+      {
+        previousStatus: previousOrder.status,
+        nextStatus: nextOrder.status,
+      },
+      timestamp
+    );
+
     eventRecords.push(
       buildOperationalEventRecord(
         nextOrder,
@@ -528,6 +568,22 @@ function emitOperationalEventsForOrderUpdate(previousOrder, nextOrder, updates =
         )
       );
     }
+  }
+
+  if (
+    normalizedPreviousStatus !== "In Production" &&
+    normalizedNextStatus === "In Production"
+  ) {
+    emitCustomerTimelineEventForOrder(
+      nextOrder,
+      "production_started",
+      `Production started for order ${nextOrder.order_number}.`,
+      {
+        previousStatus: previousOrder.status,
+        nextStatus: nextOrder.status,
+      },
+      timestamp
+    );
   }
 
   if (
@@ -615,6 +671,23 @@ function emitOperationalEventsForOrderUpdate(previousOrder, nextOrder, updates =
     );
   }
 
+  if (
+    previousOrder.operational_visible === false &&
+    nextOrder.operational_visible === false &&
+    Object.keys(stripActivityMeta(updates)).length > 0
+  ) {
+    emitCustomerTimelineEventForOrder(
+      nextOrder,
+      "quote_updated",
+      `Quote ${nextOrder.order_number} updated.`,
+      {
+        previousQuoteStatus,
+        nextQuoteStatus,
+      },
+      timestamp
+    );
+  }
+
   eventRecords.filter(Boolean).forEach((eventRecord) => {
     createOperationalEvent(eventRecord);
   });
@@ -690,11 +763,15 @@ export function createStoredOrder(orderInput) {
   const orderNumber = `TC-${Date.now().toString().slice(-6)}`;
   const createdAt = new Date().toISOString();
   const createdAuditFields = buildStaffAuditFields("created");
+  const matchedCustomer = resolveCustomerForRecord(orderInput);
 
   const order = {
     ...orderInput,
     ...createdAuditFields,
     order_number: orderNumber,
+    customer_id: orderInput.customer_id || matchedCustomer?.id || "",
+    customer_email:
+      orderInput.customer_email || orderInput.email || matchedCustomer?.email || "",
     status: normalizeOperationalStatus(orderInput.status || "New"),
     date: formatShortDate(createdAt),
     created_at: createdAt,
@@ -713,6 +790,17 @@ export function createStoredOrder(orderInput) {
   if (!saveStoredOrders(nextOrders)) {
     throw new Error("Unable to save order. Browser storage write failed.");
   }
+
+  emitCustomerTimelineEventForOrder(
+    normalizeStoredOrder(order),
+    order.operational_visible === false ? "quote_created" : "order_created",
+    `${order.operational_visible === false ? "Quote" : "Order"} ${orderNumber} created.`,
+    {
+      quoteStatus: order.quote_status,
+      orderStatus: order.status,
+    },
+    createdAt
+  );
 
   if (order.customer_artwork_id) {
     if (order.operational_visible === false || order.quote_status !== "Ready For Production") {
@@ -747,6 +835,11 @@ export function updateStoredOrder(orderNumber, updates) {
     updatedOrder = normalizeStoredOrder({
       ...order,
       ...cleanUpdates,
+      customer_id:
+        cleanUpdates.customer_id ||
+        order.customer_id ||
+        resolveCustomerForRecord({ ...order, ...cleanUpdates })?.id ||
+        "",
       ...buildStaffAuditFields("updated"),
       created_at: order.created_at,
       updated_at: now,

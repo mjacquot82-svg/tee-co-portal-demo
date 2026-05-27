@@ -6,17 +6,16 @@ import { getStoredQuickSales } from "../lib/salesStore";
 import CustomerArtworkSection from "../components/CustomerArtworkSection";
 import CustomerTimelineSection from "../components/CustomerTimelineSection";
 import StatusBadge from "../components/StatusBadge";
+import { matchesCustomerRecord } from "../lib/customerRecordMatching";
+import {
+  deriveOperationalWorkflowState,
+  getWorkflowStateTone,
+  isWorkflowActiveState,
+  isWorkflowCompletedState,
+} from "../lib/operationalWorkflow";
 
 function currency(value) {
   return `$${Number(value || 0).toFixed(2)}`;
-}
-
-function normalize(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function normalizePhone(value) {
-  return normalize(value).replace(/\D/g, "");
 }
 
 function formatDateTime(value) {
@@ -35,40 +34,6 @@ function formatDateTime(value) {
 
 function compareTimestamps(left, right) {
   return new Date(right || 0).getTime() - new Date(left || 0).getTime();
-}
-
-function matchesCustomerRecord(customer, record) {
-  if (!customer) return false;
-
-  if (customer.id && record.customer_id && customer.id === record.customer_id) {
-    return true;
-  }
-
-  const customerName = normalize(customer.name);
-  const customerEmail = normalize(customer.email);
-  const customerPhone = normalizePhone(customer.phone);
-  const recordName = normalize(record.customer_name || record.name);
-  const recordEmail = normalize(record.email);
-  const recordPhone = normalizePhone(record.phone);
-  const linkedNumbers = new Set(customer.order_numbers || []);
-
-  if (record.order_number && linkedNumbers.has(record.order_number)) {
-    return true;
-  }
-
-  if (customerName && recordName && customerName === recordName) {
-    return true;
-  }
-
-  if (customerEmail && recordEmail && customerEmail === recordEmail) {
-    return true;
-  }
-
-  if (customerPhone && recordPhone && customerPhone === recordPhone) {
-    return true;
-  }
-
-  return false;
 }
 
 const sectionCardStyle = {
@@ -102,6 +67,24 @@ const labelStyle = {
   gap: "8px",
   fontWeight: 600,
   color: "#292524",
+};
+
+const compactSectionStyle = {
+  border: "1px solid #e2e8f0",
+  borderRadius: "18px",
+  padding: "16px",
+  background: "#fcfcfd",
+  display: "grid",
+  gap: "12px",
+};
+
+const compactRowStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+  gap: "12px",
+  alignItems: "center",
+  padding: "12px 0",
+  borderTop: "1px solid #e2e8f0",
 };
 
 function buildCustomerForm(customer) {
@@ -169,6 +152,60 @@ export default function CustomerDetail() {
       );
   }, [customer, sales]);
 
+  const quoteRecords = useMemo(
+    () =>
+      customerOrders
+        .filter((order) => order.operational_visible === false && order.quote_archived !== true)
+        .sort((left, right) =>
+          compareTimestamps(
+            left.updated_at || left.created_at || left.date,
+            right.updated_at || right.created_at || right.date
+          )
+        ),
+    [customerOrders]
+  );
+
+  const activeOrderRecords = useMemo(
+    () =>
+      customerOrders
+        .filter(
+          (order) =>
+            order.operational_visible !== false &&
+            isWorkflowActiveState(deriveOperationalWorkflowState(order))
+        )
+        .sort((left, right) => {
+          const leftDue = left.due_date ? new Date(left.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+          const rightDue = right.due_date ? new Date(right.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+
+          if (leftDue !== rightDue) {
+            return leftDue - rightDue;
+          }
+
+          return compareTimestamps(
+            left.updated_at || left.created_at || left.date,
+            right.updated_at || right.created_at || right.date
+          );
+        }),
+    [customerOrders]
+  );
+
+  const completedOrderRecords = useMemo(
+    () =>
+      customerOrders
+        .filter(
+          (order) =>
+            order.operational_visible !== false &&
+            isWorkflowCompletedState(deriveOperationalWorkflowState(order))
+        )
+        .sort((left, right) =>
+          compareTimestamps(
+            left.completed_at || left.updated_at || left.created_at || left.date,
+            right.completed_at || right.updated_at || right.created_at || right.date
+          )
+        ),
+    [customerOrders]
+  );
+
   const operationalSummary = useMemo(() => {
     const orderBalanceDue = customerOrders.reduce(
       (sum, order) => sum + Number(order.balance_due || 0),
@@ -206,6 +243,179 @@ export default function CustomerDetail() {
     if (duplicated) {
       navigate(`/admin/orders/${duplicated.order_number}`);
     }
+  }
+
+  function renderWorkflowStatePill(record) {
+    const workflowState = deriveOperationalWorkflowState(record);
+    const tone = getWorkflowStateTone(workflowState);
+
+    return (
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          borderRadius: "999px",
+          padding: "6px 10px",
+          fontSize: "11px",
+          fontWeight: 800,
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+          background: tone.background,
+          color: tone.color,
+          border: `1px solid ${tone.border}`,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {workflowState}
+      </span>
+    );
+  }
+
+  function renderArtworkIndicator(record) {
+    const artworkCount = Array.isArray(record.artwork_files) ? record.artwork_files.length : 0;
+    const firstArtwork = record.artwork_reference_names?.[0] || record.customer_artwork_name || "";
+
+    if (!artworkCount && !firstArtwork) {
+      return (
+        <span style={{ color: "#94a3b8", fontSize: "12px", fontWeight: 700 }}>
+          No artwork linked
+        </span>
+      );
+    }
+
+    return (
+      <a
+        href="#customer-artwork-library"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "8px",
+          color: "#0f172a",
+          textDecoration: "none",
+          fontSize: "12px",
+          fontWeight: 700,
+        }}
+      >
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "22px",
+            height: "22px",
+            borderRadius: "999px",
+            background: "#eff6ff",
+            color: "#1d4ed8",
+            fontSize: "11px",
+            fontWeight: 900,
+          }}
+        >
+          A
+        </span>
+        <span title={firstArtwork || "Linked artwork"}>
+          {artworkCount > 1 ? `${artworkCount} artwork linked` : firstArtwork || "Linked artwork"}
+        </span>
+      </a>
+    );
+  }
+
+  function renderOperationalSection(title, description, records, emptyMessage, type) {
+    return (
+      <section style={compactSectionStyle}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "10px",
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <h3 style={{ margin: 0, color: "#171717", fontSize: "17px" }}>{title}</h3>
+            <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: "13px" }}>{description}</p>
+          </div>
+          <strong style={{ color: "#334155", fontSize: "13px" }}>
+            {records.length} {records.length === 1 ? "record" : "records"}
+          </strong>
+        </div>
+
+        {!records.length ? (
+          <div
+            style={{
+              borderRadius: "14px",
+              border: "1px dashed #cbd5e1",
+              padding: "14px",
+              color: "#64748b",
+              fontSize: "14px",
+            }}
+          >
+            {emptyMessage}
+          </div>
+        ) : (
+          <div>
+            {records.map((record, index) => (
+              <article
+                key={record.order_number}
+                style={{
+                  ...compactRowStyle,
+                  borderTop: index === 0 ? "1px solid #e2e8f0" : compactRowStyle.borderTop,
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <Link
+                    to={`${type === "quote" ? "/admin/quotes" : "/admin/orders"}/${record.order_number}`}
+                    style={{ color: "#0f172a", fontWeight: 800, textDecoration: "none" }}
+                  >
+                    {record.order_number}
+                  </Link>
+                  <div style={{ marginTop: "4px", color: "#475569", fontSize: "13px" }}>
+                    {record.garment || "Custom item"}
+                    {record.qty ? ` • ${record.qty} pcs` : ""}
+                  </div>
+                </div>
+
+                <div style={{ minWidth: 0 }}>
+                  {renderWorkflowStatePill(record)}
+                  <div style={{ marginTop: "6px", color: "#64748b", fontSize: "12px" }}>
+                    {type === "completed"
+                      ? `Completed ${formatDateTime(record.completed_at || record.updated_at) || "recently"}`
+                      : `Updated ${formatDateTime(record.updated_at || record.created_at) || "recently"}`}
+                  </div>
+                </div>
+
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ color: "#0f172a", fontSize: "13px", fontWeight: 700 }}>
+                    {record.due_date || "No due date"}
+                  </div>
+                  <div style={{ marginTop: "6px" }}>{renderArtworkIndicator(record)}</div>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", flexWrap: "wrap" }}>
+                  {type !== "quote" ? <StatusBadge status={record.status || "Draft"} /> : null}
+                  {type !== "quote" ? (
+                    <button
+                      type="button"
+                      onClick={() => handleDuplicate(record.order_number)}
+                      style={{
+                        border: "1px solid #cbd5e1",
+                        background: "#ffffff",
+                        borderRadius: "10px",
+                        padding: "8px 10px",
+                        cursor: "pointer",
+                        fontWeight: 700,
+                      }}
+                    >
+                      Repeat
+                    </button>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    );
   }
 
   function updateEditForm(field, value) {
@@ -462,6 +672,30 @@ export default function CustomerDetail() {
       </section>
 
       <div style={{ display: "grid", gap: "18px" }}>
+        {renderOperationalSection(
+          "Active Quotes",
+          "Open quote work, approvals, and deposit checkpoints for this account.",
+          quoteRecords,
+          "No active quotes linked to this customer yet.",
+          "quote"
+        )}
+
+        {renderOperationalSection(
+          "Active Orders",
+          "Current production and pickup workflow in operational sequence.",
+          activeOrderRecords,
+          "No active production orders linked to this customer yet.",
+          "order"
+        )}
+
+        {renderOperationalSection(
+          "Completed Orders",
+          "Recent finished work for repeat-order context and handoff history.",
+          completedOrderRecords,
+          "No completed orders linked to this customer yet.",
+          "completed"
+        )}
+
         <CustomerTimelineSection customerId={customer.id} />
 
         {isEditing ? (
@@ -807,92 +1041,6 @@ export default function CustomerDetail() {
           )}
         </section>
 
-        <section style={sectionCardStyle}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: "12px",
-              flexWrap: "wrap",
-              alignItems: "center",
-              marginBottom: "14px",
-            }}
-          >
-            <div>
-              <h2 style={{ margin: 0 }}>Order History</h2>
-              <p style={{ margin: "4px 0 0", color: "#64748b" }}>
-                Repeat jobs, payment state, and due dates stay visible in one place.
-              </p>
-            </div>
-            <strong>{customerOrders.length} orders</strong>
-          </div>
-
-          {customerOrders.length ? (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ textAlign: "left", borderBottom: "1px solid #e2e8f0" }}>
-                    <th style={{ padding: "10px 8px" }}>Order</th>
-                    <th style={{ padding: "10px 8px" }}>Garment</th>
-                    <th style={{ padding: "10px 8px" }}>Qty</th>
-                    <th style={{ padding: "10px 8px" }}>Status</th>
-                    <th style={{ padding: "10px 8px" }}>Payment</th>
-                    <th style={{ padding: "10px 8px" }}>Balance</th>
-                    <th style={{ padding: "10px 8px" }}>Due</th>
-                    <th style={{ padding: "10px 8px" }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {customerOrders.map((order) => (
-                    <tr key={order.order_number} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                      <td style={{ padding: "12px 8px" }}>
-                        <Link to={`/admin/orders/${order.order_number}`} style={{ fontWeight: 700 }}>
-                          {order.order_number}
-                        </Link>
-                      </td>
-                      <td style={{ padding: "12px 8px" }}>{order.garment || "—"}</td>
-                      <td style={{ padding: "12px 8px" }}>{order.qty || "—"}</td>
-                      <td style={{ padding: "12px 8px" }}>
-                        <StatusBadge status={order.status || "New"} />
-                      </td>
-                      <td style={{ padding: "12px 8px" }}>
-                        {order.payment_status || "Not recorded"}
-                      </td>
-                      <td
-                        style={{
-                          padding: "12px 8px",
-                          fontWeight: 700,
-                          color: Number(order.balance_due || 0) > 0 ? "#b45309" : "#166534",
-                        }}
-                      >
-                        {currency(order.balance_due)}
-                      </td>
-                      <td style={{ padding: "12px 8px" }}>{order.due_date || "—"}</td>
-                      <td style={{ padding: "12px 8px" }}>
-                        <button
-                          type="button"
-                          onClick={() => handleDuplicate(order.order_number)}
-                          style={{
-                            border: "1px solid #cbd5e1",
-                            background: "#ffffff",
-                            borderRadius: "10px",
-                            padding: "8px 10px",
-                            cursor: "pointer",
-                            fontWeight: 700,
-                          }}
-                        >
-                          Duplicate
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p style={{ color: "#94a3b8" }}>No linked orders yet.</p>
-          )}
-        </section>
       </div>
     </div>
   );
