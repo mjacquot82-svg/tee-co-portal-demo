@@ -373,6 +373,10 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
 
     async function loadArtwork() {
       if (!customerId) {
+        console.info("[CustomerArtworkSection] loadArtwork skipped: missing customerId", {
+          customerId,
+          customerName,
+        });
         if (isActive) {
           setArtwork([]);
           setLoadState("idle");
@@ -396,8 +400,24 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
       }
 
       try {
+        console.info("[CustomerArtworkSection] loadArtwork start", {
+          customerId,
+          customerName,
+        });
         const loadedArtwork = await listCustomerArtwork(customerId);
         if (!isActive) return;
+        console.info("[CustomerArtworkSection] loadArtwork success", {
+          customerId,
+          customerName,
+          artworkCount: loadedArtwork.length,
+          artworkCustomerIds: Array.from(
+            new Set(
+              loadedArtwork
+                .map((entry) => String(entry?.customer_id || "").trim())
+                .filter(Boolean)
+            )
+          ),
+        });
         setArtwork(loadedArtwork);
         setSelectedArtworkId((currentSelectedArtworkId) =>
           loadedArtwork.some((entry) => entry.id === currentSelectedArtworkId)
@@ -408,6 +428,11 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
       } catch (error) {
         if (!isActive) return;
         console.error("Unable to load customer artwork", error);
+        console.error("[CustomerArtworkSection] loadArtwork failure", {
+          customerId,
+          customerName,
+          error,
+        });
         setArtwork([]);
         setSelectedArtworkId("");
         setLoadState("error");

@@ -16,6 +16,24 @@ export const CUSTOMER_ARTWORK_TABLE = "customer_artwork";
 const SUPPORTED_ARTWORK_EXTENSIONS = new Set(["png", "jpg", "jpeg", "pdf", "svg", "ai"]);
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
+function normalizeCustomerId(value) {
+  return String(value || "").trim();
+}
+
+function buildCustomerIdLookupCandidates(customerId) {
+  const normalizedCustomerId = normalizeCustomerId(customerId);
+  if (!normalizedCustomerId) return [];
+
+  const candidates = [normalizedCustomerId];
+  if (/^\d+$/.test(normalizedCustomerId)) {
+    candidates.push(`customer-${normalizedCustomerId}`);
+  } else if (/^customer-\d+$/.test(normalizedCustomerId)) {
+    candidates.push(normalizedCustomerId.replace(/^customer-/, ""));
+  }
+
+  return Array.from(new Set(candidates.filter(Boolean)));
+}
+
 function ensureSupabaseArtworkReady() {
   if (!isSupabaseConfigured || !supabase) {
     throw new Error("Supabase is not configured for artwork uploads in this workspace.");
@@ -120,7 +138,7 @@ async function createSignedUrl(storagePath) {
   return data?.signedUrl || "";
 }
 
-async function fetchCustomerArtworkRows(customerId) {
+async function fetchCustomerArtworkRowsById(customerId) {
   const { data, error } = await supabase
     .from(CUSTOMER_ARTWORK_TABLE)
     .select("*")
@@ -132,6 +150,40 @@ async function fetchCustomerArtworkRows(customerId) {
   }
 
   return Array.isArray(data) ? data : [];
+}
+
+async function fetchCustomerArtworkRows(customerId) {
+  const lookupCandidates = buildCustomerIdLookupCandidates(customerId);
+  let matchedCustomerId = "";
+
+  for (const lookupCustomerId of lookupCandidates) {
+    console.info("[customerArtworkService] fetchCustomerArtworkRows lookup", {
+      requestedCustomerId: normalizeCustomerId(customerId),
+      lookupCustomerId,
+      query: `.eq("customer_id", "${lookupCustomerId}")`,
+    });
+
+    const rows = await fetchCustomerArtworkRowsById(lookupCustomerId);
+    if (rows.length > 0) {
+      matchedCustomerId = lookupCustomerId;
+      console.info("[customerArtworkService] fetchCustomerArtworkRows matched", {
+        requestedCustomerId: normalizeCustomerId(customerId),
+        matchedCustomerId,
+        rowCount: rows.length,
+        rowCustomerIds: Array.from(
+          new Set(rows.map((row) => normalizeCustomerId(row?.customer_id)).filter(Boolean))
+        ),
+      });
+      return rows;
+    }
+  }
+
+  console.warn("[customerArtworkService] fetchCustomerArtworkRows found no rows", {
+    requestedCustomerId: normalizeCustomerId(customerId),
+    lookupCandidates,
+  });
+
+  return [];
 }
 
 function buildArtworkInsertPayload(customerId, storagePath, file, options = {}) {
@@ -202,7 +254,7 @@ async function buildFileFromLegacyArtwork(artwork) {
 
 function buildLegacyArtworkRecords(customerId) {
   const legacyMetadataMap = getLegacyArtworkMetadataMap();
-  const normalizedCustomerId = String(customerId || "").trim();
+  const normalizedCustomerId = normalizeCustomerId(customerId);
 
   return getAllCustomerArtwork()
     .filter((artwork) => !normalizedCustomerId || artwork.customer_id === normalizedCustomerId)
@@ -402,13 +454,29 @@ export function getArtworkUploadAcceptValue() {
 export async function listCustomerArtwork(customerId) {
   ensureSupabaseArtworkReady();
 
-  if (!customerId) return [];
+  const normalizedCustomerId = normalizeCustomerId(customerId);
+  if (!normalizedCustomerId) return [];
 
-  let rows = await fetchCustomerArtworkRows(customerId);
-  const migratedCount = await migrateLegacyArtworkForCustomer(customerId, rows);
+  console.info("[customerArtworkService] listCustomerArtwork start", {
+    customerId,
+    normalizedCustomerId,
+    lookupCandidates: buildCustomerIdLookupCandidates(normalizedCustomerId),
+  });
+
+  let rows = await fetchCustomerArtworkRows(normalizedCustomerId);
+  const migratedCount = await migrateLegacyArtworkForCustomer(normalizedCustomerId, rows);
   if (migratedCount) {
-    rows = await fetchCustomerArtworkRows(customerId);
+    rows = await fetchCustomerArtworkRows(normalizedCustomerId);
   }
+
+  console.info("[customerArtworkService] listCustomerArtwork complete", {
+    customerId,
+    normalizedCustomerId,
+    rowCount: rows.length,
+    rowCustomerIds: Array.from(
+      new Set(rows.map((row) => normalizeCustomerId(row?.customer_id)).filter(Boolean))
+    ),
+  });
 
   return hydrateArtworkRows(rows);
 }

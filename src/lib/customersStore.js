@@ -9,7 +9,7 @@ import { addCustomerTimelineEvent } from "./customerTimelineStore";
 import { supabase } from "./supabase";
 
 const STORAGE_KEY = "teeCoCustomers";
-const SUPABASE_TABLE = "Customers";
+const SUPABASE_TABLE = "customers";
 const SUPABASE_SELECT_FIELDS =
   "id, name, email, phone, company, notes, created_at, updated_at";
 const customerListeners = new Set();
