@@ -106,21 +106,55 @@ function ArtworkSkeletonCard() {
 }
 
 function ArtworkMetadataBadges({ file }) {
-  const { usageCount } = buildArtworkUsageSummary(file);
+  const { usageCount, orderCount, quoteCount } = buildArtworkUsageSummary(file);
 
   return (
-    <div className="customer-artwork-meta-row">
-      <span className="customer-artwork-meta-badge">
+    <div
+      className="customer-artwork-meta-row"
+      data-testid="artwork-metadata-badges"
+      data-artwork-id={file.id || ""}
+    >
+      <span
+        className="customer-artwork-meta-badge"
+        data-testid="artwork-metadata-badge"
+        data-artwork-id={file.id || ""}
+      >
         {formatCompactMetaLabel(file.artworkType, "Artwork")}
       </span>
-      <span className="customer-artwork-meta-badge customer-artwork-meta-badge-status">
+      <span
+        className="customer-artwork-meta-badge customer-artwork-meta-badge-status"
+        data-testid="artwork-metadata-badge"
+        data-artwork-id={file.id || ""}
+      >
         {formatCompactMetaLabel(file.artworkStatus, "Library")}
       </span>
       {usageCount ? (
-        <span className="customer-artwork-meta-badge customer-artwork-meta-badge-usage">
+        <span
+          className="customer-artwork-meta-badge customer-artwork-meta-badge-usage"
+          data-testid="artwork-metadata-badge"
+          data-artwork-id={file.id || ""}
+        >
           {usageCount} link{usageCount === 1 ? "" : "s"}
         </span>
       ) : null}
+      <span
+        data-testid="artwork-linked-order-indicator"
+        data-artwork-id={file.id || ""}
+        data-linked-count={orderCount}
+        hidden
+        aria-hidden="true"
+      >
+        {orderCount}
+      </span>
+      <span
+        data-testid="artwork-linked-quote-indicator"
+        data-artwork-id={file.id || ""}
+        data-linked-count={quoteCount}
+        hidden
+        aria-hidden="true"
+      >
+        {quoteCount}
+      </span>
     </div>
   );
 }
@@ -148,6 +182,8 @@ function ArtworkDetailModal({ file, onClose }) {
         role="dialog"
         aria-modal="true"
         aria-label={`Artwork details for ${file.file_name}`}
+        data-testid="artwork-detail-modal"
+        data-artwork-id={file.id || ""}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="customer-artwork-modal-header">
@@ -167,11 +203,21 @@ function ArtworkDetailModal({ file, onClose }) {
         </div>
 
         <div className="customer-artwork-modal-metadata">
-          <div className="customer-artwork-modal-stat">
+          <div
+            className="customer-artwork-modal-stat"
+            data-testid="artwork-linked-order-indicator"
+            data-artwork-id={file.id || ""}
+            data-linked-count={orderCount}
+          >
             <span>Orders linked</span>
             <strong>{orderCount}</strong>
           </div>
-          <div className="customer-artwork-modal-stat">
+          <div
+            className="customer-artwork-modal-stat"
+            data-testid="artwork-linked-quote-indicator"
+            data-artwork-id={file.id || ""}
+            data-linked-count={quoteCount}
+          >
             <span>Quotes linked</span>
             <strong>{quoteCount}</strong>
           </div>
@@ -237,11 +283,18 @@ function ArtworkLibrary({ artwork, uploading, onSelectArtwork }) {
       <div className="customer-artwork-grid">
         {uploading ? <ArtworkSkeletonCard /> : null}
         {artwork.map((file) => (
-          <article key={file.id} className="customer-artwork-card">
+          <article
+            key={file.id}
+            className="customer-artwork-card"
+            data-testid="artwork-thumbnail"
+            data-artwork-id={file.id || ""}
+          >
             <button
               type="button"
               className="customer-artwork-preview-button"
               onClick={() => onSelectArtwork(file)}
+              data-testid="artwork-thumbnail-button"
+              data-artwork-id={file.id || ""}
             >
               <div className="customer-artwork-preview-shell">
                 <ArtworkPreview file={file} />
@@ -394,7 +447,11 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
   );
 
   return (
-    <section id="customer-artwork-library" style={sectionCardStyle}>
+    <section
+      id="customer-artwork-library"
+      style={sectionCardStyle}
+      data-testid="customer-artwork-section"
+    >
       <div
         style={{
           display: "flex",
@@ -418,6 +475,7 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={!isSupabaseConfigured || isUploading}
+            data-testid="artwork-upload-button"
             style={{
               border: "none",
               background: "#171717",
@@ -439,6 +497,7 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
         type="file"
         accept={getArtworkUploadAcceptValue()}
         onChange={handleFileSelection}
+        data-testid="artwork-upload-input"
         style={{ display: "none" }}
       />
 
