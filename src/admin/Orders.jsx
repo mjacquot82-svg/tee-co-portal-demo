@@ -1,11 +1,16 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import StatusBadge from "../components/StatusBadge";
+import WorkflowBadge from "../components/WorkflowBadge";
 import { formatShortDate } from "../lib/dateFormatting";
 import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
 import { buildWorkflowActionUpdates } from "../orders/buildWorkflowActionUpdates";
-import { buildProductionGatingState } from "../orders/workflowGating";
 import { sortOrdersByOperationalStatus } from "../orders/orderWorkflow";
+import {
+  buildWorkflowBlockDetails,
+  buildWorkflowStatusBadges,
+  formatWorkflowTimelineEvent,
+} from "../orders/workflowPresentation";
 import { useCustomerTimeline } from "../lib/customerTimelineStore";
 import { getOperationalStaffUsers } from "../lib/staffUsersStore";
 import { getArtworkAssetUrl, isArtworkImage } from "../lib/orderArtwork";
@@ -184,11 +189,12 @@ function QueueActionButton({ action, onClick, emphasis = "secondary" }) {
   );
 }
 
-function QueueRow({ order, onRunAction, onOpenDetail }) {
+function QueueRow({ order, onRunAction, onOpenDetail, actionFeedback = null }) {
   const visibleActions = order.available_actions?.slice(0, 3) || [];
   const priority = order.queue_priority || {};
   const dueTone = priority.overdue ? "danger" : priority.dueSoon ? "warning" : "default";
   const dueLabel = order.due_date ? formatShortDate(order.due_date) : "No due date";
+  const workflowBadges = buildWorkflowStatusBadges(order);
 
   return (
     <article
@@ -236,6 +242,13 @@ function QueueRow({ order, onRunAction, onOpenDetail }) {
           {!priority.overdue && priority.dueSoon ? <QueueFlag label="Due Soon" tone="warning" /> : null}
           {order.rush_active ? <QueueFlag label="Rush" tone="warning" /> : null}
           {order.linked_artwork ? <QueueFlag label={`Artwork ${order.artwork_count || 1}`} tone="info" /> : null}
+          {workflowBadges.map((badge) => (
+            <WorkflowBadge
+              key={`${order.order_number}-${badge.label}`}
+              label={badge.label}
+              tone={badge.tone}
+            />
+          ))}
         </div>
 
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", minWidth: 0 }}>
@@ -264,7 +277,7 @@ function QueueRow({ order, onRunAction, onOpenDetail }) {
           </span>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+      <div style={{ display: "grid", gap: "8px", justifyItems: "end" }}>
         {visibleActions.length ? (
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
             {visibleActions.map((action, index) => (
@@ -311,6 +324,33 @@ function QueueRow({ order, onRunAction, onOpenDetail }) {
             Details
           </button>
         )}
+
+        {actionFeedback ? (
+          <div
+            style={{
+              maxWidth: "320px",
+              borderRadius: "12px",
+              border:
+                actionFeedback.tone === "danger"
+                  ? "1px solid #fecaca"
+                  : "1px solid #bfdbfe",
+              background:
+                actionFeedback.tone === "danger" ? "#fff5f5" : "#eff6ff",
+              color: actionFeedback.tone === "danger" ? "#991b1b" : "#1d4ed8",
+              padding: "10px 12px",
+              display: "grid",
+              gap: "3px",
+            }}
+          >
+            <strong style={{ fontSize: "13px" }}>{actionFeedback.summary}</strong>
+            {actionFeedback.detail ? <span style={{ fontSize: "12px" }}>{actionFeedback.detail}</span> : null}
+            {actionFeedback.nextActionLabel ? (
+              <span style={{ fontSize: "12px", fontWeight: 700 }}>
+                Next action: {actionFeedback.nextActionLabel}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </article>
   );
@@ -322,6 +362,7 @@ function ProductionDetailDrawer({
   onAssign,
   onRunAction,
   staffUsers,
+  actionFeedback = null,
 }) {
   const customerTimeline = useCustomerTimeline(order?.customer_id);
 
@@ -334,6 +375,7 @@ function ProductionDetailDrawer({
   if (!order) return null;
 
   const artworkFiles = Array.isArray(order.artwork_files) ? order.artwork_files : [];
+  const workflowBadges = buildWorkflowStatusBadges(order);
 
   return (
     <aside
@@ -356,6 +398,15 @@ function ProductionDetailDrawer({
         <div style={{ display: "grid", gap: "4px" }}>
           <strong style={{ fontSize: "18px" }}>{order.order_number}</strong>
           <span style={{ color: "#64748b" }}>{order.workflow_state}</span>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {workflowBadges.map((badge) => (
+              <WorkflowBadge
+                key={`${order.order_number}-drawer-${badge.label}`}
+                label={badge.label}
+                tone={badge.tone}
+              />
+            ))}
+          </div>
         </div>
         <button
           type="button"
@@ -425,6 +476,31 @@ function ProductionDetailDrawer({
             />
           ))}
         </div>
+        {actionFeedback ? (
+          <div
+            style={{
+              borderRadius: "12px",
+              border:
+                actionFeedback.tone === "danger"
+                  ? "1px solid #fecaca"
+                  : "1px solid #bfdbfe",
+              background:
+                actionFeedback.tone === "danger" ? "#fff5f5" : "#eff6ff",
+              color: actionFeedback.tone === "danger" ? "#991b1b" : "#1d4ed8",
+              padding: "10px 12px",
+              display: "grid",
+              gap: "3px",
+            }}
+          >
+            <strong style={{ fontSize: "13px" }}>{actionFeedback.summary}</strong>
+            {actionFeedback.detail ? <span style={{ fontSize: "12px" }}>{actionFeedback.detail}</span> : null}
+            {actionFeedback.nextActionLabel ? (
+              <span style={{ fontSize: "12px", fontWeight: 700 }}>
+                Next action: {actionFeedback.nextActionLabel}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div style={{ display: "grid", gap: "8px" }}>
@@ -511,22 +587,25 @@ function ProductionDetailDrawer({
           Workflow History
         </span>
         <div style={{ display: "grid", gap: "8px", maxHeight: "180px", overflow: "auto" }}>
-          {(order.activity_log || []).slice(0, 8).map((event) => (
-            <article
-              key={event.id}
-              style={{
-                borderLeft: "3px solid #171717",
-                background: "#f8fafc",
-                borderRadius: "10px",
-                padding: "10px 12px",
-              }}
-            >
-              <strong style={{ fontSize: "13px" }}>{event.note}</strong>
-              <div style={{ marginTop: "3px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
-                {event.staff_name || "Unknown Staff"} • {formatShortDate(event.created_at)}
-              </div>
-            </article>
-          ))}
+          {(order.activity_log || []).slice(0, 8).map((event) => {
+            const formatted = formatWorkflowTimelineEvent(event);
+            return (
+              <article
+                key={event.id}
+                style={{
+                  borderLeft: "3px solid #171717",
+                  background: "#f8fafc",
+                  borderRadius: "10px",
+                  padding: "10px 12px",
+                }}
+              >
+                <strong style={{ fontSize: "13px" }}>{formatted.title}</strong>
+                <div style={{ marginTop: "3px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
+                  {event.staff_name || "Unknown Staff"} • {formatShortDate(event.created_at)}
+                </div>
+              </article>
+            );
+          })}
         </div>
       </div>
 
@@ -601,6 +680,7 @@ export default function Orders() {
   const storedOrders = useStoredOrders();
   const staffUser = getActiveStaffUser();
   const [selectedOrderNumber, setSelectedOrderNumber] = useState("");
+  const [actionFeedbackByOrder, setActionFeedbackByOrder] = useState({});
   const isStaffWorkspace = isStaffWorkspaceView(staffUser);
   const [searchParams, setSearchParams] = useSearchParams();
   const activeStatusFilter = searchParams.get("status") || "active";
@@ -694,7 +774,7 @@ export default function Orders() {
   }
 
   function handleRunAction(order, action) {
-    const gating = buildProductionGatingState(order, action);
+    const gating = buildWorkflowBlockDetails(order, action);
     if (gating.blocked) {
       updateStoredOrder(order.order_number, {
         activity_type: "production_blocked",
@@ -702,11 +782,29 @@ export default function Orders() {
         last_production_blocked_at: new Date().toISOString(),
         last_production_blocked_reasons: gating.blockingReasons,
       });
+      setActionFeedbackByOrder((current) => ({
+        ...current,
+        [order.order_number]: {
+          tone: "danger",
+          summary: gating.summary,
+          detail: gating.detail,
+          nextActionLabel: gating.nextActionLabel,
+        },
+      }));
       return;
     }
 
     const updates = buildWorkflowActionUpdates(order, action);
     if (!updates) return;
+    setActionFeedbackByOrder((current) => ({
+      ...current,
+      [order.order_number]: {
+        tone: "info",
+        summary: `${action.label} completed.`,
+        detail: "",
+        nextActionLabel: "",
+      },
+    }));
     updateStoredOrder(order.order_number, updates);
   }
 
@@ -952,6 +1050,7 @@ export default function Orders() {
                   order={order}
                   onRunAction={handleRunAction}
                   onOpenDetail={handleOpenDetail}
+                  actionFeedback={actionFeedbackByOrder[order.order_number] || null}
                 />
               ))
             ) : (
@@ -979,6 +1078,7 @@ export default function Orders() {
             onAssign={handleAssign}
             onRunAction={handleRunAction}
             staffUsers={staffUsers}
+            actionFeedback={actionFeedbackByOrder[selectedOrder.order_number] || null}
           />
         ) : null}
       </div>

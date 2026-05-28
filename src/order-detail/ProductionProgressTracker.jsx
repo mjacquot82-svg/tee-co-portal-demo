@@ -3,12 +3,17 @@ import {
   isOnHoldOperationalStatus,
   OPERATIONAL_STATUS_PROGRESS_STAGES,
 } from "../orders/orderWorkflow";
-import { buildProductionGatingState } from "../orders/workflowGating";
+import WorkflowBadge from "../components/WorkflowBadge";
+import {
+  buildWorkflowBlockDetails,
+  buildWorkflowStatusBadges,
+} from "../orders/workflowPresentation";
 
 export default function ProductionProgressTracker({ order }) {
   const currentStage = Math.max(0, getOperationalProgressStageIndex(order.status));
   const isOnHold = isOnHoldOperationalStatus(order.status);
-  const gating = buildProductionGatingState(order, { targetStatus: "Ready For Production" });
+  const gating = buildWorkflowBlockDetails(order, { targetStatus: "Ready For Production" });
+  const workflowBadges = buildWorkflowStatusBadges(order);
 
   return (
     <section
@@ -22,6 +27,14 @@ export default function ProductionProgressTracker({ order }) {
       }}
     >
       <h2 style={{ marginTop: 0 }}>Production Workflow</h2>
+
+      {workflowBadges.length ? (
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>
+          {workflowBadges.map((badge) => (
+            <WorkflowBadge key={badge.label} label={badge.label} tone={badge.tone} />
+          ))}
+        </div>
+      ) : null}
 
       <div
         style={{
@@ -98,10 +111,12 @@ export default function ProductionProgressTracker({ order }) {
             background: "#fff7ed",
             padding: "12px 14px",
             color: "#9a3412",
-            fontWeight: 700,
+            display: "grid",
+            gap: "4px",
           }}
         >
-          Production gating active. {gating.blockingReasons.join(" ")}
+          <strong>{gating.summary}</strong>
+          <span style={{ fontWeight: 700 }}>{gating.detail}</span>
         </div>
       ) : null}
     </section>

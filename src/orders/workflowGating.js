@@ -187,7 +187,10 @@ export function buildProductionGatingState(order = {}, action = null) {
       statusLabel: artworkApprovalRequired ? artworkApprovalStatus : "Not Required",
       overridden: overrides.forceProduction.active || overrides.artworkApprovalRequirement.active,
       overrideKey: "artworkApprovalRequirement",
-      blockedSummary: "Artwork approval is not approved yet.",
+      blockedSummary:
+        artworkApprovalStatus === "Needs Revision"
+          ? "Awaiting customer revision."
+          : "Artwork approval required before production.",
     },
     {
       key: "depositRequirement",
@@ -197,7 +200,10 @@ export function buildProductionGatingState(order = {}, action = null) {
       statusLabel: depositWorkflowStatus,
       overridden: overrides.forceProduction.active || overrides.depositRequirement.active,
       overrideKey: "depositRequirement",
-      blockedSummary: "Deposit requirement is still pending.",
+      blockedSummary:
+        depositWorkflowStatus === "Deposit Requested"
+          ? "Awaiting deposit payment."
+          : "Deposit must be received before production.",
     },
   ];
 

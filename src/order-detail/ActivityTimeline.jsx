@@ -1,4 +1,5 @@
 import { formatDateTime } from "../lib/dateFormatting";
+import { formatWorkflowTimelineEvent } from "../orders/workflowPresentation";
 
 export default function ActivityTimeline({ events = [], compact = false }) {
   const sectionPadding = compact ? "20px" : "24px";
@@ -31,43 +32,64 @@ export default function ActivityTimeline({ events = [], compact = false }) {
         </p>
       ) : (
         <div style={{ display: "grid", gap: timelineGap }}>
-          {events.map((event, index) => (
-            <article
-              key={event.id || index}
-              data-testid="activity-timeline-item"
-              data-event-type={event.type || event.event_type || ""}
-              style={{
-                borderLeft: event.type === "canceled" ? "4px solid #b91c1c" : "4px solid #171717",
-                background: event.type === "canceled" ? "#fff5f5" : "#f8fafc",
-                borderRadius: "12px",
-                padding: itemPadding,
-              }}
-            >
-              <strong data-testid="activity-timeline-item-note">
-                {event.type === "canceled" ? "Canceled: " : ""}
-                {event.note || "Order activity recorded."}
-              </strong>
+          {events.map((event, index) => {
+            const formatted = formatWorkflowTimelineEvent(event);
+            const borderColor =
+              formatted.tone === "danger"
+                ? "#b91c1c"
+                : formatted.tone === "warning"
+                ? "#ea580c"
+                : formatted.tone === "success"
+                ? "#16a34a"
+                : formatted.tone === "info"
+                ? "#2563eb"
+                : "#171717";
+            const background =
+              formatted.tone === "danger"
+                ? "#fff5f5"
+                : formatted.tone === "warning"
+                ? "#fff7ed"
+                : formatted.tone === "success"
+                ? "#f0fdf4"
+                : formatted.tone === "info"
+                ? "#eff6ff"
+                : "#f8fafc";
 
-              <div
-                data-testid="activity-timeline-item-meta"
+            return (
+              <article
+                key={event.id || index}
+                data-testid="activity-timeline-item"
+                data-event-type={event.type || event.event_type || ""}
                 style={{
-                  marginTop: metaMarginTop,
-                  color: "#64748b",
-                  fontSize: "13px",
-                  fontWeight: 700,
+                  borderLeft: `4px solid ${borderColor}`,
+                  background,
+                  borderRadius: "12px",
+                  padding: itemPadding,
                 }}
               >
-                {event.staff_name || "Unknown Staff"}
-                {event.staff_role
-                  ? ` (${event.staff_role})`
-                  : ""}
+                <strong data-testid="activity-timeline-item-note">{formatted.title}</strong>
 
-                {event.created_at
-                  ? ` • ${formatDateTime(event.created_at)}`
-                  : ""}
-              </div>
-            </article>
-          ))}
+                <div
+                  data-testid="activity-timeline-item-meta"
+                  style={{
+                    marginTop: metaMarginTop,
+                    color: "#64748b",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                  }}
+                >
+                  {event.staff_name || "Unknown Staff"}
+                  {event.staff_role
+                    ? ` (${event.staff_role})`
+                    : ""}
+
+                  {event.created_at
+                    ? ` • ${formatDateTime(event.created_at)}`
+                    : ""}
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </section>

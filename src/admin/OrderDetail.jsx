@@ -29,6 +29,11 @@ import {
 import { buildProductionGatingState } from "../orders/workflowGating";
 import { isAdminWorkspaceView, isStaffWorkspaceView } from "./adminRoleView";
 import { markAssignmentAttentionSeen } from "../lib/staffAssignmentAttentionStore";
+import WorkflowBadge from "../components/WorkflowBadge";
+import {
+  buildWorkflowBlockDetails,
+  buildWorkflowStatusBadges,
+} from "../orders/workflowPresentation";
 
 const cardStyle = {
   background: "#ffffff",
@@ -68,6 +73,7 @@ export default function OrderDetail() {
   const [staffUsers, setStaffUsers] = useState(() =>
     getOperationalStaffUsers().filter((staffUser) => staffUser.status !== "Inactive")
   );
+  const [workflowFeedback, setWorkflowFeedback] = useState(null);
   const order = useMemo(
     () => storedOrders.find((entry) => entry.order_number === orderNumber) || null,
     [orderNumber, storedOrders]
@@ -107,6 +113,7 @@ export default function OrderDetail() {
     () => (order ? buildProductionGatingState(order, { targetStatus: "Ready For Production" }) : null),
     [order]
   );
+  const workflowBadges = useMemo(() => (order ? buildWorkflowStatusBadges(order) : []), [order]);
 
   useEffect(() => {
     return subscribeToStaffUsers((nextUsers) => {
@@ -181,7 +188,7 @@ export default function OrderDetail() {
   function handleWorkflowAction(action) {
     if (isCanceledOperationalStatus(order.status)) return;
 
-    const gating = buildProductionGatingState(order, action);
+    const gating = buildWorkflowBlockDetails(order, action);
     if (gating.blocked) {
       saveOrderUpdates({
         activity_type: "production_blocked",
@@ -189,11 +196,23 @@ export default function OrderDetail() {
         last_production_blocked_at: new Date().toISOString(),
         last_production_blocked_reasons: gating.blockingReasons,
       });
+      setWorkflowFeedback({
+        tone: "danger",
+        summary: gating.summary,
+        detail: gating.detail,
+        nextActionLabel: gating.nextActionLabel,
+      });
       return;
     }
 
     const updates = buildWorkflowActionUpdates(order, action);
     if (!updates) return;
+    setWorkflowFeedback({
+      tone: "info",
+      summary: `${action.label} completed.`,
+      detail: "",
+      nextActionLabel: "",
+    });
     saveOrderUpdates(updates);
   }
 
@@ -226,11 +245,12 @@ export default function OrderDetail() {
       activity_type: "artwork_approval",
       activity_note:
         normalizedStatus === "Approved"
-          ? "Artwork approved."
+          ? `Artwork approved by ${activeStaffUser?.name || "staff"}.`
           : normalizedStatus === "Needs Revision"
-          ? "Artwork revision requested."
+          ? `Artwork revision requested by ${activeStaffUser?.name || "staff"}.`
           : "Artwork moved to pending review.",
     });
+    setWorkflowFeedback(null);
   }
 
   function handleDepositWorkflowChange(nextStatus) {
@@ -280,6 +300,7 @@ export default function OrderDetail() {
           ? "Deposit requirement cleared."
           : "Awaiting deposit.",
     });
+    setWorkflowFeedback(null);
   }
 
   function handleGatingOverride(overrideKey) {
@@ -304,6 +325,12 @@ export default function OrderDetail() {
       },
       activity_type: "gating_override_used",
       activity_note: `${overrideLabels[overrideKey] || "Workflow gating override"} used.`,
+    });
+    setWorkflowFeedback({
+      tone: "info",
+      summary: "Override applied.",
+      detail: "This requirement remains visible in the workflow history.",
+      nextActionLabel: "",
     });
   }
 
@@ -459,6 +486,14 @@ export default function OrderDetail() {
               {urgency.label}
             </span>
           </div>
+
+          {workflowBadges.length ? (
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
+              {workflowBadges.map((badge) => (
+                <WorkflowBadge key={badge.label} label={badge.label} tone={badge.tone} />
+              ))}
+            </div>
+          ) : null}
 
           {isCanceledOperationalStatus(order.status) ? (
             <div
@@ -750,6 +785,7 @@ export default function OrderDetail() {
           onDepositWorkflowChange={handleDepositWorkflowChange}
           onGatingOverride={handleGatingOverride}
           onForceMoveToProduction={handleForceMoveToProduction}
+          workflowFeedback={workflowFeedback}
         />
 
         <ActivityTimeline

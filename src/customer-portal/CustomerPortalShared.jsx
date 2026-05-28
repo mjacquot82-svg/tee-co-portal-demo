@@ -2,6 +2,11 @@ import { useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { formatShortDate } from "../lib/dateFormatting";
 import { formatCurrency } from "./useCustomerPortalData";
+import WorkflowBadge from "../components/WorkflowBadge";
+import {
+  buildCustomerWorkflowMessage,
+  buildWorkflowStatusBadges,
+} from "../orders/workflowPresentation";
 
 const EMPTY_RECORDS = Object.freeze([]);
 const STATUS_FALLBACK_CACHE = new Map();
@@ -366,23 +371,17 @@ function resolveCustomerPaymentStatus(record = {}, options = {}) {
 }
 
 function resolveTimelineNote(order) {
-  const customerOrderStatus = resolveCustomerOrderStatus(order);
-
-  if (order.pickup_status === "Picked Up") {
-    return "Completed and released.";
-  }
-
   if (order.pickup_status === "Ready for Pickup") {
     return Number(order.balance_due || 0) > 0
       ? `Ready for pickup after ${formatCurrency(order.balance_due)} is settled`
       : "Ready for pickup";
   }
 
-  if (Number(order.balance_due || 0) > 0) {
+  if (Number(order.balance_due || 0) > 0 && buildCustomerWorkflowMessage(order) === "Ready for production") {
     return `${formatCurrency(order.balance_due)} still open`;
   }
 
-  return customerOrderStatus.label;
+  return buildCustomerWorkflowMessage(order);
 }
 
 function resolveArtworkApprovalLabel(record = {}) {
@@ -456,6 +455,8 @@ export function RecordList({ records = [], type = "orders" }) {
   return (
     <div style={{ display: "grid", gap: "14px" }}>
       {viewModels.map(({ record, total, balance, dueDate, primaryStatus, paymentStatus, timelineNote }) => {
+        const workflowBadges =
+          type === "orders" ? buildWorkflowStatusBadges(record, { surface: "customer" }) : [];
         return (
           <article
             key={`${type}-${record.order_number || record.id}`}
@@ -488,6 +489,13 @@ export function RecordList({ records = [], type = "orders" }) {
                   {paymentStatus ? (
                     <PortalStatusBadge label={paymentStatus.label} tone={paymentStatus.tone} />
                   ) : null}
+                  {workflowBadges.map((badge) => (
+                    <WorkflowBadge
+                      key={`${record.order_number || record.id}-${badge.label}`}
+                      label={badge.label}
+                      tone={badge.tone}
+                    />
+                  ))}
                 </div>
               </div>
 

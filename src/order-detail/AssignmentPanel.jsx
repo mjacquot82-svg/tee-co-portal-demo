@@ -1,4 +1,10 @@
 import { isCanceledOperationalStatus } from "../orders/orderWorkflow";
+import WorkflowBadge from "../components/WorkflowBadge";
+import {
+  buildWorkflowBlockDetails,
+  buildWorkflowStatusBadges,
+  formatOverrideMeta,
+} from "../orders/workflowPresentation";
 
 function formatAssignedAt(value) {
   if (!value) return "Not assigned yet";
@@ -21,12 +27,45 @@ export default function AssignmentPanel({
   onDepositWorkflowChange,
   onGatingOverride,
   onForceMoveToProduction,
+  workflowFeedback = null,
 }) {
   const assignedWorker = order.assigned_to_staff_name || "Unassigned";
   const canceled = isCanceledOperationalStatus(order.status);
   const activeOverrides = Array.isArray(productionGating?.activeOverrides)
     ? productionGating.activeOverrides
     : [];
+  const workflowBadges = buildWorkflowStatusBadges(order);
+  const blockDetails = buildWorkflowBlockDetails(order, { targetStatus: "Ready For Production" });
+
+  function QuickActionButton({ label, onClick, tone = "neutral", disabled = false }) {
+    const tones = {
+      neutral: { background: "#ffffff", border: "#cbd5e1", color: "#0f172a" },
+      success: { background: "#ecfdf5", border: "#bbf7d0", color: "#166534" },
+      warning: { background: "#fff7ed", border: "#fdba74", color: "#9a3412" },
+      dark: { background: "#0f172a", border: "#0f172a", color: "#ffffff" },
+    };
+    const palette = tones[tone] || tones.neutral;
+
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        style={{
+          border: `1px solid ${palette.border}`,
+          background: palette.background,
+          color: palette.color,
+          borderRadius: "999px",
+          padding: "8px 11px",
+          fontWeight: 800,
+          cursor: disabled ? "not-allowed" : "pointer",
+          opacity: disabled ? 0.6 : 1,
+        }}
+      >
+        {label}
+      </button>
+    );
+  }
 
   return (
     <section
@@ -42,6 +81,14 @@ export default function AssignmentPanel({
       <h2 style={{ marginTop: 0 }}>Assignment & Workflow</h2>
 
       <div style={{ display: "grid", gap: "12px" }}>
+        {workflowBadges.length ? (
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {workflowBadges.map((badge) => (
+              <WorkflowBadge key={badge.label} label={badge.label} tone={badge.tone} />
+            ))}
+          </div>
+        ) : null}
+
         <div>
           <strong>Assigned Staff</strong>
           <div style={{ marginTop: "8px" }}>
@@ -194,7 +241,44 @@ export default function AssignmentPanel({
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
+            <div style={{ display: "grid", gap: "10px" }}>
+              <div style={{ display: "grid", gap: "6px" }}>
+                <strong style={{ fontSize: "13px" }}>Artwork Workflow</strong>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <QuickActionButton
+                    label="Approve Artwork"
+                    tone="success"
+                    disabled={canceled}
+                    onClick={() => onArtworkApprovalChange?.("Approved")}
+                  />
+                  <QuickActionButton
+                    label="Request Revision"
+                    tone="warning"
+                    disabled={canceled}
+                    onClick={() => onArtworkApprovalChange?.("Needs Revision")}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "6px" }}>
+                <strong style={{ fontSize: "13px" }}>Deposit Workflow</strong>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <QuickActionButton
+                    label="Request Deposit"
+                    tone="warning"
+                    disabled={canceled}
+                    onClick={() => onDepositWorkflowChange?.("Deposit Requested")}
+                  />
+                  <QuickActionButton
+                    label="Mark Deposit Received"
+                    tone="success"
+                    disabled={canceled}
+                    onClick={() => onDepositWorkflowChange?.("Deposit Received")}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
               <label style={{ display: "grid", gap: "6px", fontSize: "13px", fontWeight: 700 }}>
                 Artwork Approval
                 <select
@@ -224,8 +308,9 @@ export default function AssignmentPanel({
                 </select>
               </label>
             </div>
+            </div>
 
-            {productionGating?.blocked ? (
+            {blockDetails.blocked ? (
               <div
                 data-testid="production-gating-alert"
                 style={{
@@ -234,11 +319,41 @@ export default function AssignmentPanel({
                   background: "#fff5f5",
                   padding: "12px 14px",
                   color: "#991b1b",
-                  fontWeight: 700,
                   lineHeight: 1.5,
+                  display: "grid",
+                  gap: "4px",
                 }}
               >
-                {productionGating.blockingReasons.join(" ")}
+                <strong>{blockDetails.summary}</strong>
+                <span style={{ fontWeight: 700 }}>{blockDetails.detail}</span>
+                <span style={{ fontSize: "13px" }}>Next action: {blockDetails.nextActionLabel}</span>
+              </div>
+            ) : null}
+
+            {workflowFeedback ? (
+              <div
+                style={{
+                  borderRadius: "12px",
+                  border:
+                    workflowFeedback.tone === "danger"
+                      ? "1px solid #fecaca"
+                      : "1px solid #bfdbfe",
+                  background:
+                    workflowFeedback.tone === "danger" ? "#fff5f5" : "#eff6ff",
+                  padding: "12px 14px",
+                  color: workflowFeedback.tone === "danger" ? "#991b1b" : "#1d4ed8",
+                  lineHeight: 1.5,
+                  display: "grid",
+                  gap: "4px",
+                }}
+              >
+                <strong>{workflowFeedback.summary}</strong>
+                {workflowFeedback.detail ? <span>{workflowFeedback.detail}</span> : null}
+                {workflowFeedback.nextActionLabel ? (
+                  <span style={{ fontSize: "13px" }}>
+                    Next action: {workflowFeedback.nextActionLabel}
+                  </span>
+                ) : null}
               </div>
             ) : null}
 
@@ -257,8 +372,7 @@ export default function AssignmentPanel({
                       fontWeight: 700,
                     }}
                   >
-                    {override.key}
-                    {override.usedByName ? ` • ${override.usedByName}` : ""}
+                    {formatOverrideMeta(override)}
                   </div>
                 ))}
               </div>
@@ -266,21 +380,12 @@ export default function AssignmentPanel({
 
             {canManageAssignments && !canceled ? (
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                {productionGating?.blocked ? (
-                  <button
-                    type="button"
+                {blockDetails.blocked ? (
+                  <QuickActionButton
+                    label="Override and Continue"
+                    tone="dark"
                     onClick={onForceMoveToProduction}
-                    style={{
-                      background: "#0f172a",
-                      color: "#ffffff",
-                      border: "1px solid #0f172a",
-                      borderRadius: "12px",
-                      padding: "10px 14px",
-                      fontWeight: 700,
-                    }}
-                  >
-                    Force Move To Production
-                  </button>
+                  />
                 ) : null}
                 <button
                   type="button"
