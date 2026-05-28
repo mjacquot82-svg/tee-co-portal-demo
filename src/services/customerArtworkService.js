@@ -83,6 +83,72 @@ function normalizeOperationalIds(values) {
   );
 }
 
+function extractMissingSchemaColumn(error) {
+  const message = String(error?.message || "");
+  const match = message.match(/Could not find the '([^']+)' column of 'customer_artwork'/i);
+  return match?.[1] || "";
+}
+
+async function insertArtworkMetadataWithSchemaFallback(insertPayload) {
+  let payload = { ...insertPayload };
+  const removedColumns = [];
+
+  while (true) {
+    const { data, error } = await supabase
+      .from(CUSTOMER_ARTWORK_TABLE)
+      .insert(payload)
+      .select("*")
+      .single();
+
+    if (!error) {
+      return { data, removedColumns };
+    }
+
+    const missingColumn = extractMissingSchemaColumn(error);
+    if (!missingColumn || !Object.prototype.hasOwnProperty.call(payload, missingColumn)) {
+      return { data: null, error, removedColumns };
+    }
+
+    removedColumns.push(missingColumn);
+    console.warn("[customerArtworkService] metadata insert schema fallback", {
+      removedColumn: missingColumn,
+      remainingColumns: Object.keys(payload).filter((key) => key !== missingColumn),
+    });
+    delete payload[missingColumn];
+  }
+}
+
+async function updateArtworkRowWithSchemaFallback(artworkId, payload) {
+  let nextPayload = { ...payload };
+  const removedColumns = [];
+
+  while (true) {
+    const { data, error } = await supabase
+      .from(CUSTOMER_ARTWORK_TABLE)
+      .update(nextPayload)
+      .eq("id", artworkId)
+      .select("*")
+      .single();
+
+    if (!error) {
+      return { data, removedColumns };
+    }
+
+    const missingColumn = extractMissingSchemaColumn(error);
+    if (!missingColumn || !Object.prototype.hasOwnProperty.call(nextPayload, missingColumn)) {
+      return { data: null, error, removedColumns };
+    }
+
+    removedColumns.push(missingColumn);
+    console.warn("[customerArtworkService] metadata update schema fallback", {
+      artworkId,
+      removedColumn: missingColumn,
+      remainingColumns: Object.keys(nextPayload).filter((key) => key !== missingColumn),
+    });
+    delete nextPayload[missingColumn];
+  }
+}
+
 function normalizeArtworkRow(row, signedUrl = "") {
   const displayName = getArtworkDisplayName(row);
   const fileName = row?.file_name || row?.original_filename || displayName;
@@ -216,10 +282,6 @@ function buildArtworkInsertPayload(customerId, storagePath, file, options = {}) 
   const linkedOrderIds = normalizeOperationalIds(options.linkedOrderIds);
   const linkedQuoteIds = normalizeOperationalIds(options.linkedQuoteIds);
   const lastUsedAt = options.lastUsedAt || "";
-  const usageCount = linkedOrderIds.length + linkedQuoteIds.length;
-  const artworkStatus =
-    options.artworkStatus ||
-    (usageCount ? "Linked" : "Library");
 
   return {
     customer_id: normalizeCustomerId(customerId),
@@ -235,8 +297,6 @@ function buildArtworkInsertPayload(customerId, storagePath, file, options = {}) 
     notes: options.notes || "",
     linked_order_ids: linkedOrderIds,
     linked_quote_ids: linkedQuoteIds,
-    artwork_type: options.artworkType || "",
-    artwork_status: artworkStatus,
     last_used_at: lastUsedAt || null,
     legacy_local_artwork_id: options.legacyLocalArtworkId || null,
     updated_at: new Date().toISOString(),
@@ -244,10 +304,21 @@ function buildArtworkInsertPayload(customerId, storagePath, file, options = {}) 
 }
 
 async function hydrateArtworkRows(rows) {
+  console.info("[customerArtworkService] hydrateArtworkRows", {
+    rowCount: Array.isArray(rows) ? rows.length : 0,
+    rowIds: Array.isArray(rows) ? rows.map((row) => row?.id || "") : [],
+    fileNames: Array.isArray(rows) ? rows.map((row) => row?.file_name || row?.display_name || "") : [],
+  });
   const signedUrls = await Promise.all(rows.map((row) => createSignedUrl(row.storage_path)));
-  return mergeArtworkCollectionWithOperationalFields(
+  const hydratedArtwork = mergeArtworkCollectionWithOperationalFields(
     rows.map((row, index) => normalizeArtworkRow(row, signedUrls[index] || ""))
   );
+  console.info("[customerArtworkService] hydrateArtworkRows resolved", {
+    artworkCount: hydratedArtwork.length,
+    artworkIds: hydratedArtwork.map((artwork) => artwork?.id || ""),
+    fileNames: hydratedArtwork.map((artwork) => artwork?.file_name || ""),
+  });
+  return hydratedArtwork;
 }
 
 async function buildFileFromLegacyArtwork(artwork) {
@@ -394,19 +465,11 @@ function buildRelationshipUpdatePayload(row, relationshipKey, relatedId) {
       ? [...normalizeOperationalIds(row?.linked_quote_ids), normalizedRelatedId]
       : row?.linked_quote_ids
   );
-  const usageCount = linkedOrderIds.length + linkedQuoteIds.length;
-  const currentStatus = String(row?.artwork_status || "").trim();
 
   return {
     linked_order_ids: linkedOrderIds,
     linked_quote_ids: linkedQuoteIds,
     last_used_at: new Date().toISOString(),
-    artwork_status:
-      currentStatus && currentStatus !== "Library"
-        ? currentStatus
-        : usageCount
-          ? "Linked"
-          : "Library",
     updated_at: new Date().toISOString(),
   };
 }
@@ -433,15 +496,21 @@ async function updateArtworkRelationship(artworkId, relationshipKey, relatedId, 
   }
 
   const payload = buildRelationshipUpdatePayload(artworkRow, relationshipKey, normalizedRelatedId);
-  const { data, error } = await supabase
-    .from(CUSTOMER_ARTWORK_TABLE)
-    .update(payload)
-    .eq("id", artworkRow.id)
-    .select("*")
-    .single();
+  const {
+    data,
+    error,
+    removedColumns,
+  } = await updateArtworkRowWithSchemaFallback(artworkRow.id, payload);
 
   if (error) {
     throw new Error(error.message || "Unable to update artwork relationship.");
+  }
+
+  if (removedColumns.length > 0) {
+    console.info("[customerArtworkService] metadata update schema fallback applied", {
+      artworkId: artworkRow.id,
+      removedColumns,
+    });
   }
 
   addCustomerTimelineEvent(data.customer_id, {
@@ -477,6 +546,12 @@ export async function listCustomerArtwork(customerId) {
   if (!normalizedCustomerId) return [];
 
   let rows = await fetchCustomerArtworkRows(normalizedCustomerId);
+  console.info("[customerArtworkService] listCustomerArtwork fetched", {
+    customerId: normalizedCustomerId,
+    rowCount: rows.length,
+    rowIds: rows.map((row) => row?.id || ""),
+    fileNames: rows.map((row) => row?.file_name || ""),
+  });
   rows = await migrateArtworkRowsToCanonicalCustomerId(rows, normalizedCustomerId);
   const migratedCount = await migrateLegacyArtworkForCustomer(normalizedCustomerId, rows);
   if (migratedCount) {
@@ -508,6 +583,13 @@ export async function uploadCustomerArtwork(customerId, file, options = {}) {
   }
 
   const storagePath = buildStoragePath(normalizedCustomerId, options.fileName || file.name);
+  console.info("[customerArtworkService] uploadCustomerArtwork start", {
+    customerId: normalizedCustomerId,
+    fileName: file.name,
+    fileSize: Number(file.size ?? 0) || 0,
+    fileType: file.type || "",
+    storagePath,
+  });
 
   const { error: uploadError } = await supabase.storage
     .from(CUSTOMER_ARTWORK_BUCKET)
@@ -520,15 +602,36 @@ export async function uploadCustomerArtwork(customerId, file, options = {}) {
   if (uploadError) {
     throw new Error(uploadError.message || "Unable to upload artwork file.");
   }
+  console.info("[customerArtworkService] storage upload complete", {
+    customerId: normalizedCustomerId,
+    storagePath,
+    fileName: file.name,
+  });
 
   const insertPayload = buildArtworkInsertPayload(normalizedCustomerId, storagePath, file, options);
-  const { data, error } = await supabase
-    .from(CUSTOMER_ARTWORK_TABLE)
-    .insert(insertPayload)
-    .select("*")
-    .single();
+  console.info("[customerArtworkService] metadata insert start", {
+    customerId: normalizedCustomerId,
+    storagePath,
+    fileName: file.name,
+    payloadCustomerId: insertPayload.customer_id,
+    payloadFileName: insertPayload.file_name,
+  });
+  const {
+    data,
+    error,
+    removedColumns,
+  } = await insertArtworkMetadataWithSchemaFallback(insertPayload);
 
   if (error) {
+    console.error("[customerArtworkService] metadata insert failed", {
+      customerId: normalizedCustomerId,
+      storagePath,
+      fileName: file.name,
+      message: error.message || "",
+      code: error.code || "",
+      details: error.details || "",
+      hint: error.hint || "",
+    });
     const cleanupResult = await supabase.storage
       .from(CUSTOMER_ARTWORK_BUCKET)
       .remove([storagePath]);
@@ -539,9 +642,28 @@ export async function uploadCustomerArtwork(customerId, file, options = {}) {
 
     throw new Error(error.message || "Artwork uploaded, but metadata could not be saved.");
   }
+  if (removedColumns.length > 0) {
+    console.info("[customerArtworkService] metadata insert schema fallback applied", {
+      customerId: normalizedCustomerId,
+      removedColumns,
+    });
+  }
+  console.info("[customerArtworkService] metadata insert complete", {
+    customerId: normalizedCustomerId,
+    insertedId: data?.id || "",
+    fileName: data?.file_name || file.name,
+  });
 
   const signedUrl = await createSignedUrl(storagePath);
   const uploadedArtwork = normalizeArtworkRow(data, signedUrl);
+  console.info("[customerArtworkService] uploadCustomerArtwork persisted", {
+    customerId: normalizedCustomerId,
+    insertedId: data?.id || "",
+    legacyLocalArtworkId: data?.legacy_local_artwork_id || "",
+    fileName: data?.file_name || file.name,
+    signedUrlCreated: Boolean(signedUrl),
+    normalizedId: uploadedArtwork?.id || "",
+  });
 
   if (!options.skipTimelineEvent) {
     const operationalUser = getOperationalAuthUser();

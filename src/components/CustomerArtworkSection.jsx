@@ -287,6 +287,12 @@ function ArtworkDetailModal({ file, onClose }) {
 }
 
 function ArtworkLibrary({ artwork, uploading, onSelectArtwork }) {
+  console.info("[CustomerArtworkSection] render artwork library", {
+    uploading,
+    artworkCount: Array.isArray(artwork) ? artwork.length : 0,
+    artworkIds: Array.isArray(artwork) ? artwork.map((file) => file?.id || "") : [],
+    fileNames: Array.isArray(artwork) ? artwork.map((file) => file?.file_name || "") : [],
+  });
   return (
     <div className="customer-artwork-library-scroll">
       <div className="customer-artwork-grid">
@@ -402,6 +408,13 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
       try {
         const loadedArtwork = await listCustomerArtwork(customerId);
         if (!isActive) return;
+        console.info("[CustomerArtworkSection] loadArtwork resolved", {
+          customerId,
+          customerName,
+          artworkCount: loadedArtwork.length,
+          artworkIds: loadedArtwork.map((entry) => entry?.id || ""),
+          fileNames: loadedArtwork.map((entry) => entry?.file_name || ""),
+        });
         setArtwork(loadedArtwork);
         setSelectedArtworkId((currentSelectedArtworkId) =>
           loadedArtwork.some((entry) => entry.id === currentSelectedArtworkId)
@@ -431,6 +444,19 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
     };
   }, [customerId, customerName]);
 
+  useEffect(() => {
+    console.info("[CustomerArtworkSection] artwork state updated", {
+      customerId,
+      customerName,
+      uploadState,
+      loadState,
+      selectedArtworkId,
+      artworkCount: artwork.length,
+      artworkIds: artwork.map((entry) => entry?.id || ""),
+      fileNames: artwork.map((entry) => entry?.file_name || ""),
+    });
+  }, [artwork, customerId, customerName, loadState, selectedArtworkId, uploadState]);
+
   async function handleFileSelection(event) {
     const selectedFile = event.target.files?.[0];
     event.target.value = "";
@@ -444,13 +470,32 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
 
     setUploadState("uploading");
     setUploadError("");
+    console.info("[CustomerArtworkSection] upload selection accepted", {
+      customerId,
+      customerName,
+      fileName: selectedFile.name,
+      fileSize: Number(selectedFile.size ?? 0) || 0,
+      fileType: selectedFile.type || "",
+    });
 
     try {
       const uploadedArtwork = await uploadCustomerArtwork(customerId, selectedFile);
+      console.info("[CustomerArtworkSection] uploadCustomerArtwork returned", {
+        customerId,
+        customerName,
+        uploadedArtworkId: uploadedArtwork?.id || "",
+        fileName: uploadedArtwork?.file_name || selectedFile.name,
+      });
       setArtwork((currentArtwork) => [uploadedArtwork, ...currentArtwork]);
       setSelectedArtworkId(uploadedArtwork.id || "");
     } catch (error) {
       console.error("Unable to upload customer artwork", error);
+      console.error("[CustomerArtworkSection] upload failed", {
+        customerId,
+        customerName,
+        fileName: selectedFile.name,
+        message: error?.message || String(error || ""),
+      });
       setUploadError(error?.message || "Unable to upload artwork right now.");
     } finally {
       setUploadState("idle");

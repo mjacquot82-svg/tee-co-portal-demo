@@ -178,6 +178,16 @@ async function openArtworkModalAndVerify(page, artworkCard, uploadedArtworkId) {
 }
 
 test("customer artwork uploads persist across refreshes", async ({ page }) => {
+  page.on("console", (message) => {
+    const text = message.text();
+    if (
+      text.includes("[customerArtworkService]") ||
+      text.includes("[CustomerArtworkSection]")
+    ) {
+      console.log(`[browser-console] ${text}`);
+    }
+  });
+
   const config = getOperationalConfig();
 
   // Open the real operational login entry point instead of bypassing the staff session workflow.
