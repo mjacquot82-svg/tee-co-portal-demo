@@ -142,6 +142,10 @@ function saveTimelineEvents(events) {
   return true;
 }
 
+export function saveCustomerTimelineEvents(events) {
+  return saveTimelineEvents(events);
+}
+
 function resolveDefaultActor() {
   const activeStaffUser = getActiveStaffUser();
   if (activeStaffUser?.id || activeStaffUser?.name) {

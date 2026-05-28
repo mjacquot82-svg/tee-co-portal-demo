@@ -113,3 +113,30 @@ export function updateStoredQuickSale(saleNumber, updates) {
   saveStoredQuickSales(nextSales);
   return updatedSale;
 }
+
+export function reassignStoredQuickSalesCustomer(fromCustomerId, toCustomerId) {
+  const normalizedFromCustomerId = normalizeCustomerId(fromCustomerId);
+  const normalizedToCustomerId = normalizeCustomerId(toCustomerId);
+
+  if (!normalizedFromCustomerId || !normalizedToCustomerId) {
+    return [];
+  }
+
+  const now = new Date().toISOString();
+  const updatedSaleNumbers = [];
+  const nextSales = getStoredQuickSales().map((sale) => {
+    if (sale.customer_id !== normalizedFromCustomerId) {
+      return sale;
+    }
+
+    updatedSaleNumbers.push(sale.sale_number);
+    return {
+      ...sale,
+      customer_id: normalizedToCustomerId,
+      updated_at: now,
+    };
+  });
+
+  saveStoredQuickSales(nextSales);
+  return updatedSaleNumbers;
+}

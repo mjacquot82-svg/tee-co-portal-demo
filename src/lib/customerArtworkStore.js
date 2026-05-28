@@ -118,6 +118,10 @@ function saveArtworkMetadataMap(metadataMap) {
   return setJsonStorageItem(LEGACY_CUSTOMER_ARTWORK_METADATA_STORAGE_KEY, metadataMap);
 }
 
+export function saveLegacyArtworkMetadataMap(metadataMap) {
+  return saveArtworkMetadataMap(metadataMap);
+}
+
 function getArtworkMetadataRecord(artworkId) {
   const metadataMap = getArtworkMetadataMap();
   return normalizeArtworkRecord(metadataMap[artworkId] || { id: artworkId });
@@ -204,6 +208,61 @@ function findArtworkRecord(artworkId) {
 export function saveAllCustomerArtwork(artwork) {
   if (!hasBrowserStorage()) return;
   return setJsonStorageItem(LEGACY_CUSTOMER_ARTWORK_STORAGE_KEY, artwork);
+}
+
+export function reassignStoredArtworkCustomer(fromCustomerId, toCustomerId) {
+  const normalizedFromCustomerId = normalizeCustomerId(fromCustomerId);
+  const normalizedToCustomerId = normalizeCustomerId(toCustomerId);
+
+  if (!normalizedFromCustomerId || !normalizedToCustomerId) {
+    return {
+      artworkCount: 0,
+      metadataCount: 0,
+    };
+  }
+
+  const now = new Date().toISOString();
+  let artworkCount = 0;
+  const nextArtwork = getAllCustomerArtwork().map((artwork) => {
+    if (!customerIdsEqual(artwork.customer_id, normalizedFromCustomerId)) {
+      return artwork;
+    }
+
+    artworkCount += 1;
+    return {
+      ...artwork,
+      customer_id: normalizedToCustomerId,
+      updated_at: now,
+    };
+  });
+
+  saveAllCustomerArtwork(nextArtwork);
+
+  let metadataCount = 0;
+  const nextMetadataMap = Object.fromEntries(
+    Object.entries(getArtworkMetadataMap()).map(([artworkId, metadata]) => {
+      if (!customerIdsEqual(metadata?.customer_id, normalizedFromCustomerId)) {
+        return [artworkId, metadata];
+      }
+
+      metadataCount += 1;
+      return [
+        artworkId,
+        {
+          ...metadata,
+          customer_id: normalizedToCustomerId,
+          updated_at: now,
+        },
+      ];
+    })
+  );
+
+  saveArtworkMetadataMap(nextMetadataMap);
+
+  return {
+    artworkCount,
+    metadataCount,
+  };
 }
 
 export function getCustomerArtwork(customerId) {

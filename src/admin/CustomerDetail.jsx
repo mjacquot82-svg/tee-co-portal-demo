@@ -8,12 +8,17 @@ import CustomerArtworkSection from "../components/CustomerArtworkSection";
 import CustomerTimelineSection from "../components/CustomerTimelineSection";
 import StatusBadge from "../components/StatusBadge";
 import { matchesCustomerRecord } from "../lib/customerRecordMatching";
+import { findPotentialDuplicatesForCustomer } from "../lib/customerDuplicates";
+import { previewCustomerMerge, mergeCustomers } from "../lib/customerMergeService";
+import { getAllCustomerArtwork } from "../lib/customerArtworkStore";
+import { listCustomerTimelineEvents } from "../lib/customerTimelineStore";
 import {
   deriveOperationalWorkflowState,
   getWorkflowStateTone,
   isWorkflowActiveState,
   isWorkflowCompletedState,
 } from "../lib/operationalWorkflow";
+import { canManageCustomerMerges, getAdminViewer } from "./adminRoleView";
 
 function currency(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -111,6 +116,12 @@ export default function CustomerDetail() {
   const [saveError, setSaveError] = useState("");
   const [archiveState, setArchiveState] = useState("idle");
   const [archiveError, setArchiveError] = useState("");
+  const [selectedMergeCustomerId, setSelectedMergeCustomerId] = useState("");
+  const [mergeDirection, setMergeDirection] = useState("current-primary");
+  const [mergeState, setMergeState] = useState("idle");
+  const [mergeError, setMergeError] = useState("");
+  const [mergeWarnings, setMergeWarnings] = useState([]);
+  const canManageMerges = canManageCustomerMerges();
 
   useEffect(() => {
     setOrders(getStoredOrders());
@@ -239,6 +250,44 @@ export default function CustomerDetail() {
       lastActivityAt,
     };
   }, [customerOrders, customerSales]);
+
+  const duplicateCandidates = useMemo(() => {
+    if (!customer) return [];
+    return findPotentialDuplicatesForCustomer(customer.id, customers);
+  }, [customer, customers]);
+
+  const effectiveSelectedMergeCustomerId =
+    duplicateCandidates.some((candidate) =>
+      customerIdsEqual(candidate.candidate.id, selectedMergeCustomerId)
+    )
+      ? selectedMergeCustomerId
+      : duplicateCandidates[0]?.candidate?.id || "";
+
+  const selectedMergeCustomer = useMemo(
+    () =>
+      customers.find((entry) => customerIdsEqual(entry.id, effectiveSelectedMergeCustomerId)) ||
+      null,
+    [customers, effectiveSelectedMergeCustomerId]
+  );
+
+  const mergePreview = useMemo(() => {
+    if (!customer || !selectedMergeCustomer) {
+      return null;
+    }
+
+    const primaryCustomerId =
+      mergeDirection === "current-primary" ? customer.id : selectedMergeCustomer.id;
+    const duplicateCustomerId =
+      mergeDirection === "current-primary" ? selectedMergeCustomer.id : customer.id;
+
+    return previewCustomerMerge(primaryCustomerId, duplicateCustomerId, {
+      customers,
+      orders,
+      sales,
+      timelineEvents: listCustomerTimelineEvents(),
+      artwork: getAllCustomerArtwork(),
+    });
+  }, [customer, customers, mergeDirection, orders, sales, selectedMergeCustomer]);
 
   function handleDuplicate(orderNumber) {
     const duplicated = duplicateStoredOrder(orderNumber);
@@ -501,6 +550,56 @@ export default function CustomerDetail() {
     }
   }
 
+  async function handleMergeCustomers() {
+    if (
+      !customer ||
+      !selectedMergeCustomer ||
+      mergeState === "saving" ||
+      !canManageMerges
+    ) {
+      return;
+    }
+
+    const primaryCustomer =
+      mergeDirection === "current-primary" ? customer : selectedMergeCustomer;
+    const duplicateCustomer =
+      mergeDirection === "current-primary" ? selectedMergeCustomer : customer;
+
+    const confirmed = window.confirm(
+      `Merge ${duplicateCustomer.name || duplicateCustomer.id} into ${primaryCustomer.name || primaryCustomer.id}?\n\nThis will move quotes, orders, artwork, timeline events, and counter sales onto the primary customer. The duplicate record will be archived, not deleted.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setMergeState("saving");
+    setMergeError("");
+    setMergeWarnings([]);
+
+    try {
+      const result = await mergeCustomers({
+        primaryCustomerId: primaryCustomer.id,
+        duplicateCustomerId: duplicateCustomer.id,
+        actor: getAdminViewer(),
+        confirmationLabel: `${primaryCustomer.id}<-${duplicateCustomer.id}`,
+      });
+
+      setMergeWarnings(result.warnings || []);
+      setOrders(getStoredOrders());
+      setSales(getStoredQuickSales());
+
+      if (!customerIdsEqual(primaryCustomer.id, customer.id)) {
+        navigate(`/admin/customers/${primaryCustomer.id}`, { replace: true });
+      }
+    } catch (error) {
+      console.error("Unable to merge customers", error);
+      setMergeError(error?.message || "Unable to merge customer records right now.");
+    } finally {
+      setMergeState("idle");
+    }
+  }
+
   if (!customer) {
     return (
       <div style={{ maxWidth: "900px", margin: "0 auto", padding: "24px" }}>
@@ -566,6 +665,24 @@ export default function CustomerDetail() {
               }}
             >
               Archived Customer
+            </div>
+          ) : null}
+          {customer.merged_into_customer_id ? (
+            <div
+              style={{
+                marginTop: "10px",
+                color: "#92400e",
+                fontSize: "13px",
+                fontWeight: 700,
+              }}
+            >
+              Merged into{" "}
+              <Link
+                to={`/admin/customers/${customer.merged_into_customer_id}`}
+                style={{ color: "#92400e" }}
+              >
+                {customer.merged_into_customer_id}
+              </Link>
             </div>
           ) : null}
         </div>
@@ -676,6 +793,234 @@ export default function CustomerDetail() {
       </section>
 
       <div style={{ display: "grid", gap: "18px" }}>
+        {canManageMerges ? (
+          <section
+            style={{
+              ...sectionCardStyle,
+              border: duplicateCandidates.length ? "1px solid #fcd34d" : "1px solid #e2e8f0",
+              background: duplicateCandidates.length ? "#fffbeb" : "#ffffff",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "12px",
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <h2 style={{ margin: 0 }}>Duplicate Review</h2>
+                <p style={{ margin: "4px 0 0", color: "#64748b" }}>
+                  Keep one canonical customer and move operational history onto it without deleting the duplicate.
+                </p>
+              </div>
+              <strong style={{ color: duplicateCandidates.length ? "#92400e" : "#475569" }}>
+                {duplicateCandidates.length} candidate{duplicateCandidates.length === 1 ? "" : "s"}
+              </strong>
+            </div>
+
+            {duplicateCandidates.length ? (
+              <div style={{ display: "grid", gap: "14px", marginTop: "14px" }}>
+                <label style={labelStyle}>
+                  Duplicate Customer
+                  <select
+                    value={effectiveSelectedMergeCustomerId}
+                    onChange={(event) => {
+                      setSelectedMergeCustomerId(event.target.value);
+                      setMergeDirection("current-primary");
+                      setMergeError("");
+                      setMergeWarnings([]);
+                    }}
+                    disabled={mergeState === "saving"}
+                    style={fieldStyle}
+                  >
+                    {duplicateCandidates.map((candidate) => (
+                      <option key={candidate.candidate.id} value={candidate.candidate.id}>
+                        {candidate.candidate.name || candidate.candidate.id} • {candidate.signals
+                          .map((signal) => signal.label)
+                          .slice(0, 2)
+                          .join(" / ")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => setMergeDirection("current-primary")}
+                    disabled={mergeState === "saving"}
+                    style={{
+                      border: "1px solid #cbd5e1",
+                      background: mergeDirection === "current-primary" ? "#171717" : "#ffffff",
+                      color: mergeDirection === "current-primary" ? "#ffffff" : "#0f172a",
+                      borderRadius: "999px",
+                      padding: "9px 12px",
+                      fontWeight: 700,
+                      cursor: mergeState === "saving" ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Keep {customer.name || customer.id}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMergeDirection("candidate-primary")}
+                    disabled={mergeState === "saving"}
+                    style={{
+                      border: "1px solid #cbd5e1",
+                      background: mergeDirection === "candidate-primary" ? "#171717" : "#ffffff",
+                      color: mergeDirection === "candidate-primary" ? "#ffffff" : "#0f172a",
+                      borderRadius: "999px",
+                      padding: "9px 12px",
+                      fontWeight: 700,
+                      cursor: mergeState === "saving" ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Keep {selectedMergeCustomer?.name || "selected duplicate"}
+                  </button>
+                </div>
+
+                {mergePreview ? (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+                      gap: "10px",
+                    }}
+                  >
+                    {[
+                      ["Quotes", mergePreview.counts.quotes],
+                      ["Orders", mergePreview.counts.orders],
+                      ["Artwork", mergePreview.counts.artwork],
+                      ["Timeline", mergePreview.counts.timelineEvents],
+                      ["Counter Sales", mergePreview.counts.sales],
+                    ].map(([label, value]) => (
+                      <div
+                        key={label}
+                        style={{
+                          borderRadius: "14px",
+                          border: "1px solid #fde68a",
+                          background: "rgba(255,255,255,0.72)",
+                          padding: "12px",
+                          display: "grid",
+                          gap: "4px",
+                        }}
+                      >
+                        <span style={{ color: "#78350f", fontSize: "12px", fontWeight: 800 }}>
+                          {label}
+                        </span>
+                        <strong style={{ color: "#111827", fontSize: "24px" }}>{value}</strong>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {selectedMergeCustomer ? (
+                  <div
+                    style={{
+                      borderRadius: "14px",
+                      border: "1px solid #fde68a",
+                      background: "rgba(255,255,255,0.72)",
+                      padding: "12px 14px",
+                      color: "#78350f",
+                      fontSize: "13px",
+                    }}
+                  >
+                    <strong style={{ color: "#92400e" }}>
+                      Merge path:
+                    </strong>{" "}
+                    {mergeDirection === "current-primary"
+                      ? `${selectedMergeCustomer.name || selectedMergeCustomer.id} -> ${customer.name || customer.id}`
+                      : `${customer.name || customer.id} -> ${selectedMergeCustomer.name || selectedMergeCustomer.id}`}
+                  </div>
+                ) : null}
+
+                {mergeError ? (
+                  <div
+                    style={{
+                      border: "1px solid #fecaca",
+                      background: "#fff1f2",
+                      color: "#9f1239",
+                      borderRadius: "14px",
+                      padding: "12px 14px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {mergeError}
+                  </div>
+                ) : null}
+
+                {mergeWarnings.length ? (
+                  <div
+                    style={{
+                      border: "1px solid #fed7aa",
+                      background: "#fff7ed",
+                      color: "#9a3412",
+                      borderRadius: "14px",
+                      padding: "12px 14px",
+                      display: "grid",
+                      gap: "4px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {mergeWarnings.map((warning) => (
+                      <div key={warning}>{warning}</div>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div style={{ color: "#78350f", fontSize: "13px", fontWeight: 600 }}>
+                    Confirmation is required before the duplicate is archived. Nothing is auto-deleted.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleMergeCustomers}
+                    disabled={mergeState === "saving" || !selectedMergeCustomer}
+                    style={{
+                      border: "none",
+                      background: "#171717",
+                      color: "#ffffff",
+                      borderRadius: "12px",
+                      padding: "11px 16px",
+                      fontWeight: 700,
+                      cursor:
+                        mergeState === "saving" || !selectedMergeCustomer
+                          ? "not-allowed"
+                          : "pointer",
+                      opacity: mergeState === "saving" || !selectedMergeCustomer ? 0.8 : 1,
+                    }}
+                  >
+                    {mergeState === "saving" ? "Merging..." : "Merge Customer Records"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div
+                style={{
+                  marginTop: "14px",
+                  borderRadius: "14px",
+                  border: "1px dashed #cbd5e1",
+                  padding: "14px",
+                  color: "#64748b",
+                }}
+              >
+                No current duplicate matches detected for this customer by email, phone, or highly similar name.
+              </div>
+            )}
+          </section>
+        ) : null}
+
         {renderOperationalSection(
           "Active Quotes",
           "Open quote work, approvals, and deposit checkpoints for this account.",

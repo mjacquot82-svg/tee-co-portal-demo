@@ -98,6 +98,10 @@ export function canManageCanceledOrders(staffUser = getActiveStaffUser()) {
   return isAdminWorkspaceView(staffUser);
 }
 
+export function canManageCustomerMerges(staffUser = getActiveStaffUser()) {
+  return isAdminWorkspaceView(staffUser);
+}
+
 export function matchesAssignedStaff(order, staffUser = getActiveStaffUser()) {
   const viewer = getAdminViewer(staffUser);
   if (!viewer) return false;

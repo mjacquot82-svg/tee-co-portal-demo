@@ -712,3 +712,48 @@ export async function linkCustomerArtworkToQuote(artworkId, quoteId) {
     "artwork_linked_to_quote"
   );
 }
+
+export async function reassignCustomerArtworkRecords(fromCustomerId, toCustomerId) {
+  const normalizedFromCustomerId = normalizeCustomerId(fromCustomerId);
+  const normalizedToCustomerId = normalizeCustomerId(toCustomerId);
+
+  if (!normalizedFromCustomerId || !normalizedToCustomerId) {
+    return {
+      updatedCount: 0,
+      skipped: true,
+    };
+  }
+
+  if (!isSupabaseConfigured || !supabase) {
+    return {
+      updatedCount: 0,
+      skipped: true,
+    };
+  }
+
+  const rows = await fetchCustomerArtworkRows(normalizedFromCustomerId);
+  const rowsToUpdate = rows.filter(
+    (row) => !customerIdsEqual(row?.customer_id, normalizedToCustomerId)
+  );
+
+  let updatedCount = 0;
+  for (const row of rowsToUpdate) {
+    const {
+      error,
+    } = await updateArtworkRowWithSchemaFallback(row.id, {
+      customer_id: normalizedToCustomerId,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      throw new Error(error.message || "Unable to reassign customer artwork.");
+    }
+
+    updatedCount += 1;
+  }
+
+  return {
+    updatedCount,
+    skipped: false,
+  };
+}

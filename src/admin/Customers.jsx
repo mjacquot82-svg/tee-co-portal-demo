@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { customerIdsEqual } from "../lib/customerIds";
+import { buildPotentialDuplicateCustomerGroups } from "../lib/customerDuplicates";
 import { createStoredCustomer, getStoredCustomers } from "../lib/customersStore";
 import { getStoredOrders } from "../lib/ordersStore";
 import { getStoredQuickSales } from "../lib/salesStore";
@@ -171,6 +172,11 @@ export default function Customers() {
       );
     });
   }, [customerRecords, searchTerm]);
+
+  const duplicateGroups = useMemo(
+    () => buildPotentialDuplicateCustomerGroups(customerRecords),
+    [customerRecords]
+  );
 
   function updateForm(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -345,6 +351,105 @@ export default function Customers() {
             boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
           }}
         >
+          {duplicateGroups.length ? (
+            <div
+              style={{
+                marginBottom: "18px",
+                border: "1px solid #fde68a",
+                background: "#fffbeb",
+                borderRadius: "16px",
+                padding: "16px",
+                display: "grid",
+                gap: "12px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                }}
+              >
+                <div>
+                  <strong style={{ color: "#92400e" }}>
+                    {duplicateGroups.length} potential duplicate group
+                    {duplicateGroups.length === 1 ? "" : "s"}
+                  </strong>
+                  <p style={{ margin: "4px 0 0", color: "#78350f", fontSize: "13px" }}>
+                    Review these before customer history splits further across quotes, orders, artwork, and payments.
+                  </p>
+                </div>
+                <span
+                  style={{
+                    borderRadius: "999px",
+                    border: "1px solid #f59e0b",
+                    padding: "6px 10px",
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    color: "#92400e",
+                  }}
+                >
+                  Operator review
+                </span>
+              </div>
+
+              <div style={{ display: "grid", gap: "10px" }}>
+                {duplicateGroups.slice(0, 4).map((group) => (
+                  <div
+                    key={group.id}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 1fr) auto",
+                      gap: "12px",
+                      alignItems: "center",
+                      borderRadius: "14px",
+                      padding: "12px 14px",
+                      background: "rgba(255,255,255,0.72)",
+                      border: "1px solid #fde68a",
+                    }}
+                  >
+                    <div>
+                      <strong style={{ color: "#1f2937" }}>
+                        {group.customers.map((customer) => customer.name || customer.id).join(" / ")}
+                      </strong>
+                      <div style={{ marginTop: "4px", color: "#6b7280", fontSize: "12px" }}>
+                        {group.customers.length} linked records under review
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                      {group.signals.slice(0, 3).map((signal) => (
+                        <span
+                          key={`${group.id}-${signal}`}
+                          style={{
+                            borderRadius: "999px",
+                            background: "#fff7ed",
+                            color: "#9a3412",
+                            border: "1px solid #fdba74",
+                            padding: "5px 8px",
+                            fontSize: "11px",
+                            fontWeight: 800,
+                          }}
+                        >
+                          {signal}
+                        </span>
+                      ))}
+                    </div>
+
+                    <Link
+                      to={`/admin/customers/${group.customers[0].id}`}
+                      style={{ color: "#0f172a", fontWeight: 800, textDecoration: "none" }}
+                    >
+                      Review merge
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div
             style={{
               display: "flex",
@@ -380,7 +485,8 @@ export default function Customers() {
                   data-customer-id={customer.id}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "minmax(220px, 1.4fr) repeat(2, minmax(160px, 0.8fr)) auto",
+                    gridTemplateColumns:
+                      "minmax(220px, 1.4fr) repeat(2, minmax(160px, 0.8fr)) minmax(140px, auto)",
                     gap: "14px",
                     alignItems: "center",
                     padding: "16px",
@@ -431,8 +537,34 @@ export default function Customers() {
                     </div>
                   </div>
 
-                  <div style={{ textAlign: "right", color: "#0f172a", fontWeight: 800 }}>
-                    View record
+                  <div
+                    style={{
+                      display: "grid",
+                      justifyItems: "end",
+                      gap: "8px",
+                      textAlign: "right",
+                    }}
+                  >
+                    {duplicateGroups.some((group) =>
+                      group.customers.some((entry) => entry.id === customer.id)
+                    ) ? (
+                      <span
+                        style={{
+                          borderRadius: "999px",
+                          background: "#fffbeb",
+                          color: "#92400e",
+                          border: "1px solid #fcd34d",
+                          padding: "6px 10px",
+                          fontSize: "11px",
+                          fontWeight: 900,
+                          letterSpacing: "0.04em",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        Duplicate review
+                      </span>
+                    ) : null}
+                    <span style={{ color: "#0f172a", fontWeight: 800 }}>View record</span>
                   </div>
                 </Link>
               ))}
