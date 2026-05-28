@@ -15,8 +15,24 @@ import { supabase } from "./supabase";
 
 const STORAGE_KEY = "teeCoCustomers";
 const SUPABASE_TABLE = "customers";
-const SUPABASE_SELECT_FIELDS =
-  "id, name, email, phone, company, notes, created_at, updated_at";
+const REQUIRED_SUPABASE_SELECT_FIELDS = [
+  "id",
+  "name",
+  "email",
+  "phone",
+  "company",
+  "notes",
+  "created_at",
+  "updated_at",
+];
+const OPTIONAL_SUPABASE_SELECT_FIELDS = [
+  "external_reference",
+  "archived",
+  "archived_at",
+  "merged_into_customer_id",
+  "merged_at",
+  "merged_customer_ids",
+];
 const customerListeners = new Set();
 const EMPTY_CUSTOMERS = [];
 
@@ -24,6 +40,7 @@ let cachedCustomersRaw = null;
 let cachedCustomersSnapshot = EMPTY_CUSTOMERS;
 let customersHydrationPromise = null;
 let hasLoggedFallbackActivation = false;
+let activeOptionalSupabaseFields = [...OPTIONAL_SUPABASE_SELECT_FIELDS];
 
 function emitCustomersUpdated() {
   customerListeners.forEach((listener) => listener());
@@ -36,6 +53,20 @@ function shouldUseSupabase() {
 function normalizeOrderNumbers(orderNumbers) {
   if (!Array.isArray(orderNumbers)) return [];
   return orderNumbers.filter(Boolean);
+}
+
+function normalizeMergedCustomerIds(mergedCustomerIds) {
+  if (!Array.isArray(mergedCustomerIds)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      mergedCustomerIds
+        .map((customerId) => normalizeCustomerId(customerId))
+        .filter(Boolean)
+    )
+  );
 }
 
 function normalizeCustomer(customer = {}, fallbackTimestamp = new Date().toISOString()) {
@@ -59,6 +90,9 @@ function normalizeCustomer(customer = {}, fallbackTimestamp = new Date().toISOSt
     order_numbers: normalizeOrderNumbers(customer.order_numbers),
     archived: Boolean(customer.archived),
     archived_at: customer.archived ? customer.archived_at || customer.updated_at || createdAt : null,
+    merged_into_customer_id: normalizeCustomerId(customer.merged_into_customer_id),
+    merged_at: customer.merged_at || "",
+    merged_customer_ids: normalizeMergedCustomerIds(customer.merged_customer_ids),
     created_at: createdAt,
     updated_at: customer.updated_at || createdAt,
   };
@@ -136,6 +170,39 @@ function logFallbackActivation(reason, error) {
 
   hasLoggedFallbackActivation = true;
   console.warn("[customersStore] Local fallback activated");
+}
+
+function buildSupabaseSelectFields(optionalFields = activeOptionalSupabaseFields) {
+  return [...REQUIRED_SUPABASE_SELECT_FIELDS, ...optionalFields].join(", ");
+}
+
+function extractMissingSchemaColumn(error) {
+  const message = String(error?.message || "");
+  const missingQuotedColumn = message.match(/Could not find the '([^']+)' column/i)?.[1];
+  if (missingQuotedColumn) {
+    return missingQuotedColumn;
+  }
+
+  const undefinedColumn = message.match(/column\s+["']?([a-z0-9_]+)["']?\s+does not exist/i)?.[1];
+  return undefinedColumn || "";
+}
+
+function removeUnsupportedOptionalField(fieldName) {
+  if (!fieldName) {
+    return false;
+  }
+
+  if (!activeOptionalSupabaseFields.includes(fieldName)) {
+    return false;
+  }
+
+  activeOptionalSupabaseFields = activeOptionalSupabaseFields.filter((field) => field !== fieldName);
+  console.warn("[customersStore] schema fallback removed unsupported optional customer column", {
+    table: SUPABASE_TABLE,
+    fieldName,
+    remainingOptionalFields: activeOptionalSupabaseFields,
+  });
+  return true;
 }
 
 function syncCachedCustomersRaw(customers) {
@@ -230,9 +297,78 @@ function buildSupabaseCustomerPayload(customer) {
     phone: canonicalCustomer.phone || "",
     company: canonicalCustomer.company || "",
     notes: canonicalCustomer.notes || "",
+    external_reference: canonicalCustomer.external_reference || "",
+    archived: Boolean(canonicalCustomer.archived),
+    archived_at: canonicalCustomer.archived ? canonicalCustomer.archived_at || null : null,
+    merged_into_customer_id: canonicalCustomer.merged_into_customer_id || null,
+    merged_at: canonicalCustomer.merged_at || null,
+    merged_customer_ids: canonicalCustomer.merged_customer_ids || [],
     created_at: canonicalCustomer.created_at || new Date().toISOString(),
     updated_at: canonicalCustomer.updated_at || new Date().toISOString(),
   };
+}
+
+async function executeSupabaseCustomerUpsert(payload, operation) {
+  let nextPayload = { ...payload };
+
+  while (true) {
+    const selectFields = buildSupabaseSelectFields();
+    const { data, error } = await supabase
+      .from(SUPABASE_TABLE)
+      .upsert(nextPayload, { onConflict: "id" })
+      .select(selectFields)
+      .single();
+
+    if (!error) {
+      return { data, payload: nextPayload };
+    }
+
+    const missingColumn = extractMissingSchemaColumn(error);
+    const removedPayloadColumn =
+      missingColumn && Object.prototype.hasOwnProperty.call(nextPayload, missingColumn);
+    const removedSelectColumn = removeUnsupportedOptionalField(missingColumn);
+
+    if (!removedPayloadColumn && !removedSelectColumn) {
+      logFallbackActivation(operation, error);
+      console.error("[customersStore] Supabase upsert/select returned error", {
+        operation,
+        table: SUPABASE_TABLE,
+        payload: nextPayload,
+        error,
+      });
+      throw error;
+    }
+
+    if (removedPayloadColumn) {
+      delete nextPayload[missingColumn];
+      console.warn("[customersStore] schema fallback removed unsupported customer payload column", {
+        table: SUPABASE_TABLE,
+        operation,
+        missingColumn,
+        remainingPayloadColumns: Object.keys(nextPayload),
+      });
+    }
+  }
+}
+
+async function fetchSupabaseCustomersWithSchemaFallback() {
+  while (true) {
+    const selectFields = buildSupabaseSelectFields();
+    const { data, error } = await supabase
+      .from(SUPABASE_TABLE)
+      .select(selectFields)
+      .order("created_at", { ascending: false });
+
+    if (!error) {
+      return data || [];
+    }
+
+    const missingColumn = extractMissingSchemaColumn(error);
+    const removedSelectColumn = removeUnsupportedOptionalField(missingColumn);
+    if (!removedSelectColumn) {
+      throw error;
+    }
+  }
 }
 
 async function persistCustomerToSupabase(customer, operation) {
@@ -282,29 +418,15 @@ async function persistCustomerToSupabase(customer, operation) {
     console.info("[customersStore] select before", {
       operation,
       table: SUPABASE_TABLE,
-      selectFields: SUPABASE_SELECT_FIELDS,
+      selectFields: buildSupabaseSelectFields(),
     });
-    const { data, error } = await upsertQuery
-      .select(SUPABASE_SELECT_FIELDS)
-      .single();
+    const { data } = await executeSupabaseCustomerUpsert(payload, operation);
     console.info("[customersStore] select after", {
       operation,
       table: SUPABASE_TABLE,
       data,
-      error,
+      error: null,
     });
-
-    if (error) {
-      logFallbackActivation(operation, error);
-      console.error("[customersStore] Supabase upsert/select returned error", {
-        operation,
-        table: SUPABASE_TABLE,
-        payload,
-        data,
-        error,
-      });
-      throw error;
-    }
 
     const currentCustomers = readCustomersFromStorage();
     const localCustomer =
@@ -368,27 +490,14 @@ export function ensureCustomersHydrated() {
     try {
       console.info("[customersStore] hydration before select", {
         table: SUPABASE_TABLE,
-        selectFields: SUPABASE_SELECT_FIELDS,
+        selectFields: buildSupabaseSelectFields(),
       });
-      const { data, error } = await supabase
-        .from(SUPABASE_TABLE)
-        .select(SUPABASE_SELECT_FIELDS)
-        .order("created_at", { ascending: false });
+      const data = await fetchSupabaseCustomersWithSchemaFallback();
       console.info("[customersStore] hydration after select", {
         table: SUPABASE_TABLE,
         data,
-        error,
+        error: null,
       });
-
-      if (error) {
-        logFallbackActivation("hydration", error);
-        console.error("[customersStore] Hydration select returned error", {
-          table: SUPABASE_TABLE,
-          data,
-          error,
-        });
-        return localCustomers;
-      }
 
       const hydratedCustomers = mergeHydratedCustomers(data || [], readCustomersFromStorage());
       persistCustomersSnapshot(hydratedCustomers, { emit: true, writeStorage: true });

@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { customerIdsEqual, normalizeCustomerId } from "../lib/customerIds";
 import { updateStoredCustomer, useStoredCustomers } from "../lib/customersStore";
 import { duplicateStoredOrder, getStoredOrders } from "../lib/ordersStore";
@@ -40,6 +40,14 @@ function formatDateTime(value) {
 
 function compareTimestamps(left, right) {
   return new Date(right || 0).getTime() - new Date(left || 0).getTime();
+}
+
+function describeSignal(signal) {
+  if (!signal) {
+    return "";
+  }
+
+  return signal.value ? `${signal.label}: ${signal.value}` : signal.label;
 }
 
 const sectionCardStyle = {
@@ -108,8 +116,8 @@ export default function CustomerDetail() {
   const normalizedRouteCustomerId = normalizeCustomerId(customerId);
   const navigate = useNavigate();
   const customers = useStoredCustomers();
-  const [orders, setOrders] = useState([]);
-  const [sales, setSales] = useState([]);
+  const [orders, setOrders] = useState(() => getStoredOrders());
+  const [sales, setSales] = useState(() => getStoredQuickSales());
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState(() => buildCustomerForm());
   const [saveState, setSaveState] = useState("idle");
@@ -121,23 +129,13 @@ export default function CustomerDetail() {
   const [mergeState, setMergeState] = useState("idle");
   const [mergeError, setMergeError] = useState("");
   const [mergeWarnings, setMergeWarnings] = useState([]);
+  const [mergeConfirmationText, setMergeConfirmationText] = useState("");
   const canManageMerges = canManageCustomerMerges();
-
-  useEffect(() => {
-    setOrders(getStoredOrders());
-    setSales(getStoredQuickSales());
-  }, [customerId]);
 
   const customer = useMemo(
     () => customers.find((entry) => customerIdsEqual(entry.id, normalizedRouteCustomerId)) || null,
     [customers, normalizedRouteCustomerId]
   );
-
-  useEffect(() => {
-    if (!isEditing) {
-      setEditForm(buildCustomerForm(customer));
-    }
-  }, [customer, isEditing]);
 
   const customerOrders = useMemo(() => {
     if (!customer) return [];
@@ -588,6 +586,7 @@ export default function CustomerDetail() {
       setMergeWarnings(result.warnings || []);
       setOrders(getStoredOrders());
       setSales(getStoredQuickSales());
+      setMergeConfirmationText("");
 
       if (!customerIdsEqual(primaryCustomer.id, customer.id)) {
         navigate(`/admin/customers/${primaryCustomer.id}`, { replace: true });
@@ -832,6 +831,7 @@ export default function CustomerDetail() {
                       setMergeDirection("current-primary");
                       setMergeError("");
                       setMergeWarnings([]);
+                      setMergeConfirmationText("");
                     }}
                     disabled={mergeState === "saving"}
                     style={fieldStyle}
@@ -896,6 +896,8 @@ export default function CustomerDetail() {
                       ["Artwork", mergePreview.counts.artwork],
                       ["Timeline", mergePreview.counts.timelineEvents],
                       ["Counter Sales", mergePreview.counts.sales],
+                      ["Workflow", mergePreview.counts.activeWorkflowReferences],
+                      ["Production", mergePreview.counts.productionReferences],
                     ].map(([label, value]) => (
                       <div
                         key={label}
@@ -918,23 +920,76 @@ export default function CustomerDetail() {
                 ) : null}
 
                 {selectedMergeCustomer ? (
-                  <div
-                    style={{
-                      borderRadius: "14px",
-                      border: "1px solid #fde68a",
-                      background: "rgba(255,255,255,0.72)",
-                      padding: "12px 14px",
-                      color: "#78350f",
-                      fontSize: "13px",
-                    }}
-                  >
-                    <strong style={{ color: "#92400e" }}>
-                      Merge path:
-                    </strong>{" "}
-                    {mergeDirection === "current-primary"
-                      ? `${selectedMergeCustomer.name || selectedMergeCustomer.id} -> ${customer.name || customer.id}`
-                      : `${customer.name || customer.id} -> ${selectedMergeCustomer.name || selectedMergeCustomer.id}`}
+                  <div style={{ display: "grid", gap: "10px" }}>
+                    <div
+                      style={{
+                        borderRadius: "14px",
+                        border: "1px solid #fde68a",
+                        background: "rgba(255,255,255,0.72)",
+                        padding: "12px 14px",
+                        color: "#78350f",
+                        fontSize: "13px",
+                      }}
+                    >
+                      <strong style={{ color: "#92400e" }}>
+                        Merge path:
+                      </strong>{" "}
+                      {mergeDirection === "current-primary"
+                        ? `${selectedMergeCustomer.name || selectedMergeCustomer.id} -> ${customer.name || customer.id}`
+                        : `${customer.name || customer.id} -> ${selectedMergeCustomer.name || selectedMergeCustomer.id}`}
+                    </div>
+
+                    <div
+                      style={{
+                        borderRadius: "14px",
+                        border: "1px solid #fde68a",
+                        background: "rgba(255,255,255,0.72)",
+                        padding: "12px 14px",
+                        display: "grid",
+                        gap: "8px",
+                      }}
+                    >
+                      <strong style={{ color: "#92400e", fontSize: "13px" }}>
+                        Duplicate signals
+                      </strong>
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                        {duplicateCandidates
+                          .find((candidate) =>
+                            customerIdsEqual(candidate.candidate.id, selectedMergeCustomer.id)
+                          )
+                          ?.signals.map((signal) => (
+                            <span
+                              key={`${selectedMergeCustomer.id}-${signal.type}`}
+                              title={describeSignal(signal)}
+                              style={{
+                                borderRadius: "999px",
+                                background: "#fff7ed",
+                                color: "#9a3412",
+                                border: "1px solid #fdba74",
+                                padding: "5px 8px",
+                                fontSize: "11px",
+                                fontWeight: 800,
+                              }}
+                            >
+                              {signal.label}
+                            </span>
+                          ))}
+                      </div>
+                    </div>
                   </div>
+                ) : null}
+
+                {mergePreview ? (
+                  <label style={labelStyle}>
+                    Type `MERGE` to confirm
+                    <input
+                      value={mergeConfirmationText}
+                      onChange={(event) => setMergeConfirmationText(event.target.value)}
+                      placeholder="MERGE"
+                      disabled={mergeState === "saving"}
+                      style={fieldStyle}
+                    />
+                  </label>
                 ) : null}
 
                 {mergeError ? (
@@ -981,12 +1036,16 @@ export default function CustomerDetail() {
                   }}
                 >
                   <div style={{ color: "#78350f", fontSize: "13px", fontWeight: 600 }}>
-                    Confirmation is required before the duplicate is archived. Nothing is auto-deleted.
+                    Confirmation is required before the duplicate is archived. Nothing is auto-deleted, and linked records stay attached to the retained customer.
                   </div>
                   <button
                     type="button"
                     onClick={handleMergeCustomers}
-                    disabled={mergeState === "saving" || !selectedMergeCustomer}
+                    disabled={
+                      mergeState === "saving" ||
+                      !selectedMergeCustomer ||
+                      mergeConfirmationText.trim().toUpperCase() !== "MERGE"
+                    }
                     style={{
                       border: "none",
                       background: "#171717",
@@ -995,10 +1054,17 @@ export default function CustomerDetail() {
                       padding: "11px 16px",
                       fontWeight: 700,
                       cursor:
-                        mergeState === "saving" || !selectedMergeCustomer
+                        mergeState === "saving" ||
+                        !selectedMergeCustomer ||
+                        mergeConfirmationText.trim().toUpperCase() !== "MERGE"
                           ? "not-allowed"
                           : "pointer",
-                      opacity: mergeState === "saving" || !selectedMergeCustomer ? 0.8 : 1,
+                      opacity:
+                        mergeState === "saving" ||
+                        !selectedMergeCustomer ||
+                        mergeConfirmationText.trim().toUpperCase() !== "MERGE"
+                          ? 0.8
+                          : 1,
                     }}
                   >
                     {mergeState === "saving" ? "Merging..." : "Merge Customer Records"}

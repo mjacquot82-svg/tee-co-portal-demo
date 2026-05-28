@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { customerIdsEqual } from "../lib/customerIds";
 import { buildPotentialDuplicateCustomerGroups } from "../lib/customerDuplicates";
-import { createStoredCustomer, getStoredCustomers } from "../lib/customersStore";
+import { createStoredCustomer, useStoredCustomers } from "../lib/customersStore";
 import { getStoredOrders } from "../lib/ordersStore";
 import { getStoredQuickSales } from "../lib/salesStore";
 
@@ -96,10 +96,18 @@ function compareTimestamps(left, right) {
   return new Date(right || 0).getTime() - new Date(left || 0).getTime();
 }
 
+function describeSignal(signal) {
+  if (!signal) {
+    return "";
+  }
+
+  return signal.value ? `${signal.label}: ${signal.value}` : signal.label;
+}
+
 export default function Customers() {
-  const [customers, setCustomers] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [sales, setSales] = useState([]);
+  const customers = useStoredCustomers();
+  const [orders] = useState(() => getStoredOrders());
+  const [sales] = useState(() => getStoredQuickSales());
   const [searchTerm, setSearchTerm] = useState("");
   const [form, setForm] = useState({
     name: "",
@@ -108,12 +116,6 @@ export default function Customers() {
     email: "",
     notes: "",
   });
-
-  useEffect(() => {
-    setCustomers(getStoredCustomers());
-    setOrders(getStoredOrders());
-    setSales(getStoredQuickSales());
-  }, []);
 
   const customerRecords = useMemo(() => {
     return customers
@@ -192,7 +194,6 @@ export default function Customers() {
 
     try {
       await createStoredCustomer(form);
-      setCustomers(getStoredCustomers());
       setForm({ name: "", company: "", phone: "", email: "", notes: "" });
     } catch (error) {
       console.error("Unable to create customer", error);
@@ -401,28 +402,47 @@ export default function Customers() {
                     key={group.id}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 1fr) auto",
                       gap: "12px",
-                      alignItems: "center",
                       borderRadius: "14px",
                       padding: "12px 14px",
                       background: "rgba(255,255,255,0.72)",
                       border: "1px solid #fde68a",
                     }}
                   >
-                    <div>
-                      <strong style={{ color: "#1f2937" }}>
-                        {group.customers.map((customer) => customer.name || customer.id).join(" / ")}
-                      </strong>
-                      <div style={{ marginTop: "4px", color: "#6b7280", fontSize: "12px" }}>
-                        {group.customers.length} linked records under review
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "12px",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div>
+                        <strong style={{ color: "#1f2937" }}>
+                          {group.customers.map((customer) => customer.name || customer.id).join(" / ")}
+                        </strong>
+                        <div style={{ marginTop: "4px", color: "#6b7280", fontSize: "12px" }}>
+                          {group.customers.length} linked records under review
+                        </div>
                       </div>
+
+                      <Link
+                        to={`/admin/customers/${group.customers[0].id}`}
+                        style={{ color: "#0f172a", fontWeight: 800, textDecoration: "none" }}
+                      >
+                        Review merge
+                      </Link>
                     </div>
 
                     <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                      {group.signals.slice(0, 3).map((signal) => (
+                      {group.pairs
+                        .flatMap((pair) => pair.signals)
+                        .slice(0, 4)
+                        .map((signal, index) => (
                         <span
-                          key={`${group.id}-${signal}`}
+                          key={`${group.id}-${signal.type}-${index}`}
+                          title={describeSignal(signal)}
                           style={{
                             borderRadius: "999px",
                             background: "#fff7ed",
@@ -433,17 +453,43 @@ export default function Customers() {
                             fontWeight: 800,
                           }}
                         >
-                          {signal}
+                          {signal.label}
                         </span>
                       ))}
                     </div>
 
-                    <Link
-                      to={`/admin/customers/${group.customers[0].id}`}
-                      style={{ color: "#0f172a", fontWeight: 800, textDecoration: "none" }}
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                        gap: "10px",
+                      }}
                     >
-                      Review merge
-                    </Link>
+                      {group.customers.map((customer) => (
+                        <div
+                          key={customer.id}
+                          style={{
+                            borderRadius: "12px",
+                            border: "1px solid #fde68a",
+                            background: "#ffffff",
+                            padding: "10px 12px",
+                            display: "grid",
+                            gap: "4px",
+                          }}
+                        >
+                          <strong style={{ color: "#111827", fontSize: "13px" }}>
+                            {customer.name || customer.id}
+                          </strong>
+                          <span style={{ color: "#6b7280", fontSize: "12px" }}>
+                            {[customer.phone, customer.email].filter(Boolean).join(" • ") ||
+                              "No contact info"}
+                          </span>
+                          <span style={{ color: "#92400e", fontSize: "12px", fontWeight: 700 }}>
+                            {customer.relatedOrders.length} orders • {customer.relatedSales.length} sales
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>

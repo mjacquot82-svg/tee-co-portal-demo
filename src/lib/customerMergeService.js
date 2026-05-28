@@ -31,6 +31,16 @@ function uniqueStrings(values = []) {
   );
 }
 
+function uniqueValidCustomerIds(values = []) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => normalizeCustomerId(value))
+        .filter(Boolean)
+    )
+  );
+}
+
 function mergeNotes(primaryNotes, duplicateNotes, duplicateCustomerName) {
   const normalizedPrimaryNotes = String(primaryNotes || "").trim();
   const normalizedDuplicateNotes = String(duplicateNotes || "").trim();
@@ -56,17 +66,21 @@ function buildMergedCustomerRecord(primaryCustomer, duplicateCustomer, orderNumb
     company: primaryCustomer.company || duplicateCustomer.company || "",
     phone: primaryCustomer.phone || duplicateCustomer.phone || "",
     email: primaryCustomer.email || duplicateCustomer.email || "",
+    external_reference:
+      primaryCustomer.external_reference || duplicateCustomer.external_reference || "",
     notes: mergeNotes(primaryCustomer.notes, duplicateCustomer.notes, duplicateCustomer.name),
     order_numbers: uniqueStrings([
       ...(primaryCustomer.order_numbers || []),
       ...(duplicateCustomer.order_numbers || []),
       ...orderNumbers,
     ]),
-    merged_customer_ids: uniqueStrings([
+    merged_customer_ids: uniqueValidCustomerIds([
       ...(primaryCustomer.merged_customer_ids || []),
       duplicateCustomer.id,
       ...(duplicateCustomer.merged_customer_ids || []),
     ]),
+    merged_into_customer_id: "",
+    merged_at: "",
     updated_at: mergedAt,
   };
 }
@@ -122,6 +136,14 @@ function buildCustomerMergeCounts(primaryCustomer, duplicateCustomer, context = 
     sales: affectedSales.length,
     timelineEvents: affectedTimelineEvents.length,
     artwork: affectedArtwork.length,
+    activeWorkflowReferences: affectedOrders.filter(
+      (order) => order.operational_visible !== false
+    ).length,
+    productionReferences: affectedOrders.filter(
+      (order) =>
+        order.operational_visible !== false &&
+        String(order.status || "").trim() !== "Draft"
+    ).length,
     orderNumbers: uniqueStrings(affectedOrders.map((order) => order.order_number)),
     saleNumbers: uniqueStrings(affectedSales.map((sale) => sale.sale_number)),
   };
