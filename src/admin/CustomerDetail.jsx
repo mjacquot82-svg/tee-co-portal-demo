@@ -398,6 +398,8 @@ export default function CustomerDetail() {
                   {type !== "quote" ? (
                     <button
                       type="button"
+                      data-testid="customer-order-repeat-button"
+                      data-order-number={record.order_number}
                       onClick={() => handleDuplicate(record.order_number)}
                       style={{
                         border: "1px solid #cbd5e1",

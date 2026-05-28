@@ -634,7 +634,12 @@ export default function NewOrder() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
             <label style={labelStyle}>
               Existing Customer
-              <select value={selectedCustomerId} onChange={selectCustomer} style={fieldStyle}>
+              <select
+                data-testid="new-order-existing-customer-select"
+                value={selectedCustomerId}
+                onChange={selectCustomer}
+                style={fieldStyle}
+              >
                 <option value="">New customer / type manually...</option>
                 {customers.map((customer) => (
                   <option key={customer.id} value={customer.id}>
@@ -647,6 +652,7 @@ export default function NewOrder() {
             <label style={{ ...labelStyle, position: "relative" }}>
               Customer Name
               <input
+                data-testid="new-order-customer-name-input"
                 ref={customerNameInputRef}
                 name="customer_name"
                 value={form.customer_name}
@@ -790,6 +796,7 @@ export default function NewOrder() {
               <label style={labelStyle}>
                 Garment / Product
                 <select
+                  data-testid="new-order-product-select"
                   ref={productSelectRef}
                   value={selectedProductId}
                   onChange={selectProduct}
@@ -888,6 +895,7 @@ export default function NewOrder() {
                 </label>
                 <input
                   id="order-artwork-upload"
+                  data-testid="new-order-artwork-upload-input"
                   ref={artworkInputRef}
                   type="file"
                   accept="image/*"
@@ -960,6 +968,8 @@ export default function NewOrder() {
                   <label key={size} className="new-order-size-field">
                     <span>{size}</span>
                     <input
+                      data-testid="new-order-size-input"
+                      data-size-key={size}
                       type="number"
                       min="0"
                       inputMode="numeric"
@@ -1053,6 +1063,7 @@ export default function NewOrder() {
                   >
                     <input
                       ref={depositDecisionRef}
+                      data-testid="new-order-deposit-required-radio"
                       type="radio"
                       name="deposit_requirement"
                       value="required"
@@ -1080,6 +1091,7 @@ export default function NewOrder() {
                     }}
                   >
                     <input
+                      data-testid="new-order-no-deposit-radio"
                       type="radio"
                       name="deposit_requirement"
                       value="not_required"
@@ -1123,6 +1135,7 @@ export default function NewOrder() {
           </button>
           <button
             type="submit"
+            data-testid="new-order-save-button"
             disabled={submitState === "saving"}
             style={{
               background: submitState === "saving" ? "#57534e" : "#171717",

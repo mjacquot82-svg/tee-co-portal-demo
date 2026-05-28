@@ -2,6 +2,7 @@ import { isCanceledOperationalStatus } from "../orders/orderWorkflow";
 import WorkflowBadge from "../components/WorkflowBadge";
 import {
   buildWorkflowBlockDetails,
+  buildCustomerWorkflowMessage,
   buildWorkflowStatusBadges,
   formatOverrideMeta,
 } from "../orders/workflowPresentation";
@@ -13,6 +14,44 @@ function formatAssignedAt(value) {
   if (Number.isNaN(date.getTime())) return value;
 
   return date.toLocaleString();
+}
+
+function QuickActionButton({
+  actionKey = "",
+  label,
+  onClick,
+  tone = "neutral",
+  disabled = false,
+}) {
+  const tones = {
+    neutral: { background: "#ffffff", border: "#cbd5e1", color: "#0f172a" },
+    success: { background: "#ecfdf5", border: "#bbf7d0", color: "#166534" },
+    warning: { background: "#fff7ed", border: "#fdba74", color: "#9a3412" },
+    dark: { background: "#0f172a", border: "#0f172a", color: "#ffffff" },
+  };
+  const palette = tones[tone] || tones.neutral;
+
+  return (
+    <button
+      type="button"
+      data-testid="workflow-quick-action"
+      data-action-key={actionKey}
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        border: `1px solid ${palette.border}`,
+        background: palette.background,
+        color: palette.color,
+        borderRadius: "999px",
+        padding: "8px 11px",
+        fontWeight: 800,
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      {label}
+    </button>
+  );
 }
 
 export default function AssignmentPanel({
@@ -36,36 +75,7 @@ export default function AssignmentPanel({
     : [];
   const workflowBadges = buildWorkflowStatusBadges(order);
   const blockDetails = buildWorkflowBlockDetails(order, { targetStatus: "Ready For Production" });
-
-  function QuickActionButton({ label, onClick, tone = "neutral", disabled = false }) {
-    const tones = {
-      neutral: { background: "#ffffff", border: "#cbd5e1", color: "#0f172a" },
-      success: { background: "#ecfdf5", border: "#bbf7d0", color: "#166534" },
-      warning: { background: "#fff7ed", border: "#fdba74", color: "#9a3412" },
-      dark: { background: "#0f172a", border: "#0f172a", color: "#ffffff" },
-    };
-    const palette = tones[tone] || tones.neutral;
-
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={disabled}
-        style={{
-          border: `1px solid ${palette.border}`,
-          background: palette.background,
-          color: palette.color,
-          borderRadius: "999px",
-          padding: "8px 11px",
-          fontWeight: 800,
-          cursor: disabled ? "not-allowed" : "pointer",
-          opacity: disabled ? 0.6 : 1,
-        }}
-      >
-        {label}
-      </button>
-    );
-  }
+  const customerWorkflowMessage = buildCustomerWorkflowMessage(order);
 
   return (
     <section
@@ -82,12 +92,26 @@ export default function AssignmentPanel({
 
       <div style={{ display: "grid", gap: "12px" }}>
         {workflowBadges.length ? (
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <div data-testid="workflow-badges" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             {workflowBadges.map((badge) => (
-              <WorkflowBadge key={badge.label} label={badge.label} tone={badge.tone} />
+              <span
+                key={badge.label}
+                data-testid="workflow-badge"
+                data-badge-label={badge.label}
+                data-badge-tone={badge.tone}
+              >
+                <WorkflowBadge label={badge.label} tone={badge.tone} />
+              </span>
             ))}
           </div>
         ) : null}
+
+        <div style={{ display: "grid", gap: "6px" }}>
+          <strong>Customer Workflow Message</strong>
+          <span data-testid="customer-workflow-message" style={{ color: "#475569", fontWeight: 700 }}>
+            {customerWorkflowMessage}
+          </span>
+        </div>
 
         <div>
           <strong>Assigned Staff</strong>
@@ -210,6 +234,12 @@ export default function AssignmentPanel({
                 {(productionGating?.checks || []).map((check) => (
                   <div
                     key={check.key}
+                    data-testid="workflow-gate"
+                    data-gate-key={check.key}
+                    data-required={check.required ? "true" : "false"}
+                    data-satisfied={check.satisfied ? "true" : "false"}
+                    data-overridden={check.overridden ? "true" : "false"}
+                    data-status-label={check.statusLabel}
                     style={{
                       borderRadius: "12px",
                       border: check.satisfied ? "1px solid #bbf7d0" : "1px solid #fed7aa",
@@ -227,12 +257,18 @@ export default function AssignmentPanel({
                       }}
                     >
                       <strong>{check.label}</strong>
-                      <span style={{ color: check.satisfied ? "#166534" : "#9a3412", fontWeight: 800 }}>
+                      <span
+                        data-testid="workflow-gate-status"
+                        style={{ color: check.satisfied ? "#166534" : "#9a3412", fontWeight: 800 }}
+                      >
                         {check.statusLabel}
                       </span>
                     </div>
                     {check.overridden ? (
-                      <div style={{ marginTop: "4px", color: "#1d4ed8", fontSize: "12px", fontWeight: 700 }}>
+                      <div
+                        data-testid="workflow-gate-override-indicator"
+                        style={{ marginTop: "4px", color: "#1d4ed8", fontSize: "12px", fontWeight: 700 }}
+                      >
                         Override active
                       </div>
                     ) : null}
@@ -246,12 +282,14 @@ export default function AssignmentPanel({
                 <strong style={{ fontSize: "13px" }}>Artwork Workflow</strong>
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                   <QuickActionButton
+                    actionKey="approve_artwork"
                     label="Approve Artwork"
                     tone="success"
                     disabled={canceled}
                     onClick={() => onArtworkApprovalChange?.("Approved")}
                   />
                   <QuickActionButton
+                    actionKey="request_revision"
                     label="Request Revision"
                     tone="warning"
                     disabled={canceled}
@@ -264,12 +302,14 @@ export default function AssignmentPanel({
                 <strong style={{ fontSize: "13px" }}>Deposit Workflow</strong>
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                   <QuickActionButton
+                    actionKey="request_deposit"
                     label="Request Deposit"
                     tone="warning"
                     disabled={canceled}
                     onClick={() => onDepositWorkflowChange?.("Deposit Requested")}
                   />
                   <QuickActionButton
+                    actionKey="mark_deposit_received"
                     label="Mark Deposit Received"
                     tone="success"
                     disabled={canceled}
@@ -282,6 +322,7 @@ export default function AssignmentPanel({
               <label style={{ display: "grid", gap: "6px", fontSize: "13px", fontWeight: 700 }}>
                 Artwork Approval
                 <select
+                  data-testid="artwork-approval-select"
                   value={order.artwork_approval_status || "Pending Review"}
                   onChange={(event) => onArtworkApprovalChange?.(event.target.value)}
                   disabled={canceled}
@@ -296,6 +337,7 @@ export default function AssignmentPanel({
               <label style={{ display: "grid", gap: "6px", fontSize: "13px", fontWeight: 700 }}>
                 Deposit Workflow
                 <select
+                  data-testid="deposit-workflow-select"
                   value={order.deposit_workflow_status || "Awaiting Deposit"}
                   onChange={(event) => onDepositWorkflowChange?.(event.target.value)}
                   disabled={canceled}
@@ -363,6 +405,8 @@ export default function AssignmentPanel({
                 {activeOverrides.map((override) => (
                   <div
                     key={override.key}
+                    data-testid="workflow-active-override"
+                    data-override-key={override.key}
                     style={{
                       borderRadius: "12px",
                       border: "1px solid #bfdbfe",
@@ -382,6 +426,7 @@ export default function AssignmentPanel({
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                 {blockDetails.blocked ? (
                   <QuickActionButton
+                    actionKey="force_move_to_production"
                     label="Override and Continue"
                     tone="dark"
                     onClick={onForceMoveToProduction}
@@ -389,6 +434,8 @@ export default function AssignmentPanel({
                 ) : null}
                 <button
                   type="button"
+                  data-testid="workflow-override-button"
+                  data-override-key="artworkApprovalRequirement"
                   onClick={() => onGatingOverride?.("artworkApprovalRequirement")}
                   style={{
                     border: "1px solid #cbd5e1",
@@ -402,6 +449,8 @@ export default function AssignmentPanel({
                 </button>
                 <button
                   type="button"
+                  data-testid="workflow-override-button"
+                  data-override-key="depositRequirement"
                   onClick={() => onGatingOverride?.("depositRequirement")}
                   style={{
                     border: "1px solid #cbd5e1",

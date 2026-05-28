@@ -554,6 +554,7 @@ export default function QuoteDetail() {
           {!archived && !canceled && canAdvanceQuoteStatus(order.quote_status) ? (
             <button
               type="button"
+              data-testid="quote-detail-advance-status"
               onClick={handleAdvanceQuote}
               style={{
                 border: "none",
@@ -571,6 +572,7 @@ export default function QuoteDetail() {
           {!archived && !canceled && isQuoteReadyForProduction(order.quote_status) ? (
             <button
               type="button"
+              data-testid="quote-detail-release-to-production"
               onClick={handleReleaseToProduction}
               style={{
                 border: "none",

@@ -448,6 +448,7 @@ export default function Quotes() {
 
       {flashMessage ? (
         <section
+          data-testid="quote-workflow-flash"
           aria-live="polite"
           style={{
             marginBottom: "20px",
