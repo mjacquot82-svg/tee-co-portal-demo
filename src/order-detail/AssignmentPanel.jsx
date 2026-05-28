@@ -227,6 +227,7 @@ export default function AssignmentPanel({
 
             {productionGating?.blocked ? (
               <div
+                data-testid="production-gating-alert"
                 style={{
                   borderRadius: "12px",
                   border: "1px solid #fecaca",

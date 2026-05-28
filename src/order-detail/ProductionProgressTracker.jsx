@@ -74,6 +74,7 @@ export default function ProductionProgressTracker({ order }) {
 
       {isOnHold ? (
         <div
+          data-testid="production-hold-indicator"
           style={{
             marginTop: "12px",
             borderRadius: "14px",
