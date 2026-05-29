@@ -203,14 +203,14 @@ function buildOwnerAttentionItems(orders = []) {
       label: "Awaiting Approval",
       count: lookup["Awaiting Approval"] || 0,
       description: "Quotes still waiting on customer approval before production can move.",
-      to: "/admin/quotes",
+      to: "/admin/quotes?queue=awaiting-approval",
       tone: "warning",
     },
     {
       label: "Awaiting Deposit",
       count: lookup["Awaiting Deposit"] || 0,
       description: "Quote work is blocked until deposit collection is complete.",
-      to: "/admin/quotes",
+      to: "/admin/quotes?queue=awaiting-deposit",
       tone: "warning",
     },
     {

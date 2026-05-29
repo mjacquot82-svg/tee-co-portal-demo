@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { formatDateTimeParts, formatShortDate } from "../lib/dateFormatting";
 import { useCustomerTimeline } from "../lib/customerTimelineStore";
 import "./CustomerTimelineSection.css";
@@ -72,6 +73,21 @@ function groupTimelineEvents(events = []) {
   }, []);
 }
 
+function buildTimelineSearchText(event) {
+  const metadataEntries = getVisibleMetadataEntries(event.metadata);
+
+  return [
+    event.summary,
+    event.eventType,
+    event.actor?.label,
+    event.actor?.name,
+    ...metadataEntries.map((entry) => `${entry.label} ${entry.value}`),
+  ]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+}
+
 function TimelineRow({ event }) {
   const metadataEntries = getVisibleMetadataEntries(event.metadata);
   const timestampParts = formatDateTimeParts(event.timestamp);
@@ -108,23 +124,82 @@ function TimelineRow({ event }) {
 
 export default function CustomerTimelineSection({ customerId }) {
   const timelineEvents = useCustomerTimeline(customerId);
-  const groupedTimelineEvents = groupTimelineEvents(timelineEvents);
+  const [searchTerm, setSearchTerm] = useState("");
+  const filteredTimelineEvents = useMemo(() => {
+    const normalizedSearchTerm = String(searchTerm || "").trim().toLowerCase();
+    if (!normalizedSearchTerm) return timelineEvents;
+
+    return timelineEvents.filter((event) =>
+      buildTimelineSearchText(event).includes(normalizedSearchTerm)
+    );
+  }, [searchTerm, timelineEvents]);
+  const groupedTimelineEvents = useMemo(
+    () => groupTimelineEvents(filteredTimelineEvents),
+    [filteredTimelineEvents]
+  );
 
   return (
-    <section className="customer-timeline-section">
+    <section id="customer-timeline" className="customer-timeline-section">
       <div className="customer-timeline-section-header">
         <div>
           <h2>Operational Timeline</h2>
           <p>Structured customer history for artwork, record changes, and workflow-linked activity.</p>
         </div>
         <strong className="customer-timeline-count">
-          {timelineEvents.length} event{timelineEvents.length === 1 ? "" : "s"}
+          {filteredTimelineEvents.length}
+          {filteredTimelineEvents.length !== timelineEvents.length
+            ? ` of ${timelineEvents.length}`
+            : ""}
+          {" "}event{filteredTimelineEvents.length === 1 ? "" : "s"}
         </strong>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: "10px",
+          flexWrap: "wrap",
+          alignItems: "center",
+          marginBottom: "16px",
+        }}
+      >
+        <input
+          type="search"
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="Search event, actor, order number, note"
+          style={{
+            flex: "1 1 320px",
+            minWidth: "240px",
+            border: "1px solid #cbd5e1",
+            borderRadius: "12px",
+            padding: "11px 12px",
+            background: "#ffffff",
+          }}
+        />
+        {searchTerm ? (
+          <button
+            type="button"
+            onClick={() => setSearchTerm("")}
+            style={{
+              border: "1px solid #cbd5e1",
+              background: "#ffffff",
+              borderRadius: "12px",
+              padding: "11px 14px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Reset
+          </button>
+        ) : null}
       </div>
 
       {!groupedTimelineEvents.length ? (
         <div className="customer-timeline-empty-state">
-          No operational history recorded for this customer yet.
+          {searchTerm
+            ? "No timeline events match the current search."
+            : "No operational history recorded for this customer yet."}
         </div>
       ) : (
         <div className="customer-timeline-groups">

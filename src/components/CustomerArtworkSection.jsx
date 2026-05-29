@@ -72,6 +72,25 @@ function buildArtworkUsageSummary(file) {
   };
 }
 
+function buildArtworkSearchText(file) {
+  const { usageCount, orderCount, quoteCount } = buildArtworkUsageSummary(file);
+
+  return [
+    file.file_name,
+    file.file_extension,
+    file.artworkType,
+    file.artworkStatus,
+    file.artworkApprovalStatus,
+    file.lastUsedAt,
+    `${usageCount}`,
+    `${orderCount}`,
+    `${quoteCount}`,
+  ]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+}
+
 function ArtworkPreview({ file }) {
   if (file.is_previewable_image && file.preview_url) {
     return <img src={file.preview_url} alt={file.file_name} className="customer-artwork-preview-image" />;
@@ -373,6 +392,7 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
   const [loadError, setLoadError] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [selectedArtworkId, setSelectedArtworkId] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     let isActive = true;
@@ -504,6 +524,12 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
 
   const isLoading = loadState === "loading";
   const isUploading = uploadState === "uploading";
+  const filteredArtwork = useMemo(() => {
+    const normalizedSearchTerm = String(searchTerm || "").trim().toLowerCase();
+    if (!normalizedSearchTerm) return artwork;
+
+    return artwork.filter((file) => buildArtworkSearchText(file).includes(normalizedSearchTerm));
+  }, [artwork, searchTerm]);
   const selectedArtwork = useMemo(
     () => artwork.find((file) => file.id === selectedArtworkId) || null,
     [artwork, selectedArtworkId]
@@ -570,8 +596,51 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
           record{customerName ? ` for ${customerName}` : ""}.
         </span>
         <span>
-          Newest first{artwork.length > 8 ? " • Scroll to browse full history" : ""}.
+          {filteredArtwork.length}
+          {filteredArtwork.length !== artwork.length ? ` of ${artwork.length}` : ""}
+          {" "}visible • Newest first{artwork.length > 8 ? " • Scroll to browse full history" : ""}.
         </span>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: "10px",
+          flexWrap: "wrap",
+          alignItems: "center",
+          marginBottom: "14px",
+        }}
+      >
+        <input
+          type="search"
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="Search filename, type, status, approval"
+          style={{
+            flex: "1 1 320px",
+            minWidth: "240px",
+            border: "1px solid #cbd5e1",
+            borderRadius: "12px",
+            padding: "11px 12px",
+            background: "#ffffff",
+          }}
+        />
+        {searchTerm ? (
+          <button
+            type="button"
+            onClick={() => setSearchTerm("")}
+            style={{
+              border: "1px solid #cbd5e1",
+              background: "#ffffff",
+              borderRadius: "12px",
+              padding: "11px 14px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Reset
+          </button>
+        ) : null}
       </div>
 
       {uploadError ? (
@@ -610,18 +679,23 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
           <ArtworkSkeletonCard />
           <ArtworkSkeletonCard />
         </div>
-      ) : artwork.length ? (
+      ) : filteredArtwork.length ? (
         <ArtworkLibrary
-          artwork={artwork}
+          artwork={filteredArtwork}
           uploading={isUploading}
           onSelectArtwork={(file) => setSelectedArtworkId(file.id || "")}
         />
       ) : isUploading ? (
         <ArtworkLibrary
-          artwork={artwork}
+          artwork={filteredArtwork}
           uploading={isUploading}
           onSelectArtwork={(file) => setSelectedArtworkId(file.id || "")}
         />
+      ) : searchTerm ? (
+        <div className="customer-artwork-empty-state">
+          <strong>No artwork files match this search.</strong>
+          <span>Try a filename, file type, or artwork status.</span>
+        </div>
       ) : (
         <div className="customer-artwork-empty-state">
           <strong>No artwork uploaded yet.</strong>

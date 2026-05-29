@@ -679,10 +679,10 @@ function ProductionDetailDrawer({
 export default function Orders() {
   const storedOrders = useStoredOrders();
   const staffUser = getActiveStaffUser();
-  const [selectedOrderNumber, setSelectedOrderNumber] = useState("");
   const [actionFeedbackByOrder, setActionFeedbackByOrder] = useState({});
   const isStaffWorkspace = isStaffWorkspaceView(staffUser);
   const [searchParams, setSearchParams] = useSearchParams();
+  const selectedOrderNumber = searchParams.get("order") || "";
   const activeStatusFilter = searchParams.get("status") || "active";
   const activeMethodFilter = searchParams.get("workflow") || "all";
   const activeDateFilter = searchParams.get("date") || "all";
@@ -752,6 +752,7 @@ export default function Orders() {
     Object.entries(nextValues).forEach(([key, value]) => {
       if (
         !value ||
+        (key === "order" && !value) ||
         (key === "status" && value === "active") ||
         (key === "workflow" && value === "all") ||
         (key === "date" && value === "all")
@@ -809,7 +810,7 @@ export default function Orders() {
   }
 
   function handleOpenDetail(order) {
-    setSelectedOrderNumber(order.order_number);
+    updateFilters({ order: order.order_number });
   }
 
   function handleAssign(order, staffId) {
@@ -1074,7 +1075,7 @@ export default function Orders() {
         {selectedOrder ? (
           <ProductionDetailDrawer
             order={selectedOrder}
-            onClose={() => setSelectedOrderNumber("")}
+            onClose={() => updateFilters({ order: "" })}
             onAssign={handleAssign}
             onRunAction={handleRunAction}
             staffUsers={staffUsers}

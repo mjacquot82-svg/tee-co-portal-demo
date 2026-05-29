@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getOrderArtworkNames } from "../lib/orderArtwork";
 import { getJsonStorageItem, setJsonStorageItem } from "../lib/browserStorage";
@@ -24,6 +24,14 @@ import {
 } from "./adminRoleView";
 
 const EXPANDED_QUOTES_STORAGE_KEY = "teeCoQuotesExpandedState";
+const QUOTE_QUEUE_FILTERS = [
+  { key: "all", label: "All Quotes" },
+  { key: "awaiting-approval", label: "Awaiting Approval" },
+  { key: "awaiting-artwork", label: "Artwork Follow-Up" },
+  { key: "awaiting-deposit", label: "Awaiting Deposit" },
+  { key: "ready", label: "Ready For Production" },
+  { key: "blocked", label: "Blocked" },
+];
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -82,6 +90,54 @@ function buildStatusCountMap(quotes) {
     counts[key] = (counts[key] || 0) + 1;
     return counts;
   }, {});
+}
+
+function FilterPill({ active, children, count, tone = "default", onClick }) {
+  const activeBackground =
+    tone === "warning"
+      ? "#9a3412"
+      : tone === "success"
+      ? "#166534"
+      : "#111827";
+  const inactiveBackground = tone === "warning" ? "#fff7ed" : "#ffffff";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        border: active ? `1px solid ${activeBackground}` : "1px solid #d6dbe4",
+        background: active ? activeBackground : inactiveBackground,
+        color: active ? "#ffffff" : "#111827",
+        borderRadius: "999px",
+        padding: "8px 11px",
+        fontWeight: 700,
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "8px",
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span>{children}</span>
+      <span
+        style={{
+          minWidth: "20px",
+          height: "20px",
+          padding: "0 6px",
+          borderRadius: "999px",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "12px",
+          background: active ? "rgba(255,255,255,0.16)" : "#f1f5f9",
+          color: active ? "#ffffff" : "#475569",
+        }}
+      >
+        {count}
+      </span>
+    </button>
+  );
 }
 
 function SummaryCard({ label, value, tone = "default" }) {
@@ -224,9 +280,40 @@ function getCollapsedSummaryFields(quote, summary) {
   ];
 }
 
+function buildQuoteSearchableText(quote, summary) {
+  return [
+    quote.order_number,
+    quote.customer_name,
+    quote.company,
+    quote.garment,
+    quote.decoration_type,
+    quote.quote_status,
+    summary.approvalStatus,
+    summary.depositStatus,
+    summary.dueDate,
+    summary.decorationSummary,
+    summary.placementSummary,
+    ...summary.artworkNames,
+  ]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function matchesQuoteQueueFilter(quote, summary, filterKey) {
+  if (filterKey === "all") return true;
+  if (filterKey === "awaiting-approval") return quote.quote_status === "Awaiting Approval";
+  if (filterKey === "awaiting-artwork") return quote.quote_status === "Awaiting Artwork Approval";
+  if (filterKey === "awaiting-deposit") return quote.quote_status === "Awaiting Deposit";
+  if (filterKey === "ready") return summary.readiness.ready || isQuoteReadyForProduction(quote.quote_status);
+  if (filterKey === "blocked") return !summary.readiness.ready;
+  return true;
+}
+
 export default function Quotes() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const staffUser = getActiveStaffUser();
   const viewer = getAdminViewer(staffUser);
   const isStaffWorkspace = isStaffWorkspaceView(staffUser);
@@ -240,15 +327,55 @@ export default function Quotes() {
   const [highlightedQuote, setHighlightedQuote] = useState(
     () => location.state?.createdOrderNumber || ""
   );
+  const activeQueueFilter = searchParams.get("queue") || "all";
+  const searchTerm = searchParams.get("q") || "";
   const quotes = useMemo(
     () => sortQuotesByStatus(orders.filter((order) => isActiveQuoteWorkflowOrder(order))),
     [orders]
+  );
+  const quoteRecords = useMemo(
+    () =>
+      quotes.map((quote) => {
+        const summary = buildQuoteSummary(quote);
+        return {
+          quote,
+          summary,
+          searchText: buildQuoteSearchableText(quote, summary),
+        };
+      }),
+    [quotes]
   );
   const statusCounts = useMemo(() => buildStatusCountMap(quotes), [quotes]);
   const readyQuotes = useMemo(
     () => quotes.filter((quote) => isQuoteReadyForProduction(quote.quote_status)),
     [quotes]
   );
+  const filterCounts = useMemo(
+    () =>
+      QUOTE_QUEUE_FILTERS.reduce((counts, filter) => {
+        counts[filter.key] = quoteRecords.filter(({ quote, summary }) =>
+          matchesQuoteQueueFilter(quote, summary, filter.key)
+        ).length;
+        return counts;
+      }, {}),
+    [quoteRecords]
+  );
+  const filteredQuoteRecords = useMemo(() => {
+    const normalizedSearchTerm = String(searchTerm || "").trim().toLowerCase();
+
+    return quoteRecords.filter(({ quote, summary, searchText }) => {
+      if (!matchesQuoteQueueFilter(quote, summary, activeQueueFilter)) {
+        return false;
+      }
+
+      if (!normalizedSearchTerm) {
+        return true;
+      }
+
+      return searchText.includes(normalizedSearchTerm);
+    });
+  }, [activeQueueFilter, quoteRecords, searchTerm]);
+  const hasActiveFilters = activeQueueFilter !== "all" || Boolean(searchTerm);
 
   useEffect(() => {
     const activeOrderNumbers = new Set(quotes.map((quote) => quote.order_number));
@@ -329,6 +456,33 @@ export default function Quotes() {
       ...current,
       [orderNumber]: !current[orderNumber],
     }));
+  }
+
+  function updateFilters(nextValues) {
+    const nextParams = new URLSearchParams(searchParams);
+
+    Object.entries(nextValues).forEach(([key, value]) => {
+      if (!value || (key === "queue" && value === "all")) {
+        nextParams.delete(key);
+      } else {
+        nextParams.set(key, value);
+      }
+    });
+
+    setSearchParams(nextParams);
+  }
+
+  function setVisibleQuotesExpanded(expanded) {
+    const visibleOrderNumbers = filteredQuoteRecords.map(({ quote }) => quote.order_number);
+    if (!visibleOrderNumbers.length) return;
+
+    setExpandedQuotes((current) => {
+      const nextState = { ...current };
+      visibleOrderNumbers.forEach((orderNumber) => {
+        nextState[orderNumber] = expanded;
+      });
+      return nextState;
+    });
   }
 
   function handleArchiveQuote(quote) {
@@ -446,6 +600,105 @@ export default function Quotes() {
         <SummaryCard label="Ready For Production" value={readyQuotes.length} tone="success" />
       </section>
 
+      <section
+        style={{
+          background: "#ffffff",
+          borderRadius: "20px",
+          padding: "18px 20px",
+          border: "1px solid #e8edf3",
+          display: "grid",
+          gap: "12px",
+          marginBottom: "20px",
+        }}
+      >
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+          {QUOTE_QUEUE_FILTERS.map((filter) => (
+            <FilterPill
+              key={filter.key}
+              active={activeQueueFilter === filter.key}
+              count={filterCounts[filter.key] || 0}
+              tone={
+                filter.key === "ready"
+                  ? "success"
+                  : filter.key === "awaiting-approval" ||
+                    filter.key === "awaiting-artwork" ||
+                    filter.key === "awaiting-deposit" ||
+                    filter.key === "blocked"
+                  ? "warning"
+                  : "default"
+              }
+              onClick={() => updateFilters({ queue: filter.key })}
+            >
+              {filter.label}
+            </FilterPill>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => updateFilters({ q: event.target.value })}
+            placeholder="Search quote, customer, garment, artwork, status"
+            style={{
+              flex: "1 1 360px",
+              minWidth: "240px",
+              border: "1px solid #cbd5e1",
+              borderRadius: "12px",
+              padding: "11px 12px",
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => setVisibleQuotesExpanded(true)}
+            disabled={!filteredQuoteRecords.length}
+            style={{
+              border: "1px solid #cbd5e1",
+              background: "#ffffff",
+              borderRadius: "12px",
+              padding: "11px 14px",
+              fontWeight: 700,
+              cursor: filteredQuoteRecords.length ? "pointer" : "not-allowed",
+              opacity: filteredQuoteRecords.length ? 1 : 0.6,
+            }}
+          >
+            Expand Visible
+          </button>
+          <button
+            type="button"
+            onClick={() => setVisibleQuotesExpanded(false)}
+            disabled={!filteredQuoteRecords.length}
+            style={{
+              border: "1px solid #cbd5e1",
+              background: "#ffffff",
+              borderRadius: "12px",
+              padding: "11px 14px",
+              fontWeight: 700,
+              cursor: filteredQuoteRecords.length ? "pointer" : "not-allowed",
+              opacity: filteredQuoteRecords.length ? 1 : 0.6,
+            }}
+          >
+            Collapse Visible
+          </button>
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              onClick={() => setSearchParams(new URLSearchParams())}
+              style={{
+                border: "1px solid #cbd5e1",
+                background: "#ffffff",
+                borderRadius: "12px",
+                padding: "11px 14px",
+                fontWeight: 700,
+              }}
+            >
+              Reset
+            </button>
+          ) : null}
+          <strong style={{ color: "#475569" }}>{filteredQuoteRecords.length} visible</strong>
+        </div>
+      </section>
+
       {flashMessage ? (
         <section
           data-testid="quote-workflow-flash"
@@ -475,9 +728,8 @@ export default function Quotes() {
         }}
       >
         <div style={{ display: "grid", gap: "12px" }}>
-          {quotes.length ? (
-            quotes.map((quote) => {
-              const summary = buildQuoteSummary(quote);
+          {filteredQuoteRecords.length ? (
+            filteredQuoteRecords.map(({ quote, summary }) => {
               const isExpanded = Boolean(expandedQuotes[quote.order_number]);
               const isHighlighted = highlightedQuote === quote.order_number;
               const readinessTone = summary.readiness.ready ? "success" : "warning";
@@ -967,7 +1219,9 @@ export default function Quotes() {
                 color: "#64748b",
               }}
             >
-              No active quotes yet. New intake created from this area will stay in sales workflow until released for production. Archived quotes are removed from this queue.
+              {hasActiveFilters
+                ? "No quotes match the current filters."
+                : "No active quotes yet. New intake created from this area will stay in sales workflow until released for production. Archived quotes are removed from this queue."}
             </div>
           )}
         </div>
