@@ -1,8 +1,8 @@
 import { pushAuthDiagnostic } from "./authDiagnostics";
+import { normalizeOperationalRole as normalizePermissionRole } from "./permissions";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
 
 const OPERATIONAL_AUTH_UPDATED_EVENT = "tee-co-operational-auth-updated";
-const VALID_OPERATIONAL_ROLES = new Set(["Owner", "Manager", "Staff"]);
 
 let authSubscription = null;
 let initializationPromise = null;
@@ -21,29 +21,13 @@ function emitOperationalAuthUpdated() {
   window.dispatchEvent(new CustomEvent(OPERATIONAL_AUTH_UPDATED_EVENT));
 }
 
-function normalizeRoleValue(value) {
-  const normalizedValue = String(value || "").trim().toLowerCase();
-
-  if (normalizedValue === "owner") return "Owner";
-  if (normalizedValue === "manager") return "Manager";
-  if (normalizedValue === "staff") return "Staff";
-
-  return "";
-}
-
 function normalizeOperationalRole(user) {
   const metadataRole =
     user?.app_metadata?.operational_role ||
     user?.app_metadata?.role ||
     user?.user_metadata?.operational_role ||
     user?.user_metadata?.role;
-  const normalizedRole = normalizeRoleValue(metadataRole);
-
-  if (VALID_OPERATIONAL_ROLES.has(normalizedRole)) {
-    return normalizedRole;
-  }
-
-  return "";
+  return normalizePermissionRole(metadataRole);
 }
 
 function buildOperationalDisplayName(user) {

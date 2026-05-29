@@ -176,7 +176,14 @@ function getAdminSections(staffUser) {
     ];
   }
 
-  const canManageCatalog = true;
+  const canAccessNavLink = (pathname) => {
+    if (!canAccessOperationalWorkspace(pathname, staffUser)) {
+      return false;
+    }
+
+    return !requiresProtectedManagementAccess(pathname) ||
+      canAccessProtectedManagementRoute(pathname, staffUser);
+  };
 
   return [
     {
@@ -215,12 +222,8 @@ function getAdminSections(staffUser) {
       links: [
         { to: "/admin/customers", label: "Customer Lookup", navKey: "customers" },
         { to: "/admin/sales", label: "Sales History", navKey: "counterSales" },
-        ...(canManageCatalog
-          ? [
-              { to: "/admin/garments", label: "Garment Library", navKey: "garments" },
-              { to: "/admin/products", label: "Customer Catalog", navKey: "products" },
-            ]
-          : []),
+        { to: "/admin/garments", label: "Garment Library", navKey: "garments" },
+        { to: "/admin/products", label: "Customer Catalog", navKey: "products" },
         {
           to: "/admin/quotes/archived",
           label: "Archived Quotes",
@@ -233,7 +236,12 @@ function getAdminSections(staffUser) {
         },
       ],
     },
-  ];
+  ]
+    .map((section) => ({
+      ...section,
+      links: section.links.filter((link) => canAccessNavLink(link.to)),
+    }))
+    .filter((section) => section.links.length > 0);
 }
 
 function getActiveSidebarLink(pathname, staffUser) {

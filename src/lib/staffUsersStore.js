@@ -46,7 +46,7 @@ function isProtectedOwnerId(userId) {
 }
 
 function shouldLogOwnerDiagnostics(user) {
-  return Boolean(user) && (user.id === PROTECTED_OWNER_ID || user.role === "Owner");
+  return isProtectedStaffUser(user);
 }
 
 function normalizeOwnerLoginId(loginId) {
@@ -65,9 +65,7 @@ function buildTemporaryOwnerSession() {
 
 function isTemporaryOwnerSession(user) {
   return (
-    Boolean(user) &&
-    user.id === PROTECTED_OWNER_ID &&
-    user.role === "Owner" &&
+    isProtectedStaffUser(user) &&
     user.authMode === "temporary-owner"
   );
 }
@@ -1046,7 +1044,7 @@ export function attemptTemporaryOwnerLogin({
 }
 
 export function isActiveStaffOwner() {
-  return getActiveStaffUser()?.role === "Owner";
+  return isProtectedStaffUser(getActiveStaffUser());
 }
 
 export function isProtectedStaffUser(user) {

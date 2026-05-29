@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   getOwnerAdminAccount,
   getOperationalStaffUsers,
+  isProtectedStaffUser,
   subscribeToStaffUsers,
   createStoredStaffUser,
   updateStoredStaffUser,
@@ -94,7 +95,7 @@ export default function StaffUsers() {
     setOwnerAccount(getOwnerAdminAccount());
     setStaff(getOperationalStaffUsers());
     return subscribeToStaffUsers((users) => {
-      setOwnerAccount(users.find((user) => user.role === "Owner") || null);
+      setOwnerAccount(users.find((user) => isProtectedStaffUser(user)) || null);
       setStaff(users);
     });
   }, []);
@@ -684,7 +685,7 @@ export default function StaffUsers() {
                 <tbody>
                   {staff.map((user) => {
                     const isInactive = user.status === "Inactive";
-                    const isProtectedOwner = user.role === "Owner";
+                    const isProtectedOwner = isProtectedStaffUser(user);
                     const draft = drafts[user.id] || {
                       name: user.name,
                       pin: user.pin,

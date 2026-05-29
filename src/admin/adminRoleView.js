@@ -1,9 +1,17 @@
+import {
+  OPERATIONAL_ROLES,
+  PERMISSIONS,
+  getPermissionListForUser,
+  hasAnyPermission,
+  hasPermission,
+  normalizeOperationalRole as normalizePermissionRole,
+} from "../lib/permissions";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 
 const OPERATIONAL_ROLE_RANK = {
-  Staff: 1,
-  Manager: 2,
-  Owner: 3,
+  [OPERATIONAL_ROLES.staff]: 1,
+  [OPERATIONAL_ROLES.manager]: 2,
+  [OPERATIONAL_ROLES.owner]: 3,
 };
 
 export const MANAGEMENT_EXACT_PATHS = [
@@ -22,36 +30,152 @@ export const MANAGEMENT_PATH_PREFIXES = [
   "/admin/products",
 ];
 
+const ADMIN_ROUTE_PERMISSION_RULES = [
+  {
+    type: "exact",
+    value: "/admin",
+    permissions: [PERMISSIONS.productionManage, PERMISSIONS.quoteManage],
+    classification: "operational",
+  },
+  {
+    type: "exact",
+    value: "/admin/quotes",
+    permissions: [PERMISSIONS.quoteManage],
+    classification: "operational",
+  },
+  {
+    type: "exact",
+    value: "/admin/quotes/new",
+    permissions: [PERMISSIONS.quoteManage],
+    classification: "operational",
+  },
+  {
+    type: "prefix",
+    value: "/admin/quotes/",
+    permissions: [PERMISSIONS.quoteManage],
+    classification: "operational",
+  },
+  {
+    type: "exact",
+    value: "/admin/orders",
+    permissions: [PERMISSIONS.orderManage, PERMISSIONS.productionManage],
+    classification: "operational",
+  },
+  {
+    type: "prefix",
+    value: "/admin/orders/",
+    permissions: [PERMISSIONS.orderManage, PERMISSIONS.productionManage],
+    classification: "operational",
+  },
+  {
+    type: "exact",
+    value: "/admin/assignments",
+    permissions: [PERMISSIONS.assignmentManage, PERMISSIONS.productionManage],
+    classification: "operational",
+  },
+  {
+    type: "exact",
+    value: "/admin/sales/new",
+    permissions: [PERMISSIONS.orderManage],
+    classification: "operational",
+  },
+  {
+    type: "prefix",
+    value: "/admin/sales/receipt/",
+    permissions: [PERMISSIONS.orderManage],
+    classification: "operational",
+  },
+  {
+    type: "exact",
+    value: "/admin/customers",
+    permissions: [PERMISSIONS.customerEdit],
+    classification: "protected-management",
+  },
+  {
+    type: "prefix",
+    value: "/admin/customers/",
+    permissions: [PERMISSIONS.customerEdit],
+    classification: "protected-management",
+  },
+  {
+    type: "exact",
+    value: "/admin/financial",
+    permissions: [PERMISSIONS.depositManage],
+    classification: "protected-management",
+  },
+  {
+    type: "prefix",
+    value: "/admin/financial/",
+    permissions: [PERMISSIONS.depositManage],
+    classification: "protected-management",
+  },
+  {
+    type: "exact",
+    value: "/admin/records/canceled",
+    permissions: [PERMISSIONS.orderCancel],
+    classification: "protected-management",
+  },
+  {
+    type: "exact",
+    value: "/admin/sales",
+    permissions: [PERMISSIONS.depositManage],
+    classification: "protected-management",
+  },
+  {
+    type: "exact",
+    value: "/admin/staff-users",
+    permissions: [PERMISSIONS.staffManage],
+    classification: "protected-management",
+  },
+  {
+    type: "exact",
+    value: "/admin/quotes/archived",
+    permissions: [PERMISSIONS.quoteArchiveManage],
+    classification: "protected-management",
+  },
+  {
+    type: "prefix",
+    value: "/admin/garments",
+    permissions: [PERMISSIONS.catalogManage],
+    classification: "protected-management",
+  },
+  {
+    type: "prefix",
+    value: "/admin/products",
+    permissions: [PERMISSIONS.catalogManage],
+    classification: "protected-management",
+  },
+];
+
 function normalizeRoutePathname(pathname = "") {
   return String(pathname || "").trim() || "/";
 }
 
 export function resolveOperationalRole(staffUser = getActiveStaffUser()) {
   if (!staffUser?.id) return "";
-
-  const role = String(staffUser.role || "").trim();
-  if (role === "Owner" || role === "Manager" || role === "Staff") {
-    return role;
-  }
-
-  return "";
+  return normalizePermissionRole(staffUser.role);
 }
 
 export function getAdminViewer(staffUser = getActiveStaffUser()) {
-  return staffUser || null;
+  if (!staffUser) return null;
+
+  return {
+    ...staffUser,
+    role: resolveOperationalRole(staffUser),
+    permissions: getPermissionListForUser(staffUser),
+  };
 }
 
 export function isAdminWorkspaceView(staffUser = getActiveStaffUser()) {
-  const role = resolveOperationalRole(staffUser);
-  return role === "Owner" || role === "Manager";
+  return hasAnyOperationalManagementPermission(staffUser);
 }
 
 export function isOwnerView(staffUser = getActiveStaffUser()) {
-  return resolveOperationalRole(staffUser) === "Owner";
+  return resolveOperationalRole(staffUser) === OPERATIONAL_ROLES.owner;
 }
 
 export function isStaffWorkspaceView(staffUser = getActiveStaffUser()) {
-  return resolveOperationalRole(staffUser) === "Staff";
+  return resolveOperationalRole(staffUser) === OPERATIONAL_ROLES.staff;
 }
 
 export function hasOperationalSession(staffUser = getActiveStaffUser()) {
@@ -84,22 +208,86 @@ export function canAccessProtectedManagementRoute(
   pathname,
   authenticatedUser = getActiveStaffUser()
 ) {
-  return (
-    requiresProtectedManagementAccess(pathname) &&
-    isAdminWorkspaceView(authenticatedUser)
+  const routeRule = getAdminRoutePermissionRule(pathname);
+  if (!routeRule || routeRule.classification !== "protected-management") {
+    return false;
+  }
+
+  return routeRule.permissions.some((permission) =>
+    hasPermission(authenticatedUser, permission)
   );
 }
 
 export function canManageArchivedQuotes(staffUser = getActiveStaffUser()) {
-  return isAdminWorkspaceView(staffUser);
+  return hasPermission(staffUser, PERMISSIONS.quoteArchiveManage);
 }
 
 export function canManageCanceledOrders(staffUser = getActiveStaffUser()) {
-  return isAdminWorkspaceView(staffUser);
+  return hasPermission(staffUser, PERMISSIONS.orderCancel);
 }
 
 export function canManageCustomerMerges(staffUser = getActiveStaffUser()) {
-  return isAdminWorkspaceView(staffUser);
+  return hasPermission(staffUser, PERMISSIONS.customerMerge);
+}
+
+export function canManageStaffUsers(staffUser = getActiveStaffUser()) {
+  return hasPermission(staffUser, PERMISSIONS.staffManage);
+}
+
+export function canManageAssignments(staffUser = getActiveStaffUser()) {
+  return hasPermission(staffUser, PERMISSIONS.assignmentManage);
+}
+
+export function canManageProductionWorkflow(staffUser = getActiveStaffUser()) {
+  return hasPermission(staffUser, PERMISSIONS.productionManage);
+}
+
+export function canManageOrderRecords(staffUser = getActiveStaffUser()) {
+  return hasPermission(staffUser, PERMISSIONS.orderManage);
+}
+
+export function canManageDepositWorkflow(staffUser = getActiveStaffUser()) {
+  return hasPermission(staffUser, PERMISSIONS.depositManage);
+}
+
+export function canUseWorkflowOverrides(staffUser = getActiveStaffUser()) {
+  return hasPermission(staffUser, PERMISSIONS.workflowOverride);
+}
+
+export function canEditCustomers(staffUser = getActiveStaffUser()) {
+  return hasPermission(staffUser, PERMISSIONS.customerEdit);
+}
+
+export function canViewCustomers(staffUser = getActiveStaffUser()) {
+  return hasPermission(staffUser, PERMISSIONS.customerView);
+}
+
+function hasAnyOperationalManagementPermission(staffUser = getActiveStaffUser()) {
+  return [
+    PERMISSIONS.customerEdit,
+    PERMISSIONS.quoteArchiveManage,
+    PERMISSIONS.depositManage,
+    PERMISSIONS.staffManage,
+    PERMISSIONS.catalogManage,
+    PERMISSIONS.orderCancel,
+    PERMISSIONS.workflowOverride,
+  ].some((permission) => hasPermission(staffUser, permission));
+}
+
+function matchesAdminRouteRule(pathname, rule) {
+  if (!rule) return false;
+  if (rule.type === "exact") return pathname === rule.value;
+  if (rule.type === "prefix") return pathname.startsWith(rule.value);
+  return false;
+}
+
+function getAdminRoutePermissionRule(pathname = "") {
+  const normalizedPathname = normalizeRoutePathname(pathname);
+  return (
+    ADMIN_ROUTE_PERMISSION_RULES.find((rule) =>
+      matchesAdminRouteRule(normalizedPathname, rule)
+    ) || null
+  );
 }
 
 export function matchesAssignedStaff(order, staffUser = getActiveStaffUser()) {
@@ -127,10 +315,12 @@ export function getOperationalOrdersForStaff(orders = []) {
 
 export function canAccessOwnerWorkspace(pathname, staffUser = getActiveStaffUser()) {
   if (!hasOperationalSession(staffUser)) return false;
-  if (isAdminWorkspaceView(staffUser)) return true;
-  if (!isStaffWorkspaceView(staffUser)) return false;
+  const routeRule = getAdminRoutePermissionRule(pathname);
+  if (!routeRule) return false;
 
-  return !requiresProtectedManagementAccess(pathname);
+  return routeRule.permissions.some((permission) =>
+    hasPermission(staffUser, permission)
+  );
 }
 
 export function canAccessOperationalWorkspace(pathname, staffUser = getActiveStaffUser()) {
@@ -138,39 +328,24 @@ export function canAccessOperationalWorkspace(pathname, staffUser = getActiveSta
 }
 
 export function requiresProtectedManagementAccess(pathname = "") {
-  const normalizedPathname = normalizeRoutePathname(pathname);
-
-  return (
-    MANAGEMENT_EXACT_PATHS.includes(normalizedPathname) ||
-    MANAGEMENT_PATH_PREFIXES.some((prefix) => normalizedPathname.startsWith(prefix))
-  );
+  const routeRule = getAdminRoutePermissionRule(pathname);
+  return routeRule?.classification === "protected-management";
 }
 
 export function classifyAdminRoute(pathname = "") {
   const normalizedPathname = normalizeRoutePathname(pathname);
-  const matchedExactManagementRule = MANAGEMENT_EXACT_PATHS.includes(normalizedPathname)
-    ? normalizedPathname
-    : "";
-  const matchedPrefixManagementRule =
-    MANAGEMENT_PATH_PREFIXES.find((prefix) => normalizedPathname.startsWith(prefix)) || "";
-  const requiresManagementAccess = Boolean(
-    matchedExactManagementRule || matchedPrefixManagementRule
-  );
+  const matchedRule = getAdminRoutePermissionRule(normalizedPathname);
+  const requiresManagementAccess = matchedRule?.classification === "protected-management";
 
   return {
     pathname: normalizedPathname,
     isAdminRoute: normalizedPathname.startsWith("/admin"),
-    classification: requiresManagementAccess
-      ? "protected-management"
-      : normalizedPathname.startsWith("/admin")
-        ? "operational"
-        : "non-admin",
+    classification:
+      matchedRule?.classification ||
+      (normalizedPathname.startsWith("/admin") ? "operational" : "non-admin"),
     requiresManagementAccess,
-    matchedManagementRuleType: matchedExactManagementRule
-      ? "exact"
-      : matchedPrefixManagementRule
-        ? "prefix"
-        : "",
-    matchedManagementRule: matchedExactManagementRule || matchedPrefixManagementRule || "",
+    matchedManagementRuleType: matchedRule?.type || "",
+    matchedManagementRule: matchedRule?.value || "",
+    requiredPermissions: matchedRule?.permissions || [],
   };
 }
