@@ -38,6 +38,20 @@ const CUSTOMER_REQUEST_TYPES = new Set([
   "Standard Purchase",
 ]);
 
+const CUSTOMER_VISIBLE_INVOICE_STATUSES = new Set([
+  "Sent",
+  "Awaiting Deposit",
+  "Awaiting Payment",
+  "Awaiting Final Payment",
+  "Partial Payment",
+  "Deposit Applied",
+  "Deposit Paid",
+  "Paid",
+  "Overdue",
+  "Refunded",
+  "Void",
+]);
+
 function sortByRecentActivity(records = []) {
   if (!Array.isArray(records) || records.length === 0) {
     return EMPTY_PORTAL_RECORDS;
@@ -194,11 +208,13 @@ export function getCustomerInvoices(orders = []) {
 
   return orders.filter((order) => {
     const invoiceStatus = normalizeText(order.invoice_status);
-    return (
-      Boolean(invoiceStatus) ||
-      Number(order.balance_due || 0) > 0 ||
-      Number(order.total_amount || 0) > 0
-    );
+    const balanceDue = Number(order.balance_due || 0);
+
+    if (CUSTOMER_VISIBLE_INVOICE_STATUSES.has(invoiceStatus)) {
+      return true;
+    }
+
+    return Boolean(invoiceStatus) && invoiceStatus !== "Draft" && balanceDue > 0;
   });
 }
 

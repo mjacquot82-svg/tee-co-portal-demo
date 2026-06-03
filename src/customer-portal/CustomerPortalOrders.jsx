@@ -113,7 +113,7 @@ export default function CustomerPortalOrders() {
           <EmptyState
             title="No requests yet"
             description="Start a request whenever you are ready. It will appear here so you can resume artwork completion and track progress."
-            actionLabel="Start New Order"
+            actionLabel="Open Request Hub"
             actionTo="/portal/request-order"
           />
         )}

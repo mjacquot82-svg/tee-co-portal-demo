@@ -10,7 +10,14 @@ import { useCustomerPortalData } from "./useCustomerPortalData";
 
 export default function CustomerPortalInvoices() {
   const { customerSession } = useOutletContext();
-  const { invoices, summary } = useCustomerPortalData(customerSession);
+  const { invoices } = useCustomerPortalData(customerSession);
+  const overdueInvoiceCount = invoices.filter(
+    (invoice) => String(invoice.invoice_status || "").trim() === "Overdue"
+  ).length;
+  const openInvoiceBalance = invoices.reduce(
+    (total, invoice) => total + Number(invoice.balance_due || 0),
+    0
+  );
 
   return (
     <PortalPage
@@ -28,17 +35,17 @@ export default function CustomerPortalInvoices() {
         <MetricCard
           label="Invoices"
           value={invoices.length}
-          helper="All invoice-related records connected to your account."
+          helper="Customer-visible billing records connected to your account."
         />
         <MetricCard
           label="Overdue"
-          value={summary.overdueInvoiceCount}
-          helper="Records currently marked overdue."
+          value={overdueInvoiceCount}
+          helper="Invoices currently marked overdue."
         />
         <MetricCard
           label="Open Balance"
-          value={`$${summary.outstandingBalance.toFixed(2)}`}
-          helper="Total remaining across your visible invoices."
+          value={`$${openInvoiceBalance.toFixed(2)}`}
+          helper="Remaining balance across visible invoices."
         />
       </div>
 

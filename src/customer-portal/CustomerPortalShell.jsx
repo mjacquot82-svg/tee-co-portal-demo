@@ -15,7 +15,7 @@ import {
 } from "../lib/operationalAuthStore";
 
 const portalLinks = [
-  { to: "/portal/request-order", label: "Start New Order" },
+  { to: "/portal/request-order", label: "Request Hub" },
   { to: "/portal/orders", label: "My Requests" },
   { to: "/portal/quotes", label: "Quotes & Approvals" },
   { to: "/portal/invoices", label: "Invoices" },
@@ -189,7 +189,7 @@ export default function CustomerPortalShell() {
                 boxShadow: "0 12px 24px rgba(15, 118, 110, 0.18)",
               })}
             >
-              Start New Order
+              Request Hub
             </NavLink>
             <div
               style={{
@@ -284,7 +284,7 @@ export default function CustomerPortalShell() {
                 fontWeight: 800,
               })}
             >
-              Start New Order
+              Request Hub
             </NavLink>
 
             <p

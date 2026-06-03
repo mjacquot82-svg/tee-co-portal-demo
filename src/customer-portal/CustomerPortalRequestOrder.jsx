@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useOutletContext } from "react-router-dom";
+import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import { useCatalogLookups } from "../lib/catalogLookupsStore";
+import { getCartItemCount, getCartTotal, useStoredCart } from "../lib/cartStore";
 import { getDefaultDecorationType } from "../lib/orderConfiguration";
 import { submitProjectRequest } from "../lib/projectRequestSubmission";
 import {
@@ -19,6 +20,7 @@ import {
   useStoredProducts,
 } from "../lib/productsStore";
 import { PortalPage, SectionCard } from "./CustomerPortalShared";
+import { useCustomerPortalData } from "./useCustomerPortalData";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -52,9 +54,191 @@ function labelStyle() {
   };
 }
 
+function getRequestAction(request = {}) {
+  const orderNumber = normalizeText(request.order_number);
+  const completionStatus = normalizeText(request.request_completion_status).toLowerCase();
+  const quoteStatus = normalizeText(request.quote_status);
+  const invoiceStatus = normalizeText(request.invoice_status);
+
+  if (!orderNumber) {
+    return {
+      label: "View Requests",
+      to: "/portal/orders",
+    };
+  }
+
+  if (completionStatus === "pending_completion" || completionStatus === "awaiting_artwork") {
+    return {
+      label: completionStatus === "awaiting_artwork" ? "Upload Artwork" : "Complete Request",
+      to: `/portal/requests/${encodeURIComponent(orderNumber)}/complete`,
+    };
+  }
+
+  if (quoteStatus === "Awaiting Approval" || quoteStatus === "Awaiting Artwork Approval") {
+    return {
+      label: "Review & Confirm",
+      to: `/approval/${encodeURIComponent(orderNumber)}`,
+    };
+  }
+
+  if (
+    quoteStatus === "Awaiting Deposit" ||
+    invoiceStatus === "Awaiting Deposit" ||
+    invoiceStatus === "Awaiting Payment"
+  ) {
+    return {
+      label: "Pay Deposit",
+      to: `/deposit-payment?order=${encodeURIComponent(orderNumber)}`,
+    };
+  }
+
+  return {
+    label: "View Request",
+    to: "/portal/orders",
+  };
+}
+
+function getRequestStatusLabel(request = {}) {
+  const completionStatus = normalizeText(request.request_completion_status).toLowerCase();
+  const quoteStatus = normalizeText(request.quote_status);
+  const invoiceStatus = normalizeText(request.invoice_status);
+
+  if (completionStatus === "pending_completion") return "Complete Request";
+  if (completionStatus === "awaiting_artwork") return "Awaiting Artwork";
+  if (completionStatus === "artwork_assistance_required") return "Artwork Help Requested";
+  if (completionStatus === "ready_for_review" && quoteStatus === "Draft") return "Ready For Review";
+  if (invoiceStatus === "Awaiting Deposit" || invoiceStatus === "Awaiting Payment") return invoiceStatus;
+  if (quoteStatus) return quoteStatus;
+  return "Request Started";
+}
+
+function requestNeedsCustomerAction(request = {}) {
+  const completionStatus = normalizeText(request.request_completion_status).toLowerCase();
+  const quoteStatus = normalizeText(request.quote_status);
+  const invoiceStatus = normalizeText(request.invoice_status);
+
+  return (
+    completionStatus === "pending_completion" ||
+    completionStatus === "awaiting_artwork" ||
+    quoteStatus === "Awaiting Approval" ||
+    quoteStatus === "Awaiting Artwork Approval" ||
+    quoteStatus === "Awaiting Deposit" ||
+    invoiceStatus === "Awaiting Deposit" ||
+    invoiceStatus === "Awaiting Payment"
+  );
+}
+
+function HubActionLink({ to, children, variant = "primary" }) {
+  const primary = variant === "primary";
+
+  return (
+    <Link
+      to={to}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "44px",
+        borderRadius: "999px",
+        padding: "0 18px",
+        textDecoration: "none",
+        fontWeight: 800,
+        background: primary ? "#171717" : "#ffffff",
+        color: primary ? "#ffffff" : "#0f172a",
+        border: primary ? "1px solid #171717" : "1px solid #cbd5e1",
+        boxShadow: primary ? "0 14px 28px rgba(15, 23, 42, 0.16)" : "none",
+      }}
+    >
+      {children}
+    </Link>
+  );
+}
+
+function DashboardPanel({ eyebrow, title, body, children, background = "#ffffff" }) {
+  return (
+    <section
+      style={{
+        borderRadius: "24px",
+        border: "1px solid #dbe4ee",
+        background,
+        padding: "22px",
+        display: "grid",
+        gap: "14px",
+        boxShadow: "0 16px 34px rgba(15, 23, 42, 0.06)",
+      }}
+    >
+      <div style={{ display: "grid", gap: "6px" }}>
+        <p
+          style={{
+            margin: 0,
+            color: "#0f766e",
+            fontSize: "12px",
+            fontWeight: 900,
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+          }}
+        >
+          {eyebrow}
+        </p>
+        <h2
+          style={{
+            margin: 0,
+            color: "#0f172a",
+            fontSize: "24px",
+            lineHeight: 1.05,
+          }}
+        >
+          {title}
+        </h2>
+        <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>{body}</p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function WorkItem({ request, tone = "default" }) {
+  const action = getRequestAction(request);
+  const warning = tone === "warning";
+
+  return (
+    <article
+      style={{
+        borderRadius: "18px",
+        border: warning ? "1px solid #fdba74" : "1px solid #dbe4ee",
+        background: warning ? "#fff7ed" : "#ffffff",
+        padding: "16px",
+        display: "grid",
+        gap: "12px",
+      }}
+    >
+      <div style={{ display: "grid", gap: "4px" }}>
+        <strong style={{ color: "#0f172a", fontSize: "16px" }}>
+          {request.order_number || "Request"}
+        </strong>
+        <span style={{ color: warning ? "#9a3412" : "#475569", fontWeight: 800 }}>
+          {getRequestStatusLabel(request)}
+        </span>
+        <span style={{ color: "#64748b", lineHeight: 1.5 }}>
+          {request.garment || request.request_details || request.notes || "Customer request"}
+        </span>
+      </div>
+      <div>
+        <HubActionLink to={action.to} variant={warning ? "primary" : "secondary"}>
+          {action.label}
+        </HubActionLink>
+      </div>
+    </article>
+  );
+}
+
 export default function CustomerPortalRequestOrder() {
   const navigate = useNavigate();
   const { customerSession } = useOutletContext();
+  const cartItems = useStoredCart();
+  const cartItemCount = getCartItemCount(cartItems);
+  const cartTotal = getCartTotal(cartItems);
+  const { requests } = useCustomerPortalData(customerSession);
   const products = useStoredProducts();
   const productsReady = areStoredProductsReady();
   const lookups = useCatalogLookups();
@@ -98,6 +282,10 @@ export default function CustomerPortalRequestOrder() {
   const [contactPhone, setContactPhone] = useState(customerSession.phone || "");
   const [submitState, setSubmitState] = useState("idle");
   const [submitMessage, setSubmitMessage] = useState("");
+  const attentionRequests = requests.filter((request) => requestNeedsCustomerAction(request));
+  const underReviewRequests = requests.filter((request) => !requestNeedsCustomerAction(request));
+  const primaryAttentionRequest = attentionRequests[0] || null;
+  const cartPreviewItems = cartItems.slice(0, 3);
 
   const resolvedColor = availableColors.includes(selectedColor) ? selectedColor : availableColors[0] || "";
   const resolvedSize = availableSizes.includes(selectedSize) ? selectedSize : availableSizes[0] || "";
@@ -171,201 +359,360 @@ export default function CustomerPortalRequestOrder() {
 
   return (
     <PortalPage
-      eyebrow="Start New Order"
-      title="Request a quote or start a new order"
-      description="Browse the live storefront catalog, choose the product you want, and send a lightweight request with quantity and customization notes. Tee & Co will take it from there inside the existing quote workflow."
+      eyebrow="Request Hub"
+      title="Start or continue a Tee & Co request"
+      description="Continue a request, browse the storefront, or manage active work without leaving the Tee & Co storefront flow."
     >
       <SectionCard
-        title="How this works"
-        subtitle="This stays intentionally lightweight. You are not checking out, building a cart, or locking production details yet."
+        title="What needs attention"
+        subtitle="Customer actions appear first. Storefront browsing stays available when there is nothing blocking a current request."
       >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: "12px",
-          }}
-        >
-          {[
-            "Browse a category and choose a product.",
-            "Set quantity and share the basics we should know.",
-            "Tee & Co reviews the request and turns it into a quote or active order workflow.",
-          ].map((step, index) => (
-            <div
-              key={step}
-              style={{
-                borderRadius: "18px",
-                border: "1px solid #dbe4ee",
-                background: "#f8fafc",
-                padding: "16px",
-              }}
-            >
-              <p style={{ margin: "0 0 8px", color: "#0f766e", fontSize: "12px", fontWeight: 900 }}>
-                Step {index + 1}
-              </p>
-              <p style={{ margin: 0, color: "#334155", lineHeight: 1.6 }}>{step}</p>
-            </div>
-          ))}
-        </div>
+        {primaryAttentionRequest ? (
+          <WorkItem request={primaryAttentionRequest} tone="warning" />
+        ) : (
+          <div
+            style={{
+              borderRadius: "20px",
+              border: "1px solid #a7f3d0",
+              background: "#ecfdf5",
+              padding: "18px",
+              color: "#115e59",
+              display: "grid",
+              gap: "10px",
+            }}
+          >
+            <strong style={{ color: "#064e3b", fontSize: "18px" }}>
+              No customer action needed right now
+            </strong>
+            <span style={{ lineHeight: 1.6 }}>
+              Continue your request builder, check submitted requests, or browse the storefront to
+              start something new.
+            </span>
+          </div>
+        )}
+
+        {attentionRequests.length > 1 ? (
+          <div style={{ display: "grid", gap: "10px" }}>
+            {attentionRequests.slice(1, 4).map((request) => (
+              <WorkItem key={request.order_number || request.id} request={request} tone="warning" />
+            ))}
+          </div>
+        ) : null}
       </SectionCard>
 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 1.3fr) minmax(320px, 0.9fr)",
-          gap: "24px",
-          alignItems: "start",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: "18px",
         }}
       >
-        <SectionCard
-          title="Browse the catalog"
-          subtitle="This request flow uses the same storefront catalog and category-first browse already driving the public catalog."
+        <DashboardPanel
+          eyebrow="Builder"
+          title="Request Builder"
+          body={
+            cartItemCount
+              ? `${cartItemCount} item${cartItemCount === 1 ? "" : "s"} in progress, totaling ${formatMoney(cartTotal)} before review.`
+              : "No products are in your request builder yet."
+          }
+          background={cartItemCount ? "#f0fdfa" : "#ffffff"}
         >
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
-            {storefrontCategories.map((category) => (
-              <button
-                key={buildStorefrontCategorySelectionValue(category)}
-                type="button"
-                onClick={() => handleSelectCategory(category.id)}
-                style={{
-                  borderRadius: "999px",
-                  border: activeCategoryId === category.id ? "1px solid #99f6e4" : "1px solid #dbe4ee",
-                  background: activeCategoryId === category.id ? "#ccfbf1" : "#ffffff",
-                  color: activeCategoryId === category.id ? "#115e59" : "#0f172a",
-                  padding: "10px 14px",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                }}
-              >
-                {category.name} ({category.productCount})
-              </button>
-            ))}
+          {cartPreviewItems.length ? (
+            <div style={{ display: "grid", gap: "8px" }}>
+              {cartPreviewItems.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    borderRadius: "14px",
+                    background: "#ffffff",
+                    border: "1px solid #ccfbf1",
+                    padding: "10px 12px",
+                    color: "#0f172a",
+                    fontWeight: 700,
+                  }}
+                >
+                  {item.name} x{item.quantity}
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <HubActionLink to={cartItemCount ? "/cart" : "/"}>
+              {cartItemCount ? "Continue Builder" : "Browse Storefront"}
+            </HubActionLink>
+            {cartItemCount ? (
+              <HubActionLink to="/" variant="secondary">
+                Browse More
+              </HubActionLink>
+            ) : null}
           </div>
+        </DashboardPanel>
 
-          {!productsReady ? (
-            <p style={{ margin: 0, color: "#64748b" }}>Loading catalog…</p>
-          ) : null}
+        <DashboardPanel
+          eyebrow="Submitted"
+          title="Under Review"
+          body={
+            underReviewRequests.length
+              ? `${underReviewRequests.length} request${underReviewRequests.length === 1 ? "" : "s"} with Tee & Co.`
+              : "Submitted requests will appear here while Tee & Co reviews them."
+          }
+          background="#f8fafc"
+        >
+          {underReviewRequests.slice(0, 3).map((request) => (
+            <WorkItem key={request.order_number || request.id} request={request} />
+          ))}
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <HubActionLink to="/portal/orders" variant={underReviewRequests.length ? "secondary" : "primary"}>
+              My Requests
+            </HubActionLink>
+            {!cartItemCount && !attentionRequests.length ? (
+              <HubActionLink to="/" variant="secondary">
+                Browse Storefront
+              </HubActionLink>
+            ) : null}
+          </div>
+        </DashboardPanel>
+      </div>
 
-          {productsReady && !storefrontProducts.length ? (
-            <div
-              style={{
-                borderRadius: "18px",
-                border: "1px dashed #cbd5e1",
-                background: "#f8fafc",
-                padding: "22px",
-                color: "#475569",
-              }}
-            >
-              No storefront products are available yet.
-            </div>
-          ) : null}
-
-          {productsReady && categoryProducts.length ? (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                gap: "14px",
-              }}
-            >
-              {categoryProducts.map((product) => {
-                const imageSrc = getStorefrontProductImage(product);
-                const isSelected = selectedProduct?.id === product.id;
-
-                return (
-                  <button
-                    key={product.id}
-                    type="button"
-                    onClick={() => handleSelectProduct(product.id)}
-                    style={{
-                      textAlign: "left",
-                      borderRadius: "20px",
-                      border: isSelected ? "1px solid #99f6e4" : "1px solid #dbe4ee",
-                      background: isSelected ? "#f0fdfa" : "#ffffff",
-                      padding: "14px",
-                      boxShadow: isSelected
-                        ? "0 16px 32px rgba(20, 184, 166, 0.12)"
-                        : "0 10px 24px rgba(15, 23, 42, 0.05)",
-                      cursor: "pointer",
-                      display: "grid",
-                      gap: "12px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "100%",
-                        aspectRatio: "1 / 1",
-                        borderRadius: "16px",
-                        background: "#f8fafc",
-                        border: "1px solid #e2e8f0",
-                        overflow: "hidden",
-                        display: "grid",
-                        placeItems: "center",
-                      }}
-                    >
-                      {imageSrc ? (
-                        <img
-                          src={imageSrc}
-                          alt={product.name}
-                          style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                        />
-                      ) : (
-                        <NoImagePlaceholder
-                          style={{ borderRadius: "16px", width: "100%", height: "100%" }}
-                          titleStyle={{ fontSize: "13px" }}
-                          subtitleStyle={{ fontSize: "11px" }}
-                        />
-                      )}
-                    </div>
-
-                    <div style={{ display: "grid", gap: "6px" }}>
-                      <strong style={{ color: "#0f172a", fontSize: "16px" }}>{product.name}</strong>
-                      <p style={{ margin: 0, color: "#475569", lineHeight: 1.5, fontSize: "13px" }}>
-                        {product.notes || "Available for custom quote requests."}
-                      </p>
-                      <span style={{ color: "#0f766e", fontWeight: 800, fontSize: "13px" }}>
-                        {resolveProductBasePrice(product) > 0
-                          ? `From ${formatMoney(resolveProductBasePrice(product))} each`
-                          : "Pricing confirmed during review"}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-        </SectionCard>
-
-        <form onSubmit={handleSubmit} noValidate>
-          <SectionCard
-            title="Request details"
-            subtitle="Keep it simple. Share the product, quantity, and the basics Tee & Co needs to start the quote."
+      <details
+        style={{
+          borderRadius: "26px",
+          border: "1px solid #e2e8f0",
+          background: "rgba(255,255,255,0.72)",
+          padding: "20px",
+          display: "grid",
+          gap: "18px",
+          boxShadow: "0 12px 30px rgba(15, 23, 42, 0.04)",
+        }}
+      >
+        <summary
+          style={{
+            display: "grid",
+            gap: "6px",
+            cursor: "pointer",
+            listStyle: "none",
+          }}
+        >
+          <span
+            style={{
+              color: "#64748b",
+              fontSize: "12px",
+              fontWeight: 900,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
           >
-            {selectedProduct ? (
+            Optional Tool
+          </span>
+          <span style={{ color: "#0f172a", fontSize: "24px", lineHeight: 1.1, fontWeight: 800 }}>
+            Quick single product request
+          </span>
+          <span style={{ color: "#64748b", lineHeight: 1.6 }}>
+            This legacy shortcut stays available for one-off requests, but the recommended path is
+            to browse the storefront, add products to the request builder, and submit from checkout.
+          </span>
+        </summary>
+
+        <div
+          style={{
+            marginTop: "18px",
+            borderRadius: "18px",
+            border: "1px solid #dbe4ee",
+            background: "#f8fafc",
+            padding: "14px 16px",
+            color: "#475569",
+            lineHeight: 1.6,
+            fontWeight: 650,
+          }}
+        >
+          Use this section only if you already know the product and want to send a simple quote
+          request without building a multi-item request.
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1.1fr) minmax(300px, 0.9fr)",
+            gap: "18px",
+            alignItems: "start",
+          }}
+        >
+          <SectionCard
+            title="Product shortcut"
+            subtitle="A compact selector for single-product requests. Use the storefront for full product discovery."
+          >
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              <HubActionLink to="/" variant="secondary">
+                Browse Storefront
+              </HubActionLink>
+              <HubActionLink to="/cart" variant="secondary">
+                Open Request Builder
+              </HubActionLink>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "8px",
+              }}
+            >
+              {storefrontCategories.map((category) => (
+                <button
+                  key={buildStorefrontCategorySelectionValue(category)}
+                  type="button"
+                  onClick={() => handleSelectCategory(category.id)}
+                  style={{
+                    borderRadius: "999px",
+                    border:
+                      activeCategoryId === category.id ? "1px solid #5eead4" : "1px solid #dbe4ee",
+                    background: activeCategoryId === category.id ? "#ccfbf1" : "#ffffff",
+                    color: activeCategoryId === category.id ? "#115e59" : "#334155",
+                    padding: "8px 11px",
+                    fontWeight: 800,
+                    fontSize: "12px",
+                    cursor: "pointer",
+                  }}
+                >
+                  {category.name} ({category.productCount})
+                </button>
+              ))}
+            </div>
+
+            {!productsReady ? (
+              <p style={{ margin: 0, color: "#64748b" }}>Loading catalog...</p>
+            ) : null}
+
+            {productsReady && !storefrontProducts.length ? (
               <div
                 style={{
                   borderRadius: "18px",
-                  border: "1px solid #dbe4ee",
+                  border: "1px dashed #cbd5e1",
                   background: "#f8fafc",
-                  padding: "16px",
-                  display: "grid",
-                  gap: "8px",
+                  padding: "22px",
+                  color: "#475569",
                 }}
               >
-                <p style={{ margin: 0, color: "#0f766e", fontSize: "12px", fontWeight: 900 }}>
-                  Selected Product
-                </p>
-                <strong style={{ color: "#0f172a", fontSize: "18px" }}>{selectedProduct.name}</strong>
-                <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
-                  {activeCategory?.name || getStorefrontProductCategoryLabel(selectedProduct, storefrontCategoryLookups)}
-                </p>
-                <p style={{ margin: 0, color: "#334155", fontSize: "14px" }}>
-                  {estimatedTotal !== null
-                    ? `Starting estimate: ${formatMoney(estimatedTotal)} for ${Math.max(1, Number(quantity || 1))} units before final review.`
-                    : "Pricing will be confirmed after review."}
-                </p>
+                No storefront products are available yet.
               </div>
             ) : null}
+
+            {productsReady && categoryProducts.length ? (
+              <div
+                style={{
+                  borderRadius: "18px",
+                  border: "1px solid #e2e8f0",
+                  background: "#f8fafc",
+                  padding: "12px",
+                  maxHeight: "420px",
+                  overflow: "auto",
+                }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                    gap: "10px",
+                  }}
+                >
+                  {categoryProducts.map((product) => {
+                    const imageSrc = getStorefrontProductImage(product);
+                    const isSelected = selectedProduct?.id === product.id;
+
+                    return (
+                      <button
+                        key={product.id}
+                        type="button"
+                        onClick={() => handleSelectProduct(product.id)}
+                        style={{
+                          textAlign: "left",
+                          borderRadius: "16px",
+                          border: isSelected ? "1px solid #14b8a6" : "1px solid #dbe4ee",
+                          background: isSelected ? "#f0fdfa" : "#ffffff",
+                          padding: "10px",
+                          boxShadow: isSelected
+                            ? "0 12px 24px rgba(20, 184, 166, 0.12)"
+                            : "none",
+                          cursor: "pointer",
+                          display: "grid",
+                          gap: "8px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: "100%",
+                            aspectRatio: "4 / 3",
+                            borderRadius: "12px",
+                            background: "#f8fafc",
+                            border: "1px solid #e2e8f0",
+                            overflow: "hidden",
+                            display: "grid",
+                            placeItems: "center",
+                          }}
+                        >
+                          {imageSrc ? (
+                            <img
+                              src={imageSrc}
+                              alt={product.name}
+                              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                            />
+                          ) : (
+                            <NoImagePlaceholder
+                              style={{ borderRadius: "12px", width: "100%", height: "100%" }}
+                              titleStyle={{ fontSize: "12px" }}
+                              subtitleStyle={{ fontSize: "10px" }}
+                            />
+                          )}
+                        </div>
+
+                        <div style={{ display: "grid", gap: "4px" }}>
+                          <strong style={{ color: "#0f172a", fontSize: "14px", lineHeight: 1.2 }}>
+                            {product.name}
+                          </strong>
+                          <span style={{ color: "#0f766e", fontWeight: 800, fontSize: "12px" }}>
+                            {resolveProductBasePrice(product) > 0
+                              ? `From ${formatMoney(resolveProductBasePrice(product))}`
+                              : "Pricing during review"}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </SectionCard>
+
+          <form onSubmit={handleSubmit} noValidate>
+            <SectionCard
+              title="Request details"
+              subtitle="Preserved direct intake fields for this optional quick request path."
+            >
+              {selectedProduct ? (
+                <div
+                  style={{
+                    borderRadius: "18px",
+                    border: "1px solid #dbe4ee",
+                    background: "#f8fafc",
+                    padding: "16px",
+                    display: "grid",
+                    gap: "8px",
+                  }}
+                >
+                  <p style={{ margin: 0, color: "#0f766e", fontSize: "12px", fontWeight: 900 }}>
+                    Selected Product
+                  </p>
+                  <strong style={{ color: "#0f172a", fontSize: "18px" }}>{selectedProduct.name}</strong>
+                  <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
+                    {activeCategory?.name || getStorefrontProductCategoryLabel(selectedProduct, storefrontCategoryLookups)}
+                  </p>
+                  <p style={{ margin: 0, color: "#334155", fontSize: "14px" }}>
+                    {estimatedTotal !== null
+                      ? `Starting estimate: ${formatMoney(estimatedTotal)} for ${Math.max(1, Number(quantity || 1))} units before final review.`
+                      : "Pricing will be confirmed after review."}
+                  </p>
+                </div>
+              ) : null}
 
             <div
               style={{
@@ -539,7 +886,8 @@ export default function CustomerPortalRequestOrder() {
             </div>
           </SectionCard>
         </form>
-      </div>
+        </div>
+      </details>
     </PortalPage>
   );
 }

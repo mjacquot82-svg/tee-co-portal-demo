@@ -512,6 +512,22 @@ function resolveCustomerPaymentStatus(record = {}, options = {}) {
   return getStableStatusBadge(invoiceStatus || "Billing Pending");
 }
 
+function isRequestStageRecord(record = {}) {
+  if (!isCustomerRequestRecord(record)) return false;
+
+  const completionStatus = getRequestCompletionStatus(record);
+  const quoteStatus = String(record.quote_status || "").trim();
+
+  return (
+    completionStatus === "pending_completion" ||
+    completionStatus === "awaiting_artwork" ||
+    completionStatus === "artwork_assistance_required" ||
+    completionStatus === "ready_for_review" ||
+    quoteStatus === "Draft" ||
+    quoteStatus === "Sent"
+  );
+}
+
 function resolveTimelineNote(order) {
   if (isCustomerRequestRecord(order)) {
     const quoteStatus = String(order.quote_status || "").trim();
@@ -552,17 +568,43 @@ function resolveTimelineNote(order) {
 }
 
 function resolveArtworkApprovalLabel(record = {}) {
+  if (isRequestStageRecord(record)) {
+    const completionStatus = getRequestCompletionStatus(record);
+    const hasArtwork = storefrontRequestHasArtwork(record);
+
+    if (completionStatus === "awaiting_artwork") return "Awaiting Artwork";
+    if (completionStatus === "artwork_assistance_required") return "Artwork Assistance Requested";
+    if (hasArtwork) return "Artwork Attached";
+    if (completionStatus === "ready_for_review") return "Artwork Requirement Pending Review";
+    return "Artwork Not Attached";
+  }
+
   const required =
     typeof record.artwork_approval_required === "boolean"
       ? record.artwork_approval_required
       : Boolean(record.customer_artwork_id) ||
         (Array.isArray(record.artwork_files) && record.artwork_files.length > 0);
 
-  return required ? record.artwork_approval_status || "Pending Review" : "Not Required";
+  return required ? record.artwork_approval_status || "Pending Review" : "No Artwork Approval Requested";
 }
 
 function resolveDepositWorkflowLabel(record = {}) {
-  return record.deposit_workflow_status || (record.deposit_required ? "Awaiting Deposit" : "Deposit Not Required");
+  if (isRequestStageRecord(record)) {
+    return "Deposit Requirement Pending Review";
+  }
+
+  return record.deposit_workflow_status || (record.deposit_required ? "Awaiting Deposit" : "No Deposit Requested");
+}
+
+function resolveRequestStagePricingLabel(record = {}) {
+  const quoteStatus = String(record.quote_status || "").trim();
+  if (quoteStatus === "Sent") return "Quote In Preparation";
+  return "Pricing Pending Review";
+}
+
+function resolveRequestStageNeedByLabel(record = {}, dueDate = "") {
+  if (dueDate) return formatShortDate(dueDate);
+  return "Need-By Date Not Provided";
 }
 
 export function RecordList({ records = [], type = "orders" }) {
@@ -572,9 +614,16 @@ export function RecordList({ records = [], type = "orders" }) {
   const viewModels = useMemo(
     () => {
       const nextViewModels = safeRecords.map((record) => {
-        const total = formatCurrency(record.total_amount || record.total || 0);
-        const balance = formatCurrency(record.balance_due || 0);
-        const dueDate = record.invoice_due_date || record.due_date || "";
+        const requestStage = isRequestStageRecord(record);
+        const total = requestStage
+          ? resolveRequestStagePricingLabel(record)
+          : formatCurrency(record.total_amount || record.total || 0);
+        const balance = requestStage
+          ? resolveRequestStagePricingLabel(record)
+          : formatCurrency(record.balance_due || 0);
+        const dueDate = requestStage
+          ? record.due_date || ""
+          : record.invoice_due_date || record.due_date || "";
         const primaryStatus =
           type === "quotes"
             ? resolveCustomerQuoteStatus(record)
@@ -593,6 +642,7 @@ export function RecordList({ records = [], type = "orders" }) {
           total,
           balance,
           dueDate,
+          requestStage,
           primaryStatus,
           paymentStatus,
           timelineNote: resolveTimelineNote(record),
@@ -621,7 +671,7 @@ export function RecordList({ records = [], type = "orders" }) {
 
   return (
     <div style={{ display: "grid", gap: "14px" }}>
-      {viewModels.map(({ record, total, balance, dueDate, primaryStatus, paymentStatus, timelineNote }) => {
+      {viewModels.map(({ record, total, balance, dueDate, requestStage, primaryStatus, paymentStatus, timelineNote }) => {
         const workflowBadges =
           type === "orders" ? buildWorkflowStatusBadges(record, { surface: "customer" }) : [];
         const completionNotice = renderRequestCompletionNotice(record);
@@ -670,7 +720,7 @@ export function RecordList({ records = [], type = "orders" }) {
 
               <div style={{ textAlign: "right", minWidth: "160px" }}>
                 <p style={{ margin: 0, color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
-                  Total
+                  {requestStage ? "Pricing" : "Total"}
                 </p>
                 <p style={{ margin: "4px 0 0", color: "#0f172a", fontWeight: 800, fontSize: "20px" }}>
                   {total}
@@ -694,12 +744,22 @@ export function RecordList({ records = [], type = "orders" }) {
                 value={record.updated_at ? formatShortDate(record.updated_at) : "Recently"}
               />
               <DetailPair
-                label="Due"
-                value={dueDate ? formatShortDate(dueDate) : "Scheduling in progress"}
+                label={requestStage ? "Need-By" : "Due"}
+                value={
+                  requestStage
+                    ? resolveRequestStageNeedByLabel(record, dueDate)
+                    : dueDate
+                    ? formatShortDate(dueDate)
+                    : "Scheduling To Be Determined"
+                }
               />
               <DetailPair label="Artwork" value={resolveArtworkApprovalLabel(record)} />
               <DetailPair label="Deposit" value={resolveDepositWorkflowLabel(record)} />
-              <DetailPair label="Balance" value={balance} />
+              {requestStage ? (
+                <DetailPair label="Quote" value={balance} />
+              ) : (
+                <DetailPair label="Balance" value={balance} />
+              )}
             </div>
 
             <p

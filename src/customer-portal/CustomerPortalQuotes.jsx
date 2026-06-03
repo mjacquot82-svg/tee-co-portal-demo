@@ -65,7 +65,7 @@ export default function CustomerPortalQuotes() {
           <EmptyState
             title="No quote requests yet"
             description="Start a request from the portal and Tee & Co will move it into the quote workflow for review."
-            actionLabel="Start New Order"
+            actionLabel="Open Request Hub"
             actionTo="/portal/request-order"
           />
         )}
