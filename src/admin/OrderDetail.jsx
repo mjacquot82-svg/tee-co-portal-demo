@@ -1,7 +1,8 @@
 import { useParams, Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import "./OrderDetail.css";
-import { recordStoredOrderPayment, updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
+import { useStoredOrders } from "../lib/ordersStore";
+import { recordOrderPayment, updateOrderWorkflow } from "../repositories/ordersRepository";
 import { useStoredProducts } from "../lib/productsStore";
 import {
   getActiveStaffUser,
@@ -18,7 +19,6 @@ import ActivityTimeline from "../order-detail/ActivityTimeline";
 import ProductionInstructionsPanel from "../order-detail/ProductionInstructionsPanel";
 import FinancialSummaryPanel from "../order-detail/FinancialSummaryPanel";
 import { buildOrderUrgency } from "../order-detail/buildOrderUrgency";
-import { buildWorkflowActionUpdates } from "../orders/buildWorkflowActionUpdates";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
 import { formatDateTimeParts } from "../lib/dateFormatting";
 import {
@@ -148,14 +148,11 @@ export default function OrderDetail() {
 
   const urgency = buildOrderUrgency(order);
 
-  function saveOrderUpdates(updates) {
-    const updated = updateStoredOrder(orderNumber, {
-      updated_by_staff_name: activeStaffUser?.name || "Unknown Staff",
-      updated_by_staff_role: activeStaffUser?.role || "",
-      ...updates,
+  function saveWorkflowUpdate(workflowInput, options = {}) {
+    return updateOrderWorkflow(orderNumber, workflowInput, {
+      staffUser: activeStaffUser,
+      ...options,
     });
-
-    return updated;
   }
 
   function handleAssign(staffId) {
@@ -174,15 +171,14 @@ export default function OrderDetail() {
       activityNote = `Reassigned from ${previousAssignment} to ${nextAssignment}.`;
     }
 
-    saveOrderUpdates({
-      assigned_to_staff_id: worker?.id || "",
-      assigned_to_staff_name: worker?.name || "",
-      assigned_to_staff_role: worker?.role || "",
-      assigned_at: worker ? new Date().toISOString() : null,
-      needs_assignment: !worker,
-      activity_type: "assignment",
-      activity_note: activityNote,
-    });
+    saveWorkflowUpdate(
+      {
+        type: "assign_staff",
+        assignee: worker,
+        activity_note: activityNote,
+      },
+      { now: new Date().toISOString() }
+    );
   }
 
   function handleWorkflowAction(action) {
@@ -190,12 +186,14 @@ export default function OrderDetail() {
 
     const gating = buildWorkflowBlockDetails(order, action);
     if (gating.blocked) {
-      saveOrderUpdates({
-        activity_type: "production_blocked",
-        activity_note: `${action.label} blocked. ${gating.blockingReasons.join(" ")}`,
-        last_production_blocked_at: new Date().toISOString(),
-        last_production_blocked_reasons: gating.blockingReasons,
-      });
+      saveWorkflowUpdate(
+        {
+          type: "record_production_blocked",
+          action,
+          blockingReasons: gating.blockingReasons,
+        },
+        { now: new Date().toISOString() }
+      );
       setWorkflowFeedback({
         tone: "danger",
         summary: gating.summary,
@@ -205,15 +203,17 @@ export default function OrderDetail() {
       return;
     }
 
-    const updates = buildWorkflowActionUpdates(order, action);
-    if (!updates) return;
+    if (!action?.targetStatus) return;
     setWorkflowFeedback({
       tone: "info",
       summary: `${action.label} completed.`,
       detail: "",
       nextActionLabel: "",
     });
-    saveOrderUpdates(updates);
+    saveWorkflowUpdate({
+      type: "run_production_action",
+      action,
+    });
   }
 
   function handleArtworkApprovalChange(nextStatus) {
@@ -221,35 +221,13 @@ export default function OrderDetail() {
 
     const normalizedStatus = String(nextStatus || "").trim();
     const now = new Date().toISOString();
-    saveOrderUpdates({
-      artwork_approval_status: normalizedStatus,
-      approval_status:
-        normalizedStatus === "Approved"
-          ? "Customer Approved"
-          : normalizedStatus === "Needs Revision"
-          ? "Revision Requested"
-          : "Pending Review",
-      quote_status:
-        order.operational_visible === false
-          ? normalizedStatus === "Approved"
-            ? order.deposit_required
-              ? "Awaiting Deposit"
-              : "Approved"
-            : "Awaiting Artwork Approval"
-          : order.quote_status,
-      customer_approved_at: normalizedStatus === "Approved" ? order.customer_approved_at || now : null,
-      customer_revision_requested_at:
-        normalizedStatus === "Needs Revision"
-          ? order.customer_revision_requested_at || now
-          : null,
-      activity_type: "artwork_approval",
-      activity_note:
-        normalizedStatus === "Approved"
-          ? `Artwork approved by ${activeStaffUser?.name || "staff"}.`
-          : normalizedStatus === "Needs Revision"
-          ? `Artwork revision requested by ${activeStaffUser?.name || "staff"}.`
-          : "Artwork moved to pending review.",
-    });
+    saveWorkflowUpdate(
+      {
+        type: "set_artwork_approval",
+        status: normalizedStatus,
+      },
+      { now }
+    );
     setWorkflowFeedback(null);
   }
 
@@ -258,74 +236,33 @@ export default function OrderDetail() {
 
     const normalizedStatus = String(nextStatus || "").trim();
     const now = new Date().toISOString();
-    const nextDeposit = {
-      ...(order.deposit || {}),
-      amount: normalizedOrder.deposit_amount,
-      updated_at: now,
-      status:
-        normalizedStatus === "Deposit Not Required"
-          ? "not_required"
-          : normalizedStatus === "Deposit Requested"
-          ? "pending"
-          : normalizedStatus === "Deposit Received"
-          ? "paid"
-          : "awaiting",
-      requested_at:
-        normalizedStatus === "Deposit Requested"
-          ? order.deposit?.requested_at || now
-          : order.deposit?.requested_at || null,
-      paid_at:
-        normalizedStatus === "Deposit Received" ? order.deposit?.paid_at || now : order.deposit?.paid_at || null,
-    };
-
-    saveOrderUpdates({
-      deposit_workflow_status: normalizedStatus,
-      deposit_required: normalizedStatus !== "Deposit Not Required",
-      quote_status:
-        order.operational_visible === false
-          ? normalizedStatus === "Deposit Requested" || normalizedStatus === "Awaiting Deposit"
-            ? "Awaiting Deposit"
-            : order.artwork_approval_status === "Approved"
-            ? "Approved"
-            : order.quote_status
-          : order.quote_status,
-      deposit: nextDeposit,
-      activity_type: "deposit_workflow",
-      activity_note:
-        normalizedStatus === "Deposit Requested"
-          ? "Deposit requested."
-          : normalizedStatus === "Deposit Received"
-          ? "Deposit received."
-          : normalizedStatus === "Deposit Not Required"
-          ? "Deposit requirement cleared."
-          : "Awaiting deposit.",
-    });
+    saveWorkflowUpdate(
+      {
+        type: "set_deposit_workflow",
+        status: normalizedStatus,
+      },
+      {
+        now,
+        financialOptions: {
+          additionalSources: quoteSnapshot
+            ? [{ label: "generatedQuoteSnapshot", value: quoteSnapshot }]
+            : [],
+        },
+      }
+    );
     setWorkflowFeedback(null);
   }
 
   function handleGatingOverride(overrideKey) {
     if (!canManageAssignments || isCanceledOperationalStatus(order.status)) return;
 
-    const now = new Date().toISOString();
-    const overrideLabels = {
-      forceProduction: "Force Move To Production",
-      depositRequirement: "Override Deposit Requirement",
-      artworkApprovalRequirement: "Override Artwork Approval Requirement",
-    };
-
-    saveOrderUpdates({
-      workflow_overrides: {
-        ...order.workflow_overrides,
-        [overrideKey]: {
-          active: true,
-          usedAt: now,
-          usedByName: activeStaffUser?.name || "Unknown Staff",
-          usedByRole: activeStaffUser?.role || "",
-        },
+    saveWorkflowUpdate(
+      {
+        type: "apply_gating_override",
+        overrideKey,
       },
-      activity_type: "gating_override_used",
-      activity_note: `${overrideLabels[overrideKey] || "Workflow gating override"} used.`,
-    });
+      { now: new Date().toISOString() }
+    );
     setWorkflowFeedback({
       tone: "info",
       summary: "Override applied.",
@@ -337,16 +274,8 @@ export default function OrderDetail() {
   function handleForceMoveToProduction() {
     handleGatingOverride("forceProduction");
 
-    const updates = buildWorkflowActionUpdates(order, {
-      key: "move_to_production",
-      label: "Move To Production",
-      targetStatus: "Ready For Production",
-    });
-    if (!updates) return;
-
-    saveOrderUpdates({
-      ...updates,
-      activity_note: "Move To Production forced with operational override.",
+    saveWorkflowUpdate({
+      type: "force_move_to_production",
     });
   }
 
@@ -357,7 +286,7 @@ export default function OrderDetail() {
   }
 
   function handleRecordPayment(paymentInput) {
-    return recordStoredOrderPayment(orderNumber, paymentInput, {
+    return recordOrderPayment(orderNumber, paymentInput, {
       financialOptions: {
         additionalSources: quoteSnapshot
           ? [{ label: "generatedQuoteSnapshot", value: quoteSnapshot }]
@@ -369,22 +298,13 @@ export default function OrderDetail() {
   function handleMarkPickedUp() {
     if (isCanceledOperationalStatus(order.status)) return;
 
-    const now = new Date().toISOString();
-    const balanceNote =
-      normalizedOrder.balance_due > 0
-        ? ` Outstanding balance: ${money(normalizedOrder.balance_due)}.`
-        : "";
-
-    saveOrderUpdates({
-      pickup_status: "Picked Up",
-      picked_up_at: order.picked_up_at || now,
-      status:
-        normalizeOperationalStatus(order.status) === "Ready For Pickup"
-          ? "Completed"
-          : order.status,
-      activity_type: "pickup",
-      activity_note: `Order marked as picked up.${balanceNote}`,
-    });
+    saveWorkflowUpdate(
+      {
+        type: "mark_picked_up",
+        balance_due: normalizedOrder.balance_due,
+      },
+      { now: new Date().toISOString() }
+    );
   }
 
   function handleSendDepositRequest(requestDetails = {}) {
@@ -392,36 +312,33 @@ export default function OrderDetail() {
 
     const now = new Date().toISOString();
 
-    saveOrderUpdates({
-      deposit_workflow_status: "Deposit Requested",
-      deposit_required: Number(normalizedOrder.deposit_amount || 0) > 0,
-      deposit: {
-        ...(order.deposit || {}),
-        amount: normalizedOrder.deposit_amount,
-        status: "pending",
-        requested_at: now,
-        updated_at: now,
-        request_channel: requestDetails.channel || "",
-        last_requested_subject: requestDetails.subject || "",
-        last_requested_message: requestDetails.body || "",
+    saveWorkflowUpdate(
+      {
+        type: "send_deposit_request",
+        channel: requestDetails.channel || "",
+        subject: requestDetails.subject || "",
+        body: requestDetails.body || "",
       },
-      activity_type: "deposit_request",
-      activity_note: `Deposit request prepared via ${requestDetails.channel || "manual workflow"}.`,
-    });
+      {
+        now,
+        financialOptions: {
+          additionalSources: quoteSnapshot
+            ? [{ label: "generatedQuoteSnapshot", value: quoteSnapshot }]
+            : [],
+        },
+      }
+    );
   }
 
   function handleCancelProductionOrder() {
     if (isCanceledOperationalStatus(order.status)) return;
 
-    updateStoredOrder(orderNumber, {
-      status: "Canceled",
-      quote_status: "Canceled",
-      operational_visible: false,
-      production_ready: false,
-      canceled_at: new Date().toISOString(),
-      activity_type: "canceled",
-      activity_note: "Production order canceled while preserving operational and financial history.",
-    });
+    saveWorkflowUpdate(
+      {
+        type: "cancel_order",
+      },
+      { now: new Date().toISOString() }
+    );
   }
 
   const placedAt = formatDateTimeParts(order.created_at);

@@ -4,10 +4,10 @@ import { useStoredProducts } from "../lib/productsStore";
 import { createStoredQuickSale } from "../lib/salesStore";
 import { createStoredCustomer, getStoredCustomers } from "../lib/customersStore";
 import {
-  recordStoredOrderPayment,
   updateStoredOrder,
   useStoredOrders,
 } from "../lib/ordersStore";
+import { recordOrderPayment } from "../repositories/ordersRepository";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 import { validatePaymentAmount } from "../lib/financialValidation";
 import { customerIdsEqual } from "../lib/customerIds";
@@ -1097,7 +1097,7 @@ export default function QuickSale() {
           const amountForOrder = Math.min(entryRemaining, orderRemaining);
           if (amountForOrder <= 0) return;
 
-          const updatedOrder = recordStoredOrderPayment(item.orderNumber, {
+          const updatedOrder = recordOrderPayment(item.orderNumber, {
             amount: amountForOrder,
             method: entry.method,
             note: entry.note,
