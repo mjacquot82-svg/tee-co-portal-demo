@@ -1,6 +1,10 @@
 import { Link } from "react-router-dom";
+import { getCartItemCount, useStoredCart } from "../lib/cartStore";
 
 export default function Header() {
+  const cartItems = useStoredCart();
+  const cartItemCount = getCartItemCount(cartItems);
+
   return (
     <header
       style={{
@@ -88,7 +92,39 @@ export default function Header() {
               fontSize: "14px",
             }}
           >
-            My Orders
+            My Requests
+          </Link>
+
+          <Link
+            to="/cart"
+            style={{
+              textDecoration: "none",
+              color: "#171717",
+              fontWeight: "600",
+              fontSize: "14px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <span>Request Builder</span>
+            <span
+              style={{
+                minWidth: "22px",
+                height: "22px",
+                borderRadius: "999px",
+                padding: "0 6px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: cartItemCount > 0 ? "#171717" : "#e7e5e4",
+                color: cartItemCount > 0 ? "#ffffff" : "#57534e",
+                fontSize: "12px",
+                fontWeight: 800,
+              }}
+            >
+              {cartItemCount}
+            </span>
           </Link>
 
           <Link

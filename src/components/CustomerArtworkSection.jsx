@@ -305,35 +305,66 @@ function ArtworkDetailModal({ file, onClose }) {
   );
 }
 
-function ArtworkLibrary({ artwork, uploading, onSelectArtwork }) {
+function ArtworkLibrary({
+  artwork,
+  uploading,
+  selectionEnabled = false,
+  selectedArtworkId = "",
+  selectionActionLabel = "",
+  onSelectArtwork,
+  onOpenDetails,
+}) {
+  const artworkCount = Array.isArray(artwork) ? artwork.length : 0;
+  const gridClassName = [
+    "customer-artwork-grid",
+    artworkCount === 1 ? "customer-artwork-grid-single" : "",
+    artworkCount === 2 ? "customer-artwork-grid-pair" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   console.info("[CustomerArtworkSection] render artwork library", {
     uploading,
-    artworkCount: Array.isArray(artwork) ? artwork.length : 0,
+    artworkCount,
     artworkIds: Array.isArray(artwork) ? artwork.map((file) => file?.id || "") : [],
     fileNames: Array.isArray(artwork) ? artwork.map((file) => file?.file_name || "") : [],
   });
   return (
     <div className="customer-artwork-library-scroll">
-      <div className="customer-artwork-grid">
+      <div className={gridClassName}>
         {uploading ? <ArtworkSkeletonCard /> : null}
         {artwork.map((file) => (
           <article
             key={file.id}
-            className="customer-artwork-card"
+            className={`customer-artwork-card ${
+              selectionEnabled ? "customer-artwork-card-selectable" : ""
+            } ${selectedArtworkId === file.id ? "customer-artwork-card-selected" : ""}`}
             data-testid="artwork-thumbnail"
             data-artwork-id={file.id || ""}
+            data-selected={selectedArtworkId === file.id ? "true" : "false"}
+            onClick={selectionEnabled ? () => onSelectArtwork(file) : undefined}
+            onKeyDown={(event) => {
+              if (!selectionEnabled) return;
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelectArtwork(file);
+              }
+            }}
+            role={selectionEnabled ? "button" : undefined}
+            tabIndex={selectionEnabled ? 0 : undefined}
+            aria-pressed={selectionEnabled ? selectedArtworkId === file.id : undefined}
           >
-            <button
-              type="button"
-              className="customer-artwork-preview-button"
-              onClick={() => onSelectArtwork(file)}
-              data-testid="artwork-thumbnail-button"
-              data-artwork-id={file.id || ""}
-            >
-              <div className="customer-artwork-preview-shell">
-                <ArtworkPreview file={file} />
-              </div>
-            </button>
+            <div className="customer-artwork-preview-shell">
+              <ArtworkPreview file={file} />
+              {selectionEnabled ? (
+                <div className="customer-artwork-selection-indicator" aria-hidden="true">
+                  <span className="customer-artwork-selection-check">✓</span>
+                  <span className="customer-artwork-selection-label">
+                    {selectedArtworkId === file.id ? "Selected" : "Select"}
+                  </span>
+                </div>
+              ) : null}
+            </div>
 
             <div className="customer-artwork-card-body">
               <div className="customer-artwork-card-copy">
@@ -348,6 +379,32 @@ function ArtworkLibrary({ artwork, uploading, onSelectArtwork }) {
               <ArtworkMetadataBadges file={file} />
 
               <div className="customer-artwork-card-actions">
+                {selectionEnabled ? (
+                  <button
+                    type="button"
+                    className={`customer-artwork-action-link customer-artwork-selection-action ${
+                      selectedArtworkId === file.id ? "is-selected" : ""
+                    }`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectArtwork(file);
+                    }}
+                  >
+                    {selectedArtworkId === file.id
+                      ? "Artwork Selected"
+                      : selectionActionLabel || "Select Artwork"}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="customer-artwork-action-link customer-artwork-secondary-button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenDetails(file);
+                  }}
+                >
+                  Preview
+                </button>
                 <a
                   href={file.open_url || file.download_url || "#"}
                   target="_blank"
@@ -357,6 +414,7 @@ function ArtworkLibrary({ artwork, uploading, onSelectArtwork }) {
                   }`}
                   aria-disabled={!file.open_url && !file.download_url}
                   onClick={(event) => {
+                    event.stopPropagation();
                     if (!file.open_url && !file.download_url) event.preventDefault();
                   }}
                 >
@@ -370,6 +428,7 @@ function ArtworkLibrary({ artwork, uploading, onSelectArtwork }) {
                   }`}
                   aria-disabled={!file.download_url && !file.open_url}
                   onClick={(event) => {
+                    event.stopPropagation();
                     if (!file.download_url && !file.open_url) event.preventDefault();
                   }}
                 >
@@ -384,15 +443,41 @@ function ArtworkLibrary({ artwork, uploading, onSelectArtwork }) {
   );
 }
 
-export default function CustomerArtworkSection({ customerId, customerName = "" }) {
+export default function CustomerArtworkSection({
+  customerId,
+  customerName = "",
+  onArtworkSelected = null,
+  onArtworkLibraryChange = null,
+  selectedArtworkId: controlledSelectedArtworkId = undefined,
+  onSelectedArtworkIdChange = null,
+  selectionActionLabel = "",
+  selectionHelpText = "",
+}) {
   const fileInputRef = useRef(null);
   const [artwork, setArtwork] = useState([]);
   const [loadState, setLoadState] = useState("idle");
   const [uploadState, setUploadState] = useState("idle");
   const [loadError, setLoadError] = useState("");
   const [uploadError, setUploadError] = useState("");
-  const [selectedArtworkId, setSelectedArtworkId] = useState("");
+  const [internalSelectedArtworkId, setInternalSelectedArtworkId] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [detailArtworkId, setDetailArtworkId] = useState("");
+  const selectedArtworkId =
+    controlledSelectedArtworkId === undefined
+      ? internalSelectedArtworkId
+      : String(controlledSelectedArtworkId || "");
+
+  function updateSelectedArtworkId(nextSelectedArtworkId) {
+    const normalizedSelectedArtworkId = String(nextSelectedArtworkId || "");
+
+    if (controlledSelectedArtworkId === undefined) {
+      setInternalSelectedArtworkId(normalizedSelectedArtworkId);
+    }
+
+    if (typeof onSelectedArtworkIdChange === "function") {
+      onSelectedArtworkIdChange(normalizedSelectedArtworkId);
+    }
+  }
 
   useEffect(() => {
     let isActive = true;
@@ -428,17 +513,25 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
       try {
         const loadedArtwork = await listCustomerArtwork(customerId);
         if (!isActive) return;
+        const nextSelectedArtworkId =
+          loadedArtwork.some((entry) => entry.id === selectedArtworkId)
+            ? selectedArtworkId
+            : selectionActionLabel && loadedArtwork.length === 1
+            ? loadedArtwork[0]?.id || ""
+            : "";
         console.info("[CustomerArtworkSection] loadArtwork resolved", {
           customerId,
           customerName,
           artworkCount: loadedArtwork.length,
           artworkIds: loadedArtwork.map((entry) => entry?.id || ""),
           fileNames: loadedArtwork.map((entry) => entry?.file_name || ""),
+          nextSelectedArtworkId,
         });
         setArtwork(loadedArtwork);
-        setSelectedArtworkId((currentSelectedArtworkId) =>
-          loadedArtwork.some((entry) => entry.id === currentSelectedArtworkId)
-            ? currentSelectedArtworkId
+        updateSelectedArtworkId(nextSelectedArtworkId);
+        setDetailArtworkId((currentDetailArtworkId) =>
+          loadedArtwork.some((entry) => entry.id === currentDetailArtworkId)
+            ? currentDetailArtworkId
             : ""
         );
         setLoadState("loaded");
@@ -451,7 +544,8 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
           error,
         });
         setArtwork([]);
-        setSelectedArtworkId("");
+        updateSelectedArtworkId("");
+        setDetailArtworkId("");
         setLoadState("error");
         setLoadError(error?.message || "Unable to load artwork right now.");
       }
@@ -507,7 +601,7 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
         fileName: uploadedArtwork?.file_name || selectedFile.name,
       });
       setArtwork((currentArtwork) => [uploadedArtwork, ...currentArtwork]);
-      setSelectedArtworkId(uploadedArtwork.id || "");
+      updateSelectedArtworkId(uploadedArtwork.id || "");
     } catch (error) {
       console.error("Unable to upload customer artwork", error);
       console.error("[CustomerArtworkSection] upload failed", {
@@ -534,6 +628,20 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
     () => artwork.find((file) => file.id === selectedArtworkId) || null,
     [artwork, selectedArtworkId]
   );
+  const detailArtwork = useMemo(
+    () => artwork.find((file) => file.id === detailArtworkId) || null,
+    [artwork, detailArtworkId]
+  );
+
+  useEffect(() => {
+    if (typeof onArtworkSelected !== "function") return;
+    onArtworkSelected(selectedArtwork);
+  }, [onArtworkSelected, selectedArtwork]);
+
+  useEffect(() => {
+    if (typeof onArtworkLibraryChange !== "function") return;
+    onArtworkLibraryChange(artwork);
+  }, [artwork, onArtworkLibraryChange]);
 
   return (
     <section
@@ -601,6 +709,23 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
           {" "}visible • Newest first{artwork.length > 8 ? " • Scroll to browse full history" : ""}.
         </span>
       </div>
+
+      {selectionActionLabel ? (
+        <div
+          style={{
+            marginBottom: "14px",
+            border: "1px solid #bfdbfe",
+            background: "#eff6ff",
+            color: "#1d4ed8",
+            borderRadius: "14px",
+            padding: "12px 14px",
+            fontWeight: 600,
+            lineHeight: 1.6,
+          }}
+        >
+          {selectionHelpText || `${selectionActionLabel} after choosing a file from the artwork library.`}
+        </div>
+      ) : null}
 
       <div
         style={{
@@ -683,13 +808,21 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
         <ArtworkLibrary
           artwork={filteredArtwork}
           uploading={isUploading}
-          onSelectArtwork={(file) => setSelectedArtworkId(file.id || "")}
+          selectionEnabled={Boolean(selectionActionLabel)}
+          selectedArtworkId={selectedArtworkId}
+          selectionActionLabel={selectionActionLabel}
+          onSelectArtwork={(file) => updateSelectedArtworkId(file.id || "")}
+          onOpenDetails={(file) => setDetailArtworkId(file.id || "")}
         />
       ) : isUploading ? (
         <ArtworkLibrary
           artwork={filteredArtwork}
           uploading={isUploading}
-          onSelectArtwork={(file) => setSelectedArtworkId(file.id || "")}
+          selectionEnabled={Boolean(selectionActionLabel)}
+          selectedArtworkId={selectedArtworkId}
+          selectionActionLabel={selectionActionLabel}
+          onSelectArtwork={(file) => updateSelectedArtworkId(file.id || "")}
+          onOpenDetails={(file) => setDetailArtworkId(file.id || "")}
         />
       ) : searchTerm ? (
         <div className="customer-artwork-empty-state">
@@ -703,8 +836,8 @@ export default function CustomerArtworkSection({ customerId, customerName = "" }
         </div>
       )}
 
-      {selectedArtwork ? (
-        <ArtworkDetailModal file={selectedArtwork} onClose={() => setSelectedArtworkId("")} />
+      {detailArtwork ? (
+        <ArtworkDetailModal file={detailArtwork} onClose={() => setDetailArtworkId("")} />
       ) : null}
     </section>
   );

@@ -6,9 +6,13 @@ import CustomerPortalQuotes from "./customer-portal/CustomerPortalQuotes";
 import CustomerPortalInvoices from "./customer-portal/CustomerPortalInvoices";
 import CustomerPortalAccount from "./customer-portal/CustomerPortalAccount";
 import CustomerPortalRequestOrder from "./customer-portal/CustomerPortalRequestOrder";
+import CustomerPortalCompleteRequest from "./customer-portal/CustomerPortalCompleteRequest";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import StartProject from "./pages/StartProject";
+import Cart from "./pages/Cart";
+import Checkout from "./pages/Checkout";
 import CategoryView from "./pages/CategoryView";
 import GarmentView from "./pages/GarmentView";
 import OrderPreview from "./pages/OrderPreview";
@@ -47,6 +51,9 @@ export default function App() {
             <Route index element={<Home />} />
             <Route path="login" element={<Login />} />
             <Route path="signup" element={<Signup />} />
+            <Route path="start-project" element={<StartProject />} />
+            <Route path="cart" element={<Cart />} />
+            <Route path="checkout" element={<Checkout />} />
             <Route path="category/:categoryId" element={<CategoryView />} />
             <Route path="garment/:garmentId" element={<GarmentView />} />
             <Route path="order-preview" element={<OrderPreview />} />
@@ -95,6 +102,7 @@ export default function App() {
           <Route path="/portal" element={<CustomerPortalShell />}>
             <Route index element={<Navigate to="orders" replace />} />
             <Route path="request-order" element={<CustomerPortalRequestOrder />} />
+            <Route path="requests/:orderNumber/complete" element={<CustomerPortalCompleteRequest />} />
             <Route path="orders" element={<CustomerPortalOrders />} />
             <Route path="quotes" element={<CustomerPortalQuotes />} />
             <Route path="invoices" element={<CustomerPortalInvoices />} />

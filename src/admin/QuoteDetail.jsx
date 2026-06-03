@@ -14,9 +14,12 @@ import {
   isQuoteReadyForProduction,
 } from "../quotes/quoteWorkflow";
 import {
+  buildArtworkStatus,
   buildApprovalStatus,
   buildDepositStatus,
   buildProductionReadiness,
+  getRequestCompletionStatus,
+  isStorefrontRequestRecord,
 } from "../quotes/productionReadiness";
 import {
   canManageArchivedQuotes,
@@ -84,6 +87,90 @@ function StatusPill({ children, tone = "default" }) {
   );
 }
 
+function hasCustomerArtwork(order = {}) {
+  return Boolean(String(order.customer_artwork_id || "").trim()) ||
+    (Array.isArray(order.artwork_files) && order.artwork_files.length > 0);
+}
+
+function formatTimestamp(value, fallback = "—") {
+  return value ? formatDateTime(value, " • ") : fallback;
+}
+
+function getRequestLifecycleLabel(status) {
+  switch (status) {
+    case "awaiting_artwork":
+      return "Awaiting Artwork";
+    case "artwork_assistance_required":
+      return "Artwork Assistance Required";
+    case "ready_for_review":
+      return "Ready For Review";
+    default:
+      return "Pending Completion";
+  }
+}
+
+function buildRequestStageContext(order = {}) {
+  const storefrontRequest = isStorefrontRequestRecord(order);
+  const quoteStatus = String(order?.quote_status || "").trim();
+  const completionStatus = getRequestCompletionStatus(order);
+  const intakeLifecycleLabel = getRequestLifecycleLabel(completionStatus);
+  const quoteWorkflowStarted = quoteStatus && quoteStatus !== "Draft";
+  const intakeBlocked =
+    storefrontRequest &&
+    order?.operational_visible !== true &&
+    (completionStatus === "pending_completion" || completionStatus === "awaiting_artwork");
+  const intakeVisible =
+    storefrontRequest &&
+    order?.operational_visible !== true &&
+    !["Awaiting Deposit", "Approved", "Ready For Production", "Canceled"].includes(quoteStatus);
+
+  let workflowVisibility = order?.operational_visible ? "Active operational workflow" : "Active quote workflow";
+  if (storefrontRequest && order?.operational_visible !== true) {
+    if (completionStatus === "pending_completion" || completionStatus === "awaiting_artwork") {
+      workflowVisibility = "Customer intake workflow";
+    } else if (!quoteWorkflowStarted || quoteStatus === "Sent") {
+      workflowVisibility = "Request review workflow";
+    } else {
+      workflowVisibility = "Active quote workflow";
+    }
+  }
+
+  let nextStep = "Await remaining quote requirements";
+  if (storefrontRequest && order?.operational_visible !== true) {
+    if (completionStatus === "pending_completion") {
+      nextStep = "Wait for customer to complete request";
+    } else if (completionStatus === "awaiting_artwork") {
+      nextStep = "Wait for customer artwork upload";
+    } else if (completionStatus === "artwork_assistance_required" && quoteStatus === "Draft") {
+      nextStep = "Review artwork assistance request";
+    } else if (completionStatus === "ready_for_review" && quoteStatus === "Draft") {
+      nextStep = "Begin request review";
+    } else if (quoteStatus === "Sent") {
+      nextStep = "Prepare quote";
+    } else if (quoteStatus === "Awaiting Artwork Approval") {
+      nextStep = "Review artwork with customer";
+    } else if (quoteStatus === "Awaiting Approval") {
+      nextStep = "Wait for customer approval";
+    } else if (quoteStatus === "Awaiting Deposit") {
+      nextStep = "Request or record deposit";
+    } else if (quoteStatus === "Approved") {
+      nextStep = "Mark Ready For Production";
+    } else if (quoteStatus === "Ready For Production") {
+      nextStep = "Release to production";
+    }
+  }
+
+  return {
+    storefrontRequest,
+    completionStatus,
+    intakeLifecycleLabel,
+    intakeBlocked,
+    intakeVisible,
+    workflowVisibility,
+    nextStep,
+  };
+}
+
 function buildTimelineEvents(order = {}) {
   return [...(order.activity_log || [])].sort((left, right) =>
     String(right?.created_at || "").localeCompare(String(left?.created_at || ""))
@@ -94,10 +181,10 @@ function ReferenceTimeline({ events = [], compact = false, embedded = false }) {
   const content = (
     <>
       <div style={{ marginBottom: compact ? "12px" : "16px" }}>
-        <p
-          style={{
-            margin: 0,
-            color: "#78716c",
+          <p
+            style={{
+              margin: 0,
+              color: "#78716c",
             fontSize: "11px",
             fontWeight: 800,
             letterSpacing: "0.08em",
@@ -328,10 +415,12 @@ export default function QuoteDetail() {
   );
   const depositStatus = useMemo(() => buildDepositStatus(order, financials), [order, financials]);
   const approvalStatus = useMemo(() => buildApprovalStatus(order), [order]);
+  const artworkStatus = useMemo(() => buildArtworkStatus(order), [order]);
   const productionReadiness = useMemo(
     () => buildProductionReadiness(order, financials),
     [order, financials]
   );
+  const requestStage = useMemo(() => buildRequestStageContext(order), [order]);
   const artworkNames = useMemo(() => getOrderArtworkNames(order), [order]);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [archivedSections, setArchivedSections] = useState({
@@ -351,18 +440,43 @@ export default function QuoteDetail() {
     () => financials?.connected_timeline || buildTimelineEvents(order),
     [financials, order]
   );
-  const readinessSummary = productionReadiness.ready
-    ? "Ready for production"
-    : `${productionReadiness.remainingRequirements} requirement${productionReadiness.remainingRequirements === 1 ? "" : "s"} remaining`;
+  const requestCreatedAt = formatTimestamp(order?.created_at || order?.date);
+  const customerCompletedAt = formatTimestamp(order?.request_completed_at || "");
+  const artworkReceivedAt = formatTimestamp(
+    order?.artwork_received_at ||
+      order?.artwork_files?.find?.((file) => file?.uploaded_at)?.uploaded_at ||
+      ""
+  );
+  const lastActivityAt = formatTimestamp(order?.updated_at || order?.created_at);
+  const readinessSummary =
+    requestStage.storefrontRequest && requestStage.intakeVisible
+      ? productionReadiness.ready
+        ? "Ready for production"
+        : "Intake in progress"
+      : productionReadiness.ready
+      ? "Ready for production"
+      : `${productionReadiness.remainingRequirements} requirement${productionReadiness.remainingRequirements === 1 ? "" : "s"} remaining`;
   const nextStep = archived
     ? "Archived from active workflow"
     : canceled
     ? "Workflow canceled"
+    : requestStage.nextStep !== "Await remaining quote requirements"
+    ? requestStage.nextStep
     : canAdvanceQuoteStatus(order?.quote_status)
     ? `Mark ${getNextQuoteStatus(order.quote_status)}`
     : isQuoteReadyForProduction(order?.quote_status)
     ? "Release to Production"
     : "Await remaining quote requirements";
+  const canAdvanceCurrentQuote =
+    !archived &&
+    !canceled &&
+    canAdvanceQuoteStatus(order?.quote_status) &&
+    !requestStage.intakeBlocked;
+  const canReleaseCurrentQuote =
+    !archived &&
+    !canceled &&
+    isQuoteReadyForProduction(order?.quote_status) &&
+    productionReadiness.ready;
 
   useEffect(() => {
     if (!archived || !isStaffWorkspace) return;
@@ -387,7 +501,7 @@ export default function QuoteDetail() {
 
   function handleAdvanceQuote() {
     if (archived || canceled) return;
-    if (!canAdvanceQuoteStatus(order.quote_status)) return;
+    if (!canAdvanceCurrentQuote) return;
 
     const nextQuoteStatus = getNextQuoteStatus(order.quote_status);
     updateStoredOrder(order.order_number, {
@@ -399,7 +513,7 @@ export default function QuoteDetail() {
 
   function handleReleaseToProduction() {
     if (archived || canceled) return;
-    if (!isQuoteReadyForProduction(order.quote_status)) return;
+    if (!canReleaseCurrentQuote) return;
 
     updateStoredOrder(order.order_number, {
       quote_status: "Ready For Production",
@@ -524,14 +638,20 @@ export default function QuoteDetail() {
               ? "Archived Quote Record"
               : canceled
               ? "Canceled Quote Record"
+              : requestStage.storefrontRequest
+              ? "Request Intake Workspace"
               : "Quote Detail Workspace"}
           </p>
-          <h1 style={{ margin: "6px 0" }}>Quote {order.order_number}</h1>
+          <h1 style={{ margin: "6px 0" }}>
+            {requestStage.storefrontRequest ? "Request" : "Quote"} {order.order_number}
+          </h1>
           <p style={{ margin: 0, color: "#475569", maxWidth: "760px" }}>
             {archived
               ? "Historical quote record for reference, context, and recovery back into the active quote workflow."
               : canceled
               ? "Canceled quote record with preserved operational and financial history for historical review."
+              : requestStage.storefrontRequest
+              ? "Intake-aware workspace for request completion, review readiness, artwork handling, quote preparation, and eventual production release."
               : "Focused operational workspace for approvals, readiness, pricing, artwork, and production release."}
           </p>
         </div>
@@ -551,7 +671,7 @@ export default function QuoteDetail() {
           >
             {archived ? "Back to Archived Quotes" : canceled ? "Back to Canceled Orders" : "Back to Quotes"}
           </Link>
-          {!archived && !canceled && canAdvanceQuoteStatus(order.quote_status) ? (
+          {!archived && !canceled && canAdvanceCurrentQuote ? (
             <button
               type="button"
               data-testid="quote-detail-advance-status"
@@ -569,7 +689,7 @@ export default function QuoteDetail() {
               Mark {getNextQuoteStatus(order.quote_status)}
             </button>
           ) : null}
-          {!archived && !canceled && isQuoteReadyForProduction(order.quote_status) ? (
+          {!archived && !canceled && canReleaseCurrentQuote ? (
             <button
               type="button"
               data-testid="quote-detail-release-to-production"
@@ -814,7 +934,7 @@ export default function QuoteDetail() {
                 eyebrow="Artwork And Approval"
                 title="Artwork and approval"
                 description="Artwork files, approval state, and readiness remain available without keeping the whole workspace open."
-                summary={`${approvalStatus} • ${artworkNames.length} artwork file${artworkNames.length === 1 ? "" : "s"} • ${productionReadiness.checks.find((check) => check.label === "Artwork")?.detail || "No artwork required"}`}
+                summary={`${approvalStatus} • ${artworkNames.length} artwork file${artworkNames.length === 1 ? "" : "s"} • ${artworkStatus}`}
                 background="#fcfcfb"
               >
                 <div
@@ -831,10 +951,7 @@ export default function QuoteDetail() {
                   />
                   <DetailItem
                     label="Artwork Readiness"
-                    value={
-                      productionReadiness.checks.find((check) => check.label === "Artwork")?.detail ||
-                      "No artwork required"
-                    }
+                    value={artworkStatus}
                   />
                   <DetailItem label="Deposit Status" value={depositStatus} />
                 </div>
@@ -902,10 +1019,18 @@ export default function QuoteDetail() {
         <div style={{ display: "grid", gap: "18px" }}>
         <WorkspaceCard
           eyebrow="Workspace Focus"
-          title={canceled ? "Canceled quote record" : "Operational quote management"}
+          title={
+            canceled
+              ? "Canceled quote record"
+              : requestStage.storefrontRequest
+              ? "Customer request intake"
+              : "Operational quote management"
+          }
           description={
             canceled
               ? "This record is preserved for review, but operational release actions are disabled because the workflow was intentionally terminated."
+              : requestStage.storefrontRequest
+              ? "This record starts as a customer intake request. Intake completion, artwork intent, quote preparation, approval, deposit, and production release happen in sequence."
               : "This route keeps quote-critical decisions visible at all times. It does not collapse like the list view."
           }
           background="#f8fafc"
@@ -916,8 +1041,23 @@ export default function QuoteDetail() {
             </StatusPill>
             {archived ? <StatusPill>Archived</StatusPill> : null}
             {canceled ? <StatusPill tone="danger">Workflow stopped</StatusPill> : null}
-            <StatusPill tone={depositStatus === "Deposit received" ? "success" : "warning"}>
+            <StatusPill tone={depositStatus === "Deposit Received" ? "success" : "warning"}>
               {depositStatus}
+            </StatusPill>
+            <StatusPill
+              tone={
+                requestStage.storefrontRequest
+                  ? requestStage.completionStatus === "ready_for_review"
+                    ? "success"
+                    : requestStage.completionStatus === "artwork_assistance_required"
+                    ? "default"
+                    : "warning"
+                  : approvalStatus === "Approved"
+                  ? "success"
+                  : "warning"
+              }
+            >
+              {requestStage.storefrontRequest ? requestStage.intakeLifecycleLabel : approvalStatus}
             </StatusPill>
             <StatusPill tone={approvalStatus === "Approved" ? "success" : "warning"}>
               {approvalStatus}
@@ -936,12 +1076,19 @@ export default function QuoteDetail() {
           >
             <DetailItem label="Customer" value={order.customer_name} />
             <DetailItem label="Company" value={order.customer_company} />
+            {requestStage.storefrontRequest ? (
+              <DetailItem label="Request Lifecycle" value={requestStage.intakeLifecycleLabel} />
+            ) : null}
             <DetailItem label="Quote Status" value={order.quote_status} />
             <DetailItem label="Production Readiness" value={readinessSummary} />
             <DetailItem label="Customer Approval" value={approvalStatus} />
             <DetailItem label="Deposit" value={depositStatus} />
             <DetailItem label="Source" value={order.source} />
             <DetailItem label="Due Date" value={order.due_date} />
+            <DetailItem label="Request Created" value={requestCreatedAt} />
+            <DetailItem label="Customer Completed" value={customerCompletedAt} />
+            <DetailItem label="Artwork Received" value={artworkReceivedAt} />
+            <DetailItem label="Last Activity" value={lastActivityAt} />
             <DetailItem
               label="Workflow Visibility"
               value={
@@ -949,14 +1096,14 @@ export default function QuoteDetail() {
                   ? "Removed from active workflow"
                   : canceled
                   ? "Canceled operational workflow"
-                  : "Active operational workflow"
+                  : requestStage.workflowVisibility
               }
             />
             {archived ? <DetailItem label="Archived At" value={archivedAt} /> : null}
             {canceled ? <DetailItem label="Canceled At" value={canceledAt} /> : null}
             <DetailItem
               label="Artwork"
-              value={productionReadiness.checks.find((check) => check.label === "Artwork")?.detail || "No artwork required"}
+              value={artworkStatus}
             />
             <DetailItem label="Next workflow step" value={nextStep} />
           </div>
@@ -1130,11 +1277,17 @@ export default function QuoteDetail() {
           }}
         >
           <WorkspaceCard
-            eyebrow="Readiness"
-            title="Production release requirements"
+            eyebrow={requestStage.storefrontRequest ? "Request Readiness" : "Readiness"}
+            title={
+              requestStage.storefrontRequest
+                ? "Intake and quote readiness"
+                : "Production release requirements"
+            }
             description={
               productionReadiness.ready
                 ? "All release requirements are satisfied."
+                : requestStage.storefrontRequest
+                ? "This request is still moving through intake and quote preparation. Resolve the remaining requirements below before moving it into production."
                 : "Resolve the remaining requirements below before moving this quote into production."
             }
             background={productionReadiness.ready ? "#ecfdf5" : "#fff7ed"}
@@ -1172,6 +1325,8 @@ export default function QuoteDetail() {
               >
                 {productionReadiness.ready
                   ? "This quote has everything needed to move into production."
+                  : requestStage.storefrontRequest
+                  ? "This section shows what is still required before this request can become a production-ready quote."
                   : "This section shows what is still required before this quote can move into production."}
               </p>
             </div>
@@ -1225,8 +1380,12 @@ export default function QuoteDetail() {
 
           <WorkspaceCard
             eyebrow="Release Workflow"
-            title="Move the quote forward"
-            description="Production release actions stay visible here instead of being hidden behind an accordion preview."
+            title={requestStage.storefrontRequest ? "Move the request forward" : "Move the quote forward"}
+            description={
+              requestStage.storefrontRequest
+                ? "Customer intake and quote progression stay visible here, but operational release should only appear once the request has actually cleared readiness."
+                : "Production release actions stay visible here instead of being hidden behind an accordion preview."
+            }
           >
             <div
               style={{
@@ -1241,12 +1400,18 @@ export default function QuoteDetail() {
               <DetailItem label="Next action" value={nextStep} />
               <DetailItem
                 label="Release gate"
-                value={productionReadiness.ready ? "Eligible for production release" : "Blocked by requirements"}
+                value={
+                  productionReadiness.ready
+                    ? "Eligible for production release"
+                    : requestStage.storefrontRequest
+                    ? "Blocked by intake or quote requirements"
+                    : "Blocked by requirements"
+                }
               />
             </div>
 
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-              {canAdvanceQuoteStatus(order.quote_status) ? (
+              {canAdvanceCurrentQuote ? (
                 <button
                   type="button"
                   onClick={handleAdvanceQuote}
@@ -1265,7 +1430,7 @@ export default function QuoteDetail() {
                   Mark {getNextQuoteStatus(order.quote_status)}
                 </button>
               ) : null}
-              {isQuoteReadyForProduction(order.quote_status) ? (
+              {canReleaseCurrentQuote ? (
                 <button
                   type="button"
                   onClick={handleReleaseToProduction}
@@ -1322,7 +1487,7 @@ export default function QuoteDetail() {
             <DetailItem label="Artwork approval" value={approvalStatus} />
             <DetailItem
               label="Artwork readiness"
-              value={productionReadiness.checks.find((check) => check.label === "Artwork")?.detail || "No artwork required"}
+              value={artworkStatus}
             />
           </div>
           {order.notes ? (

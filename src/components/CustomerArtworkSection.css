@@ -24,10 +24,21 @@
   gap: 14px;
 }
 
+.customer-artwork-grid-single {
+  grid-template-columns: minmax(280px, 420px);
+  justify-content: center;
+}
+
+.customer-artwork-grid-pair {
+  grid-template-columns: repeat(2, minmax(220px, 320px));
+  justify-content: center;
+}
+
 .customer-artwork-card {
-  border: 1px solid #e2e8f0;
+  position: relative;
+  border: 1px solid #d6e0eb;
   border-radius: 16px;
-  background: #f8fafc;
+  background: linear-gradient(180deg, #fbfdff 0%, #f8fafc 100%);
   min-width: 0;
   overflow: hidden;
   transition:
@@ -37,24 +48,32 @@
     background-color 160ms ease;
 }
 
+.customer-artwork-card-selectable {
+  cursor: pointer;
+}
+
 .customer-artwork-card:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
-  transform: translateY(-1px);
+  border-color: #94a3b8;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.1);
+  transform: translateY(-2px);
   background: #ffffff;
 }
 
-.customer-artwork-preview-button {
-  display: block;
-  width: 100%;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
+.customer-artwork-card-selected {
+  border-color: #0f766e;
+  box-shadow:
+    0 0 0 2px rgba(15, 118, 110, 0.22),
+    0 18px 34px rgba(15, 118, 110, 0.18);
+  background: linear-gradient(180deg, #f4fffd 0%, #ebfffb 100%);
+}
+
+.customer-artwork-card-selected:hover {
+  border-color: #0f766e;
+  background: linear-gradient(180deg, #f4fffd 0%, #ebfffb 100%);
 }
 
 .customer-artwork-preview-shell {
+  position: relative;
   aspect-ratio: 1 / 1;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(241, 245, 249, 0.92)),
@@ -64,6 +83,56 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+
+.customer-artwork-card-selected .customer-artwork-preview-shell {
+  border-bottom-color: rgba(15, 118, 110, 0.2);
+  background:
+    linear-gradient(180deg, rgba(240, 253, 250, 0.95), rgba(204, 251, 241, 0.88)),
+    #ffffff;
+}
+
+.customer-artwork-selection-indicator {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+  color: #334155;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.customer-artwork-card-selected .customer-artwork-selection-indicator {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(15, 118, 110, 0.28);
+}
+
+.customer-artwork-selection-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.2);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.customer-artwork-card-selected .customer-artwork-selection-check {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .customer-artwork-preview-image {
@@ -111,6 +180,10 @@
   padding: 12px;
   display: grid;
   gap: 10px;
+}
+
+.customer-artwork-card-selected .customer-artwork-file-name {
+  color: #115e59;
 }
 
 .customer-artwork-card-copy {
@@ -170,6 +243,10 @@
 }
 
 .customer-artwork-action-link {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   text-decoration: none;
   font-size: 12px;
   font-weight: 700;
@@ -188,6 +265,42 @@
   background: #0f172a;
   border-color: #0f172a;
   color: #ffffff;
+}
+
+.customer-artwork-action-link:focus-visible,
+.customer-artwork-card-selectable:focus-visible {
+  outline: 2px solid #0f766e;
+  outline-offset: 2px;
+}
+
+.customer-artwork-selection-action {
+  background: #ecfeff;
+  border-color: #7dd3fc;
+  color: #155e75;
+}
+
+.customer-artwork-selection-action.is-selected {
+  background: #ccfbf1;
+  border-color: #5eead4;
+  color: #115e59;
+}
+
+.customer-artwork-selection-action.is-selected:hover {
+  background: #99f6e4;
+  border-color: #2dd4bf;
+  color: #115e59;
+}
+
+.customer-artwork-secondary-button {
+  border: 1px solid #cbd5e1;
+  cursor: pointer;
+}
+
+@media (max-width: 720px) {
+  .customer-artwork-grid-single,
+  .customer-artwork-grid-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .customer-artwork-action-link.is-disabled {

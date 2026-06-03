@@ -3,10 +3,17 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import PlacementOptionList from "../components/PlacementOptionList";
 import {
+  clearOrderPreviewDraft,
+  getOrderPreviewDraft,
+  saveOrderPreviewDraft,
+} from "../lib/orderPreviewDraftStore";
+import {
   buildPlacementPricingOptions,
   getDefaultDecorationType,
   resolveCustomerOrderProduct,
 } from "../lib/orderConfiguration";
+import { submitProjectRequest } from "../lib/projectRequestSubmission";
+import { getActiveCustomerSession } from "../lib/customerSessionStore";
 import { generateQuoteSnapshot } from "../lib/quoteEngine";
 import { useStoredProducts } from "../lib/productsStore";
 
@@ -19,12 +26,31 @@ function formatPrice(value, isAvailable = true) {
   return money(value);
 }
 
+const MAX_PERSISTED_ARTWORK_BYTES = 350 * 1024;
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function OrderPreview() {
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = useRef(null);
-
-  const passedState = useMemo(() => location.state || {}, [location.state]);
+  const storedDraft = useMemo(() => getOrderPreviewDraft(), []);
+  const routeState = useMemo(() => location.state || {}, [location.state]);
+  const shouldRestoreDraft =
+    !routeState.productId &&
+    !routeState.garmentId &&
+    Boolean(storedDraft?.projectState);
+  const passedState = useMemo(
+    () => (shouldRestoreDraft ? storedDraft.projectState : routeState),
+    [routeState, shouldRestoreDraft, storedDraft]
+  );
   const products = useStoredProducts();
   const selectedProduct = useMemo(
     () => resolveCustomerOrderProduct(products, passedState),
@@ -54,11 +80,37 @@ export default function OrderPreview() {
   const imageSrc = passedState.imageSrc || selectedProduct?.image || "";
   const selectedColor = passedState.selectedColor || "Black";
   const selectedSize = passedState.selectedSize || "M";
+  const restoredArtwork = passedState.artwork || null;
 
-  const [requestedPlacements, setRequestedPlacements] = useState([]);
-  const [notes, setNotes] = useState("");
-  const [artwork, setArtwork] = useState(null);
+  const [requestedPlacements, setRequestedPlacements] = useState(
+    Array.isArray(passedState.requestedPlacements) ? passedState.requestedPlacements : []
+  );
+  const [notes, setNotes] = useState(passedState.notes || "");
+  const [artwork, setArtwork] = useState(() => {
+    if (!restoredArtwork?.name) return null;
+
+    return {
+      name: restoredArtwork.name,
+      previewUrl: restoredArtwork.dataUrl || restoredArtwork.previewUrl || "",
+      type: restoredArtwork.type || "",
+      size: restoredArtwork.size || 0,
+      dataUrl: restoredArtwork.dataUrl || "",
+      requiresReupload: restoredArtwork.requiresReupload === true,
+      restored: true,
+    };
+  });
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
+  const [submitState, setSubmitState] = useState("idle");
+  const [submitMessage, setSubmitMessage] = useState(
+    shouldRestoreDraft && getActiveCustomerSession()
+      ? "Your project details were restored. Review and submit your request."
+      : ""
+  );
+  const [artworkWarning, setArtworkWarning] = useState(
+    restoredArtwork?.requiresReupload
+      ? "Artwork details were restored, but the original file must be re-uploaded before submission."
+      : ""
+  );
 
   const selectedPlacements = useMemo(() => {
     if (!allowedPlacements.length) return [];
@@ -130,14 +182,133 @@ export default function OrderPreview() {
       file,
       name: file.name,
       previewUrl,
+      type: file.type || "",
+      size: file.size || 0,
+      requiresReupload: false,
     });
+    setArtworkWarning("");
   }
 
-  function handleSubmit() {
-    navigate("/order-submitted", {
+  async function buildDraftArtwork() {
+    if (!artwork?.name) return null;
+
+    if (artwork.dataUrl) {
+      return {
+        name: artwork.name,
+        type: artwork.type || "",
+        size: artwork.size || 0,
+        dataUrl: artwork.dataUrl,
+        previewUrl: artwork.previewUrl || artwork.dataUrl,
+        requiresReupload: artwork.requiresReupload === true,
+      };
+    }
+
+    if (!artwork.file) {
+      return {
+        name: artwork.name,
+        type: artwork.type || "",
+        size: artwork.size || 0,
+        dataUrl: "",
+        previewUrl: "",
+        requiresReupload: artwork.requiresReupload === true,
+      };
+    }
+
+    if (Number(artwork.file.size || 0) > MAX_PERSISTED_ARTWORK_BYTES) {
+      return {
+        name: artwork.file.name,
+        type: artwork.file.type || "",
+        size: artwork.file.size || 0,
+        dataUrl: "",
+        previewUrl: "",
+        requiresReupload: true,
+      };
+    }
+
+    try {
+      const dataUrl = await fileToDataUrl(artwork.file);
+      return {
+        name: artwork.file.name,
+        type: artwork.file.type || "",
+        size: artwork.file.size || 0,
+        dataUrl: typeof dataUrl === "string" ? dataUrl : "",
+        previewUrl: typeof dataUrl === "string" ? dataUrl : "",
+        requiresReupload: false,
+      };
+    } catch (error) {
+      console.error("Unable to preserve artwork during auth redirect", error);
+      return {
+        name: artwork.file.name,
+        type: artwork.file.type || "",
+        size: artwork.file.size || 0,
+        dataUrl: "",
+        previewUrl: "",
+        requiresReupload: true,
+      };
+    }
+  }
+
+  async function handleSubmit() {
+    if (!selectedProduct) {
+      setSubmitState("error");
+      setSubmitMessage("Choose a product before submitting a request.");
+      return;
+    }
+
+    const customerSession = getActiveCustomerSession();
+    const draftArtwork = await buildDraftArtwork();
+    const projectState = {
+      garmentId: passedState.garmentId || "",
+      productId: selectedProduct?.id || passedState.productId || "",
+      garmentName,
+      brand,
+      category,
+      description,
+      imageSrc,
+      selectedColor,
+      selectedSize,
+      quantity,
+      requestedPlacements: selectedPlacements,
+      notes,
+      artwork: draftArtwork,
+    };
+
+    if (!customerSession) {
+      saveOrderPreviewDraft({
+        projectState,
+        requiresAuth: true,
+        savedAt: new Date().toISOString(),
+      });
+      navigate(`/login?redirectTo=${encodeURIComponent("/order-preview")}`);
+      return;
+    }
+
+    setSubmitState("submitting");
+    setSubmitMessage("");
+
+    try {
+      const { createdOrder, quote } = await submitProjectRequest({
+        customerSession,
+        selectedProduct,
+        category,
+        imageSrc,
+        contactName: customerSession.displayName || "",
+        contactPhone: customerSession.phone || "",
+        quantity,
+        selectedColor,
+        selectedSize,
+        selectedPlacements,
+        decorationType: defaultDecorationType,
+        notes,
+        artwork: draftArtwork,
+        source: "Customer Project Request",
+      });
+
+      clearOrderPreviewDraft();
+
+      navigate("/order-submitted", {
       state: {
-        garmentId: passedState.garmentId || "",
-        productId: selectedProduct?.id || passedState.productId || "",
+        createdOrderNumber: createdOrder.order_number,
         garmentName,
         brand,
         category,
@@ -149,11 +320,22 @@ export default function OrderPreview() {
         placements: selectedPlacements,
         placement: selectedPlacements[0] || "",
         notes,
-        artworkName: artwork?.name || "",
+        artworkName: draftArtwork?.name || "",
         decorationType: defaultDecorationType,
-        quote: liveQuote,
+        quote,
       },
-    });
+      });
+    } catch (error) {
+      console.error("Unable to submit project request", error);
+      setSubmitState("error");
+      setSubmitMessage(
+        error instanceof Error && error.message
+          ? error.message
+          : "The project request could not be created. Try again."
+      );
+    } finally {
+      setSubmitState((current) => (current === "submitting" ? "idle" : current));
+    }
   }
 
   return (
@@ -308,7 +490,42 @@ export default function OrderPreview() {
             </p>
           </div>
 
-          {artwork?.previewUrl && artwork.file?.type?.startsWith("image/") && (
+          {submitMessage ? (
+            <div
+              style={{
+                width: "100%",
+                padding: "16px 18px",
+                borderRadius: "18px",
+                background: submitState === "error" ? "#fff5f5" : "#ecfdf5",
+                border: submitState === "error" ? "1px solid #fecaca" : "1px solid #a7f3d0",
+                color: submitState === "error" ? "#b91c1c" : "#166534",
+                fontWeight: 700,
+                lineHeight: 1.6,
+              }}
+            >
+              {submitMessage}
+            </div>
+          ) : null}
+
+          {artworkWarning ? (
+            <div
+              style={{
+                width: "100%",
+                padding: "16px 18px",
+                borderRadius: "18px",
+                background: "#fff7ed",
+                border: "1px solid #fed7aa",
+                color: "#9a3412",
+                fontWeight: 700,
+                lineHeight: 1.6,
+              }}
+            >
+              {artworkWarning}
+            </div>
+          ) : null}
+
+          {artwork?.previewUrl &&
+          (artwork.file?.type?.startsWith("image/") || artwork.type?.startsWith("image/")) ? (
             <div
               style={{
                 width: "100%",
@@ -342,7 +559,7 @@ export default function OrderPreview() {
                 }}
               />
             </div>
-          )}
+          ) : null}
         </div>
 
         <div
@@ -582,19 +799,21 @@ export default function OrderPreview() {
             <button
               type="button"
               onClick={handleSubmit}
+              disabled={submitState === "submitting"}
               style={{
                 background: "#171717",
                 color: "#ffffff",
                 padding: "12px 16px",
                 borderRadius: "12px",
                 border: "none",
-                cursor: "pointer",
+                cursor: submitState === "submitting" ? "wait" : "pointer",
                 fontWeight: "700",
                 boxShadow: "0 8px 18px rgba(0,0,0,0.08)",
                 fontSize: "14px",
+                opacity: submitState === "submitting" ? 0.8 : 1,
               }}
             >
-              Submit Order Request
+              {submitState === "submitting" ? "Submitting..." : "Submit Order Request"}
             </button>
 
             <button

@@ -212,6 +212,74 @@ export default function Home() {
             </Link>
           </section>
 
+          <section
+            style={{
+              marginTop: "28px",
+              borderRadius: "26px",
+              padding: "22px 24px",
+              background:
+                "linear-gradient(135deg, rgba(15,118,110,0.08) 0%, rgba(248,250,252,0.98) 70%)",
+              border: "1px solid #dbe4ee",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "18px",
+              flexWrap: "wrap",
+            }}
+          >
+            <div
+              style={{
+                display: "grid",
+                gap: "8px",
+                maxWidth: "760px",
+              }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "12px",
+                  fontWeight: 900,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: "#0f766e",
+                }}
+              >
+                Custom Work
+              </p>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "18px",
+                  lineHeight: 1.5,
+                  color: "#0f172a",
+                }}
+              >
+                Need teamwear, uniforms, screen printing, embroidery, or an artwork-based apparel
+                project? Start with any product, add it to your request, and complete artwork
+                details after account login, or go directly to the project overview.
+              </p>
+            </div>
+
+            <Link
+              to="/start-project"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: "46px",
+                borderRadius: "999px",
+                padding: "0 18px",
+                textDecoration: "none",
+                fontWeight: 800,
+                color: "#ffffff",
+                background: "linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)",
+                boxShadow: "0 16px 28px rgba(15, 118, 110, 0.16)",
+              }}
+            >
+              Project Overview
+            </Link>
+          </section>
+
           <section className="storefront-section" id="storefront-featured">
             <div className="storefront-section-header">
               <div>

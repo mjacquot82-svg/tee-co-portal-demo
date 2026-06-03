@@ -92,11 +92,15 @@ export default function Login() {
   const redirectTo = searchParams.get("redirectTo");
   const resolvedRedirectTarget =
     redirectTo === "/my-orders" ||
+    redirectTo === "/order-preview" ||
+    redirectTo === "/checkout" ||
     (redirectTo && redirectTo.startsWith("/portal")) ||
     (redirectTo && redirectTo.startsWith("/admin"))
       ? redirectTo
       : "/admin";
   const targetIsAdminRoute = resolvedRedirectTarget.startsWith("/admin");
+  const targetIsProjectRequestRoute = resolvedRedirectTarget === "/order-preview";
+  const targetIsCheckoutRoute = resolvedRedirectTarget === "/checkout";
   const targetIsCustomerRoute =
     resolvedRedirectTarget === "/my-orders" ||
     resolvedRedirectTarget.startsWith("/portal");
@@ -178,6 +182,18 @@ export default function Login() {
       return;
     }
 
+    if (targetIsProjectRequestRoute) {
+      if (!activeCustomerSession) return;
+      navigate(resolvedRedirectTarget, { replace: true });
+      return;
+    }
+
+    if (targetIsCheckoutRoute) {
+      if (!activeCustomerSession) return;
+      navigate(resolvedRedirectTarget, { replace: true });
+      return;
+    }
+
     if (targetIsCustomerRoute) {
       if (!activeCustomerSession) return;
       navigate(resolvedRedirectTarget, { replace: true });
@@ -213,6 +229,8 @@ export default function Login() {
     resolvedRedirectTarget,
     routeAccessUser,
     targetIsAdminRoute,
+    targetIsCheckoutRoute,
+    targetIsProjectRequestRoute,
     targetIsCustomerRoute,
     targetNeedsManagement,
   ]);
@@ -244,9 +262,12 @@ export default function Login() {
       return;
     }
 
-    const nextTarget = canAccessOperationalWorkspace(resolvedRedirectTarget, loginResult.user)
-      ? resolvedRedirectTarget
-      : "/admin";
+    const nextTarget =
+      canAccessOperationalWorkspace(resolvedRedirectTarget, loginResult.user) &&
+      !targetIsProjectRequestRoute &&
+      !targetIsCheckoutRoute
+        ? resolvedRedirectTarget
+        : "/admin";
 
     pushAuthDiagnostic("login-redirect", {
       actorType: "staff",
@@ -292,7 +313,7 @@ export default function Login() {
 
     const nextTarget =
       loginResult.actorType === "customer"
-        ? targetIsCustomerRoute
+        ? targetIsCustomerRoute || targetIsProjectRequestRoute || targetIsCheckoutRoute
           ? resolvedRedirectTarget === "/my-orders"
             ? "/portal/orders"
             : resolvedRedirectTarget
@@ -476,7 +497,11 @@ export default function Login() {
               <p style={{ margin: 0, color: "#64748b", fontSize: "13px", lineHeight: 1.6 }}>
                 New customer?{" "}
                 <Link
-                  to="/signup"
+                  to={
+                    redirectTo
+                      ? `/signup?redirectTo=${encodeURIComponent(redirectTo)}`
+                      : "/signup"
+                  }
                   style={{
                     color: "#0f766e",
                     fontWeight: 800,

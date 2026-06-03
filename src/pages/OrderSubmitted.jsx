@@ -5,6 +5,7 @@ export default function OrderSubmitted() {
   const location = useLocation();
   const state = location.state || {};
   const quote = state.quote || null;
+  const createdOrderNumber = state.createdOrderNumber || "";
 
   const garmentName = state.garmentName || "Selected Garment";
   const brand = state.brand || "Tee & Co";
@@ -14,6 +15,66 @@ export default function OrderSubmitted() {
   const quantity = state.quantity || 1;
   const artworkName = state.artworkName || "No artwork uploaded";
   const notes = state.notes || "";
+
+  if (!createdOrderNumber) {
+    return (
+      <div
+        style={{
+          maxWidth: "860px",
+          margin: "0 auto",
+          padding: "16px 20px 28px",
+          fontFamily:
+            'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        }}
+      >
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: "22px",
+            padding: "28px",
+            border: "1px solid #e7e5e4",
+            boxShadow: "0 14px 32px rgba(0,0,0,0.06)",
+          }}
+        >
+          <p
+            style={{
+              margin: "0 0 8px 0",
+              fontSize: "12px",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "#78716c",
+            }}
+          >
+            Project Request
+          </p>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: "30px",
+              lineHeight: 1.1,
+              letterSpacing: "-0.02em",
+              color: "#171717",
+            }}
+          >
+            Project request could not be verified
+          </h1>
+          <p
+            style={{
+              marginTop: "16px",
+              marginBottom: 0,
+              color: "#57534e",
+              fontSize: "15px",
+              lineHeight: 1.6,
+              maxWidth: "720px",
+            }}
+          >
+            Sign in to your customer account and submit the request from the project preview page
+            to create a real quote request.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -100,6 +161,20 @@ export default function OrderSubmitted() {
           been sent to Tee &amp; Co. The shop can now review the order before
           approval and production.
         </p>
+
+        {createdOrderNumber ? (
+          <p
+            style={{
+              marginTop: "-8px",
+              marginBottom: "22px",
+              color: "#0f172a",
+              fontSize: "14px",
+              fontWeight: 700,
+            }}
+          >
+            Project request reference: {createdOrderNumber}
+          </p>
+        ) : null}
 
         <div
           style={{
@@ -355,7 +430,7 @@ export default function OrderSubmitted() {
               fontSize: "14px",
             }}
           >
-            View My Orders
+            View My Requests
           </Link>
 
           <Link

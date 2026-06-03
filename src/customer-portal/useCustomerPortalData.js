@@ -7,6 +7,7 @@ import {
   findCustomerProfileForSession,
   getCustomerInvoices,
   getCustomerQuotes,
+  getCustomerRequests,
   getCustomerScopedOrders,
 } from "../lib/customerPortalData";
 import { useStoredCustomers } from "../lib/customersStore";
@@ -18,6 +19,7 @@ const EMPTY_PORTAL_DATA = Object.freeze({
   activeOrders: Object.freeze([]),
   archivedOrders: Object.freeze([]),
   allOrders: Object.freeze([]),
+  requests: Object.freeze([]),
   quotes: Object.freeze([]),
   invoices: Object.freeze([]),
   summary: EMPTY_PORTAL_SUMMARY,
@@ -49,6 +51,7 @@ export function useCustomerPortalData(session) {
       orders,
       customers,
     });
+    const requests = getCustomerRequests(scopedOrders);
     const activeOrders = getCustomerActiveOrders(scopedOrders);
     const archivedOrders = getCustomerArchivedOrders(scopedOrders);
     const quotes = getCustomerQuotes(scopedOrders);
@@ -61,6 +64,7 @@ export function useCustomerPortalData(session) {
       customerCount: customers.length,
       orderCount: orders.length,
       scopedOrderCount: scopedOrders.length,
+      requestCount: requests.length,
       activeOrderCount: activeOrders.length,
       archivedOrderCount: archivedOrders.length,
       quoteCount: quotes.length,
@@ -75,6 +79,7 @@ export function useCustomerPortalData(session) {
       activeOrders,
       archivedOrders,
       allOrders: scopedOrders,
+      requests,
       quotes,
       invoices,
       summary,

@@ -1,8 +1,9 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import { garments } from "../data/garments";
 import { findProductForGarment } from "../lib/orderConfiguration";
+import { addCartItem } from "../lib/cartStore";
 import {
   areStoredProductsReady,
   resolveProductBasePrice,
@@ -27,6 +28,7 @@ function formatBasePrice(value) {
 }
 
 export default function GarmentView() {
+  const navigate = useNavigate();
   const { garmentId } = useParams();
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedSize, setSelectedSize] = useState("");
@@ -185,6 +187,23 @@ export default function GarmentView() {
 
   const categorySlug = storefrontCategory?.id || normalizeCategorySlug(detailCategory) || "catalog";
   const orderTotal = Number.isFinite(startingPrice) && startingPrice > 0 ? startingPrice * quantity : null;
+
+  function handleAddToCart() {
+    addCartItem({
+      productId: selectedProduct?.id || garment?.product_id || "",
+      garmentId: garment?.garment_id || "",
+      name: detailTitle,
+      brand: detailBrand,
+      category: detailCategory,
+      imageSrc,
+      selectedColor: currentSelectedColor,
+      selectedSize: currentSelectedSize,
+      quantity,
+      unitPrice: startingPrice,
+    });
+
+    navigate("/cart");
+  }
 
   return (
     <div
@@ -650,38 +669,80 @@ export default function GarmentView() {
           <div
             style={{
               marginTop: "20px",
-              display: "flex",
-              gap: "10px",
-              flexWrap: "wrap",
+              display: "grid",
+              gap: "14px",
             }}
           >
-            <Link
-              to="/order-preview"
-              state={{
-                garmentId: garment?.garment_id || "",
-                productId: selectedProduct?.id || garment?.product_id || "",
-                garmentName: detailTitle,
-                brand: detailBrand,
-                category: detailCategory,
-                description: detailDescription,
-                imageSrc,
-                selectedColor: currentSelectedColor,
-                selectedSize: currentSelectedSize,
-                quantity,
-              }}
+            <div
               style={{
-                background: "#171717",
-                color: "#ffffff",
-                padding: "12px 16px",
-                borderRadius: "12px",
-                textDecoration: "none",
-                fontWeight: "700",
-                boxShadow: "0 8px 18px rgba(0,0,0,0.08)",
-                fontSize: "14px",
+                display: "grid",
+                gap: "12px",
               }}
             >
-              Continue Order
-            </Link>
+              <section
+                style={{
+                  borderRadius: "20px",
+                  border: "1px solid #dbe4ee",
+                  background: "#f8fafc",
+                  padding: "18px",
+                  display: "grid",
+                  gap: "10px",
+                }}
+              >
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "12px",
+                    fontWeight: 900,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: "#334155",
+                  }}
+                >
+                  Request Builder
+                </p>
+                <h2
+                  style={{
+                    margin: 0,
+                    color: "#0f172a",
+                    fontSize: "22px",
+                    lineHeight: 1.1,
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  Add To Request
+                </h2>
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#475569",
+                    lineHeight: 1.6,
+                    fontSize: "14px",
+                  }}
+                >
+                  Add this product to your request and keep browsing if you need multiple items.
+                  You will review and submit the request in the next step.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleAddToCart}
+                  style={{
+                    justifySelf: "start",
+                    minHeight: "44px",
+                    borderRadius: "12px",
+                    border: "none",
+                    padding: "0 16px",
+                    background: "#171717",
+                    color: "#ffffff",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    boxShadow: "0 12px 22px rgba(15, 23, 42, 0.12)",
+                  }}
+                >
+                  Add To Request
+                </button>
+              </section>
+            </div>
 
             <Link
               to="/"

@@ -165,6 +165,15 @@ function normalizeOrderTimestamps(order = {}) {
 }
 
 function normalizeStoredOrder(order = {}) {
+  const source = String(order.source || "").trim();
+  const requestType = String(order.request_type || "").trim();
+  const isLegacyRequestBuilderRecord =
+    source === "Storefront" &&
+    requestType === "Standard Purchase" &&
+    Array.isArray(order.cart_items) &&
+    order.cart_items.length > 0 &&
+    !order.customer_artwork_id &&
+    (!Array.isArray(order.artwork_files) || order.artwork_files.length === 0);
   const assignedToStaffId = order.assigned_to_staff_id || "";
   const assignedToStaffName = order.assigned_to_staff_name || "";
   const hasAssignedStaff = Boolean(assignedToStaffId);
@@ -176,7 +185,9 @@ function normalizeStoredOrder(order = {}) {
     order.production_owner_staff_role || order.assigned_to_staff_role || "";
   const status = normalizeOperationalStatus(order.status || "New");
   const quoteStatus = normalizeQuoteStatus(
-    order.quote_status || (order.operational_visible === false ? "Draft" : "Ready For Production")
+    isLegacyRequestBuilderRecord
+      ? "Draft"
+      : order.quote_status || (order.operational_visible === false ? "Draft" : "Ready For Production")
   );
   const artworkFiles = getOrderArtworkFiles(order);
   const placements = normalizePlacements(order);
@@ -209,6 +220,19 @@ function normalizeStoredOrder(order = {}) {
 
   return normalizeOrderFinancials({
     ...order,
+    source: isLegacyRequestBuilderRecord ? "Storefront Request" : source || order.source || "",
+    request_type: isLegacyRequestBuilderRecord ? "Product Request" : requestType || order.request_type || "",
+    request_completion_status:
+      String(
+        order.request_completion_status ||
+          (isLegacyRequestBuilderRecord
+            ? (order.customer_artwork_id ||
+                (Array.isArray(order.artwork_files) && order.artwork_files.length > 0)
+                  ? "ready_for_review"
+                  : "pending_completion")
+            : "")
+      ).trim() || "",
+    artwork_intent: String(order.artwork_intent || "").trim(),
     ...timestamps,
     customer_id:
       normalizeCustomerId(order.customer_id) || resolveCustomerForRecord(order)?.id || "",
@@ -255,11 +279,15 @@ function normalizeStoredOrder(order = {}) {
         ? order.rush
         : false,
     production_ready:
-      typeof order.production_ready === "boolean"
+      isLegacyRequestBuilderRecord
+        ? false
+        : typeof order.production_ready === "boolean"
         ? order.production_ready
         : isQuoteReadyForProduction(quoteStatus) && isReadyForProductionStatus(status),
     operational_visible:
-      typeof order.operational_visible === "boolean"
+      isLegacyRequestBuilderRecord
+        ? false
+        : typeof order.operational_visible === "boolean"
         ? order.operational_visible
         : isQuoteReadyForProduction(quoteStatus) && isActiveOperationalStatus(status),
     workflow_state: deriveOperationalWorkflowState({
@@ -267,7 +295,9 @@ function normalizeStoredOrder(order = {}) {
       status,
       quote_status: quoteStatus,
       operational_visible:
-        typeof order.operational_visible === "boolean"
+        isLegacyRequestBuilderRecord
+          ? false
+          : typeof order.operational_visible === "boolean"
           ? order.operational_visible
         : isQuoteReadyForProduction(quoteStatus) && isActiveOperationalStatus(status),
       quote_archived: order.quote_archived,
@@ -1492,6 +1522,18 @@ export function recordStoredOrderPayment(orderNumber, paymentInput = {}, options
   const financialOptions = options.financialOptions || {};
   const activeStaff = options.staffUser || getActiveStaffUser();
   const normalizedOrder = normalizeOrderFinancials(order, financialOptions);
+  const isDepositLinkPayment = String(paymentInput.method || "").trim() === "Customer Deposit Link";
+
+  if (
+    isDepositLinkPayment &&
+    Number(normalizedOrder.deposit_amount || 0) > 0 &&
+    Number(normalizedOrder.deposit_applied || 0) >= Number(normalizedOrder.deposit_amount || 0)
+  ) {
+    const error = new Error("Deposit has already been received for this order.");
+    error.code = "DEPOSIT_ALREADY_RECEIVED";
+    throw error;
+  }
+
   const validation = validatePaymentAmount({
     amount: paymentInput.amount,
     remainingBalance: normalizedOrder.balance_due,

@@ -25,6 +25,19 @@ function normalizeName(value) {
   return normalizeText(value).replace(/\s+/g, " ").toLowerCase();
 }
 
+const CUSTOMER_REQUEST_SOURCES = new Set([
+  "Storefront Request",
+  "Customer Portal",
+  "Customer Project Request",
+  "Storefront",
+]);
+
+const CUSTOMER_REQUEST_TYPES = new Set([
+  "Product Request",
+  "Quote Request",
+  "Standard Purchase",
+]);
+
 function sortByRecentActivity(records = []) {
   if (!Array.isArray(records) || records.length === 0) {
     return EMPTY_PORTAL_RECORDS;
@@ -104,6 +117,29 @@ export function getCustomerScopedOrders({
   );
 }
 
+export function isCustomerRequestRecord(order = {}) {
+  const source = normalizeText(order.source);
+  const requestType = normalizeText(order.request_type);
+
+  if (order.operational_visible !== false) {
+    return false;
+  }
+
+  if (!CUSTOMER_REQUEST_SOURCES.has(source)) {
+    return false;
+  }
+
+  if (CUSTOMER_REQUEST_TYPES.has(requestType)) {
+    return true;
+  }
+
+  return (
+    source === "Storefront" &&
+    Array.isArray(order.cart_items) &&
+    order.cart_items.length > 0
+  );
+}
+
 export function isCustomerPortalArchivedOrder(order = {}) {
   const quoteStatus = normalizeText(order.quote_status);
   const pickupStatus = normalizeText(order.pickup_status);
@@ -118,14 +154,26 @@ export function isCustomerPortalArchivedOrder(order = {}) {
 
 export function getCustomerActiveOrders(orders = []) {
   return sortByRecentActivity(
-    orders.filter((order) => !isCustomerPortalArchivedOrder(order))
+    orders.filter(
+      (order) => !isCustomerRequestRecord(order) && !isCustomerPortalArchivedOrder(order)
+    )
   );
 }
 
 export function getCustomerArchivedOrders(orders = []) {
   return sortByRecentActivity(
-    orders.filter((order) => isCustomerPortalArchivedOrder(order))
+    orders.filter(
+      (order) => !isCustomerRequestRecord(order) && isCustomerPortalArchivedOrder(order)
+    )
   );
+}
+
+export function getCustomerRequests(orders = []) {
+  if (!Array.isArray(orders) || orders.length === 0) {
+    return EMPTY_PORTAL_RECORDS;
+  }
+
+  return sortByRecentActivity(orders.filter((order) => isCustomerRequestRecord(order)));
 }
 
 export function getCustomerQuotes(orders = []) {
@@ -135,7 +183,7 @@ export function getCustomerQuotes(orders = []) {
 
   return orders.filter((order) => {
     const quoteStatus = normalizeText(order.quote_status);
-    return Boolean(quoteStatus) && quoteStatus !== "Canceled";
+    return order.operational_visible === false && Boolean(quoteStatus) && quoteStatus !== "Canceled";
   });
 }
 

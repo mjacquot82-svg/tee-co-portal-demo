@@ -2,11 +2,8 @@ import { useMemo, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import { useCatalogLookups } from "../lib/catalogLookupsStore";
-import { ensureCustomerProfile } from "../lib/customerProfileStore";
-import { linkOrderToCustomer } from "../lib/customersStore";
-import { createStoredOrder } from "../lib/ordersStore";
 import { getDefaultDecorationType } from "../lib/orderConfiguration";
-import { generateQuoteSnapshot } from "../lib/quoteEngine";
+import { submitProjectRequest } from "../lib/projectRequestSubmission";
 import {
   buildStorefrontCategories,
   buildStorefrontCategorySelectionValue,
@@ -131,80 +128,30 @@ export default function CustomerPortalRequestOrder() {
       return;
     }
 
-    const normalizedQuantity = Math.max(1, Number(quantity || 1));
-    const profile = await ensureCustomerProfile(customerSession);
     const decorationType = getDefaultDecorationType(selectedProduct);
-    const requestPlacements = resolvedPlacement
-      ? [
-          {
-            placement: resolvedPlacement,
-            decoration_type: decorationType,
-            artwork_id: "",
-            artwork_name: "",
-          },
-        ]
-      : [];
-    const quote = generateQuoteSnapshot(
-      {
-        garment: selectedProduct.name,
-        product_id: selectedProduct.id,
-        qty: normalizedQuantity,
-        placement: resolvedPlacement,
-        placements: requestPlacements,
-        decoration_type: decorationType,
-        setup_fees: [],
-      },
-      selectedProduct
-    );
 
     try {
       setSubmitState("submitting");
       setSubmitMessage("");
 
-      const createdOrder = createStoredOrder({
-        customer_id: profile?.id || "",
-        customer_name: profile?.name || customerSession.displayName || "Customer Account",
-        customer_email: customerSession.email || profile?.email || "",
-        customer_phone: normalizeText(contactPhone) || profile?.phone || "",
-        customer_company: profile?.company || "",
-        contact_name: normalizeText(contactName) || customerSession.displayName || "",
-        product_id: selectedProduct.id,
-        garment: selectedProduct.name,
+      const { createdOrder } = await submitProjectRequest({
+        customerSession,
+        selectedProduct,
         category: getStorefrontProductCategoryLabel(selectedProduct, storefrontCategoryLookups),
-        product_image: getStorefrontProductImage(selectedProduct),
-        product_notes: selectedProduct.notes || "",
+        imageSrc: getStorefrontProductImage(selectedProduct),
+        contactName,
+        contactPhone,
+        quantity,
+        selectedColor: resolvedColor === "Open" ? "" : resolvedColor,
+        selectedSize: resolvedSize === "Open" ? "" : resolvedSize,
+        selectedPlacements: resolvedPlacement ? [resolvedPlacement] : [],
+        decorationType,
+        dueDate: needByDate,
+        notes,
         source: "Customer Portal",
-        request_type: "Quote Request",
-        status: "New",
-        quote_status: "Draft",
-        operational_visible: false,
-        production_ready: false,
-        qty: normalizedQuantity,
-        selected_color: resolvedColor === "Open" ? "" : resolvedColor,
-        selected_size: resolvedSize === "Open" ? "" : resolvedSize,
-        size_breakdown: resolvedSize && resolvedSize !== "Open" ? { [resolvedSize]: normalizedQuantity } : {},
-        placement: resolvedPlacement,
-        placements: requestPlacements,
-        decoration_type: decorationType,
-        due_date: needByDate || "",
-        notes: normalizeText(notes),
-        customer_notes: normalizeText(notes),
-        request_details: normalizeText(notes),
-        payment_history: [],
-        total_paid: 0,
-        amount_paid: 0,
-        balance_due: 0,
-        deposit_amount: 0,
-        deposit_required: false,
-        invoice_status: "Draft",
-        quote,
       });
 
-      if (profile?.id) {
-        await linkOrderToCustomer(profile.id, createdOrder.order_number);
-      }
-
-      navigate("/portal/quotes", {
+      navigate("/portal/orders", {
         replace: true,
         state: {
           createdOrderNumber: createdOrder.order_number,

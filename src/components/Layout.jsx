@@ -822,75 +822,122 @@ function PublicHeader() {
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "10px",
-                background: "#fafaf9",
-                border: "1px solid #e7e5e4",
-                borderRadius: "16px",
-                padding: "8px 10px 8px 8px",
+                gap: "12px",
+                flexWrap: "wrap",
+                justifyContent: "flex-end",
                 maxWidth: "100%",
               }}
             >
-              <div
-                aria-hidden="true"
+              <Link
+                to="/portal/orders"
                 style={{
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "999px",
-                  background: "#171717",
-                  color: "#ffffff",
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontWeight: 900,
-                  fontSize: "13px",
-                  flexShrink: 0,
-                }}
-              >
-                {customerInitials}
-              </div>
-
-              <div style={{ minWidth: 0 }}>
-                <p
-                  style={{
-                    margin: "0 0 3px",
-                    color: "#78716c",
-                    fontSize: "11px",
-                    fontWeight: 900,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Customer Portal
-                </p>
-                <p
-                  style={{
-                    margin: 0,
-                    color: "#171717",
-                    fontWeight: 800,
-                    lineHeight: 1.2,
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {activeCustomerSession.displayName}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleCustomerLogout}
-                style={{
-                  background: "#171717",
-                  color: "#ffffff",
-                  border: "none",
+                  minHeight: "42px",
                   borderRadius: "12px",
-                  padding: "10px 14px",
+                  padding: "0 14px",
+                  textDecoration: "none",
                   fontWeight: 800,
-                  cursor: "pointer",
-                  flexShrink: 0,
+                  background: "#0f766e",
+                  color: "#ffffff",
+                  boxShadow: "0 12px 24px rgba(15, 118, 110, 0.14)",
                 }}
               >
-                Logout
-              </button>
+                My Requests
+              </Link>
+              <Link
+                to="/portal/request-order"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  minHeight: "42px",
+                  borderRadius: "12px",
+                  padding: "0 14px",
+                  textDecoration: "none",
+                  fontWeight: 800,
+                  background: "#ffffff",
+                  color: "#171717",
+                  border: "1px solid #d6d3d1",
+                }}
+              >
+                Start Request
+              </Link>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  background: "#fafaf9",
+                  border: "1px solid #e7e5e4",
+                  borderRadius: "16px",
+                  padding: "8px 10px 8px 8px",
+                  maxWidth: "100%",
+                }}
+              >
+                <div
+                  aria-hidden="true"
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "999px",
+                    background: "#171717",
+                    color: "#ffffff",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontWeight: 900,
+                    fontSize: "13px",
+                    flexShrink: 0,
+                  }}
+                >
+                  {customerInitials}
+                </div>
+
+                <div style={{ minWidth: 0 }}>
+                  <p
+                    style={{
+                      margin: "0 0 3px",
+                      color: "#78716c",
+                      fontSize: "11px",
+                      fontWeight: 900,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Customer Portal
+                  </p>
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "#171717",
+                      fontWeight: 800,
+                      lineHeight: 1.2,
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {activeCustomerSession.displayName}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCustomerLogout}
+                  style={{
+                    background: "#171717",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "12px",
+                    padding: "10px 14px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    flexShrink: 0,
+                  }}
+                >
+                  Logout
+                </button>
+              </div>
             </div>
           ) : (
             <Link

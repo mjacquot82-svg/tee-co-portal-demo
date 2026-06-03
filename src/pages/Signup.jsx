@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { ensureCustomerProfile } from "../lib/customerProfileStore";
 import {
@@ -27,6 +27,7 @@ const labelStyle = {
 
 export default function Signup() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -41,6 +42,12 @@ export default function Signup() {
     password: "",
     confirmPassword: "",
   });
+  const searchParams = new URLSearchParams(location.search);
+  const redirectTo = searchParams.get("redirectTo");
+  const resolvedRedirectTarget =
+    redirectTo === "/order-preview" || redirectTo === "/checkout"
+      ? redirectTo
+      : "/portal/orders";
 
   useEffect(() => {
     function syncActiveCustomer(nextSession = getActiveCustomerSession()) {
@@ -56,9 +63,9 @@ export default function Signup() {
 
   useEffect(() => {
     if (activeCustomerSession) {
-      navigate("/portal/orders", { replace: true });
+      navigate(resolvedRedirectTarget, { replace: true });
     }
-  }, [activeCustomerSession, navigate]);
+  }, [activeCustomerSession, navigate, resolvedRedirectTarget]);
 
   function updateField(field, value) {
     setErrorMessage("");
@@ -110,7 +117,7 @@ export default function Signup() {
     if (signupResult.customerSession) {
       try {
         await ensureCustomerProfile(signupResult.customerSession);
-        navigate("/portal/orders", { replace: true });
+        navigate(resolvedRedirectTarget, { replace: true });
       } catch (error) {
         console.error("Unable to ensure customer profile after signup", error);
         setErrorMessage(error?.message || "Unable to create your customer profile.");
@@ -301,7 +308,11 @@ export default function Signup() {
           <p style={{ margin: 0, color: "#475569", fontSize: "14px" }}>
             Already have an account?{" "}
             <Link
-              to="/login"
+              to={
+                redirectTo
+                  ? `/login?redirectTo=${encodeURIComponent(redirectTo)}`
+                  : "/login"
+              }
               style={{
                 color: "#0f766e",
                 fontWeight: "700",

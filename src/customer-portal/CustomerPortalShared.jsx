@@ -2,6 +2,7 @@ import { useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { formatShortDate } from "../lib/dateFormatting";
 import { formatCurrency } from "./useCustomerPortalData";
+import { isCustomerRequestRecord } from "../lib/customerPortalData";
 import WorkflowBadge from "../components/WorkflowBadge";
 import {
   buildCustomerWorkflowMessage,
@@ -237,6 +238,123 @@ function normalizeOperationalStatusValue(status) {
   return String(status || "").trim();
 }
 
+function storefrontRequestHasArtwork(record = {}) {
+  return Boolean(String(record.customer_artwork_id || "").trim()) ||
+    (Array.isArray(record.artwork_files) && record.artwork_files.length > 0);
+}
+
+function getRequestCompletionStatus(record = {}) {
+  const rawStatus = String(record.request_completion_status || "").trim().toLowerCase();
+  if (rawStatus === "awaiting_artwork") return "awaiting_artwork";
+  if (rawStatus === "artwork_assistance_required") return "artwork_assistance_required";
+  if (rawStatus === "ready_for_review") return "ready_for_review";
+  return "pending_completion";
+}
+
+function buildCustomerRequestActions(record = {}) {
+  if (!isCustomerRequestRecord(record) || !record.order_number) return null;
+
+  const status = getRequestCompletionStatus(record);
+  const requestHref = `/portal/requests/${record.order_number}/complete`;
+  const approvalHref = `/approval/${record.order_number}`;
+  const depositHref = `/deposit-payment?order=${encodeURIComponent(record.order_number)}`;
+  const quoteStatus = String(record.quote_status || "").trim();
+  const invoiceStatus = String(record.invoice_status || "").trim();
+  const isAwaitingDeposit =
+    quoteStatus === "Awaiting Deposit" ||
+    invoiceStatus === "Awaiting Deposit" ||
+    invoiceStatus === "Awaiting Payment" ||
+    invoiceStatus === "Awaiting Final Payment";
+  const isAwaitingConfirmation =
+    quoteStatus === "Awaiting Approval" || quoteStatus === "Awaiting Artwork Approval";
+  const actions = [];
+
+  function addAction(label, href, tone = "neutral") {
+    if (!href) return;
+    if (actions.some((action) => action.href === href && action.label === label)) return;
+    actions.push({ label, href, tone });
+  }
+
+  if (isAwaitingDeposit) {
+    addAction("Pay Deposit", depositHref, "success");
+    addAction("View Request", requestHref, "neutral");
+    return actions;
+  }
+
+  if (isAwaitingConfirmation) {
+    addAction("Review & Confirm", approvalHref, "warning");
+    addAction("View Request", requestHref, "neutral");
+    return actions;
+  }
+
+  if (status === "awaiting_artwork") {
+    addAction("Upload Artwork", requestHref, "warning");
+    addAction("Continue Request", requestHref, "neutral");
+    return actions;
+  }
+
+  if (status === "pending_completion") {
+    addAction("Complete Request", requestHref, "warning");
+    return actions;
+  }
+
+  if (status === "ready_for_review" || status === "artwork_assistance_required") {
+    addAction("View Request", requestHref, "success");
+    return actions;
+  }
+
+  addAction("View Request", requestHref, "neutral");
+  return actions;
+}
+
+function renderRequestCompletionNotice(record = {}) {
+  if (!isCustomerRequestRecord(record)) return null;
+
+  const status = getRequestCompletionStatus(record);
+
+  if (status === "awaiting_artwork") {
+    return {
+      title: "Artwork Required",
+      body: "Tee & Co is waiting for artwork before the request can move into review.",
+      background: "#fff7ed",
+      border: "#fdba74",
+      color: "#9a3412",
+    };
+  }
+
+  if (status === "pending_completion") {
+    return {
+      title: "Complete Your Request",
+      body: "Choose whether you are uploading artwork now, uploading later, or need artwork help.",
+      background: "#eff6ff",
+      border: "#93c5fd",
+      color: "#1d4ed8",
+    };
+  }
+
+  if (status === "artwork_assistance_required") {
+    return {
+      title: "Artwork Assistance Required",
+      body: "Tee & Co has been told you need help with artwork before quote preparation.",
+      background: "#eff6ff",
+      border: "#93c5fd",
+      color: "#1d4ed8",
+    };
+  }
+
+  if (status === "ready_for_review") {
+    return {
+      title: "Ready For Review",
+      body: "Tee & Co has what is needed to begin reviewing this request.",
+      background: "#ecfdf5",
+      border: "#86efac",
+      color: "#166534",
+    };
+  }
+
+  return null;
+}
+
 function resolveCustomerOrderStatus(order = {}) {
   const operationalStatus = normalizeOperationalStatusValue(order.status);
   const quoteStatus = String(order.quote_status || "").trim();
@@ -294,6 +412,30 @@ function resolveCustomerOrderStatus(order = {}) {
 
 function resolveCustomerQuoteStatus(record = {}) {
   const quoteStatus = String(record.quote_status || "").trim();
+  const isStorefrontRequest = isCustomerRequestRecord(record);
+  const completionStatus = getRequestCompletionStatus(record);
+
+  if (isStorefrontRequest) {
+    if (completionStatus === "pending_completion") {
+      return getStableStatusBadge("Complete Your Request", "warning");
+    }
+
+    if (completionStatus === "awaiting_artwork") {
+      return getStableStatusBadge("Awaiting Artwork", "warning");
+    }
+
+    if (completionStatus === "artwork_assistance_required") {
+      return getStableStatusBadge("Artwork Assistance Required", "info");
+    }
+
+    if (completionStatus === "ready_for_review" && quoteStatus === "Draft") {
+      return getStableStatusBadge("Ready For Review", "success");
+    }
+  }
+
+  if (isStorefrontRequest && quoteStatus === "Sent") {
+    return getStableStatusBadge("Quote In Preparation", "info");
+  }
 
   if (quoteStatus === "Awaiting Approval" || quoteStatus === "Awaiting Artwork Approval") {
     return STATUS_BADGES.orderAwaitingApproval;
@@ -371,6 +513,31 @@ function resolveCustomerPaymentStatus(record = {}, options = {}) {
 }
 
 function resolveTimelineNote(order) {
+  if (isCustomerRequestRecord(order)) {
+    const quoteStatus = String(order.quote_status || "").trim();
+    const completionStatus = getRequestCompletionStatus(order);
+
+    if (completionStatus === "pending_completion") {
+      return "Choose how you want to handle artwork before Tee & Co starts review";
+    }
+
+    if (completionStatus === "awaiting_artwork") {
+      return "Artwork still needed from you before the request can move into review";
+    }
+
+    if (completionStatus === "artwork_assistance_required") {
+      return "Tee & Co has been asked to help with artwork before quote preparation";
+    }
+
+    if (completionStatus === "ready_for_review" && quoteStatus === "Draft") {
+      return "Request is ready for review";
+    }
+
+    if (quoteStatus === "Sent") {
+      return "Quote in preparation";
+    }
+  }
+
   if (order.pickup_status === "Ready for Pickup") {
     return Number(order.balance_due || 0) > 0
       ? `Ready for pickup after ${formatCurrency(order.balance_due)} is settled`
@@ -457,6 +624,8 @@ export function RecordList({ records = [], type = "orders" }) {
       {viewModels.map(({ record, total, balance, dueDate, primaryStatus, paymentStatus, timelineNote }) => {
         const workflowBadges =
           type === "orders" ? buildWorkflowStatusBadges(record, { surface: "customer" }) : [];
+        const completionNotice = renderRequestCompletionNotice(record);
+        const requestActions = buildCustomerRequestActions(record) || [];
         return (
           <article
             key={`${type}-${record.order_number || record.id}`}
@@ -544,6 +713,55 @@ export function RecordList({ records = [], type = "orders" }) {
             >
               {timelineNote}
             </p>
+
+            {completionNotice ? (
+              <div
+                style={{
+                  borderRadius: "18px",
+                  border: `1px solid ${completionNotice.border}`,
+                  background: completionNotice.background,
+                  color: completionNotice.color,
+                  padding: "14px 16px",
+                  display: "grid",
+                  gap: "6px",
+                }}
+              >
+                <strong>{completionNotice.title}</strong>
+                <span style={{ lineHeight: 1.6 }}>{completionNotice.body}</span>
+              </div>
+            ) : null}
+
+            {requestActions.length ? (
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                {requestActions.map((requestAction) => (
+                  <Link
+                    key={`${record.order_number || record.id}-${requestAction.label}-${requestAction.href}`}
+                    to={requestAction.href}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      minHeight: "40px",
+                      borderRadius: "999px",
+                      padding: "0 16px",
+                      textDecoration: "none",
+                      fontWeight: 800,
+                      background:
+                        requestAction.tone === "warning"
+                          ? "#f59e0b"
+                          : requestAction.tone === "success"
+                          ? "#0f766e"
+                          : "#ffffff",
+                      color: requestAction.tone === "neutral" ? "#0f172a" : "#ffffff",
+                      border:
+                        requestAction.tone === "neutral" ? "1px solid #cbd5e1" : "1px solid transparent",
+                    }}
+                  >
+                    {requestAction.label}
+                  </Link>
+                ))}
+              </div>
+            ) : null}
           </article>
         );
       })}
