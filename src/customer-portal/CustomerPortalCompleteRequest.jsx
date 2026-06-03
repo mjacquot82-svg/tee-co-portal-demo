@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import CustomerArtworkSection from "../components/CustomerArtworkSection";
-import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
+import { updateOrder, useOrders } from "../repositories/ordersRepository";
 import { useStoredCustomers } from "../lib/customersStore";
 import { findCustomerProfileForSession } from "../lib/customerPortalData";
 import { PortalPage, SectionCard } from "./CustomerPortalShared";
@@ -80,7 +80,7 @@ export default function CustomerPortalCompleteRequest() {
   const location = useLocation();
   const { orderNumber } = useParams();
   const { customerSession } = useOutletContext();
-  const orders = useStoredOrders();
+  const orders = useOrders();
   const customers = useStoredCustomers();
   const profile = useMemo(
     () => findCustomerProfileForSession(customerSession, customers),
@@ -122,7 +122,7 @@ export default function CustomerPortalCompleteRequest() {
     setMessage("");
 
     try {
-      const updatedOrder = updateStoredOrder(order.order_number, updates);
+      const updatedOrder = updateOrder(order.order_number, updates);
       if (!updatedOrder) {
         throw new Error("The request could not be found while saving your artwork update.");
       }

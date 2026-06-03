@@ -7,7 +7,7 @@ import ActivityTimeline from "../order-detail/ActivityTimeline";
 import { demoOrders as seededDemoOrders } from "../data/demoOrders";
 import { formatDateTime, formatShortDate } from "../lib/dateFormatting";
 import { normalizeOperationalStatus } from "../orders/orderWorkflow";
-import { useStoredOrders } from "../lib/ordersStore";
+import { useOrders } from "../repositories/ordersRepository";
 import {
   getArtworkAssetUrl,
   getArtworkDisplayName,
@@ -503,7 +503,7 @@ function CustomerOrderCard({ order, expanded, onToggle }) {
 
 export default function MyOrders() {
   const location = useLocation();
-  const storedOrders = useStoredOrders();
+  const storedOrders = useOrders();
   const [expandedOrders, setExpandedOrders] = useState({});
 
   const orders = useMemo(

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { customerIdsEqual } from "../lib/customerIds";
 import { buildPotentialDuplicateCustomerGroups } from "../lib/customerDuplicates";
 import { createStoredCustomer, useStoredCustomers } from "../lib/customersStore";
-import { getStoredOrders } from "../lib/ordersStore";
+import { listOrders } from "../repositories/ordersRepository";
 import { getStoredQuickSales } from "../lib/salesStore";
 
 const fieldStyle = {
@@ -106,7 +106,7 @@ function describeSignal(signal) {
 
 export default function Customers() {
   const customers = useStoredCustomers();
-  const [orders] = useState(() => getStoredOrders());
+  const [orders] = useState(() => listOrders());
   const [sales] = useState(() => getStoredQuickSales());
   const [searchTerm, setSearchTerm] = useState("");
   const [form, setForm] = useState({

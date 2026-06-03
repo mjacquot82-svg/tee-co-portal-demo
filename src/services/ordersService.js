@@ -1,18 +1,18 @@
 import {
-  createStoredOrder,
-  findStoredOrder,
-  getStoredOrders,
-  updateStoredOrder,
-} from "../lib/ordersStore";
+  createOrder,
+  getOrderByNumber,
+  listOrders,
+  updateOrder,
+} from "../repositories/ordersRepository";
 import { createCrudService } from "./createCrudService";
 
 const ordersService = createCrudService({
   table: "orders",
   local: {
-    list: () => getStoredOrders(),
-    getById: (orderNumber) => findStoredOrder(orderNumber),
-    create: (order) => createStoredOrder(order),
-    update: (orderNumber, updates) => updateStoredOrder(orderNumber, updates),
+    list: () => listOrders(),
+    getById: (orderNumber) => getOrderByNumber(orderNumber),
+    create: (order) => createOrder(order),
+    update: (orderNumber, updates) => updateOrder(orderNumber, updates),
   },
   remoteMatchField: "order_number",
 });
@@ -24,4 +24,3 @@ export const getOrderByNumber = (orderNumber) => ordersService.getById(orderNumb
 export const createOrderRecord = (order) => ordersService.create(order);
 export const updateOrderRecord = (orderNumber, updates) =>
   ordersService.update(orderNumber, updates);
-

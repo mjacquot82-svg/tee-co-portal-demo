@@ -11,7 +11,7 @@ import {
   getCustomerScopedOrders,
 } from "../lib/customerPortalData";
 import { useStoredCustomers } from "../lib/customersStore";
-import { useStoredOrders } from "../lib/ordersStore";
+import { useOrders } from "../repositories/ordersRepository";
 
 const EMPTY_PORTAL_DATA = Object.freeze({
   profile: null,
@@ -30,7 +30,7 @@ export function formatCurrency(value) {
 }
 
 export function useCustomerPortalData(session) {
-  const orders = useStoredOrders();
+  const orders = useOrders();
   const customers = useStoredCustomers();
   const renderCountRef = useRef(0);
 
