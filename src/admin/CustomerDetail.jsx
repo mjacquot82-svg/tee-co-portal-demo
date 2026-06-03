@@ -2,7 +2,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { customerIdsEqual, normalizeCustomerId } from "../lib/customerIds";
 import { updateStoredCustomer, useStoredCustomers } from "../lib/customersStore";
-import { duplicateStoredOrder, getStoredOrders } from "../lib/ordersStore";
+import { duplicateStoredOrder } from "../lib/ordersStore";
+import { listOrders } from "../repositories/ordersRepository";
 import { getStoredQuickSales } from "../lib/salesStore";
 import CustomerArtworkSection from "../components/CustomerArtworkSection";
 import CustomerTimelineSection from "../components/CustomerTimelineSection";
@@ -116,7 +117,7 @@ export default function CustomerDetail() {
   const normalizedRouteCustomerId = normalizeCustomerId(customerId);
   const navigate = useNavigate();
   const customers = useStoredCustomers();
-  const [orders, setOrders] = useState(() => getStoredOrders());
+  const [orders, setOrders] = useState(() => listOrders());
   const [sales, setSales] = useState(() => getStoredQuickSales());
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState(() => buildCustomerForm());
@@ -584,7 +585,7 @@ export default function CustomerDetail() {
       });
 
       setMergeWarnings(result.warnings || []);
-      setOrders(getStoredOrders());
+      setOrders(listOrders());
       setSales(getStoredQuickSales());
       setMergeConfirmationText("");
 

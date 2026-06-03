@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { recordStoredOrderPayment, useStoredOrders } from "../lib/ordersStore";
+import { recordOrderPayment, useOrders } from "../repositories/ordersRepository";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -9,7 +9,7 @@ function money(value) {
 export default function DepositPayment() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const orders = useStoredOrders();
+  const orders = useOrders();
   const [submissionError, setSubmissionError] = useState("");
   const orderNumber = String(searchParams.get("order") || "").trim();
   const order = orders.find((entry) => entry.order_number === orderNumber);
@@ -26,7 +26,7 @@ export default function DepositPayment() {
     setSubmissionError("");
 
     try {
-      recordStoredOrderPayment(order.order_number, {
+      recordOrderPayment(order.order_number, {
         amount: depositAmount,
         method: "Customer Deposit Link",
         note: "Deposit received from customer payment page",

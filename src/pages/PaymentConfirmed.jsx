@@ -1,5 +1,5 @@
 import { Link, useSearchParams } from "react-router-dom";
-import { useStoredOrders } from "../lib/ordersStore";
+import { useOrders } from "../repositories/ordersRepository";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -7,7 +7,7 @@ function money(value) {
 
 export default function PaymentConfirmed() {
   const [searchParams] = useSearchParams();
-  const orders = useStoredOrders();
+  const orders = useOrders();
   const orderNumber = String(searchParams.get("order") || "").trim();
   const order = orders.find((entry) => entry.order_number === orderNumber);
   const depositAmount = Number(order?.deposit_amount) || 0;

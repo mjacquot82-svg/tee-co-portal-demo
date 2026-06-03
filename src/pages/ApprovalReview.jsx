@@ -1,6 +1,6 @@
 import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { findStoredOrder, updateStoredOrder } from "../lib/ordersStore";
+import { getOrderByNumber, updateOrder } from "../repositories/ordersRepository";
 
 export default function ApprovalReview() {
   const { orderNumber } = useParams();
@@ -8,7 +8,7 @@ export default function ApprovalReview() {
   const [customerNote, setCustomerNote] = useState("");
 
   useEffect(() => {
-    const stored = findStoredOrder(orderNumber);
+    const stored = getOrderByNumber(orderNumber);
     if (stored) {
       setOrder(stored);
       setCustomerNote(stored.customer_approval_note || "");
@@ -16,7 +16,7 @@ export default function ApprovalReview() {
   }, [orderNumber]);
 
   function approveMockup() {
-    const updated = updateStoredOrder(orderNumber, {
+    const updated = updateOrder(orderNumber, {
       quote_status: order?.deposit_required ? "Awaiting Deposit" : "Approved",
       approval_status: "Customer Approved",
       artwork_approval_status: "Approved",
@@ -27,7 +27,7 @@ export default function ApprovalReview() {
   }
 
   function requestChanges() {
-    const updated = updateStoredOrder(orderNumber, {
+    const updated = updateOrder(orderNumber, {
       quote_status: "Awaiting Artwork Approval",
       approval_status: "Customer Requested Changes",
       artwork_approval_status: "Needs Revision",
