@@ -28,9 +28,9 @@ export async function ensureCustomerProfile(session = {}) {
   );
 
   if (existingCustomer) {
-    const nextName = name || existingCustomer.name || "Customer Account";
+    const nextName = existingCustomer.name || name || "Customer Account";
     const nextEmail = session.email || existingCustomer.email || "";
-    const nextPhone = session.phone || existingCustomer.phone || "";
+    const nextPhone = existingCustomer.phone || session.phone || "";
     const nextAuthUserId = session.id || existingCustomer.auth_user_id || "";
     const nextExternalReference = session.id || existingCustomer.external_reference || "";
     const isUnchanged =
