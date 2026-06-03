@@ -1,7 +1,6 @@
 import { getCartTotal } from "./cartStore";
 import { ensureCustomerProfile } from "./customerProfileStore";
-import { linkOrderToCustomer } from "./customersStore";
-import { createStoredOrder } from "./ordersStore";
+import { createCustomerRequest } from "../repositories/ordersRepository";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -68,54 +67,53 @@ export async function submitStorefrontOrder({ customerSession, cartItems = [] } 
   const detailedSummary = buildCartSummary(normalizedItems);
   const checkoutNotes = `Customer request received from the storefront request builder.\n\nItems:\n${detailedSummary}`;
 
-  const createdOrder = createStoredOrder({
-    customer_id: profile?.id || "",
-    customer_name: profile?.name || customerSession.displayName || "Customer Account",
-    customer_email: customerSession.email || profile?.email || "",
-    customer_phone: profile?.phone || customerSession.phone || "",
-    customer_company: profile?.company || "",
-    contact_name: customerSession.displayName || profile?.name || "",
-    source: "Storefront Request",
-    request_type: "Product Request",
-    status: "New",
-    quote_status: "Draft",
-    operational_visible: false,
-    production_ready: false,
-    product_id: primaryItem.productId || primaryItem.garmentId || "",
-    garment: productSummary,
-    category: itemCount === 1 ? primaryItem.category || "Storefront" : "Storefront Purchase",
-    product_image: primaryItem.imageSrc || "",
-    product_notes: detailedSummary,
-    qty: totalQuantity,
-    selected_color: itemCount === 1 ? primaryItem.selectedColor : "Multiple",
-    selected_size: itemCount === 1 ? primaryItem.selectedSize : "Multiple",
-    size_breakdown:
-      itemCount === 1 && primaryItem.selectedSize
-        ? { [primaryItem.selectedSize]: primaryItem.quantity }
-        : {},
-    notes: checkoutNotes,
-    customer_notes: checkoutNotes,
-    request_details: checkoutNotes,
-    cart_items: normalizedItems,
-    subtotal: cartTotal,
-    tax_amount: 0,
-    total_amount: cartTotal,
-    total: cartTotal,
-    payment_history: [],
-    total_paid: 0,
-    amount_paid: 0,
-    balance_due: cartTotal,
-    deposit_amount: 0,
-    deposit_required: false,
-    invoice_status: "Draft",
-    artwork_approval_required: false,
-    request_completion_status: "pending_completion",
-    artwork_intent: "",
+  const createdOrder = await createCustomerRequest({
+    profile,
+    orderInput: {
+      customer_id: profile?.id || "",
+      customer_name: profile?.name || customerSession.displayName || "Customer Account",
+      customer_email: customerSession.email || profile?.email || "",
+      customer_phone: profile?.phone || customerSession.phone || "",
+      customer_company: profile?.company || "",
+      contact_name: customerSession.displayName || profile?.name || "",
+      source: "Storefront Request",
+      request_type: "Product Request",
+      status: "New",
+      quote_status: "Draft",
+      operational_visible: false,
+      production_ready: false,
+      product_id: primaryItem.productId || primaryItem.garmentId || "",
+      garment: productSummary,
+      category: itemCount === 1 ? primaryItem.category || "Storefront" : "Storefront Purchase",
+      product_image: primaryItem.imageSrc || "",
+      product_notes: detailedSummary,
+      qty: totalQuantity,
+      selected_color: itemCount === 1 ? primaryItem.selectedColor : "Multiple",
+      selected_size: itemCount === 1 ? primaryItem.selectedSize : "Multiple",
+      size_breakdown:
+        itemCount === 1 && primaryItem.selectedSize
+          ? { [primaryItem.selectedSize]: primaryItem.quantity }
+          : {},
+      notes: checkoutNotes,
+      customer_notes: checkoutNotes,
+      request_details: checkoutNotes,
+      cart_items: normalizedItems,
+      subtotal: cartTotal,
+      tax_amount: 0,
+      total_amount: cartTotal,
+      total: cartTotal,
+      payment_history: [],
+      total_paid: 0,
+      amount_paid: 0,
+      balance_due: cartTotal,
+      deposit_amount: 0,
+      deposit_required: false,
+      invoice_status: "Draft",
+      artwork_approval_required: false,
+      request_completion_status: "pending_completion",
+      artwork_intent: "",
+    },
   });
-
-  if (profile?.id) {
-    await linkOrderToCustomer(profile.id, createdOrder.order_number);
-  }
 
   return {
     createdOrder,

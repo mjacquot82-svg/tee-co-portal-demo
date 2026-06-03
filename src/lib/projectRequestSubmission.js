@@ -1,6 +1,5 @@
 import { ensureCustomerProfile } from "./customerProfileStore";
-import { linkOrderToCustomer } from "./customersStore";
-import { createStoredOrder } from "./ordersStore";
+import { createCustomerRequest } from "../repositories/ordersRepository";
 import { generateQuoteSnapshot } from "./quoteEngine";
 
 function normalizeText(value) {
@@ -110,55 +109,54 @@ export async function submitProjectRequest({
   );
   const requestNotes = buildRequestNotes(notes, artwork);
 
-  const createdOrder = createStoredOrder({
-    customer_id: profile?.id || "",
-    customer_name: profile?.name || customerSession.displayName || "Customer Account",
-    customer_email: customerSession.email || profile?.email || "",
-    customer_phone: normalizeText(contactPhone) || profile?.phone || customerSession.phone || "",
-    customer_company: profile?.company || "",
-    contact_name: normalizeText(contactName) || customerSession.displayName || "",
-    product_id: selectedProduct.id,
-    garment: selectedProduct.name,
-    category: normalizeText(category) || selectedProduct.category || "Apparel",
-    product_image: imageSrc || selectedProduct.image || "",
-    product_notes: selectedProduct.notes || "",
-    source,
-    request_type: requestType,
-    status: "New",
-    quote_status: "Draft",
-    operational_visible: false,
-    production_ready: false,
-    qty: normalizedQuantity,
-    selected_color: normalizeText(selectedColor),
-    selected_size: normalizeText(selectedSize),
-    size_breakdown:
-      selectedSize && normalizeText(selectedSize) !== "Open"
-        ? { [selectedSize]: normalizedQuantity }
-        : {},
-    placement: requestPlacements[0]?.placement || "",
-    placements: requestPlacements,
-    decoration_type: decorationType,
-    due_date: normalizeText(dueDate),
-    notes: requestNotes,
-    customer_notes: requestNotes,
-    request_details: requestNotes,
-    payment_history: [],
-    total_paid: 0,
-    amount_paid: 0,
-    balance_due: 0,
-    deposit_amount: 0,
-    deposit_required: false,
-    invoice_status: "Draft",
-    request_completion_status: "pending_completion",
-    artwork_intent: "",
-    artwork_files: artworkFiles,
-    customer_artwork_name: artworkName,
-    quote,
+  const createdOrder = await createCustomerRequest({
+    profile,
+    orderInput: {
+      customer_id: profile?.id || "",
+      customer_name: profile?.name || customerSession.displayName || "Customer Account",
+      customer_email: customerSession.email || profile?.email || "",
+      customer_phone: normalizeText(contactPhone) || profile?.phone || customerSession.phone || "",
+      customer_company: profile?.company || "",
+      contact_name: normalizeText(contactName) || customerSession.displayName || "",
+      product_id: selectedProduct.id,
+      garment: selectedProduct.name,
+      category: normalizeText(category) || selectedProduct.category || "Apparel",
+      product_image: imageSrc || selectedProduct.image || "",
+      product_notes: selectedProduct.notes || "",
+      source,
+      request_type: requestType,
+      status: "New",
+      quote_status: "Draft",
+      operational_visible: false,
+      production_ready: false,
+      qty: normalizedQuantity,
+      selected_color: normalizeText(selectedColor),
+      selected_size: normalizeText(selectedSize),
+      size_breakdown:
+        selectedSize && normalizeText(selectedSize) !== "Open"
+          ? { [selectedSize]: normalizedQuantity }
+          : {},
+      placement: requestPlacements[0]?.placement || "",
+      placements: requestPlacements,
+      decoration_type: decorationType,
+      due_date: normalizeText(dueDate),
+      notes: requestNotes,
+      customer_notes: requestNotes,
+      request_details: requestNotes,
+      payment_history: [],
+      total_paid: 0,
+      amount_paid: 0,
+      balance_due: 0,
+      deposit_amount: 0,
+      deposit_required: false,
+      invoice_status: "Draft",
+      request_completion_status: "pending_completion",
+      artwork_intent: "",
+      artwork_files: artworkFiles,
+      customer_artwork_name: artworkName,
+      quote,
+    },
   });
-
-  if (profile?.id) {
-    await linkOrderToCustomer(profile.id, createdOrder.order_number);
-  }
 
   return {
     createdOrder,

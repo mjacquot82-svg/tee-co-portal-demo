@@ -8,6 +8,7 @@ import {
   updateStoredOrder,
   useStoredOrders,
 } from "../lib/ordersStore";
+import { linkOrderToCustomer } from "../lib/customersStore";
 
 export function listOrders() {
   return getStoredOrders();
@@ -19,6 +20,16 @@ export function getOrderByNumber(orderNumber) {
 
 export function createOrder(order) {
   return createStoredOrder(order);
+}
+
+export async function createCustomerRequest({ profile = null, orderInput = {}, linkToCustomer = true } = {}) {
+  const createdOrder = createOrder(orderInput);
+
+  if (linkToCustomer && profile?.id) {
+    await linkOrderToCustomer(profile.id, createdOrder.order_number);
+  }
+
+  return createdOrder;
 }
 
 export function updateOrder(orderNumber, updates) {
