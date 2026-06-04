@@ -3,9 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import PricingSummary from "../components/PricingSummary";
 import { formatDateTime } from "../lib/dateFormatting";
 import { getOrderArtworkNames } from "../lib/orderArtwork";
-import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
+import { updateOrderWorkflow, useOrders } from "../repositories/ordersRepository";
 import {
   canAdvanceQuoteStatus,
   getNextQuoteStatus,
@@ -393,7 +393,7 @@ export default function QuoteDetail() {
   const viewer = getAdminViewer(activeStaffUser);
   const isStaffWorkspace = isStaffWorkspaceView(activeStaffUser);
   const canManageArchive = canManageArchivedQuotes(viewer);
-  const orders = useStoredOrders();
+  const orders = useOrders();
   const savedOrder = location.state?.savedOrder || null;
   const order = useMemo(
     () =>
@@ -504,10 +504,9 @@ export default function QuoteDetail() {
     if (!canAdvanceCurrentQuote) return;
 
     const nextQuoteStatus = getNextQuoteStatus(order.quote_status);
-    updateStoredOrder(order.order_number, {
-      quote_status: nextQuoteStatus,
-      activity_type: "quote_status",
-      activity_note: `Quote status changed to ${nextQuoteStatus}.`,
+    updateOrderWorkflow(order.order_number, {
+      type: "advance_quote",
+      nextQuoteStatus,
     });
   }
 
@@ -515,26 +514,16 @@ export default function QuoteDetail() {
     if (archived || canceled) return;
     if (!canReleaseCurrentQuote) return;
 
-    updateStoredOrder(order.order_number, {
-      quote_status: "Ready For Production",
-      status: "Awaiting Production",
-      operational_visible: true,
-      production_ready: true,
-      activity_type: "release_to_production",
-      activity_note: "Quote released into Production Orders.",
+    updateOrderWorkflow(order.order_number, {
+      type: "release_to_production",
     });
   }
 
   function handleArchiveQuote() {
     if (archived || canceled) return;
 
-    updateStoredOrder(order.order_number, {
-      quote_archived: true,
-      quote_archived_at: new Date().toISOString(),
-      operational_visible: false,
-      production_ready: false,
-      activity_type: "quote_archive",
-      activity_note: "Quote archived from active workflow.",
+    updateOrderWorkflow(order.order_number, {
+      type: "archive_quote",
     });
 
     setShowArchiveConfirm(false);
@@ -549,11 +538,8 @@ export default function QuoteDetail() {
   function handleRestoreQuote() {
     if (!archived) return;
 
-    updateStoredOrder(order.order_number, {
-      quote_archived: false,
-      quote_archived_at: null,
-      activity_type: "quote_restore",
-      activity_note: "Quote restored to active workflow.",
+    updateOrderWorkflow(order.order_number, {
+      type: "restore_quote",
     });
 
     navigate(`/admin/quotes/${order.order_number}`, {
@@ -568,14 +554,8 @@ export default function QuoteDetail() {
   function handleCancelQuote() {
     if (archived || canceled) return;
 
-    updateStoredOrder(order.order_number, {
-      status: "Canceled",
-      quote_status: "Canceled",
-      operational_visible: false,
-      production_ready: false,
-      canceled_at: new Date().toISOString(),
-      activity_type: "canceled",
-      activity_note: "Quote canceled while preserving operational and financial history.",
+    updateOrderWorkflow(order.order_number, {
+      type: "cancel_quote",
     });
 
     navigate(`/admin/quotes/${order.order_number}`, {
