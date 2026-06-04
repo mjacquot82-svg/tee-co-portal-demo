@@ -1,5 +1,5 @@
 import { Link, useSearchParams } from "react-router-dom";
-import { useOrders } from "../repositories/ordersRepository";
+import { useCustomerWorkflowOrderAccess } from "../lib/customerWorkflowAccess";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -7,9 +7,12 @@ function money(value) {
 
 export default function PaymentConfirmed() {
   const [searchParams] = useSearchParams();
-  const orders = useOrders();
   const orderNumber = String(searchParams.get("order") || "").trim();
-  const order = orders.find((entry) => entry.order_number === orderNumber);
+  const { order, isRedirectingToLogin, accessDenied } =
+    useCustomerWorkflowOrderAccess({
+      orderNumber,
+      workflowLabel: "payment confirmation",
+    });
   const depositAmount = Number(order?.deposit_amount) || 0;
   const depositApplied = Number(order?.deposit_applied) || 0;
   const depositVerified =
@@ -17,7 +20,11 @@ export default function PaymentConfirmed() {
     (depositAmount > 0 && depositApplied >= depositAmount);
   const statusLabel = order?.deposit_workflow_status || order?.payment_status || "Updated";
 
-  if (!order) {
+  if (isRedirectingToLogin) {
+    return null;
+  }
+
+  if (!order || accessDenied) {
     return (
       <div
         style={{
@@ -40,7 +47,7 @@ export default function PaymentConfirmed() {
           <h1 style={{ marginTop: 0 }}>Order not found</h1>
 
           <p style={{ color: "#475569", lineHeight: 1.6 }}>
-            We could not load the order tied to this payment confirmation.
+            This payment confirmation is not available for this customer account.
           </p>
 
           <div style={{ marginTop: "24px" }}>

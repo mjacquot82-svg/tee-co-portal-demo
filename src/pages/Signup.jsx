@@ -45,7 +45,13 @@ export default function Signup() {
   const searchParams = new URLSearchParams(location.search);
   const redirectTo = searchParams.get("redirectTo");
   const resolvedRedirectTarget =
-    redirectTo === "/order-preview" || redirectTo === "/checkout"
+    redirectTo === "/order-preview" ||
+    redirectTo === "/checkout" ||
+    (redirectTo && redirectTo.startsWith("/portal")) ||
+    (redirectTo && redirectTo.startsWith("/approval/")) ||
+    (redirectTo && redirectTo.startsWith("/quote/")) ||
+    (redirectTo && redirectTo.startsWith("/deposit-payment")) ||
+    (redirectTo && redirectTo.startsWith("/payment-confirmed"))
       ? redirectTo
       : "/portal/orders";
 

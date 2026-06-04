@@ -1,6 +1,7 @@
 import { useParams } from "react-router-dom";
 import PricingSummary from "../components/PricingSummary";
-import { getOrderByNumber, updateOrderWorkflow } from "../repositories/ordersRepository";
+import { updateOrderWorkflow } from "../repositories/ordersRepository";
+import { useCustomerWorkflowOrderAccess } from "../lib/customerWorkflowAccess";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -13,8 +14,11 @@ function formatPrice(value, isAvailable = true) {
 
 export default function QuoteView() {
   const { orderNumber } = useParams();
-
-  const order = getOrderByNumber(orderNumber);
+  const { order, isRedirectingToLogin, accessDenied } =
+    useCustomerWorkflowOrderAccess({
+      orderNumber,
+      workflowLabel: "quote approval",
+    });
   const quote = order?.quote;
 
   function approveQuote() {
@@ -37,11 +41,15 @@ export default function QuoteView() {
     alert("Revision request sent.");
   }
 
-  if (!order || !quote) {
+  if (isRedirectingToLogin) {
+    return null;
+  }
+
+  if (!order || !quote || accessDenied) {
     return (
       <div style={{ padding: "40px", fontFamily: "Inter, sans-serif" }}>
         <h2>Quote not available</h2>
-        <p>This quote link is invalid or has expired.</p>
+        <p>This quote is not available for this customer account.</p>
       </div>
     );
   }

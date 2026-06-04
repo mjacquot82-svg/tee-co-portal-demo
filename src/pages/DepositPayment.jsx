@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { recordOrderPayment, useOrders } from "../repositories/ordersRepository";
+import { recordOrderPayment } from "../repositories/ordersRepository";
+import { useCustomerWorkflowOrderAccess } from "../lib/customerWorkflowAccess";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -9,10 +10,13 @@ function money(value) {
 export default function DepositPayment() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const orders = useOrders();
   const [submissionError, setSubmissionError] = useState("");
   const orderNumber = String(searchParams.get("order") || "").trim();
-  const order = orders.find((entry) => entry.order_number === orderNumber);
+  const { order, isRedirectingToLogin, accessDenied } =
+    useCustomerWorkflowOrderAccess({
+      orderNumber,
+      workflowLabel: "deposit payment",
+    });
   const depositAmount = Number(order?.deposit_amount) || 0;
   const depositApplied = Number(order?.deposit_applied) || 0;
   const depositAlreadyReceived =
@@ -39,7 +43,11 @@ export default function DepositPayment() {
     navigate(`/payment-confirmed?order=${encodeURIComponent(order.order_number)}`);
   }
 
-  if (!order) {
+  if (isRedirectingToLogin) {
+    return null;
+  }
+
+  if (!order || accessDenied) {
     return (
       <div
         style={{
@@ -62,7 +70,7 @@ export default function DepositPayment() {
           <h1 style={{ marginTop: 0 }}>Order not found</h1>
 
           <p style={{ color: "#475569", lineHeight: 1.6 }}>
-            This deposit payment link is invalid or the order is no longer available.
+            This deposit payment link is not available for this customer account.
           </p>
 
           <div style={{ marginTop: "24px" }}>

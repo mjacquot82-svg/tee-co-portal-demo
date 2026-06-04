@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import CustomerArtworkSection from "../components/CustomerArtworkSection";
-import { updateOrderWorkflow, useOrders } from "../repositories/ordersRepository";
+import { updateOrderWorkflow } from "../repositories/ordersRepository";
 import { useStoredCustomers } from "../lib/customersStore";
 import { findCustomerProfileForSession } from "../lib/customerPortalData";
+import { useCustomerWorkflowOrderAccess } from "../lib/customerWorkflowAccess";
 import { PortalPage, SectionCard } from "./CustomerPortalShared";
 
 function normalizeText(value) {
@@ -80,17 +81,15 @@ export default function CustomerPortalCompleteRequest() {
   const location = useLocation();
   const { orderNumber } = useParams();
   const { customerSession } = useOutletContext();
-  const orders = useOrders();
   const customers = useStoredCustomers();
+  const { order, isRedirectingToLogin, accessDenied } =
+    useCustomerWorkflowOrderAccess({
+      orderNumber,
+      workflowLabel: "request completion",
+    });
   const profile = useMemo(
     () => findCustomerProfileForSession(customerSession, customers),
     [customerSession, customers]
-  );
-  const order = useMemo(
-    () =>
-      orders.find((record) => record.order_number === orderNumber && record.operational_visible === false) ||
-      null,
-    [orderNumber, orders]
   );
   const [libraryArtwork, setLibraryArtwork] = useState([]);
   const [selectedArtworkId, setSelectedArtworkId] = useState("");
@@ -233,7 +232,11 @@ export default function CustomerPortalCompleteRequest() {
     );
   }
 
-  if (!order) {
+  if (isRedirectingToLogin) {
+    return null;
+  }
+
+  if (!order || accessDenied || order.operational_visible !== false) {
     return (
       <PortalPage
         eyebrow="Complete Request"

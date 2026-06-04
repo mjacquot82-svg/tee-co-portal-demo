@@ -95,6 +95,10 @@ export default function Login() {
     redirectTo === "/order-preview" ||
     redirectTo === "/checkout" ||
     (redirectTo && redirectTo.startsWith("/portal")) ||
+    (redirectTo && redirectTo.startsWith("/approval/")) ||
+    (redirectTo && redirectTo.startsWith("/quote/")) ||
+    (redirectTo && redirectTo.startsWith("/deposit-payment")) ||
+    (redirectTo && redirectTo.startsWith("/payment-confirmed")) ||
     (redirectTo && redirectTo.startsWith("/admin"))
       ? redirectTo
       : "/admin";
@@ -103,7 +107,11 @@ export default function Login() {
   const targetIsCheckoutRoute = resolvedRedirectTarget === "/checkout";
   const targetIsCustomerRoute =
     resolvedRedirectTarget === "/my-orders" ||
-    resolvedRedirectTarget.startsWith("/portal");
+    resolvedRedirectTarget.startsWith("/portal") ||
+    resolvedRedirectTarget.startsWith("/approval/") ||
+    resolvedRedirectTarget.startsWith("/quote/") ||
+    resolvedRedirectTarget.startsWith("/deposit-payment") ||
+    resolvedRedirectTarget.startsWith("/payment-confirmed");
   const targetNeedsManagement =
     targetIsAdminRoute && requiresProtectedManagementAccess(resolvedRedirectTarget);
   const routeAccessUser = getRouteAccessUser({

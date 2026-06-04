@@ -1,14 +1,15 @@
 import { useParams } from "react-router-dom";
-import { useMemo, useState } from "react";
-import { updateOrderWorkflow, useOrders } from "../repositories/ordersRepository";
+import { useState } from "react";
+import { updateOrderWorkflow } from "../repositories/ordersRepository";
+import { useCustomerWorkflowOrderAccess } from "../lib/customerWorkflowAccess";
 
 export default function ApprovalReview() {
   const { orderNumber } = useParams();
-  const orders = useOrders();
-  const order = useMemo(
-    () => orders.find((entry) => entry.order_number === orderNumber) || null,
-    [orderNumber, orders]
-  );
+  const { order, isRedirectingToLogin, accessDenied } =
+    useCustomerWorkflowOrderAccess({
+      orderNumber,
+      workflowLabel: "artwork approval",
+    });
   const [customerNotesByOrder, setCustomerNotesByOrder] = useState({});
   const hasDraftCustomerNote = Object.prototype.hasOwnProperty.call(
     customerNotesByOrder,
@@ -48,12 +49,16 @@ export default function ApprovalReview() {
     });
   }
 
-  if (!order) {
+  if (isRedirectingToLogin) {
+    return null;
+  }
+
+  if (!order || accessDenied) {
     return (
       <div style={{ maxWidth: "760px", margin: "0 auto", padding: "32px" }}>
         <h1>Approval Review</h1>
         <p style={{ color: "#64748b" }}>
-          This approval record was not found on this device yet. In production, this page will load from cloud storage.
+          This approval record is not available for this customer account.
         </p>
       </div>
     );
