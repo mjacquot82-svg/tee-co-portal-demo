@@ -1,6 +1,6 @@
 import { useParams } from "react-router-dom";
 import PricingSummary from "../components/PricingSummary";
-import { getOrderByNumber, updateOrder } from "../repositories/ordersRepository";
+import { getOrderByNumber, updateOrderWorkflow } from "../repositories/ordersRepository";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -18,7 +18,8 @@ export default function QuoteView() {
   const quote = order?.quote;
 
   function approveQuote() {
-    updateOrder(orderNumber, {
+    updateOrderWorkflow(orderNumber, {
+      type: "customer_approve_quote",
       approval_status: "Approved",
       approved_at: new Date().toISOString(),
     });
@@ -27,7 +28,8 @@ export default function QuoteView() {
   }
 
   function requestChanges() {
-    updateOrder(orderNumber, {
+    updateOrderWorkflow(orderNumber, {
+      type: "customer_request_quote_revision",
       approval_status: "Revision Requested",
       revision_requested_at: new Date().toISOString(),
     });

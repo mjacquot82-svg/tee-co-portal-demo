@@ -138,6 +138,28 @@ function buildCustomerArtworkApprovalWorkflowUpdates(order, workflowInput = {}, 
   return null;
 }
 
+function buildCustomerQuoteApprovalWorkflowUpdates(workflowInput = {}, options = {}) {
+  const type = getWorkflowActionType(workflowInput);
+  const now = getWorkflowTimestamp(options);
+
+  if (type === "customer_approve_quote") {
+    return {
+      approval_status: "Approved",
+      approved_at: workflowInput.approved_at || workflowInput.approvedAt || now,
+    };
+  }
+
+  if (type === "customer_request_quote_revision") {
+    return {
+      approval_status: "Revision Requested",
+      revision_requested_at:
+        workflowInput.revision_requested_at || workflowInput.revisionRequestedAt || now,
+    };
+  }
+
+  return null;
+}
+
 function buildDepositWorkflowUpdates(order, workflowInput = {}, options = {}) {
   const normalizedStatus = String(workflowInput.status || workflowInput.nextStatus || "").trim();
   const now = getWorkflowTimestamp(options);
@@ -422,6 +444,9 @@ function buildOrderWorkflowUpdates(order, workflowInput = {}, options = {}) {
     case "customer_approve_artwork":
     case "customer_request_artwork_revision":
       return buildCustomerArtworkApprovalWorkflowUpdates(order, workflowInput, options);
+    case "customer_approve_quote":
+    case "customer_request_quote_revision":
+      return buildCustomerQuoteApprovalWorkflowUpdates(workflowInput, options);
     case "set_deposit_workflow":
     case "deposit_workflow":
       return buildDepositWorkflowUpdates(order, workflowInput, options);
