@@ -3,11 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useStoredProducts } from "../lib/productsStore";
 import { createStoredQuickSale } from "../lib/salesStore";
 import { createStoredCustomer, getStoredCustomers } from "../lib/customersStore";
-import {
-  updateStoredOrder,
-  useStoredOrders,
-} from "../lib/ordersStore";
-import { recordOrderPayment } from "../repositories/ordersRepository";
+import { recordOrderPayment, updateOrderWorkflow, useOrders } from "../repositories/ordersRepository";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 import { validatePaymentAmount } from "../lib/financialValidation";
 import { customerIdsEqual } from "../lib/customerIds";
@@ -498,7 +494,7 @@ export default function QuickSale() {
   const isStaffWorkspace = isStaffWorkspaceView(activeStaffUser);
 
   const products = useStoredProducts().filter((product) => product.status !== "Inactive");
-  const storedOrders = useStoredOrders();
+  const storedOrders = useOrders();
   const [customers, setCustomers] = useState(() => getStoredCustomers());
   const customerDirectory = useMemo(
     () => buildCustomerDirectory(customers, storedOrders),
@@ -679,7 +675,6 @@ export default function QuickSale() {
     splitPrimaryAmountValue,
     splitSecondaryAmountValue,
     splitTotalMatches,
-    paymentAmount,
   ]);
 
   const handleGlobalEnter = useEffectEvent((event) => {
@@ -699,9 +694,18 @@ export default function QuickSale() {
   }, []);
 
   useEffect(() => {
-    setSelectedTransactionIds((current) =>
-      filterSelectionIdsForMode(activeMode, current, selectableItems)
-    );
+    let canceled = false;
+
+    queueMicrotask(() => {
+      if (canceled) return;
+      setSelectedTransactionIds((current) =>
+        filterSelectionIdsForMode(activeMode, current, selectableItems)
+      );
+    });
+
+    return () => {
+      canceled = true;
+    };
   }, [activeMode, selectableItems]);
 
   function resetPaymentForm(nextAmount = "") {
@@ -1162,13 +1166,16 @@ export default function QuickSale() {
       const balanceNote =
         Number(order.balance_due || 0) > 0 ? ` Outstanding balance: ${currency(order.balance_due)}.` : "";
 
-      updateStoredOrder(order.order_number, {
-        pickup_status: "Picked Up",
-        picked_up_at: order.picked_up_at || new Date().toISOString(),
-        status: order.status === "Ready for Pickup" ? "Picked Up" : order.status,
-        activity_type: "pickup",
-        activity_note: `Order marked as picked up.${balanceNote}`,
-      });
+      updateOrderWorkflow(
+        order.order_number,
+        {
+          type: "pickup",
+          statusMode: "quick_sale_release",
+          balance_due: order.balance_due,
+          activity_note: `Order marked as picked up.${balanceNote}`,
+        },
+        { now: new Date().toISOString() }
+      );
       releasedOrders.push(order.order_number);
     });
 
