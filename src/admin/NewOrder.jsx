@@ -16,7 +16,7 @@ import {
   linkOrderToCustomer,
 } from "../lib/customersStore";
 import { customerIdsEqual } from "../lib/customerIds";
-import { createStoredOrder } from "../lib/ordersStore";
+import { createOrder } from "../repositories/ordersRepository";
 import { useStoredProducts } from "../lib/productsStore";
 import { generateQuoteSnapshot } from "../lib/quoteEngine";
 import { uploadCustomerArtwork } from "../services/customerArtworkService";
@@ -546,7 +546,7 @@ export default function NewOrder() {
         selectedProduct
       );
 
-      const order = createStoredOrder({
+      const order = createOrder({
         ...form,
         customer_id: customerId,
         quote_status: "Draft",

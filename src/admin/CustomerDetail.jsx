@@ -2,8 +2,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { customerIdsEqual, normalizeCustomerId } from "../lib/customerIds";
 import { updateStoredCustomer, useStoredCustomers } from "../lib/customersStore";
-import { duplicateStoredOrder } from "../lib/ordersStore";
-import { listOrders } from "../repositories/ordersRepository";
+import { duplicateOrder, listOrders } from "../repositories/ordersRepository";
 import { getStoredQuickSales } from "../lib/salesStore";
 import CustomerArtworkSection from "../components/CustomerArtworkSection";
 import CustomerTimelineSection from "../components/CustomerTimelineSection";
@@ -289,7 +288,7 @@ export default function CustomerDetail() {
   }, [customer, customers, mergeDirection, orders, sales, selectedMergeCustomer]);
 
   function handleDuplicate(orderNumber) {
-    const duplicated = duplicateStoredOrder(orderNumber);
+    const duplicated = duplicateOrder(orderNumber);
     if (duplicated) {
       navigate(`/admin/orders/${duplicated.order_number}`);
     }
