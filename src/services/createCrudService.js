@@ -1,7 +1,43 @@
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
+import { isProductionPersistenceEnforced } from "../lib/persistenceMode";
 
-async function runSupabaseOperation(operation, fallbackOperation) {
+const WRITE_OPERATIONS = new Set(["create", "update"]);
+
+function buildPersistenceError(operationType, table, reason, error) {
+  const persistenceError = new Error(
+    `Supabase persistence is required for ${operationType} on ${table}. ${reason}`
+  );
+  persistenceError.cause = error;
+  persistenceError.code = "SUPABASE_PERSISTENCE_REQUIRED";
+  return persistenceError;
+}
+
+export function shouldBlockPersistenceFallback(
+  operationType,
+  persistenceEnforced = isProductionPersistenceEnforced
+) {
+  return persistenceEnforced && WRITE_OPERATIONS.has(operationType);
+}
+
+async function runSupabaseOperation(operation, fallbackOperation, options = {}) {
+  const { operationType = "read", table = "unknown" } = options;
+
   if (!isSupabaseConfigured || !supabase) {
+    if (shouldBlockPersistenceFallback(operationType)) {
+      console.error("[createCrudService] blocked production persistence fallback", {
+        table,
+        operationType,
+        reason: "supabase-unavailable",
+        isSupabaseConfigured,
+        hasSupabaseClient: Boolean(supabase),
+      });
+      throw buildPersistenceError(
+        operationType,
+        table,
+        "Supabase is not configured or the client is unavailable."
+      );
+    }
+
     return fallbackOperation();
   }
 
@@ -14,6 +50,22 @@ async function runSupabaseOperation(operation, fallbackOperation) {
 
     return result?.data ?? result;
   } catch (error) {
+    if (shouldBlockPersistenceFallback(operationType)) {
+      console.error("[createCrudService] blocked production persistence fallback", {
+        table,
+        operationType,
+        reason: "supabase-write-failed",
+        message: error?.message || String(error),
+        code: error?.code || "",
+      });
+      throw buildPersistenceError(
+        operationType,
+        table,
+        "Supabase write failed.",
+        error
+      );
+    }
+
     console.error("Supabase service fallback triggered", error);
     return fallbackOperation();
   }
@@ -42,7 +94,7 @@ export function createCrudService(config) {
         }
 
         return query;
-      }, local.list);
+      }, local.list, { operationType: "list", table });
     },
 
     async getById(identifier) {
@@ -53,7 +105,8 @@ export function createCrudService(config) {
             .select(select)
             .eq(remoteMatchField, identifier)
             .maybeSingle(),
-        () => local.getById(identifier)
+        () => local.getById(identifier),
+        { operationType: "getById", table }
       );
     },
 
@@ -65,7 +118,8 @@ export function createCrudService(config) {
             .insert(buildInsertPayload(record))
             .select(select)
             .single(),
-        () => local.create(record)
+        () => local.create(record),
+        { operationType: "create", table }
       );
     },
 
@@ -78,9 +132,9 @@ export function createCrudService(config) {
             .eq(remoteMatchField, identifier)
             .select(select)
             .single(),
-        () => local.update(identifier, updates)
+        () => local.update(identifier, updates),
+        { operationType: "update", table }
       );
     },
   };
 }
-
