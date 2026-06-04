@@ -1,40 +1,51 @@
 import { useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { getOrderByNumber, updateOrder } from "../repositories/ordersRepository";
+import { useMemo, useState } from "react";
+import { updateOrderWorkflow, useOrders } from "../repositories/ordersRepository";
 
 export default function ApprovalReview() {
   const { orderNumber } = useParams();
-  const [order, setOrder] = useState(null);
-  const [customerNote, setCustomerNote] = useState("");
+  const orders = useOrders();
+  const order = useMemo(
+    () => orders.find((entry) => entry.order_number === orderNumber) || null,
+    [orderNumber, orders]
+  );
+  const [customerNotesByOrder, setCustomerNotesByOrder] = useState({});
+  const hasDraftCustomerNote = Object.prototype.hasOwnProperty.call(
+    customerNotesByOrder,
+    orderNumber
+  );
+  const customerNote = hasDraftCustomerNote
+    ? customerNotesByOrder[orderNumber]
+    : order?.customer_approval_note || "";
 
-  useEffect(() => {
-    const stored = getOrderByNumber(orderNumber);
-    if (stored) {
-      setOrder(stored);
-      setCustomerNote(stored.customer_approval_note || "");
-    }
-  }, [orderNumber]);
+  function updateCustomerNote(event) {
+    const nextCustomerNote = event.target.value;
+    setCustomerNotesByOrder((currentNotes) => ({
+      ...currentNotes,
+      [orderNumber]: nextCustomerNote,
+    }));
+  }
 
   function approveMockup() {
-    const updated = updateOrder(orderNumber, {
+    updateOrderWorkflow(orderNumber, {
+      type: "customer_approve_artwork",
       quote_status: order?.deposit_required ? "Awaiting Deposit" : "Approved",
       approval_status: "Customer Approved",
       artwork_approval_status: "Approved",
       customer_approval_note: customerNote,
       customer_approved_at: new Date().toISOString(),
     });
-    if (updated) setOrder(updated);
   }
 
   function requestChanges() {
-    const updated = updateOrder(orderNumber, {
+    updateOrderWorkflow(orderNumber, {
+      type: "customer_request_artwork_revision",
       quote_status: "Awaiting Artwork Approval",
       approval_status: "Customer Requested Changes",
       artwork_approval_status: "Needs Revision",
       customer_approval_note: customerNote,
       customer_revision_requested_at: new Date().toISOString(),
     });
-    if (updated) setOrder(updated);
   }
 
   if (!order) {
@@ -144,7 +155,7 @@ export default function ApprovalReview() {
           Approval Notes
           <textarea
             value={customerNote}
-            onChange={(event) => setCustomerNote(event.target.value)}
+            onChange={updateCustomerNote}
             placeholder="Add approval comments or requested changes here."
             style={{
               border: "1px solid #cbd5e1",

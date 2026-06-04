@@ -106,6 +106,38 @@ function buildArtworkApprovalWorkflowUpdates(order, workflowInput = {}, options 
   };
 }
 
+function buildCustomerArtworkApprovalWorkflowUpdates(order, workflowInput = {}, options = {}) {
+  const type = getWorkflowActionType(workflowInput);
+  const now = getWorkflowTimestamp(options);
+  const customerApprovalNote =
+    Object.prototype.hasOwnProperty.call(workflowInput, "customer_approval_note")
+      ? workflowInput.customer_approval_note
+      : workflowInput.customerApprovalNote || "";
+
+  if (type === "customer_approve_artwork") {
+    return {
+      quote_status: order?.deposit_required ? "Awaiting Deposit" : "Approved",
+      approval_status: "Customer Approved",
+      artwork_approval_status: "Approved",
+      customer_approval_note: customerApprovalNote,
+      customer_approved_at: workflowInput.customer_approved_at || workflowInput.customerApprovedAt || now,
+    };
+  }
+
+  if (type === "customer_request_artwork_revision") {
+    return {
+      quote_status: "Awaiting Artwork Approval",
+      approval_status: "Customer Requested Changes",
+      artwork_approval_status: "Needs Revision",
+      customer_approval_note: customerApprovalNote,
+      customer_revision_requested_at:
+        workflowInput.customer_revision_requested_at || workflowInput.customerRevisionRequestedAt || now,
+    };
+  }
+
+  return null;
+}
+
 function buildDepositWorkflowUpdates(order, workflowInput = {}, options = {}) {
   const normalizedStatus = String(workflowInput.status || workflowInput.nextStatus || "").trim();
   const now = getWorkflowTimestamp(options);
@@ -387,6 +419,9 @@ function buildOrderWorkflowUpdates(order, workflowInput = {}, options = {}) {
     case "set_artwork_approval":
     case "artwork_approval":
       return buildArtworkApprovalWorkflowUpdates(order, workflowInput, options);
+    case "customer_approve_artwork":
+    case "customer_request_artwork_revision":
+      return buildCustomerArtworkApprovalWorkflowUpdates(order, workflowInput, options);
     case "set_deposit_workflow":
     case "deposit_workflow":
       return buildDepositWorkflowUpdates(order, workflowInput, options);
