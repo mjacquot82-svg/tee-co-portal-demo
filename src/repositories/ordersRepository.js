@@ -181,6 +181,62 @@ function buildDepositRequestWorkflowUpdates(order, workflowInput = {}, options =
   };
 }
 
+function buildCustomerRequestCompletionWorkflowUpdates(workflowInput = {}, options = {}) {
+  const type = getWorkflowActionType(workflowInput);
+  const now = getWorkflowTimestamp(options);
+  const requestCompletedAt = workflowInput.request_completed_at || workflowInput.requestCompletedAt || now;
+
+  if (type === "customer_mark_artwork_later") {
+    return {
+      request_completion_status: "awaiting_artwork",
+      artwork_intent: "upload_later",
+      request_completed_at: requestCompletedAt,
+      activity_type: workflowInput.activity_type || "request_completion",
+      activity_note:
+        workflowInput.activity_note ||
+        workflowInput.activityNote ||
+        "Customer marked the request as awaiting artwork.",
+    };
+  }
+
+  if (type === "customer_request_artwork_help") {
+    return {
+      request_completion_status: "artwork_assistance_required",
+      artwork_intent: "need_artwork_help",
+      request_completed_at: requestCompletedAt,
+      activity_type: workflowInput.activity_type || "request_completion",
+      activity_note:
+        workflowInput.activity_note ||
+        workflowInput.activityNote ||
+        "Customer requested artwork help.",
+    };
+  }
+
+  if (type === "customer_attach_artwork_to_request") {
+    return {
+      request_completion_status: "ready_for_review",
+      artwork_intent: "upload_now",
+      request_completed_at: requestCompletedAt,
+      artwork_received_at: workflowInput.artwork_received_at || workflowInput.artworkReceivedAt || now,
+      customer_artwork_id: workflowInput.customer_artwork_id || workflowInput.customerArtworkId || "",
+      customer_artwork_name: workflowInput.customer_artwork_name || workflowInput.customerArtworkName || "",
+      artwork_files: Array.isArray(workflowInput.artwork_files)
+        ? workflowInput.artwork_files
+        : Array.isArray(workflowInput.artworkFiles)
+        ? workflowInput.artworkFiles
+        : [],
+      placements: Array.isArray(workflowInput.placements) ? workflowInput.placements : [],
+      activity_type: workflowInput.activity_type || "request_completion",
+      activity_note:
+        workflowInput.activity_note ||
+        workflowInput.activityNote ||
+        "Customer attached artwork and marked the request ready for review.",
+    };
+  }
+
+  return null;
+}
+
 function buildGatingOverrideWorkflowUpdates(order, workflowInput = {}, options = {}) {
   const overrideKey = workflowInput.overrideKey || workflowInput.key;
   const now = getWorkflowTimestamp(options);
@@ -337,6 +393,10 @@ function buildOrderWorkflowUpdates(order, workflowInput = {}, options = {}) {
     case "send_deposit_request":
     case "deposit_request":
       return buildDepositRequestWorkflowUpdates(order, workflowInput, options);
+    case "customer_mark_artwork_later":
+    case "customer_request_artwork_help":
+    case "customer_attach_artwork_to_request":
+      return buildCustomerRequestCompletionWorkflowUpdates(workflowInput, options);
     case "apply_gating_override":
     case "gating_override":
       return buildGatingOverrideWorkflowUpdates(order, workflowInput, options);

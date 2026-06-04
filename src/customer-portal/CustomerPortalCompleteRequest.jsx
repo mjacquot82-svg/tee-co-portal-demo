@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import CustomerArtworkSection from "../components/CustomerArtworkSection";
-import { updateOrder, useOrders } from "../repositories/ordersRepository";
+import { updateOrderWorkflow, useOrders } from "../repositories/ordersRepository";
 import { useStoredCustomers } from "../lib/customersStore";
 import { findCustomerProfileForSession } from "../lib/customerPortalData";
 import { PortalPage, SectionCard } from "./CustomerPortalShared";
@@ -115,14 +115,17 @@ export default function CustomerPortalCompleteRequest() {
   const hasSingleArtworkOption = libraryArtworkCount === 1;
   const attachActionLabel = hasSingleArtworkOption ? "Attach Artwork" : "Attach To Request";
 
-  function handleUpdate(updates, successMessage, redirectTo = "", redirectState = null) {
+  function handleUpdate(actionType, updates, successMessage, redirectTo = "", redirectState = null) {
     if (!order) return;
 
     setSubmitState("submitting");
     setMessage("");
 
     try {
-      const updatedOrder = updateOrder(order.order_number, updates);
+      const updatedOrder = updateOrderWorkflow(order.order_number, {
+        type: actionType,
+        ...updates,
+      });
       if (!updatedOrder) {
         throw new Error("The request could not be found while saving your artwork update.");
       }
@@ -152,6 +155,7 @@ export default function CustomerPortalCompleteRequest() {
   function handleUploadLater() {
     setSelectedAction("upload_later");
     handleUpdate(
+      "customer_mark_artwork_later",
       {
         request_completion_status: "awaiting_artwork",
         artwork_intent: "upload_later",
@@ -172,6 +176,7 @@ export default function CustomerPortalCompleteRequest() {
   function handleNeedArtworkHelp() {
     setSelectedAction("need_artwork_help");
     handleUpdate(
+      "customer_request_artwork_help",
       {
         request_completion_status: "artwork_assistance_required",
         artwork_intent: "need_artwork_help",
@@ -205,6 +210,7 @@ export default function CustomerPortalCompleteRequest() {
     }));
 
     handleUpdate(
+      "customer_attach_artwork_to_request",
       {
         request_completion_status: "ready_for_review",
         artwork_intent: "upload_now",
