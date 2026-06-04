@@ -18,6 +18,22 @@ function getAnonymousCustomerSession() {
   return null;
 }
 
+let cachedCustomerSessionKey = "";
+let cachedCustomerSessionSnapshot = null;
+
+function getCustomerSessionSnapshot() {
+  const nextSession = getActiveCustomerSession();
+  const nextSessionKey = nextSession ? JSON.stringify(nextSession) : "";
+
+  if (nextSessionKey === cachedCustomerSessionKey) {
+    return cachedCustomerSessionSnapshot;
+  }
+
+  cachedCustomerSessionKey = nextSessionKey;
+  cachedCustomerSessionSnapshot = nextSession;
+  return cachedCustomerSessionSnapshot;
+}
+
 function buildRedirectTarget(location) {
   return `${location.pathname}${location.search || ""}`;
 }
@@ -50,7 +66,7 @@ export function useCustomerWorkflowOrderAccess({
   const navigate = useNavigate();
   const session = useSyncExternalStore(
     subscribeToCustomerSessionSnapshot,
-    getActiveCustomerSession,
+    getCustomerSessionSnapshot,
     getAnonymousCustomerSession
   );
   const orders = useOrders();
