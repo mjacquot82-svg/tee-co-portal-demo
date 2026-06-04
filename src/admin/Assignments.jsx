@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
-import {
-  seedStoredOrders,
-  updateStoredOrder,
-  useStoredOrders,
-} from "../lib/ordersStore";
+import { seedStoredOrders } from "../lib/ordersStore";
+import { updateOrderWorkflow, useOrders } from "../repositories/ordersRepository";
 import {
   getActiveStaffUser,
   getOperationalStaffUsers,
@@ -12,26 +9,12 @@ import {
 } from "../lib/staffUsersStore";
 import AssignmentDispatchBoard from "../assignments/AssignmentDispatchBoard";
 import {
-  isActiveOperationalStatus,
-  isCompletedOperationalStatus,
   normalizeOperationalStatus,
   sortOrdersByOperationalStatus,
 } from "../orders/orderWorkflow";
 import {
   isStaffWorkspaceView,
 } from "./adminRoleView";
-
-const cardStyle = {
-  background: "#ffffff",
-  borderRadius: "20px",
-  padding: "22px",
-  boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-  border: "1px solid #e7e5e4",
-};
-
-function isOpenOrder(order) {
-  return order.operational_visible !== false && isActiveOperationalStatus(order.status);
-}
 
 function normalizeOrder(order, index = 0) {
   return {
@@ -45,14 +28,6 @@ function normalizeOrder(order, index = 0) {
     assigned_to_staff_name: order.assigned_to_staff_name || "",
     operational_visible: order.operational_visible !== false,
   };
-}
-
-function isOverdue(order) {
-  if (!order.due_date) return false;
-  const due = new Date(`${order.due_date}T00:00:00`);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return due < today && !isCompletedOperationalStatus(order.status);
 }
 
 function formatWorkerName(worker) {
@@ -75,15 +50,15 @@ function OwnerAssignments({ allOrders, staffUsers }) {
             ? `Assignment confirmed for ${nextAssignment}.`
             : "Assignment cleared.";
 
-    updateStoredOrder(order.order_number, {
-      assigned_to_staff_id: selectedWorker?.id || "",
-      assigned_to_staff_name: selectedWorker?.name || "",
-      assigned_to_staff_role: selectedWorker?.role || "",
-      assigned_at: selectedWorker ? new Date().toISOString() : null,
-      needs_assignment: !selectedWorker,
-      activity_type: "assignment",
-      activity_note: activityNote,
-    });
+    updateOrderWorkflow(
+      order.order_number,
+      {
+        type: "assign_staff",
+        assignee: selectedWorker,
+        activity_note: activityNote,
+      },
+      { now: new Date().toISOString() }
+    );
   }
 
   return (
@@ -105,7 +80,7 @@ function OwnerAssignments({ allOrders, staffUsers }) {
 }
 
 export default function Assignments() {
-  const storedOrders = useStoredOrders();
+  const storedOrders = useOrders();
   const staffUser = getActiveStaffUser();
   const [staffUsers, setStaffUsers] = useState(() =>
     getOperationalStaffUsers().filter((user) => user.status !== "Inactive")
