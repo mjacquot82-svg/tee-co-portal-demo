@@ -9,6 +9,7 @@ import {
   useStoredOrders,
 } from "../lib/ordersStore";
 import { linkOrderToCustomer } from "../lib/customersStore";
+import { isProductionPersistenceEnforced } from "../lib/persistenceMode";
 import { buildWorkflowActionUpdates } from "../orders/buildWorkflowActionUpdates";
 import { normalizeOperationalStatus } from "../orders/orderWorkflow";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
@@ -31,6 +32,30 @@ function withActorAudit(updates = {}, options = {}) {
     updated_by_staff_role: actor.role || "",
     ...updates,
   };
+}
+
+export function shouldBlockOrderRepositoryLocalWrite(
+  persistenceEnforced = isProductionPersistenceEnforced
+) {
+  return Boolean(persistenceEnforced);
+}
+
+function buildOrderPersistenceError(operationType) {
+  const error = new Error(
+    `Durable order persistence is required for ${operationType}. Local-only order writes are blocked while production persistence enforcement is active.`
+  );
+  error.code = "ORDER_PERSISTENCE_REQUIRED";
+  return error;
+}
+
+function assertOrderRepositoryWriteAllowed(operationType) {
+  if (!shouldBlockOrderRepositoryLocalWrite()) return;
+
+  console.error("[ordersRepository] blocked local-only order write", {
+    operationType,
+    reason: "production-persistence-enforced",
+  });
+  throw buildOrderPersistenceError(operationType);
 }
 
 function getWorkflowActionType(workflowInput = {}) {
@@ -504,6 +529,7 @@ export function getOrderByNumber(orderNumber) {
 }
 
 export function createOrder(order) {
+  assertOrderRepositoryWriteAllowed("createOrder");
   return createStoredOrder(order);
 }
 
@@ -518,10 +544,12 @@ export async function createCustomerRequest({ profile = null, orderInput = {}, l
 }
 
 export function updateOrder(orderNumber, updates) {
+  assertOrderRepositoryWriteAllowed("updateOrder");
   return updateStoredOrder(orderNumber, updates);
 }
 
 export function recordOrderPayment(orderNumber, paymentInput = {}, options = {}) {
+  assertOrderRepositoryWriteAllowed("recordOrderPayment");
   return recordStoredOrderPayment(orderNumber, paymentInput, options);
 }
 
@@ -532,10 +560,12 @@ export function updateOrderWorkflow(orderNumber, workflowInput = {}, options = {
   const updates = buildOrderWorkflowUpdates(order, workflowInput, options);
   if (!updates) return null;
 
-  return updateOrder(orderNumber, withActorAudit(updates, options));
+  assertOrderRepositoryWriteAllowed("updateOrderWorkflow");
+  return updateStoredOrder(orderNumber, withActorAudit(updates, options));
 }
 
 export function duplicateOrder(orderNumber) {
+  assertOrderRepositoryWriteAllowed("duplicateOrder");
   return duplicateStoredOrder(orderNumber);
 }
 
