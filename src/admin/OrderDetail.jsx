@@ -1,8 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import "./OrderDetail.css";
-import { useStoredOrders } from "../lib/ordersStore";
-import { recordOrderPayment, updateOrderWorkflow } from "../repositories/ordersRepository";
+import { recordOrderPayment, updateOrderWorkflow, useOrders } from "../repositories/ordersRepository";
 import { useStoredProducts } from "../lib/productsStore";
 import {
   getActiveStaffUser,
@@ -24,7 +23,6 @@ import { formatDateTimeParts } from "../lib/dateFormatting";
 import {
   getAvailableProductionActions,
   isCanceledOperationalStatus,
-  normalizeOperationalStatus,
 } from "../orders/orderWorkflow";
 import { buildProductionGatingState } from "../orders/workflowGating";
 import { isAdminWorkspaceView, isStaffWorkspaceView } from "./adminRoleView";
@@ -58,17 +56,13 @@ const sectionValueStyle = {
   lineHeight: 1.45,
 };
 
-function money(value) {
-  return `$${Number(value || 0).toFixed(2)}`;
-}
-
 function buildSizeBreakdownEntries(sizeBreakdown = {}) {
   return Object.entries(sizeBreakdown).filter(([, quantity]) => Number(quantity) > 0);
 }
 
 export default function OrderDetail() {
   const { orderNumber } = useParams();
-  const storedOrders = useStoredOrders();
+  const storedOrders = useOrders();
   const storedProducts = useStoredProducts();
   const [staffUsers, setStaffUsers] = useState(() =>
     getOperationalStaffUsers().filter((staffUser) => staffUser.status !== "Inactive")

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useStoredOrders } from "../lib/ordersStore";
+import { useOrders } from "../repositories/ordersRepository";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 import { formatDateTime, formatShortDate } from "../lib/dateFormatting";
 import { buildOperationalMetrics } from "../operations/buildOperationalMetrics";
@@ -525,7 +525,7 @@ function OwnerDashboard({ orders, operationalEvents }) {
 }
 
 export default function Dashboard() {
-  const orders = useStoredOrders();
+  const orders = useOrders();
   const operationalEvents = useOperationalEvents();
   const staffUser = getActiveStaffUser();
   const resolvedRole = resolveOperationalRole(staffUser);

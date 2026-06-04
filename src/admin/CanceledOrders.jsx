@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { formatDateTime, formatShortDate } from "../lib/dateFormatting";
-import { useStoredOrders } from "../lib/ordersStore";
+import { useOrders } from "../repositories/ordersRepository";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
 import { buildApprovalStatus, buildDepositStatus } from "../quotes/productionReadiness";
 import { isQuoteArchived, isQuoteCanceled } from "../quotes/quoteWorkflow";
@@ -119,7 +119,7 @@ export default function CanceledOrders() {
   const navigate = useNavigate();
   const viewer = getAdminViewer(getActiveStaffUser());
   const canViewCanceledOrders = canManageCanceledOrders(viewer);
-  const orders = useStoredOrders();
+  const orders = useOrders();
   const canceledRecords = useMemo(() => buildCanceledRecords(orders), [orders]);
   const [flashMessage, setFlashMessage] = useState(() => location.state?.flashMessage || "");
   const [flashTone] = useState(() => location.state?.flashTone || "default");

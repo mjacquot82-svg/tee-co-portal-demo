@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { formatDateTime } from "../lib/dateFormatting";
-import { useStoredOrders } from "../lib/ordersStore";
+import { useOrders } from "../repositories/ordersRepository";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
 
 const PAGE_SIZE = 20;
@@ -46,13 +46,14 @@ function SummaryStat({ label, value, detail }) {
 }
 
 export default function FinancialHistory() {
-  const orders = useStoredOrders();
+  const orders = useOrders();
   const financialOrders = useMemo(
     () => orders.map((order) => normalizeOrderFinancials(order)),
     [orders]
   );
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
+  const [currentTimestamp] = useState(() => Date.now());
   const allEvents = useMemo(() => buildFinancialEvents(financialOrders), [financialOrders]);
 
   const filteredEvents = useMemo(() => {
@@ -78,7 +79,7 @@ export default function FinancialHistory() {
   const recent24HoursCount = allEvents.filter((event) => {
     const timestamp = new Date(event.created_at || "").getTime();
     if (!timestamp) return false;
-    return Date.now() - timestamp <= 24 * 60 * 60 * 1000;
+    return currentTimestamp - timestamp <= 24 * 60 * 60 * 1000;
   }).length;
 
   return (

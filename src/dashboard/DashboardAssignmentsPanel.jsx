@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
 import AssignmentAlertCard from "../components/AssignmentAlertCard";
-import { useStoredOrders } from "../lib/ordersStore";
+import { useOrders } from "../repositories/ordersRepository";
 
 export default function DashboardAssignmentsPanel() {
-  const orders = useStoredOrders();
+  const orders = useOrders();
 
   const pendingAssignments = orders.filter(
     (order) => order.needs_assignment || !order.assigned_to_staff_id

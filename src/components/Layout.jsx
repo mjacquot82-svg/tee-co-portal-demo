@@ -1,6 +1,6 @@
 import { Component, useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useStoredOrders } from "../lib/ordersStore";
+import { useOrders } from "../repositories/ordersRepository";
 import { formatShortDate } from "../lib/dateFormatting";
 import { isActiveOperationalStatus } from "../orders/orderWorkflow";
 import {
@@ -472,7 +472,7 @@ function SocialLinks({ compact = false }) {
 }
 
 function AdminSidebar({ pathname, staffUser }) {
-  const orders = useStoredOrders();
+  const orders = useOrders();
   const assignmentAttentionState = useStaffAssignmentAttention();
   const staffWorkspace = isStaffWorkspaceView(staffUser);
   const operationalOrders = isAdminWorkspaceView(staffUser)

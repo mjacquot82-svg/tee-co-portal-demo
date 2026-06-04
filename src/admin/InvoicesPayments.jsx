@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import PaymentStatusBadge from "../components/PaymentStatusBadge";
 import { formatDateTime, formatShortDate } from "../lib/dateFormatting";
-import { useStoredOrders } from "../lib/ordersStore";
+import { useOrders } from "../repositories/ordersRepository";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
 import { isCanceledOperationalStatus } from "../orders/orderWorkflow";
 import { isQuoteCanceled } from "../quotes/quoteWorkflow";
@@ -132,7 +132,7 @@ function QueueHint({ label, value, tone = "default" }) {
 }
 
 export default function InvoicesPayments() {
-  const orders = useStoredOrders();
+  const orders = useOrders();
   const financialOrders = orders.map((order) => normalizeOrderFinancials(order));
   const activeFinancialOrders = financialOrders.filter(isActiveFinancialWorkflowOrder);
   const statusCounts = buildStatusCounts(activeFinancialOrders);

@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { findStoredOrder } from "../lib/ordersStore";
+import { getOrderByNumber } from "../repositories/ordersRepository";
 import StatusBadge from "../components/StatusBadge";
 import { getArtworkDisplayName, getOrderArtworkFiles } from "../lib/orderArtwork";
 
@@ -19,7 +19,7 @@ function formatPrice(value, isAvailable = true) {
 
 export default function WorkOrder() {
   const { orderNumber } = useParams();
-  const order = findStoredOrder(orderNumber);
+  const order = getOrderByNumber(orderNumber);
 
   if (!order) {
     return (
