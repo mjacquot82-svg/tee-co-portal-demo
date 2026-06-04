@@ -2,8 +2,8 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router-do
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getOrderArtworkNames } from "../lib/orderArtwork";
 import { getJsonStorageItem, setJsonStorageItem } from "../lib/browserStorage";
-import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
+import { updateOrderWorkflow, useOrders } from "../repositories/ordersRepository";
 import {
   canAdvanceQuoteStatus,
   getNextQuoteStatus,
@@ -318,7 +318,7 @@ export default function Quotes() {
   const viewer = getAdminViewer(staffUser);
   const isStaffWorkspace = isStaffWorkspaceView(staffUser);
   const canViewArchivedQuotes = canManageArchivedQuotes(viewer);
-  const orders = useStoredOrders();
+  const orders = useOrders();
   const cardRefs = useRef({});
   const [expandedQuotes, setExpandedQuotes] = useState(readExpandedQuotesState);
   const [flashTitle, setFlashTitle] = useState(() => location.state?.flashTitle || "Quote Created Successfully");
@@ -493,13 +493,8 @@ export default function Quotes() {
     );
     if (!confirmed) return;
 
-    updateStoredOrder(quote.order_number, {
-      quote_archived: true,
-      quote_archived_at: new Date().toISOString(),
-      operational_visible: false,
-      production_ready: false,
-      activity_type: "quote_archive",
-      activity_note: "Quote archived from active workflow.",
+    updateOrderWorkflow(quote.order_number, {
+      type: "archive_quote",
     });
 
     setFlashTitle("Quote Archived");
