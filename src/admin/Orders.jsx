@@ -3,9 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import StatusBadge from "../components/StatusBadge";
 import WorkflowBadge from "../components/WorkflowBadge";
 import { formatShortDate } from "../lib/dateFormatting";
-import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
-import { buildWorkflowActionUpdates } from "../orders/buildWorkflowActionUpdates";
 import { sortOrdersByOperationalStatus } from "../orders/orderWorkflow";
+import { updateOrderWorkflow, useOrders } from "../repositories/ordersRepository";
 import {
   buildWorkflowBlockDetails,
   buildWorkflowStatusBadges,
@@ -677,7 +676,7 @@ function ProductionDetailDrawer({
 }
 
 export default function Orders() {
-  const storedOrders = useStoredOrders();
+  const storedOrders = useOrders();
   const staffUser = getActiveStaffUser();
   const [actionFeedbackByOrder, setActionFeedbackByOrder] = useState({});
   const isStaffWorkspace = isStaffWorkspaceView(staffUser);
@@ -777,12 +776,15 @@ export default function Orders() {
   function handleRunAction(order, action) {
     const gating = buildWorkflowBlockDetails(order, action);
     if (gating.blocked) {
-      updateStoredOrder(order.order_number, {
-        activity_type: "production_blocked",
-        activity_note: `${action.label} blocked. ${gating.blockingReasons.join(" ")}`,
-        last_production_blocked_at: new Date().toISOString(),
-        last_production_blocked_reasons: gating.blockingReasons,
-      });
+      updateOrderWorkflow(
+        order.order_number,
+        {
+          type: "record_production_blocked",
+          action,
+          blockingReasons: gating.blockingReasons,
+        },
+        { now: new Date().toISOString() }
+      );
       setActionFeedbackByOrder((current) => ({
         ...current,
         [order.order_number]: {
@@ -795,8 +797,7 @@ export default function Orders() {
       return;
     }
 
-    const updates = buildWorkflowActionUpdates(order, action);
-    if (!updates) return;
+    if (!action?.targetStatus) return;
     setActionFeedbackByOrder((current) => ({
       ...current,
       [order.order_number]: {
@@ -806,7 +807,10 @@ export default function Orders() {
         nextActionLabel: "",
       },
     }));
-    updateStoredOrder(order.order_number, updates);
+    updateOrderWorkflow(order.order_number, {
+      type: "run_production_action",
+      action,
+    });
   }
 
   function handleOpenDetail(order) {
@@ -827,15 +831,15 @@ export default function Orders() {
       ? `Assignment confirmed for ${nextAssignment}.`
       : "Assignment cleared.";
 
-    updateStoredOrder(order.order_number, {
-      assigned_to_staff_id: selectedWorker?.id || "",
-      assigned_to_staff_name: selectedWorker?.name || "",
-      assigned_to_staff_role: selectedWorker?.role || "",
-      assigned_at: selectedWorker ? new Date().toISOString() : null,
-      needs_assignment: !selectedWorker,
-      activity_type: "assignment",
-      activity_note: activityNote,
-    });
+    updateOrderWorkflow(
+      order.order_number,
+      {
+        type: "assign_staff",
+        assignee: selectedWorker,
+        activity_note: activityNote,
+      },
+      { now: new Date().toISOString() }
+    );
   }
 
   return (
