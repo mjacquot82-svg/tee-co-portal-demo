@@ -73,6 +73,12 @@ const PRODUCT_MODES = {
 const CREATE_STOREFRONT_CATEGORY_VALUE = "__create_storefront_category__";
 const CREATE_BRAND_VALUE = "__create_brand__";
 
+function isUuidLike(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(value || "").trim()
+  );
+}
+
 const emptyProduct = {
   productMode: PRODUCT_MODES.APPAREL,
   name: "",
@@ -1567,6 +1573,9 @@ export default function Products() {
       : resolveStructuredProductType(garmentModel, form.product_type, form.name);
     const resolvedSupplierCategoryName = category?.name || form.category || "Catalog";
     const resolvedStorefrontCategoryName = storefrontCategory?.name || "";
+    const resolvedStorefrontCategoryLookupId = isUuidLike(storefrontCategory?.lookupId)
+      ? storefrontCategory.lookupId
+      : null;
     const resolvedManualCategoryName =
       resolvedStorefrontCategoryName || normalizeText(form.category) || "Catalog";
 
@@ -1578,7 +1587,7 @@ export default function Products() {
       category: isManualProductMode ? resolvedManualCategoryName : resolvedSupplierCategoryName,
       storefront_category: resolvedStorefrontCategoryName || null,
       category_lookup_id: isManualProductMode ? null : category?.id || form.category_lookup_id || null,
-      storefront_category_lookup_id: storefrontCategory?.lookupId || null,
+      storefront_category_lookup_id: resolvedStorefrontCategoryLookupId,
       product_type: resolvedProductType,
       brand_model: isManualProductMode
         ? buildLegacyBrandModelValue(brand, null, form.brand_model)
