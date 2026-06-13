@@ -139,6 +139,11 @@ function isUuidLike(value) {
   );
 }
 
+function normalizeUuidForeignKey(value) {
+  const normalizedValue = String(value || "").trim();
+  return isUuidLike(normalizedValue) ? normalizedValue : null;
+}
+
 function emitProductsUpdated() {
   productListeners.forEach((listener) => {
     listener();
@@ -644,14 +649,15 @@ function buildSupabaseProductRecord(product = {}, options = {}) {
     name: product.name || "",
     category: product.category || "Catalog",
     storefront_category: product.storefront_category || null,
-    category_lookup_id: product.category_lookup_id || null,
-    storefront_category_lookup_id: product.storefront_category_lookup_id || null,
+    category_lookup_id: normalizeUuidForeignKey(product.category_lookup_id),
+    storefront_category_lookup_id: normalizeUuidForeignKey(product.storefront_category_lookup_id),
     product_type: product.product_type || product.type || product.name || "",
     brand_model: product.brand_model || "",
-    brand_lookup_id: product.brand_lookup_id || null,
-    garment_library_item_id:
-      product.garment_library_item_id || product.garment_library_id || null,
-    garment_model_lookup_id: product.garment_model_lookup_id || null,
+    brand_lookup_id: normalizeUuidForeignKey(product.brand_lookup_id),
+    garment_library_item_id: normalizeUuidForeignKey(
+      product.garment_library_item_id || product.garment_library_id
+    ),
+    garment_model_lookup_id: normalizeUuidForeignKey(product.garment_model_lookup_id),
     status: normalizedStatus,
     is_featured: Boolean(product.is_featured || product.is_hero_feature),
     is_hero_feature: Boolean(product.is_hero_feature),
