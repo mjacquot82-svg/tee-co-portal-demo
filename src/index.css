@@ -218,6 +218,7 @@ aside img:not(.tee-co-logo) {
 .storefront-merch-hero-product,
 .storefront-merch-hero-meta,
 .storefront-section,
+.storefront-mobile-category-nav,
 .storefront-collection-meta,
 .storefront-featured-copy,
 .storefront-category-rows,
@@ -256,6 +257,7 @@ aside img:not(.tee-co-logo) {
 
 .storefront-rail-card,
 .storefront-merch-hero,
+.storefront-mobile-category-nav,
 .storefront-collection-card,
 .storefront-featured-card,
 .storefront-category-row,
@@ -494,6 +496,87 @@ aside img:not(.tee-co-logo) {
 
 .storefront-section-title {
   font-size: clamp(1.7rem, 3vw, 2.25rem);
+}
+
+.storefront-mobile-category-nav {
+  gap: 14px;
+  padding: 18px;
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(248, 250, 252, 0.98) 100%);
+}
+
+.storefront-mobile-category-nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.storefront-mobile-category-nav-title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.storefront-mobile-category-nav-count,
+.storefront-mobile-category-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.storefront-mobile-category-nav-count {
+  padding: 0 10px;
+}
+
+.storefront-mobile-category-nav-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 8px;
+}
+
+.storefront-mobile-category-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 10px 8px 12px;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #0f172a;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 800;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.storefront-mobile-category-link span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.storefront-mobile-category-link:hover {
+  border-color: #d6d3d1;
+  background: #f8fafc;
+  transform: translateY(-1px);
+}
+
+.storefront-mobile-category-count {
+  min-width: 28px;
+  flex: 0 0 auto;
+  padding: 0 8px;
 }
 
 .storefront-collection-card,
@@ -1032,6 +1115,10 @@ aside img:not(.tee-co-logo) {
     display: grid;
     position: sticky;
     top: 20px;
+  }
+
+  .storefront-mobile-category-nav {
+    display: none;
   }
 
   .storefront-featured-grid-wide {

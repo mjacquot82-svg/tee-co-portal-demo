@@ -212,6 +212,39 @@ export default function Home() {
             </Link>
           </section>
 
+          <section
+            className="storefront-mobile-category-nav"
+            aria-labelledby="storefront-mobile-category-nav-title"
+          >
+            <div className="storefront-mobile-category-nav-header">
+              <div>
+                <p className="storefront-section-kicker">All Collections</p>
+                <h2
+                  id="storefront-mobile-category-nav-title"
+                  className="storefront-mobile-category-nav-title"
+                >
+                  Browse every category
+                </h2>
+              </div>
+              <span className="storefront-mobile-category-nav-count">
+                {storefrontCategories.length || 0} collections
+              </span>
+            </div>
+
+            <nav className="storefront-mobile-category-nav-links" aria-label="All storefront categories">
+              {storefrontCategories.map((category) => (
+                <Link
+                  key={category.id}
+                  to={`/category/${category.id}`}
+                  className="storefront-mobile-category-link"
+                >
+                  <span>{category.name}</span>
+                  <span className="storefront-mobile-category-count">{category.productCount}</span>
+                </Link>
+              ))}
+            </nav>
+          </section>
+
           <section className="storefront-section" id="storefront-featured">
             <div className="storefront-section-header">
               <div>
