@@ -34,8 +34,43 @@ function normalizeText(value) {
   return String(value || "").trim();
 }
 
+const FALLBACK_SWATCH_COLORS = Object.freeze({
+  black: "#111111",
+  white: "#ffffff",
+  navy: "#1f2a44",
+  royal: "#1d4ed8",
+  red: "#dc2626",
+  maroon: "#7f1d1d",
+  "forest green": "#166534",
+  "kelly green": "#16a34a",
+  orange: "#f97316",
+  gold: "#fbbf24",
+  purple: "#7e22ce",
+  charcoal: "#374151",
+  "sport grey": "#9ca3af",
+  "athletic grey heather": "#a3a3a3",
+  "heather grey": "#9ca3af",
+  sand: "#d6c7a1",
+  ivory: "#fffff0",
+  sapphire: "#0ea5e9",
+  "carolina blue": "#7dd3fc",
+  "light blue": "#bfdbfe",
+  "safety green": "#84cc16",
+  "safety orange": "#fb923c",
+  "safety pink": "#f9a8d4",
+});
+
 function isValidHexColor(value) {
   return /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(normalizeText(value));
+}
+
+function resolveSwatchDisplayColor(colorRecord = {}) {
+  if (isValidHexColor(colorRecord.hex_value)) {
+    return normalizeText(colorRecord.hex_value);
+  }
+
+  const colorNameKey = normalizeText(colorRecord.color_name).toLowerCase();
+  return FALLBACK_SWATCH_COLORS[colorNameKey] || null;
 }
 
 function buildFallbackColorRecords(colorNames = [], keyPrefix = "fallback") {
@@ -504,7 +539,8 @@ export default function GarmentView() {
               {availableColorRecords.map((colorRecord) => {
                 const colorName = colorRecord.color_name;
                 const isSelected = currentSelectedColor === colorName;
-                const hasHexValue = isValidHexColor(colorRecord.hex_value);
+                const displayColor = resolveSwatchDisplayColor(colorRecord);
+                const hasDisplayColor = Boolean(displayColor);
 
                 return (
                   <button
@@ -539,8 +575,8 @@ export default function GarmentView() {
                         height: "24px",
                         flex: "0 0 24px",
                         borderRadius: "999px",
-                        background: hasHexValue ? colorRecord.hex_value : "#f5f5f4",
-                        border: hasHexValue ? "1px solid #a8a29e" : "1px solid #d6d3d1",
+                        background: hasDisplayColor ? displayColor : "#f5f5f4",
+                        border: hasDisplayColor ? "1px solid #a8a29e" : "1px solid #d6d3d1",
                         boxShadow: isSelected ? "0 0 0 2px rgba(255,255,255,0.68)" : "none",
                       }}
                     />
