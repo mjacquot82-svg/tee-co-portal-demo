@@ -14,6 +14,7 @@ import {
   getStorefrontProductCategoryLabel,
   getStorefrontProductImage,
   getStorefrontProducts,
+  resolveStorefrontProductImage,
 } from "../lib/storefrontCatalog";
 import {
   areStoredProductsReady,
@@ -322,7 +323,7 @@ export default function CustomerPortalRequestOrder() {
               }}
             >
               {categoryProducts.map((product) => {
-                const imageSrc = getStorefrontProductImage(product);
+                const productImage = resolveStorefrontProductImage(product, { size: "thumb" });
                 const isSelected = selectedProduct?.id === product.id;
 
                 return (
@@ -356,10 +357,14 @@ export default function CustomerPortalRequestOrder() {
                         placeItems: "center",
                       }}
                     >
-                      {imageSrc ? (
+                      {productImage.src ? (
                         <img
-                          src={imageSrc}
-                          alt={product.name}
+                          src={productImage.src}
+                          alt={productImage.alt}
+                          width="320"
+                          height="320"
+                          loading="lazy"
+                          decoding="async"
                           style={{ width: "100%", height: "100%", objectFit: "contain" }}
                         />
                       ) : (

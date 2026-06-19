@@ -120,8 +120,68 @@ export function getHeroStorefrontProduct(products = []) {
   );
 }
 
-export function getStorefrontProductImage(product) {
-  return normalizeText(product?.image);
+function firstPresentText(...values) {
+  return values.map(normalizeText).find(Boolean) || "";
+}
+
+function isRenderableImageSource(value) {
+  const normalizedValue = normalizeText(value);
+  return (
+    normalizedValue.startsWith("data:image/") ||
+    normalizedValue.startsWith("blob:") ||
+    normalizedValue.startsWith("http://") ||
+    normalizedValue.startsWith("https://") ||
+    normalizedValue.startsWith("/")
+  );
+}
+
+function firstRenderableImageSource(...values) {
+  return values.map(normalizeText).find(isRenderableImageSource) || "";
+}
+
+export function resolveStorefrontProductImage(product = {}, options = {}) {
+  const size = normalizeText(options.size || "medium");
+  const storagePath = firstPresentText(
+    product?.image_storage_path,
+    product?.image_original_path,
+    product?.image_medium_path,
+    product?.image_thumb_path,
+    product?.thumbnail_path
+  );
+  const preferredImage =
+    size === "thumb"
+      ? firstRenderableImageSource(
+          product?.image_thumb_url,
+          product?.thumbnail_url,
+          product?.image_medium_url,
+          product?.image_url
+        )
+      : size === "original"
+        ? firstRenderableImageSource(
+            product?.image_original_url,
+            product?.image_url,
+            product?.image_medium_url
+          )
+        : firstRenderableImageSource(
+            product?.image_medium_url,
+            product?.image_url,
+            product?.image_thumb_url,
+            product?.thumbnail_url
+          );
+  const legacyImage = normalizeText(product?.image);
+  const src = preferredImage || (isRenderableImageSource(legacyImage) ? legacyImage : "");
+
+  return {
+    src,
+    alt: normalizeText(options.alt || product?.name || "Catalog product"),
+    isBase64: src.startsWith("data:image/"),
+    storagePath,
+    source: preferredImage ? "resolved-product-image" : src ? "legacy-product-image" : "none",
+  };
+}
+
+export function getStorefrontProductImage(product, options = {}) {
+  return resolveStorefrontProductImage(product, options).src;
 }
 
 function isCustomerFacingStorefrontLabel(value) {
@@ -354,19 +414,20 @@ export function buildStorefrontCategories(products = [], storefrontCategories = 
   getStorefrontProducts(products).forEach((product) => {
     const resolvedCategory = resolveProductStorefrontCategory(product, registry);
     const categoryId = resolvedCategory.id || "catalog";
+    const productImage = resolveStorefrontProductImage(product, { size: "thumb" }).src;
     const existingCategory = groupedCategories.get(categoryId);
 
     if (existingCategory) {
       existingCategory.products.push(product);
-      if (!existingCategory.image && product?.image) {
-        existingCategory.image = product.image;
+      if (!existingCategory.image && productImage) {
+        existingCategory.image = productImage;
       }
       return;
     }
 
     groupedCategories.set(categoryId, {
       ...resolvedCategory,
-      image: normalizeText(product?.image),
+      image: productImage,
       products: [product],
     });
   });

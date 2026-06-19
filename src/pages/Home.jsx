@@ -7,8 +7,8 @@ import {
   getFeaturedStorefrontProducts,
   getHeroStorefrontProduct,
   getStorefrontProductCategoryLabel,
-  getStorefrontProductImage,
   getStorefrontProducts,
+  resolveStorefrontProductImage,
 } from "../lib/storefrontCatalog";
 import { areStoredProductsReady, useStoredProducts } from "../lib/productsStore";
 
@@ -105,6 +105,10 @@ export default function Home() {
     : heroCollection
       ? `/category/${heroCollection.id}`
       : "/";
+  const heroImage = resolveStorefrontProductImage(heroProduct, {
+    alt: heroProduct?.name || "Featured product",
+    size: "medium",
+  });
 
   return (
     <div className="storefront-home">
@@ -173,11 +177,16 @@ export default function Home() {
 
             <Link to={heroLink} className="storefront-merch-hero-product">
               <div className="storefront-merch-hero-visual">
-                {heroProduct && getStorefrontProductImage(heroProduct) ? (
+                {heroProduct && heroImage.src ? (
                   <img
-                    src={getStorefrontProductImage(heroProduct)}
-                    alt={heroProduct?.name || "Featured product"}
+                    src={heroImage.src}
+                    alt={heroImage.alt}
                     className="storefront-merch-hero-image"
+                    width="800"
+                    height="640"
+                    loading="eager"
+                    decoding="async"
+                    fetchPriority="high"
                   />
                 ) : (
                   <NoImagePlaceholder
@@ -260,7 +269,9 @@ export default function Home() {
               <div className="storefront-featured-grid storefront-featured-grid-wide">
                 {featuredProducts.map((product, index) => {
                   const renderIdentity = buildStorefrontRenderIdentity(product, index);
-                  const imageSrc = getStorefrontProductImage(product);
+                  const productImage = resolveStorefrontProductImage(product, {
+                    size: "thumb",
+                  });
                   const categoryLabel = getStorefrontProductCategoryLabel(
                     product,
                     storefrontCategoryLookups
@@ -273,11 +284,15 @@ export default function Home() {
                       className="storefront-featured-card storefront-featured-card-vertical"
                     >
                       <div className="storefront-featured-image-shell storefront-featured-image-shell-large">
-                        {imageSrc ? (
+                        {productImage.src ? (
                           <img
-                            src={imageSrc}
-                            alt={product?.name || "Catalog product"}
+                            src={productImage.src}
+                            alt={productImage.alt}
                             className="storefront-featured-image"
+                            width="640"
+                            height="640"
+                            loading="lazy"
+                            decoding="async"
                           />
                         ) : (
                           <NoImagePlaceholder
@@ -333,6 +348,10 @@ export default function Home() {
                         src={category.image}
                         alt={category.name}
                         className="storefront-collection-image"
+                        width="640"
+                        height="640"
+                        loading="lazy"
+                        decoding="async"
                       />
                     ) : (
                       <NoImagePlaceholder
@@ -396,7 +415,9 @@ export default function Home() {
                   <div className="storefront-category-row-grid">
                     {category.previewProducts.map((product, index) => {
                       const renderIdentity = buildStorefrontRenderIdentity(product, index);
-                      const imageSrc = getStorefrontProductImage(product);
+                      const productImage = resolveStorefrontProductImage(product, {
+                        size: "thumb",
+                      });
 
                       return (
                         <Link
@@ -405,11 +426,15 @@ export default function Home() {
                           className="storefront-featured-card"
                         >
                           <div className="storefront-featured-image-shell">
-                            {imageSrc ? (
+                            {productImage.src ? (
                               <img
-                                src={imageSrc}
-                                alt={product?.name || "Catalog product"}
+                                src={productImage.src}
+                                alt={productImage.alt}
                                 className="storefront-featured-image"
+                                width="320"
+                                height="320"
+                                loading="lazy"
+                                decoding="async"
                               />
                             ) : (
                               <NoImagePlaceholder

@@ -12,8 +12,8 @@ import { useCatalogLookups } from "../lib/catalogLookupsStore";
 import {
   getStorefrontCategoryById,
   getStorefrontProductCategoryLabel,
-  getStorefrontProductImage,
   normalizeCategorySlug,
+  resolveStorefrontProductImage,
 } from "../lib/storefrontCatalog";
 
 function money(value) {
@@ -168,7 +168,11 @@ export default function GarmentView() {
     );
   }
 
-  const imageSrc = garment?.image || getStorefrontProductImage(selectedProduct);
+  const productImage = resolveStorefrontProductImage(selectedProduct, {
+    alt: detailTitle,
+    size: "medium",
+  });
+  const imageSrc = garment?.image || productImage.src;
   const startingPrice = resolveProductBasePrice(selectedProduct);
   const availablePlacements =
     selectedProduct?.placement_config?.length
@@ -272,7 +276,12 @@ export default function GarmentView() {
             {imageSrc ? (
               <img
                 src={imageSrc}
-                alt={detailTitle}
+                alt={garment?.image ? detailTitle : productImage.alt}
+                width="800"
+                height="800"
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
                 style={{
                   width: "100%",
                   height: "100%",

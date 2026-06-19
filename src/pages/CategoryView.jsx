@@ -10,8 +10,8 @@ import { useCatalogLookups } from "../lib/catalogLookupsStore";
 import {
   getStorefrontCategoryById,
   getStorefrontProductCategoryLabel,
-  getStorefrontProductImage,
   getStorefrontProductsByCategory,
+  resolveStorefrontProductImage,
 } from "../lib/storefrontCatalog";
 
 function buildCategoryProductRenderIdentity(product, index) {
@@ -221,7 +221,7 @@ export default function CategoryView() {
         }}
       >
         {categoryProducts.map((item, index) => {
-          const imageSrc = getStorefrontProductImage(item);
+          const productImage = resolveStorefrontProductImage(item, { size: "thumb" });
           const renderIdentity = buildCategoryProductRenderIdentity(item, index);
           const colorPreview = buildPreviewList(item?.colors, 4);
           const sizePreview = buildPreviewList(item?.sizes, 6);
@@ -264,10 +264,14 @@ export default function CategoryView() {
                     overflow: "hidden",
                   }}
                 >
-                  {imageSrc ? (
+                  {productImage.src ? (
                     <img
-                      src={imageSrc}
-                      alt={item.name}
+                      src={productImage.src}
+                      alt={productImage.alt}
+                      width="320"
+                      height="320"
+                      loading="lazy"
+                      decoding="async"
                       style={{
                         width: "100%",
                         height: "100%",
