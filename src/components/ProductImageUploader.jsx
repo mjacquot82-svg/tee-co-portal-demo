@@ -1,8 +1,11 @@
 import { useRef } from "react";
+import { uploadProductImageToStorage } from "../services/productImageService";
 
 export default function ProductImageUploader({
   image,
   onImageChange,
+  productId,
+  useProductImageStorage = false,
 }) {
   const inputRef = useRef(null);
 
@@ -14,10 +17,30 @@ export default function ProductImageUploader({
     const file = event.target.files?.[0];
     if (!file) return;
 
+    if (useProductImageStorage) {
+      try {
+        const uploadResult = await uploadProductImageToStorage(file, { productId });
+        onImageChange(uploadResult.image, uploadResult);
+        return;
+      } catch (error) {
+        console.warn("[ProductImageUploader] Storage upload failed; using base64 fallback", {
+          message: error?.message,
+          error,
+        });
+      }
+    }
+
     const reader = new FileReader();
 
     reader.onload = () => {
-      onImageChange(reader.result);
+      onImageChange(reader.result, {
+        image: reader.result,
+        image_storage_path: null,
+        image_content_type: file.type || "",
+        image_file_size: Number(file.size ?? 0) || 0,
+        image_updated_at: new Date().toISOString(),
+        image_thumb_storage_path: null,
+      });
     };
 
     reader.readAsDataURL(file);
