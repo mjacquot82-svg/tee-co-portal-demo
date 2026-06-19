@@ -1,25 +1,63 @@
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 import process from "node:process";
 import { createClient } from "@supabase/supabase-js";
 
 const PRODUCT_IMAGES_BUCKET = "product-images";
+const RATE_LIMIT_TABLE = "product_image_upload_attempts";
 const DEFAULT_MAX_FILE_BYTES = 5 * 1024 * 1024;
+const RATE_LIMIT_WINDOW_MINUTES = 15;
+const STAFF_PIN_FAILURE_LIMIT = 5;
+const IP_PIN_FAILURE_LIMIT = 20;
 const ALLOWED_IMAGE_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
 ]);
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
+const DEFAULT_ALLOWED_ORIGINS = new Set([
+  "https://teeandco.netlify.app",
+]);
+const CORS_BASE_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+const DEPLOY_PREVIEW_ORIGIN_PATTERN = /^https:\/\/deploy-preview-\d+--teeandco\.netlify\.app$/;
 
-function jsonResponse(statusCode, body) {
+function getConfiguredAllowedOrigins() {
+  return new Set([
+    ...DEFAULT_ALLOWED_ORIGINS,
+    ...String(process.env.TEE_CO_ALLOWED_UPLOAD_ORIGINS || "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+  ]);
+}
+
+function isAllowedOrigin(origin) {
+  const normalizedOrigin = normalizeText(origin);
+  if (!normalizedOrigin) return true;
+  return getConfiguredAllowedOrigins().has(normalizedOrigin) ||
+    DEPLOY_PREVIEW_ORIGIN_PATTERN.test(normalizedOrigin);
+}
+
+function buildCorsHeaders(origin) {
+  const normalizedOrigin = normalizeText(origin);
+  return {
+    ...CORS_BASE_HEADERS,
+    ...(normalizedOrigin && isAllowedOrigin(normalizedOrigin)
+      ? {
+          "Access-Control-Allow-Origin": normalizedOrigin,
+          Vary: "Origin",
+        }
+      : {}),
+  };
+}
+
+function jsonResponse(statusCode, body, origin = "") {
   return {
     statusCode,
     headers: {
-      ...CORS_HEADERS,
+      ...buildCorsHeaders(origin),
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -32,6 +70,31 @@ function normalizeText(value) {
 
 function cleanPin(value) {
   return normalizeText(value).replace(/\D/g, "").slice(0, 4);
+}
+
+function getRequestOrigin(event) {
+  return event?.headers?.origin || event?.headers?.Origin || "";
+}
+
+function getClientIp(event) {
+  const headerValue =
+    event?.headers?.["x-nf-client-connection-ip"] ||
+    event?.headers?.["x-forwarded-for"] ||
+    event?.headers?.["client-ip"] ||
+    "";
+
+  return normalizeText(String(headerValue).split(",")[0]);
+}
+
+function buildRateLimitIpKey(event) {
+  const clientIp = getClientIp(event) || "unknown";
+  const salt = process.env.PRODUCT_IMAGE_RATE_LIMIT_SALT ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    "tee-co-product-image-upload";
+
+  return createHash("sha256")
+    .update(`${salt}:${clientIp}`)
+    .digest("hex");
 }
 
 function normalizeRole(value) {
@@ -90,6 +153,30 @@ function parseBase64Image(fileData) {
   } catch {
     return null;
   }
+}
+
+function detectImageContentType(fileBuffer) {
+  if (!fileBuffer || fileBuffer.length < 4) return "";
+
+  const isJpeg =
+    fileBuffer.length >= 3 &&
+    fileBuffer[0] === 0xff &&
+    fileBuffer[1] === 0xd8 &&
+    fileBuffer[2] === 0xff;
+  if (isJpeg) return "image/jpeg";
+
+  const pngSignature = "89504e470d0a1a0a";
+  if (fileBuffer.length >= 8 && fileBuffer.subarray(0, 8).toString("hex") === pngSignature) {
+    return "image/png";
+  }
+
+  const isWebp =
+    fileBuffer.length >= 12 &&
+    fileBuffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+    fileBuffer.subarray(8, 12).toString("ascii") === "WEBP";
+  if (isWebp) return "image/webp";
+
+  return "";
 }
 
 function getSupabaseAdminClient() {
@@ -164,11 +251,99 @@ async function validateStaffCredentials(supabaseAdmin, staffUserId, pin) {
   };
 }
 
+async function countFailedAttempts(supabaseAdmin, filters = {}) {
+  let query = supabaseAdmin
+    .from(RATE_LIMIT_TABLE)
+    .select("id", { count: "exact", head: true })
+    .eq("success", false)
+    .gte(
+      "attempted_at",
+      new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60 * 1000).toISOString()
+    );
+
+  if (filters.staffUserId) {
+    query = query.eq("staff_user_id", filters.staffUserId);
+  }
+
+  if (filters.ipKey) {
+    query = query.eq("ip_key", filters.ipKey);
+  }
+
+  const { count, error } = await query;
+  if (error) {
+    throw error;
+  }
+
+  return count || 0;
+}
+
+async function checkRateLimit(supabaseAdmin, { staffUserId, ipKey }) {
+  const normalizedStaffUserId = normalizeText(staffUserId);
+  if (!normalizedStaffUserId) {
+    return {
+      ok: true,
+    };
+  }
+
+  const [staffFailures, ipFailures] = await Promise.all([
+    countFailedAttempts(supabaseAdmin, { staffUserId: normalizedStaffUserId }),
+    countFailedAttempts(supabaseAdmin, { ipKey }),
+  ]);
+
+  if (staffFailures >= STAFF_PIN_FAILURE_LIMIT || ipFailures >= IP_PIN_FAILURE_LIMIT) {
+    return {
+      ok: false,
+      statusCode: 429,
+      message: "Too many failed upload verification attempts. Try again later.",
+    };
+  }
+
+  return {
+    ok: true,
+  };
+}
+
+async function recordUploadAttempt(supabaseAdmin, {
+  staffUserId,
+  ipKey,
+  success,
+  failureReason = "",
+}) {
+  const { error } = await supabaseAdmin
+    .from(RATE_LIMIT_TABLE)
+    .insert({
+      staff_user_id: normalizeText(staffUserId) || null,
+      ip_key: normalizeText(ipKey) || null,
+      success: Boolean(success),
+      failure_reason: normalizeText(failureReason).slice(0, 120),
+    });
+
+  if (error) {
+    console.error("[product-image-upload] unable to record upload attempt", {
+      code: error.code,
+      message: error.message,
+    });
+  }
+}
+
 export async function handler(event) {
+  const origin = getRequestOrigin(event);
+
+  if (!isAllowedOrigin(origin)) {
+    return {
+      statusCode: 403,
+      headers: buildCorsHeaders(origin),
+      body: JSON.stringify({
+        ok: false,
+        message: "Origin is not allowed.",
+      }),
+    };
+  }
+
   if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 204,
-      headers: CORS_HEADERS,
+      headers: buildCorsHeaders(origin),
       body: "",
     };
   }
@@ -177,7 +352,7 @@ export async function handler(event) {
     return jsonResponse(405, {
       ok: false,
       message: "Method not allowed.",
-    });
+    }, origin);
   }
 
   let payload = null;
@@ -187,32 +362,40 @@ export async function handler(event) {
     return jsonResponse(400, {
       ok: false,
       message: "Invalid upload request.",
-    });
+    }, origin);
   }
 
   const fileType = normalizeText(payload.fileType).toLowerCase();
   const maxFileBytes = Number(process.env.PRODUCT_IMAGE_MAX_BYTES || DEFAULT_MAX_FILE_BYTES);
   const fileBuffer = parseBase64Image(payload.fileData);
+  const detectedFileType = detectImageContentType(fileBuffer);
 
   if (!ALLOWED_IMAGE_TYPES.has(fileType)) {
     return jsonResponse(415, {
       ok: false,
       message: "Product images must be JPEG, PNG, or WebP files.",
-    });
+    }, origin);
   }
 
   if (!fileBuffer?.length) {
     return jsonResponse(400, {
       ok: false,
       message: "A valid image file is required.",
-    });
+    }, origin);
+  }
+
+  if (!detectedFileType || detectedFileType !== fileType) {
+    return jsonResponse(415, {
+      ok: false,
+      message: "Uploaded file content does not match the declared image type.",
+    }, origin);
   }
 
   if (fileBuffer.length > maxFileBytes) {
     return jsonResponse(413, {
       ok: false,
       message: `Product images must be ${Math.floor(maxFileBytes / (1024 * 1024))} MB or smaller.`,
-    });
+    }, origin);
   }
 
   let supabaseAdmin = null;
@@ -225,20 +408,47 @@ export async function handler(event) {
     return jsonResponse(500, {
       ok: false,
       message: "Product image upload service is not configured.",
+    }, origin);
+  }
+
+  const staffUserId = normalizeText(payload.staffUserId);
+  const ipKey = buildRateLimitIpKey(event);
+  try {
+    const rateLimit = await checkRateLimit(supabaseAdmin, { staffUserId, ipKey });
+    if (!rateLimit.ok) {
+      return jsonResponse(rateLimit.statusCode, {
+        ok: false,
+        message: rateLimit.message,
+      }, origin);
+    }
+  } catch (error) {
+    console.error("[product-image-upload] rate limit check failed", {
+      code: error.code,
+      message: error.message,
     });
+    return jsonResponse(500, {
+      ok: false,
+      message: "Unable to validate upload attempt limits.",
+    }, origin);
   }
 
   const staffValidation = await validateStaffCredentials(
     supabaseAdmin,
-    payload.staffUserId,
+    staffUserId,
     payload.pin
   );
 
   if (!staffValidation.ok) {
+    await recordUploadAttempt(supabaseAdmin, {
+      staffUserId,
+      ipKey,
+      success: false,
+      failureReason: staffValidation.message,
+    });
     return jsonResponse(staffValidation.statusCode, {
       ok: false,
       message: staffValidation.message,
-    });
+    }, origin);
   }
 
   const storagePath = buildStoragePath({
@@ -263,7 +473,7 @@ export async function handler(event) {
     return jsonResponse(502, {
       ok: false,
       message: "Unable to upload product image.",
-    });
+    }, origin);
   }
 
   const { data } = supabaseAdmin.storage
@@ -275,8 +485,14 @@ export async function handler(event) {
     return jsonResponse(502, {
       ok: false,
       message: "Unable to create product image URL.",
-    });
+    }, origin);
   }
+
+  await recordUploadAttempt(supabaseAdmin, {
+    staffUserId,
+    ipKey,
+    success: true,
+  });
 
   return jsonResponse(200, {
     ok: true,
@@ -285,5 +501,5 @@ export async function handler(event) {
     image_content_type: fileType,
     image_file_size: fileBuffer.length,
     image_updated_at: new Date().toISOString(),
-  });
+  }, origin);
 }

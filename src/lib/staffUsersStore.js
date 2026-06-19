@@ -15,7 +15,6 @@ import { supabase } from "./supabase";
 
 const STORAGE_KEY = "teeCoStaffUsers";
 const ACTIVE_STAFF_KEY = "teeCoActiveStaffUser";
-const ACTIVE_STAFF_UPLOAD_CREDENTIAL_KEY = "teeCoActiveStaffUploadCredential";
 const STAFF_USERS_UPDATED_EVENT = "tee-co-staff-users-updated";
 const ACTIVE_STAFF_UPDATED_EVENT = "tee-co-active-staff-updated";
 const PROTECTED_OWNER_ID = "staff-owner-default";
@@ -174,6 +173,7 @@ function readLocalFallbackStaffUsers() {
 let staffUsersCache = readLocalFallbackStaffUsers();
 let staffUsersHydrationPromise = null;
 let staffUsersHydratedFromSupabase = false;
+let activeStaffUploadCredential = null;
 
 function emitStaffUsersUpdated() {
   if (typeof window === "undefined") return;
@@ -194,24 +194,21 @@ function clearSessionActiveStaffPersistence() {
 }
 
 function clearSessionUploadCredentialPersistence() {
-  return removeStorageItem(ACTIVE_STAFF_UPLOAD_CREDENTIAL_KEY, { storage: "session" });
+  activeStaffUploadCredential = null;
 }
 
 function setActiveStaffUploadCredential(user, pin) {
-  if (!hasBrowserStorage() || !user?.id) return false;
+  if (!user?.id) return false;
 
   const cleanedPin = cleanStaffPin(pin);
   if (cleanedPin.length !== 4) return false;
 
-  return setJsonStorageItem(
-    ACTIVE_STAFF_UPLOAD_CREDENTIAL_KEY,
-    {
-      staffUserId: user.id,
-      pin: cleanedPin,
-      updated_at: new Date().toISOString(),
-    },
-    { storage: "session" }
-  );
+  activeStaffUploadCredential = {
+    staffUserId: user.id,
+    pin: cleanedPin,
+  };
+
+  return true;
 }
 
 function persistStaffUsersCache(users) {
@@ -948,27 +945,22 @@ export function getActiveStaffUser() {
 }
 
 export function getActiveStaffUploadCredential() {
-  if (!hasBrowserStorage()) return null;
-
   try {
-    const credential = getJsonStorageItem(
-      ACTIVE_STAFF_UPLOAD_CREDENTIAL_KEY,
-      null,
-      { storage: "session" }
-    );
-
-    if (!credential?.staffUserId || cleanStaffPin(credential.pin).length !== 4) {
+    if (
+      !activeStaffUploadCredential?.staffUserId ||
+      cleanStaffPin(activeStaffUploadCredential.pin).length !== 4
+    ) {
       return null;
     }
 
     const activeStaffUser = getActiveStaffUser();
-    if (!activeStaffUser?.id || activeStaffUser.id !== credential.staffUserId) {
+    if (!activeStaffUser?.id || activeStaffUser.id !== activeStaffUploadCredential.staffUserId) {
       return null;
     }
 
     return {
-      staffUserId: credential.staffUserId,
-      pin: cleanStaffPin(credential.pin),
+      staffUserId: activeStaffUploadCredential.staffUserId,
+      pin: cleanStaffPin(activeStaffUploadCredential.pin),
     };
   } catch (error) {
     console.error("[staff-users] Unable to read active staff upload credential", error);
