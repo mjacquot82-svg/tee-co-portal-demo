@@ -42,6 +42,11 @@ const PRODUCTS_SELECT_FIELDS = [
   "is_featured",
   "is_hero_feature",
   "image",
+  "image_storage_path",
+  "image_content_type",
+  "image_file_size",
+  "image_updated_at",
+  "image_thumb_storage_path",
   "characteristics",
   "colors",
   "sizes",
@@ -60,6 +65,11 @@ const PRODUCTS_SELECT_FIELDS = [
 ].join(", ");
 
 const LEGACY_PRODUCTS_SELECT_FIELDS = PRODUCTS_SELECT_FIELDS
+  .replace("image_storage_path, ", "")
+  .replace("image_content_type, ", "")
+  .replace("image_file_size, ", "")
+  .replace("image_updated_at, ", "")
+  .replace("image_thumb_storage_path, ", "")
   .replace("storefront_category, ", "")
   .replace("storefront_category_lookup_id, ", "")
   .replace("compare_at_price, ", "")
@@ -105,19 +115,12 @@ function isMissingProductColumnError(error, columnName) {
   return [message, details, hint].some((value) => value.includes(columnName));
 }
 
-function isLegacyProductSchemaError(error) {
-  return [
-    "garment_library_item_id",
-    "storefront_category",
-    "storefront_category_lookup_id",
-    "compare_at_price",
-    "characteristics",
-    "is_featured",
-    "is_hero_feature",
-  ].some((columnName) => isMissingProductColumnError(error, columnName));
-}
-
 const LEGACY_OPTIONAL_PRODUCT_COLUMNS = [
+  "image_storage_path",
+  "image_content_type",
+  "image_file_size",
+  "image_updated_at",
+  "image_thumb_storage_path",
   "garment_library_item_id",
   "storefront_category",
   "storefront_category_lookup_id",
@@ -126,6 +129,12 @@ const LEGACY_OPTIONAL_PRODUCT_COLUMNS = [
   "is_featured",
   "is_hero_feature",
 ];
+
+function isLegacyProductSchemaError(error) {
+  return LEGACY_OPTIONAL_PRODUCT_COLUMNS.some((columnName) =>
+    isMissingProductColumnError(error, columnName)
+  );
+}
 
 function getMissingProductColumns(error) {
   return LEGACY_OPTIONAL_PRODUCT_COLUMNS.filter((columnName) =>
@@ -481,6 +490,31 @@ function preserveCriticalProductFields(primary = {}, fallback = {}) {
     brand_model: preferPresentValue(primary?.brand_model, fallback?.brand_model, ""),
     product_type: preferPresentValue(primary?.product_type, fallback?.product_type, ""),
     image: preferPresentValue(primary?.image, fallback?.image, ""),
+    image_storage_path: preferPresentValue(
+      primary?.image_storage_path,
+      fallback?.image_storage_path,
+      null
+    ),
+    image_content_type: preferPresentValue(
+      primary?.image_content_type,
+      fallback?.image_content_type,
+      ""
+    ),
+    image_file_size: preferPresentValue(
+      primary?.image_file_size,
+      fallback?.image_file_size,
+      null
+    ),
+    image_updated_at: preferPresentValue(
+      primary?.image_updated_at,
+      fallback?.image_updated_at,
+      null
+    ),
+    image_thumb_storage_path: preferPresentValue(
+      primary?.image_thumb_storage_path,
+      fallback?.image_thumb_storage_path,
+      null
+    ),
     is_featured:
       resolvedHeroFeature ||
       (primaryHasFeatured ? Boolean(primary?.is_featured) : Boolean(fallback?.is_featured)),
@@ -662,6 +696,16 @@ function buildSupabaseProductRecord(product = {}, options = {}) {
     is_featured: Boolean(product.is_featured || product.is_hero_feature),
     is_hero_feature: Boolean(product.is_hero_feature),
     image: product.image || "",
+    image_storage_path: product.image_storage_path || null,
+    image_content_type: product.image_content_type || "",
+    image_file_size:
+      product.image_file_size === null ||
+      product.image_file_size === undefined ||
+      product.image_file_size === ""
+        ? null
+        : Number(product.image_file_size),
+    image_updated_at: product.image_updated_at || null,
+    image_thumb_storage_path: product.image_thumb_storage_path || null,
     characteristics: getProductCharacteristics(product),
     colors: normalizeList(product.colors),
     sizes: normalizeList(product.sizes),

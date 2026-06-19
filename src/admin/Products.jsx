@@ -86,6 +86,11 @@ const emptyProduct = {
   garmentSearch: "",
   flat_price: "",
   image: "",
+  image_storage_path: null,
+  image_content_type: "",
+  image_file_size: null,
+  image_updated_at: null,
+  image_thumb_storage_path: null,
   visibleVariants: [],
   sizes: [],
   characteristics: [],
@@ -1023,6 +1028,11 @@ export default function Products() {
       selectedGarmentLibraryId: item.id,
       garmentSearch: buildGarmentLibraryLabel(item, brands, categories, garmentModels),
       image: current.image || item.image || "",
+      image_storage_path: current.image_storage_path || null,
+      image_content_type: current.image_content_type || "",
+      image_file_size: current.image_file_size || null,
+      image_updated_at: current.image_updated_at || null,
+      image_thumb_storage_path: current.image_thumb_storage_path || null,
       visibleVariants: getVariantOptions(item).map((variant) => variant.name),
       sizes: sortSizesByLookup(item.sizes || [], sizes),
       characteristics: [],
@@ -1597,6 +1607,14 @@ export default function Products() {
         ? null
         : garmentModel?.id || form.garment_model_lookup_id || null,
       image: form.image,
+      image_storage_path: form.image_storage_path || null,
+      image_content_type: form.image_content_type || "",
+      image_file_size:
+        form.image_file_size === null || form.image_file_size === undefined || form.image_file_size === ""
+          ? null
+          : Number(form.image_file_size),
+      image_updated_at: form.image_updated_at || null,
+      image_thumb_storage_path: form.image_thumb_storage_path || null,
       status: form.status,
       is_featured: Boolean(form.is_featured),
       is_hero_feature: Boolean(form.is_hero_feature),
@@ -2141,7 +2159,34 @@ export default function Products() {
               <div className="products-storefront-header">
                 <ProductImageUploader
                   image={form.image}
-                  onImageChange={(image) => setForm((current) => ({ ...current, image }))}
+                  productId={editingProductId || "draft"}
+                  useProductImageStorage
+                  onImageChange={(image, imageMetadata = {}) =>
+                    setForm((current) => ({
+                      ...current,
+                      image,
+                      image_storage_path:
+                        imageMetadata.image_storage_path === undefined
+                          ? current.image_storage_path
+                          : imageMetadata.image_storage_path,
+                      image_content_type:
+                        imageMetadata.image_content_type === undefined
+                          ? current.image_content_type
+                          : imageMetadata.image_content_type,
+                      image_file_size:
+                        imageMetadata.image_file_size === undefined
+                          ? current.image_file_size
+                          : imageMetadata.image_file_size,
+                      image_updated_at:
+                        imageMetadata.image_updated_at === undefined
+                          ? current.image_updated_at
+                          : imageMetadata.image_updated_at,
+                      image_thumb_storage_path:
+                        imageMetadata.image_thumb_storage_path === undefined
+                          ? current.image_thumb_storage_path
+                          : imageMetadata.image_thumb_storage_path,
+                    }))
+                  }
                 />
 
                 <div className="products-storefront-header-main">

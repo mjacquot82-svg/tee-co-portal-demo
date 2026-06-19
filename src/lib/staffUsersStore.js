@@ -173,6 +173,7 @@ function readLocalFallbackStaffUsers() {
 let staffUsersCache = readLocalFallbackStaffUsers();
 let staffUsersHydrationPromise = null;
 let staffUsersHydratedFromSupabase = false;
+let activeStaffUploadCredential = null;
 
 function emitStaffUsersUpdated() {
   if (typeof window === "undefined") return;
@@ -190,6 +191,24 @@ function clearLegacyActiveStaffPersistence() {
 
 function clearSessionActiveStaffPersistence() {
   return removeStorageItem(ACTIVE_STAFF_KEY, { storage: "session" });
+}
+
+function clearSessionUploadCredentialPersistence() {
+  activeStaffUploadCredential = null;
+}
+
+function setActiveStaffUploadCredential(user, pin) {
+  if (!user?.id) return false;
+
+  const cleanedPin = cleanStaffPin(pin);
+  if (cleanedPin.length !== 4) return false;
+
+  activeStaffUploadCredential = {
+    staffUserId: user.id,
+    pin: cleanedPin,
+  };
+
+  return true;
 }
 
 function persistStaffUsersCache(users) {
@@ -849,6 +868,7 @@ export function setActiveStaffUser(user, options = {}) {
     const previousSession = getJsonStorageItem(ACTIVE_STAFF_KEY, null, { storage: "session" });
     clearLegacyActiveStaffPersistence();
     const clearedSession = clearSessionActiveStaffPersistence();
+    clearSessionUploadCredentialPersistence();
     emitActiveStaffUpdated();
     pushAuthDiagnostic("staff-session-cleared", {
       reason: options.reason || "manual-clear",
@@ -924,6 +944,30 @@ export function getActiveStaffUser() {
   return null;
 }
 
+export function getActiveStaffUploadCredential() {
+  try {
+    if (
+      !activeStaffUploadCredential?.staffUserId ||
+      cleanStaffPin(activeStaffUploadCredential.pin).length !== 4
+    ) {
+      return null;
+    }
+
+    const activeStaffUser = getActiveStaffUser();
+    if (!activeStaffUser?.id || activeStaffUser.id !== activeStaffUploadCredential.staffUserId) {
+      return null;
+    }
+
+    return {
+      staffUserId: activeStaffUploadCredential.staffUserId,
+      pin: cleanStaffPin(activeStaffUploadCredential.pin),
+    };
+  } catch (error) {
+    console.error("[staff-users] Unable to read active staff upload credential", error);
+    return null;
+  }
+}
+
 export async function attemptStaffLogin({ staffUserId, pin, persistSession = true }) {
   const users = await getStoredStaffUsers();
   const activeUsers = users.filter((user) => user.status !== "Inactive");
@@ -963,6 +1007,9 @@ export async function attemptStaffLogin({ staffUserId, pin, persistSession = tru
 
   const sessionUser = persistSession ? setActiveStaffUser(selectedUser) : selectedUser;
   const sessionCreated = persistSession ? Boolean(sessionUser?.id) : true;
+  if (sessionCreated && persistSession) {
+    setActiveStaffUploadCredential(selectedUser, pin);
+  }
 
   if (isOwnerAttempt) {
     pushOwnerAuthDiagnostic("login-result", {
