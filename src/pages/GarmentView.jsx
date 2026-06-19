@@ -15,6 +15,10 @@ import {
   normalizeCategorySlug,
   resolveStorefrontProductImage,
 } from "../lib/storefrontCatalog";
+import {
+  resolveProductDisplayColors,
+  useGarmentModelColors,
+} from "../lib/garmentModelColorsStore";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -24,6 +28,29 @@ function formatBasePrice(value) {
   return Number.isFinite(value) && Number(value) > 0
     ? `${money(value)} each`
     : "Price unavailable";
+}
+
+function normalizeText(value) {
+  return String(value || "").trim();
+}
+
+function isValidHexColor(value) {
+  return /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(normalizeText(value));
+}
+
+function buildFallbackColorRecords(colorNames = [], keyPrefix = "fallback") {
+  return colorNames
+    .map((colorName, index) => {
+      const normalizedColorName = normalizeText(colorName);
+      if (!normalizedColorName) return null;
+
+      return {
+        id: `${keyPrefix}-${index}-${normalizedColorName}`,
+        color_name: normalizedColorName,
+        hex_value: null,
+      };
+    })
+    .filter(Boolean);
 }
 
 export default function GarmentView() {
@@ -37,6 +64,7 @@ export default function GarmentView() {
   const catalogProducts = useStoredProducts();
   const productsReady = areStoredProductsReady();
   const lookups = useCatalogLookups();
+  const colorsByGarmentModel = useGarmentModelColors();
   const storefrontCategories = useMemo(
     () => lookups.storefront_categories || [],
     [lookups.storefront_categories]
@@ -81,18 +109,46 @@ export default function GarmentView() {
     storefrontCategoryLabel ||
     garment?.category ||
     "Uncategorized";
-  const availableColors =
-    garment?.available_colors?.length
-      ? garment.available_colors
-      : selectedProduct?.colors?.length
-      ? selectedProduct.colors
-      : ["Black"];
-  const availableSizes =
-    garment?.available_sizes?.length
-      ? garment.available_sizes
-      : selectedProduct?.sizes?.length
-      ? selectedProduct.sizes
-      : ["One Size"];
+  const displayColorDetails = useMemo(() => {
+    const productColors = selectedProduct
+      ? resolveProductDisplayColors(selectedProduct, colorsByGarmentModel)
+      : { colors: [], colorNames: [] };
+
+    if (productColors.colorNames.length) {
+      return productColors;
+    }
+
+    const garmentColorRecords = buildFallbackColorRecords(
+      garment?.available_colors || [],
+      garment?.garment_id || "garment"
+    );
+
+    if (garmentColorRecords.length) {
+      return {
+        source: "garments.available_colors",
+        colors: garmentColorRecords,
+        colorNames: garmentColorRecords.map((color) => color.color_name),
+      };
+    }
+
+    const defaultColorRecords = buildFallbackColorRecords(["Black"], "default");
+    return {
+      source: "default",
+      colors: defaultColorRecords,
+      colorNames: defaultColorRecords.map((color) => color.color_name),
+    };
+  }, [colorsByGarmentModel, garment, selectedProduct]);
+  const availableColorRecords = displayColorDetails.colors;
+  const availableColors = displayColorDetails.colorNames;
+  const availableSizes = useMemo(
+    () =>
+      garment?.available_sizes?.length
+        ? garment.available_sizes
+        : selectedProduct?.sizes?.length
+        ? selectedProduct.sizes
+        : ["One Size"],
+    [garment, selectedProduct]
+  );
   const currentSelectedColor = availableColors.includes(selectedColor)
     ? selectedColor
     : availableColors[0] || "";
@@ -108,28 +164,6 @@ export default function GarmentView() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
-
-  useEffect(() => {
-    if (!availableColors.length) {
-      setSelectedColor("");
-      return;
-    }
-
-    if (!availableColors.includes(selectedColor)) {
-      setSelectedColor(availableColors[0]);
-    }
-  }, [availableColors, selectedColor]);
-
-  useEffect(() => {
-    if (!availableSizes.length) {
-      setSelectedSize("");
-      return;
-    }
-
-    if (!availableSizes.includes(selectedSize)) {
-      setSelectedSize(availableSizes[0]);
-    }
-  }, [availableSizes, selectedSize]);
 
   if (!productsReady && !garment) {
     return (
@@ -301,6 +335,7 @@ export default function GarmentView() {
           <div
             style={{
               width: "100%",
+              boxSizing: "border-box",
               padding: "18px",
               borderRadius: "20px",
               background: "#fcfaf7",
@@ -334,6 +369,7 @@ export default function GarmentView() {
           <div
             style={{
               width: "100%",
+              boxSizing: "border-box",
               borderRadius: "22px",
               background: "#171717",
               color: "#ffffff",
@@ -439,43 +475,81 @@ export default function GarmentView() {
             <p
               style={{
                 fontWeight: "700",
-                margin: "0 0 8px 0",
+                margin: "0 0 6px 0",
                 fontSize: "15px",
               }}
             >
               Choose Color
             </p>
 
-            <div
+            <p
               style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "8px",
+                margin: "0 0 10px 0",
+                fontSize: "13px",
+                color: "#57534e",
+                fontWeight: 600,
               }}
             >
-              {availableColors.map((color) => (
-                <button
-                  key={color}
-                  onClick={() => setSelectedColor(color)}
-                  style={{
-                    padding: "9px 14px",
-                    borderRadius: "999px",
-                    border:
-                      currentSelectedColor === color
-                        ? "2px solid #171717"
-                        : "1px solid #d6d3d1",
-                    background:
-                      currentSelectedColor === color ? "#171717" : "#ffffff",
-                    color:
-                      currentSelectedColor === color ? "#ffffff" : "#171717",
-                    cursor: "pointer",
-                    fontWeight: 600,
-                    fontSize: "14px",
-                  }}
-                >
-                  {color}
-                </button>
-              ))}
+              Selected: {currentSelectedColor}
+            </p>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))",
+                gap: isMobile ? "10px" : "8px",
+                alignItems: "stretch",
+              }}
+            >
+              {availableColorRecords.map((colorRecord) => {
+                const colorName = colorRecord.color_name;
+                const isSelected = currentSelectedColor === colorName;
+                const hasHexValue = isValidHexColor(colorRecord.hex_value);
+
+                return (
+                  <button
+                    key={colorRecord.id || colorName}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => setSelectedColor(colorName)}
+                    style={{
+                      minHeight: isMobile ? "48px" : "44px",
+                      padding: "8px 10px",
+                      borderRadius: "14px",
+                      border: isSelected ? "2px solid #171717" : "1px solid #d6d3d1",
+                      background: isSelected ? "#171717" : "#ffffff",
+                      color: isSelected ? "#ffffff" : "#171717",
+                      cursor: "pointer",
+                      fontWeight: 700,
+                      fontSize: "13px",
+                      lineHeight: 1.2,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "9px",
+                      textAlign: "left",
+                      boxShadow: isSelected
+                        ? "0 8px 18px rgba(23, 23, 23, 0.16)"
+                        : "0 1px 2px rgba(23, 23, 23, 0.04)",
+                    }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: "24px",
+                        height: "24px",
+                        flex: "0 0 24px",
+                        borderRadius: "999px",
+                        background: hasHexValue ? colorRecord.hex_value : "#f5f5f4",
+                        border: hasHexValue ? "1px solid #a8a29e" : "1px solid #d6d3d1",
+                        boxShadow: isSelected ? "0 0 0 2px rgba(255,255,255,0.68)" : "none",
+                      }}
+                    />
+                    <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+                      {colorName}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
