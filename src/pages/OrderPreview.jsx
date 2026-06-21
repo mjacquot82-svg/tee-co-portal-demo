@@ -7,6 +7,8 @@ import {
   getDefaultDecorationType,
   resolveCustomerOrderProduct,
 } from "../lib/orderConfiguration";
+import { getActiveCustomerSession } from "../lib/customerSessionStore";
+import { savePendingCustomerRequest } from "../lib/pendingCustomerRequestStore";
 import { generateQuoteSnapshot } from "../lib/quoteEngine";
 import { useStoredProducts } from "../lib/productsStore";
 
@@ -59,6 +61,7 @@ export default function OrderPreview() {
   const [notes, setNotes] = useState("");
   const [artwork, setArtwork] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
+  const [submitError, setSubmitError] = useState("");
 
   const selectedPlacements = useMemo(() => {
     if (!allowedPlacements.length) return [];
@@ -134,24 +137,44 @@ export default function OrderPreview() {
   }
 
   function handleSubmit() {
-    navigate("/order-submitted", {
+    const pendingRequest = {
+      garmentId: passedState.garmentId || "",
+      productId: selectedProduct?.id || passedState.productId || "",
+      garmentName,
+      brand,
+      category,
+      description,
+      imageSrc,
+      selectedColor,
+      selectedSize,
+      quantity,
+      placements: selectedPlacements,
+      placement: selectedPlacements[0] || "",
+      notes,
+      artworkName: artwork?.name || "",
+      decorationType: defaultDecorationType,
+    };
+
+    if (!savePendingCustomerRequest(pendingRequest)) {
+      setSubmitError("We could not hold this request for sign-in. Please try again.");
+      return;
+    }
+
+    const target = "/portal/request-order";
+    const activeCustomerSession = getActiveCustomerSession();
+
+    if (activeCustomerSession) {
+      navigate(target, {
+        state: {
+          pendingRequestSource: "public-garment-flow",
+        },
+      });
+      return;
+    }
+
+    navigate(`/login?redirectTo=${encodeURIComponent(target)}`, {
       state: {
-        garmentId: passedState.garmentId || "",
-        productId: selectedProduct?.id || passedState.productId || "",
-        garmentName,
-        brand,
-        category,
-        description,
-        imageSrc,
-        selectedColor,
-        selectedSize,
-        quantity,
-        placements: selectedPlacements,
-        placement: selectedPlacements[0] || "",
-        notes,
-        artworkName: artwork?.name || "",
-        decorationType: defaultDecorationType,
-        quote: liveQuote,
+        pendingRequestSource: "public-garment-flow",
       },
     });
   }
@@ -579,6 +602,20 @@ export default function OrderPreview() {
               flexWrap: "wrap",
             }}
           >
+            {submitError ? (
+              <p
+                style={{
+                  flexBasis: "100%",
+                  margin: 0,
+                  color: "#b91c1c",
+                  fontWeight: 700,
+                  fontSize: "14px",
+                }}
+              >
+                {submitError}
+              </p>
+            ) : null}
+
             <button
               type="button"
               onClick={handleSubmit}

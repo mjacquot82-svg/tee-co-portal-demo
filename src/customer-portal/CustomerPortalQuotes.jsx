@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import {
   EmptyState,
@@ -13,11 +13,16 @@ export default function CustomerPortalQuotes() {
   const navigate = useNavigate();
   const { customerSession } = useOutletContext();
   const { quotes } = useCustomerPortalData(customerSession);
-  const flashMessage = location.state?.flashMessage || "";
-  const createdOrderNumber = location.state?.createdOrderNumber || "";
+  const [flashMessage, setFlashMessage] = useState(() => location.state?.flashMessage || "");
+  const [createdOrderNumber, setCreatedOrderNumber] = useState(
+    () => location.state?.createdOrderNumber || ""
+  );
 
   useEffect(() => {
     if (!location.state?.flashMessage) return;
+
+    setFlashMessage(location.state.flashMessage || "");
+    setCreatedOrderNumber(location.state.createdOrderNumber || "");
 
     const nextState = { ...location.state };
     delete nextState.flashMessage;

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import { useCatalogLookups } from "../lib/catalogLookupsStore";
@@ -6,6 +6,10 @@ import { ensureCustomerProfile } from "../lib/customerProfileStore";
 import { linkOrderToCustomer } from "../lib/customersStore";
 import { createStoredOrder } from "../lib/ordersStore";
 import { getDefaultDecorationType } from "../lib/orderConfiguration";
+import {
+  clearPendingCustomerRequest,
+  getPendingCustomerRequest,
+} from "../lib/pendingCustomerRequestStore";
 import { generateQuoteSnapshot } from "../lib/quoteEngine";
 import {
   buildStorefrontCategories,
@@ -102,6 +106,8 @@ export default function CustomerPortalRequestOrder() {
   const [contactPhone, setContactPhone] = useState(customerSession.phone || "");
   const [submitState, setSubmitState] = useState("idle");
   const [submitMessage, setSubmitMessage] = useState("");
+  const [pendingRequest, setPendingRequest] = useState(() => getPendingCustomerRequest());
+  const appliedPendingRequestRef = useRef("");
 
   const resolvedColor = availableColors.includes(selectedColor) ? selectedColor : availableColors[0] || "";
   const resolvedSize = availableSizes.includes(selectedSize) ? selectedSize : availableSizes[0] || "";
@@ -111,6 +117,40 @@ export default function CustomerPortalRequestOrder() {
   const estimatedUnitPrice = resolveProductBasePrice(selectedProduct);
   const estimatedTotal =
     Number.isFinite(estimatedUnitPrice) && estimatedUnitPrice > 0 ? estimatedUnitPrice * Number(quantity || 0) : null;
+
+  useEffect(() => {
+    if (!pendingRequest || !storefrontProducts.length) return;
+
+    const pendingKey = `${pendingRequest.created_at || ""}:${pendingRequest.productId || ""}`;
+    if (appliedPendingRequestRef.current === pendingKey) return;
+
+    const matchedProduct = storefrontProducts.find(
+      (product) => product.id === pendingRequest.productId
+    );
+
+    if (matchedProduct) {
+      setSelectedProductId(matchedProduct.id);
+      const matchedCategory = storefrontCategories.find((category) =>
+        category.products.some((product) => product.id === matchedProduct.id)
+      );
+      if (matchedCategory?.id) {
+        setSelectedCategoryId(matchedCategory.id);
+      }
+    }
+
+    if (pendingRequest.quantity) setQuantity(pendingRequest.quantity);
+    if (pendingRequest.selectedColor) setSelectedColor(pendingRequest.selectedColor);
+    if (pendingRequest.selectedSize) setSelectedSize(pendingRequest.selectedSize);
+    if (pendingRequest.placement) setSelectedPlacement(pendingRequest.placement);
+    if (pendingRequest.notes || pendingRequest.artworkName) {
+      const artworkNote = pendingRequest.artworkName
+        ? `Artwork reference: ${pendingRequest.artworkName}`
+        : "";
+      setNotes([pendingRequest.notes, artworkNote].filter(Boolean).join("\n\n"));
+    }
+
+    appliedPendingRequestRef.current = pendingKey;
+  }, [pendingRequest, storefrontCategories, storefrontProducts]);
 
   function handleSelectCategory(categoryId) {
     setSelectedCategoryId(categoryId);
@@ -135,13 +175,14 @@ export default function CustomerPortalRequestOrder() {
     const normalizedQuantity = Math.max(1, Number(quantity || 1));
     const profile = await ensureCustomerProfile(customerSession);
     const decorationType = getDefaultDecorationType(selectedProduct);
+    const artworkReferenceName = normalizeText(pendingRequest?.artworkName);
     const requestPlacements = resolvedPlacement
       ? [
           {
             placement: resolvedPlacement,
             decoration_type: decorationType,
             artwork_id: "",
-            artwork_name: "",
+            artwork_name: artworkReferenceName,
           },
         ]
       : [];
@@ -187,6 +228,8 @@ export default function CustomerPortalRequestOrder() {
         placement: resolvedPlacement,
         placements: requestPlacements,
         decoration_type: decorationType,
+        customer_artwork_name: artworkReferenceName,
+        artwork_reference_names: artworkReferenceName ? [artworkReferenceName] : [],
         due_date: needByDate || "",
         notes: normalizeText(notes),
         customer_notes: normalizeText(notes),
@@ -203,6 +246,11 @@ export default function CustomerPortalRequestOrder() {
 
       if (profile?.id) {
         await linkOrderToCustomer(profile.id, createdOrder.order_number);
+      }
+
+      if (pendingRequest) {
+        clearPendingCustomerRequest();
+        setPendingRequest(null);
       }
 
       navigate("/portal/quotes", {
@@ -233,6 +281,24 @@ export default function CustomerPortalRequestOrder() {
         title="How this works"
         subtitle="This stays intentionally lightweight. You are not checking out, building a cart, or locking production details yet."
       >
+        {pendingRequest ? (
+          <div
+            style={{
+              borderRadius: "18px",
+              border: "1px solid #a7f3d0",
+              background: "#ecfdf5",
+              padding: "16px",
+              color: "#115e59",
+              marginBottom: "14px",
+            }}
+          >
+            <strong style={{ display: "block" }}>Garment selection restored</strong>
+            <p style={{ margin: "6px 0 0", lineHeight: 1.6 }}>
+              Review the details below, then submit to create your request in the Tee & Co quote workflow.
+            </p>
+          </div>
+        ) : null}
+
         <div
           style={{
             display: "grid",

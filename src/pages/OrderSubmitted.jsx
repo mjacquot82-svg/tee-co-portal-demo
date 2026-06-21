@@ -5,6 +5,8 @@ export default function OrderSubmitted() {
   const location = useLocation();
   const state = location.state || {};
   const quote = state.quote || null;
+  const requestIdentifier =
+    state.createdOrderNumber || state.orderNumber || state.order_number || "";
 
   const garmentName = state.garmentName || "Selected Garment";
   const brand = state.brand || "Tee & Co";
@@ -14,6 +16,78 @@ export default function OrderSubmitted() {
   const quantity = state.quantity || 1;
   const artworkName = state.artworkName || "No artwork uploaded";
   const notes = state.notes || "";
+
+  if (!requestIdentifier) {
+    return (
+      <div
+        style={{
+          maxWidth: "760px",
+          margin: "0 auto",
+          padding: "40px 20px",
+          fontFamily:
+            'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        }}
+      >
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: "22px",
+            padding: "28px",
+            border: "1px solid #fecaca",
+            boxShadow: "0 14px 32px rgba(0,0,0,0.06)",
+          }}
+        >
+          <p
+            style={{
+              margin: "0 0 6px",
+              fontSize: "12px",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "#b91c1c",
+              fontWeight: 800,
+            }}
+          >
+            Request Not Submitted
+          </p>
+          <h1 style={{ margin: 0, color: "#171717", fontSize: "30px" }}>
+            We could not confirm a saved request.
+          </h1>
+          <p style={{ color: "#57534e", lineHeight: 1.6 }}>
+            Customer requests are submitted through the signed-in portal so they can be linked to
+            the correct account.
+          </p>
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <Link
+              to="/portal/request-order"
+              style={{
+                background: "#171717",
+                color: "#ffffff",
+                padding: "12px 16px",
+                borderRadius: "12px",
+                textDecoration: "none",
+                fontWeight: 800,
+              }}
+            >
+              Open Request Builder
+            </Link>
+            <Link
+              to="/"
+              style={{
+                border: "1px solid #d6d3d1",
+                color: "#171717",
+                padding: "12px 16px",
+                borderRadius: "12px",
+                textDecoration: "none",
+                background: "#ffffff",
+              }}
+            >
+              Back to Catalog
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -83,6 +157,9 @@ export default function OrderSubmitted() {
             >
               Order submitted successfully
             </h1>
+            <p style={{ margin: "8px 0 0", color: "#57534e", fontWeight: 700 }}>
+              Reference {requestIdentifier}
+            </p>
           </div>
         </div>
 

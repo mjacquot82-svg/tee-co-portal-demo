@@ -476,7 +476,9 @@ export default function Login() {
               <p style={{ margin: 0, color: "#64748b", fontSize: "13px", lineHeight: 1.6 }}>
                 New customer?{" "}
                 <Link
-                  to="/signup"
+                  to={`/signup?redirectTo=${encodeURIComponent(
+                    targetIsCustomerRoute ? resolvedRedirectTarget : "/portal/orders"
+                  )}`}
                   style={{
                     color: "#0f766e",
                     fontWeight: 800,

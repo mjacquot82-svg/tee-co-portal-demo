@@ -80,6 +80,7 @@ function SummaryCard({ label, value, tone = "default", detail }) {
 
 function buildWorkflowSnapshotCards(orders = []) {
   const snapshot = {
+    newRequests: 0,
     awaitingApproval: 0,
     awaitingDeposit: 0,
     artworkNeeded: 0,
@@ -93,6 +94,10 @@ function buildWorkflowSnapshotCards(orders = []) {
     if (isActiveQuoteWorkflowOrder(order)) {
       const readiness = buildProductionReadiness(order, order);
       const unmetChecks = readiness.checks.filter((check) => !check.passed);
+
+      if (quoteStatus === "Draft") {
+        snapshot.newRequests += 1;
+      }
 
       if (quoteStatus === "Awaiting Approval") {
         snapshot.awaitingApproval += 1;
@@ -127,6 +132,7 @@ function buildWorkflowSnapshotCards(orders = []) {
   });
 
   return [
+    { label: "New Requests", value: snapshot.newRequests, tone: "default" },
     { label: "Awaiting Approval", value: snapshot.awaitingApproval, tone: "warning" },
     { label: "Awaiting Deposit", value: snapshot.awaitingDeposit, tone: "warning" },
     { label: "Artwork Needed", value: snapshot.artworkNeeded, tone: "warning" },
@@ -198,6 +204,13 @@ function buildOwnerAttentionItems(orders = []) {
       description: "Jobs past due date need immediate review in Shop Production.",
       to: "/admin/orders",
       tone: "danger",
+    },
+    {
+      label: "New Quote Requests",
+      count: lookup["New Requests"] || 0,
+      description: "Customer-submitted requests are waiting for quote review.",
+      to: "/admin/quotes",
+      tone: "default",
     },
     {
       label: "Awaiting Approval",
