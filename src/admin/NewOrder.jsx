@@ -582,9 +582,9 @@ export default function NewOrder() {
 
       await linkOrderToCustomer(customerId, order.order_number);
       setSubmitState("success");
-      setSubmitMessage(`Quote ${order.order_number} saved. Moving into quote workflow…`);
+      setSubmitMessage(`Order request ${order.order_number} saved. Moving into review…`);
       returnToQuoteWorkflow({
-        flashMessage: `Quote ${order.order_number} created successfully and added to workflow.`,
+        flashMessage: `Order request ${order.order_number} created successfully and added to review.`,
         flashTone: "success",
       });
     } catch (error) {
@@ -593,7 +593,7 @@ export default function NewOrder() {
       setSubmitMessage(
         error instanceof Error && error.message
           ? error.message
-          : "Quote could not be saved. Try again."
+          : "Order request could not be saved. Try again."
       );
       focusFeedback();
     }
@@ -613,11 +613,11 @@ export default function NewOrder() {
               textTransform: "uppercase",
             }}
           >
-            Quote Intake
+            Request Intake
           </p>
-          <h1 style={{ margin: "6px 0 8px", fontSize: "30px" }}>New Quote</h1>
+          <h1 style={{ margin: "6px 0 8px", fontSize: "30px" }}>New Order Request</h1>
           <p style={{ margin: 0, color: "#475569" }}>
-            Build the customer quote, confirm pricing and artwork requirements, then hold it in sales workflow until it is ready for production release.
+            Build the customer request, confirm pricing and artwork requirements, then hold it in review until it is ready for production release.
           </p>
         </div>
 

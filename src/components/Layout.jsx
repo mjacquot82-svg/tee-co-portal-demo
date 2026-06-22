@@ -164,10 +164,10 @@ function getAdminSections(staffUser) {
             badgeKey: "assignments",
           },
           { to: "/admin/sales/new", label: "Front Counter", navKey: "frontCounter" },
-          { to: "/admin/quotes", label: "Quotes", navKey: "quotes" },
+          { to: "/admin/quotes", label: "Order Requests", navKey: "quotes" },
           {
             to: "/admin/orders",
-            label: "Shop Production",
+            label: "Production",
             navKey: "productionOrders",
             badgeKey: "productionOrders",
           },
@@ -197,22 +197,22 @@ function getAdminSections(staffUser) {
       title: "Workspaces",
       links: [
         { to: "/admin/sales/new", label: "Front Counter", navKey: "frontCounter" },
-        { to: "/admin/quotes", label: "Quotes", navKey: "quotes" },
+        { to: "/admin/quotes", label: "Order Requests", navKey: "quotes" },
         {
           to: "/admin/orders",
-          label: "Shop Production",
+          label: "Production",
           navKey: "productionOrders",
           badgeKey: "productionOrders",
         },
         {
           to: "/admin/assignments",
-          label: "Assignment Dispatch",
+          label: "Assign Work",
           navKey: "assignments",
           badgeKey: "assignments",
         },
         {
           to: "/admin/financial",
-          label: "Invoices & Payments",
+          label: "Payments",
           navKey: "financial",
         },
       ],
@@ -220,13 +220,13 @@ function getAdminSections(staffUser) {
     {
       title: "Records",
       links: [
-        { to: "/admin/customers", label: "Customer Lookup", navKey: "customers" },
+        { to: "/admin/customers", label: "Customers", navKey: "customers" },
         { to: "/admin/sales", label: "Sales History", navKey: "counterSales" },
         { to: "/admin/garments", label: "Garment Library", navKey: "garments" },
-        { to: "/admin/products", label: "Customer Catalog", navKey: "products" },
+        { to: "/admin/products", label: "Customer Storefront", navKey: "products" },
         {
           to: "/admin/quotes/archived",
-          label: "Archived Quotes",
+          label: "Archived Requests",
           navKey: "archivedQuotes",
         },
         {

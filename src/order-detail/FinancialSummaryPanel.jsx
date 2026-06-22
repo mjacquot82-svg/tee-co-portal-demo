@@ -191,7 +191,7 @@ export default function FinancialSummaryPanel({
         }}
       >
         <div>
-          <h2 style={{ margin: "0 0 4px" }}>Financial Summary</h2>
+          <h2 style={{ margin: "0 0 4px" }}>Payment Summary</h2>
           <p style={{ margin: 0, color: "#64748b" }}>
             Operational payment tracking for this order.
           </p>
@@ -261,7 +261,7 @@ export default function FinancialSummaryPanel({
             lineHeight: 1.6,
           }}
         >
-          This order is canceled. Financial history is preserved for review, but deposit requests and pickup actions are disabled.
+          This order is canceled. Payment history is preserved for review, but deposit requests and pickup actions are disabled.
         </div>
       ) : null}
 

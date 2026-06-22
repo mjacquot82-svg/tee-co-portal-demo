@@ -729,7 +729,7 @@ export default function CustomerDetail() {
               fontWeight: 700,
             }}
           >
-            New Quote
+            New Order Request
           </Link>
         </div>
       </div>
@@ -891,7 +891,7 @@ export default function CustomerDetail() {
                     }}
                   >
                     {[
-                      ["Quotes", mergePreview.counts.quotes],
+                      ["Requests", mergePreview.counts.quotes],
                       ["Orders", mergePreview.counts.orders],
                       ["Artwork", mergePreview.counts.artwork],
                       ["Timeline", mergePreview.counts.timelineEvents],
@@ -1088,10 +1088,10 @@ export default function CustomerDetail() {
         ) : null}
 
         {renderOperationalSection(
-          "Active Quotes",
-          "Open quote work, approvals, and deposit checkpoints for this account.",
+          "Active Requests",
+          "Open request work, approvals, and deposit checkpoints for this account.",
           quoteRecords,
-          "No active quotes linked to this customer yet.",
+          "No active requests linked to this customer yet.",
           "quote"
         )}
 

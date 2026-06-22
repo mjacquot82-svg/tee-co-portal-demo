@@ -26,6 +26,7 @@ import {
   resolveProductBasePrice,
   useStoredProducts,
 } from "../lib/productsStore";
+import { uploadCustomerArtwork } from "../services/customerArtworkService";
 import { PortalPage, SectionCard } from "./CustomerPortalShared";
 
 function normalizeText(value) {
@@ -102,6 +103,8 @@ export default function CustomerPortalRequestOrder() {
   const [selectedPlacement, setSelectedPlacement] = useState("");
   const [needByDate, setNeedByDate] = useState("");
   const [notes, setNotes] = useState("");
+  const [artworkOption, setArtworkOption] = useState("upload_later");
+  const [artworkFile, setArtworkFile] = useState(null);
   const [contactName, setContactName] = useState(customerSession.displayName || "");
   const [contactPhone, setContactPhone] = useState(customerSession.phone || "");
   const [submitState, setSubmitState] = useState("idle");
@@ -148,6 +151,9 @@ export default function CustomerPortalRequestOrder() {
         : "";
       setNotes([pendingRequest.notes, artworkNote].filter(Boolean).join("\n\n"));
     }
+    if (pendingRequest.artworkName) {
+      setArtworkOption("upload_later");
+    }
 
     appliedPendingRequestRef.current = pendingKey;
   }, [pendingRequest, storefrontCategories, storefrontProducts]);
@@ -173,16 +179,70 @@ export default function CustomerPortalRequestOrder() {
     }
 
     const normalizedQuantity = Math.max(1, Number(quantity || 1));
+    const normalizedArtworkOption = ["upload_now", "upload_later", "need_help"].includes(artworkOption)
+      ? artworkOption
+      : "upload_later";
+
+    if (normalizedArtworkOption === "upload_now" && !artworkFile) {
+      setSubmitState("error");
+      setSubmitMessage("Choose an artwork file or select Upload Artwork Later.");
+      return;
+    }
+
+    setSubmitState("submitting");
+    setSubmitMessage("");
+
     const profile = await ensureCustomerProfile(customerSession);
     const decorationType = getDefaultDecorationType(selectedProduct);
     const artworkReferenceName = normalizeText(pendingRequest?.artworkName);
+    let uploadedArtwork = null;
+
+    if (normalizedArtworkOption === "upload_now" && artworkFile) {
+      try {
+        uploadedArtwork = await uploadCustomerArtwork(profile?.id || "", artworkFile, {
+          uploadedBy: customerSession.displayName || customerSession.email || "Customer Portal",
+          notes: "Uploaded with customer order request.",
+        });
+      } catch (error) {
+        setSubmitState("error");
+        setSubmitMessage(
+          error instanceof Error && error.message
+            ? error.message
+            : "Artwork could not be uploaded. Try again or choose Upload Artwork Later."
+        );
+        return;
+      }
+    }
+
+    const artworkDisplayName =
+      uploadedArtwork?.file_name ||
+      uploadedArtwork?.name ||
+      artworkFile?.name ||
+      artworkReferenceName;
+    const artworkRequirement =
+      normalizedArtworkOption === "upload_now"
+        ? "Uploaded"
+        : normalizedArtworkOption === "need_help"
+        ? "Help Needed"
+        : "Upload Later";
+    const artworkFiles = uploadedArtwork
+      ? [
+          {
+            ...uploadedArtwork,
+            id: uploadedArtwork.id || "",
+            name: artworkDisplayName,
+            file_name: uploadedArtwork.file_name || artworkDisplayName,
+            artwork_approval_status: "Pending Review",
+          },
+        ]
+      : [];
     const requestPlacements = resolvedPlacement
       ? [
           {
             placement: resolvedPlacement,
             decoration_type: decorationType,
-            artwork_id: "",
-            artwork_name: artworkReferenceName,
+            artwork_id: uploadedArtwork?.id || "",
+            artwork_name: artworkDisplayName,
           },
         ]
       : [];
@@ -200,9 +260,6 @@ export default function CustomerPortalRequestOrder() {
     );
 
     try {
-      setSubmitState("submitting");
-      setSubmitMessage("");
-
       const createdOrder = createStoredOrder({
         customer_id: profile?.id || "",
         customer_name: profile?.name || customerSession.displayName || "Customer Account",
@@ -216,7 +273,9 @@ export default function CustomerPortalRequestOrder() {
         product_image: getStorefrontProductImage(selectedProduct),
         product_notes: selectedProduct.notes || "",
         source: "Customer Portal",
-        request_type: "Quote Request",
+        request_type: "Order Request",
+        request_status: "Pending Staff Review",
+        staff_review_status: "Pending Review",
         status: "New",
         quote_status: "Draft",
         operational_visible: false,
@@ -228,8 +287,15 @@ export default function CustomerPortalRequestOrder() {
         placement: resolvedPlacement,
         placements: requestPlacements,
         decoration_type: decorationType,
-        customer_artwork_name: artworkReferenceName,
-        artwork_reference_names: artworkReferenceName ? [artworkReferenceName] : [],
+        customer_artwork_id: uploadedArtwork?.id || "",
+        customer_artwork_name: artworkDisplayName,
+        artwork_files: artworkFiles,
+        artwork_reference_names: artworkDisplayName ? [artworkDisplayName] : [],
+        artwork_requirement: artworkRequirement,
+        artwork_status: uploadedArtwork ? "Pending Review" : "Missing",
+        artwork_approval_required: true,
+        artwork_approval_status: "Pending Review",
+        approval_status: "Pending Review",
         due_date: needByDate || "",
         notes: normalizeText(notes),
         customer_notes: normalizeText(notes),
@@ -239,7 +305,10 @@ export default function CustomerPortalRequestOrder() {
         amount_paid: 0,
         balance_due: 0,
         deposit_amount: 0,
-        deposit_required: false,
+        deposit_required: null,
+        deposit_requirement: "undecided",
+        deposit_requirement_status: "Undecided",
+        deposit_workflow_status: "Pending Decision",
         invoice_status: "Draft",
         quote,
       });
@@ -257,7 +326,7 @@ export default function CustomerPortalRequestOrder() {
         replace: true,
         state: {
           createdOrderNumber: createdOrder.order_number,
-          flashMessage: `Your request for ${selectedProduct.name} has been added to Tee & Co's quote workflow.`,
+          flashMessage: `Your order request for ${selectedProduct.name} is awaiting Tee & Co staff review.`,
         },
       });
     } catch (error) {
@@ -274,8 +343,8 @@ export default function CustomerPortalRequestOrder() {
   return (
     <PortalPage
       eyebrow="Start New Order"
-      title="Request a quote or start a new order"
-      description="Browse the live storefront catalog, choose the product you want, and send a lightweight request with quantity and customization notes. Tee & Co will take it from there inside the existing quote workflow."
+      title="Submit an order request"
+      description="Browse the live storefront catalog, choose the product you want, and send an order request with quantity, artwork, and customization notes. Tee & Co will review it before production."
     >
       <SectionCard
         title="How this works"
@@ -294,7 +363,7 @@ export default function CustomerPortalRequestOrder() {
           >
             <strong style={{ display: "block" }}>Garment selection restored</strong>
             <p style={{ margin: "6px 0 0", lineHeight: 1.6 }}>
-              Review the details below, then submit to create your request in the Tee & Co quote workflow.
+              Review the details below, then submit an order request for Tee & Co staff review.
             </p>
           </div>
         ) : null}
@@ -445,7 +514,7 @@ export default function CustomerPortalRequestOrder() {
                     <div style={{ display: "grid", gap: "6px" }}>
                       <strong style={{ color: "#0f172a", fontSize: "16px" }}>{product.name}</strong>
                       <p style={{ margin: 0, color: "#475569", lineHeight: 1.5, fontSize: "13px" }}>
-                        {product.notes || "Available for custom quote requests."}
+                        {product.notes || "Available for custom order requests."}
                       </p>
                       <span style={{ color: "#0f766e", fontWeight: 800, fontSize: "13px" }}>
                         {resolveProductBasePrice(product) > 0
@@ -574,6 +643,68 @@ export default function CustomerPortalRequestOrder() {
               </label>
             </div>
 
+            <fieldset
+              style={{
+                border: "1px solid #dbe4ee",
+                borderRadius: "16px",
+                padding: "14px",
+                display: "grid",
+                gap: "12px",
+              }}
+            >
+              <legend style={{ padding: "0 6px", color: "#0f172a", fontWeight: 800 }}>
+                Artwork
+              </legend>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                  gap: "10px",
+                }}
+              >
+                {[
+                  ["upload_now", "Upload Artwork Now"],
+                  ["upload_later", "Upload Artwork Later"],
+                  ["need_help", "Need Artwork Help"],
+                ].map(([value, label]) => (
+                  <label
+                    key={value}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "9px",
+                      border: artworkOption === value ? "1px solid #0f766e" : "1px solid #dbe4ee",
+                      background: artworkOption === value ? "#ecfdf5" : "#ffffff",
+                      color: "#0f172a",
+                      borderRadius: "14px",
+                      padding: "11px 12px",
+                      fontWeight: 800,
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="artwork_option"
+                      value={value}
+                      checked={artworkOption === value}
+                      onChange={(event) => setArtworkOption(event.target.value)}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              {artworkOption === "upload_now" ? (
+                <label style={labelStyle()}>
+                  Artwork file
+                  <input
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.pdf,.svg,.ai"
+                    onChange={(event) => setArtworkFile(event.target.files?.[0] || null)}
+                    style={fieldStyle()}
+                  />
+                </label>
+              ) : null}
+            </fieldset>
+
             <label style={labelStyle()}>
               Customization notes
               <textarea
@@ -642,7 +773,7 @@ export default function CustomerPortalRequestOrder() {
                   cursor: submitState === "submitting" || !selectedProduct ? "not-allowed" : "pointer",
                 }}
               >
-                {submitState === "submitting" ? "Sending Request..." : "Request Quote"}
+                {submitState === "submitting" ? "Sending Request..." : "Submit Order Request"}
               </button>
 
               <button

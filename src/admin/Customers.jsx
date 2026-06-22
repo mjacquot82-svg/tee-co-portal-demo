@@ -234,7 +234,7 @@ export default function Customers() {
           >
             Records
           </p>
-          <h1 style={{ margin: "6px 0 8px", fontSize: "32px" }}>Customer Lookup</h1>
+          <h1 style={{ margin: "6px 0 8px", fontSize: "32px" }}>Customers</h1>
           <p style={{ margin: 0, color: "#475569", maxWidth: "760px" }}>
             Find, open, or create a customer record here. Operational queue detail and financial follow-up live in the workspaces that own them.
           </p>

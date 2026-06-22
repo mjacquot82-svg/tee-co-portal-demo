@@ -90,8 +90,8 @@ function OwnerAssignments({ allOrders, staffUsers }) {
     <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "24px" }}>
       <div style={{ marginBottom: "18px" }}>
         <p style={{ margin: 0, color: "#78716c", fontSize: "12px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase" }}>Production Dispatch</p>
-        <h1 style={{ margin: "6px 0 8px", fontSize: "32px" }}>Assignment Dispatch Board</h1>
-        <p style={{ margin: 0, color: "#64748b", maxWidth: "760px" }}>Assign and rebalance work here. Production status tracking stays in Shop Production, and financial follow-up stays in Invoices & Payments.</p>
+        <h1 style={{ margin: "6px 0 8px", fontSize: "32px" }}>Assign Work</h1>
+        <p style={{ margin: 0, color: "#64748b", maxWidth: "760px" }}>Assign and rebalance work here. Production status tracking stays in Production, and payment follow-up stays in Payments.</p>
       </div>
 
       <AssignmentDispatchBoard

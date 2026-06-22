@@ -9,6 +9,10 @@ import {
   useCatalogLookups,
 } from "../lib/catalogLookupsStore";
 import { useGarmentLibraryItems } from "../lib/garmentLibraryStore";
+import {
+  resolveProductDisplayColors,
+  useGarmentModelColors,
+} from "../lib/garmentModelColorsStore";
 import { findLinkedGarmentLibraryItem } from "../lib/productGarmentLinks";
 import {
   buildPlacementConfig,
@@ -417,6 +421,7 @@ export default function Products() {
   const productsReady = areStoredProductsReady();
   const libraryItems = useGarmentLibraryItems();
   const lookups = useCatalogLookups();
+  const colorsByGarmentModel = useGarmentModelColors();
   const categories = useMemo(() => lookups.categories || [], [lookups.categories]);
   const storefrontCategories = useMemo(
     () => lookups.storefront_categories || [],
@@ -491,6 +496,26 @@ export default function Products() {
   const showVariantSelection = Boolean(selectedGarmentItem) && selectedGarmentVariantCount > 0;
   const showSizeSelection = Boolean(selectedGarmentItem) && garmentSizeOptions.length > 0;
   const isSelectedGarmentOneSize = isOneSizeOnly(garmentSizes);
+  const selectedGarmentColorSummary = useMemo(
+    () =>
+      resolveProductDisplayColors(
+        {
+          id: editingProduct?.id || form.selectedGarmentLibraryId || "draft-product",
+          garment_model_lookup_id:
+            selectedGarmentItem?.garment_model_lookup_id || form.garment_model_lookup_id,
+          colors: form.visibleVariants,
+        },
+        colorsByGarmentModel
+      ),
+    [
+      colorsByGarmentModel,
+      editingProduct?.id,
+      form.garment_model_lookup_id,
+      form.selectedGarmentLibraryId,
+      form.visibleVariants,
+      selectedGarmentItem?.garment_model_lookup_id,
+    ]
+  );
   const inheritedBrandLabel = isManualProductMode
     ? normalizeText(findLookupById(brands, form.brand_lookup_id)?.name || form.brand_model)
     : normalizeText(garmentBrand?.name || findLookupById(brands, form.brand_lookup_id)?.name || form.brand_model);
@@ -1702,8 +1727,8 @@ export default function Products() {
     <div ref={pageRef} className="products-page">
       <section className="products-page-hero">
         <div className="products-page-hero-copy">
-          <p className="products-eyebrow">Customer Product Catalog</p>
-          <h1 style={{ margin: 0 }}>Storefront Product Catalog</h1>
+          <p className="products-eyebrow">Customer Storefront</p>
+          <h1 style={{ margin: 0 }}>Storefront Products</h1>
           <p style={{ margin: 0, color: "#64748b" }}>
             Browse and manage published storefront products here. Garment creation starts in the
             Garment Library, while manual items stay lightweight.
@@ -1735,7 +1760,7 @@ export default function Products() {
         <section ref={catalogPanelRef} className="products-catalog-panel">
           <div className="products-catalog-header">
             <div>
-              <p className="products-eyebrow">Live Catalog</p>
+              <p className="products-eyebrow">Customer Storefront</p>
               <h2 style={{ margin: "6px 0 0" }}>Customer-facing products</h2>
               <p style={{ margin: "6px 0 0", color: "#64748b" }}>
                 Browse storefront inventory, filter it quickly, and open products for editing when needed.
@@ -2572,6 +2597,66 @@ export default function Products() {
                   <h2>Available Options</h2>
                 </div>
                 <p>Use this as the single source of truth for the colors and sizes customers can buy.</p>
+              </div>
+              <div
+                className="products-derived-field"
+                data-testid="garment-model-colors-summary"
+                data-color-source={selectedGarmentColorSummary.source}
+              >
+                <span>
+                  {selectedGarmentColorSummary.source === "garment_model_colors"
+                    ? "Garment model colors"
+                    : "Product colors fallback"}
+                </span>
+                <strong>
+                  {selectedGarmentColorSummary.colorNames.length} color
+                  {selectedGarmentColorSummary.colorNames.length === 1 ? "" : "s"}
+                </strong>
+                <p>
+                  {selectedGarmentColorSummary.source === "garment_model_colors"
+                    ? "Colors are loaded from garment_model_colors for this garment model."
+                    : "No garment_model_colors records are available yet, so this product still uses its existing colors list."}
+                </p>
+                {selectedGarmentColorSummary.colors.length ? (
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    {selectedGarmentColorSummary.colors.slice(0, 16).map((color) => (
+                      <span
+                        key={`${color.color_name}-${color.display_order}`}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "999px",
+                          padding: "5px 9px",
+                          fontSize: "12px",
+                          fontWeight: 700,
+                          background: "#ffffff",
+                          color: "#334155",
+                        }}
+                      >
+                        {color.hex_value ? (
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              width: "12px",
+                              height: "12px",
+                              borderRadius: "999px",
+                              border: "1px solid #cbd5e1",
+                              background: color.hex_value,
+                            }}
+                          />
+                        ) : null}
+                        {color.color_name}
+                      </span>
+                    ))}
+                    {selectedGarmentColorSummary.colors.length > 16 ? (
+                      <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
+                        +{selectedGarmentColorSummary.colors.length - 16} more
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               <div className="products-library-grid products-library-grid-wide">
                 {showVariantSelection ? (

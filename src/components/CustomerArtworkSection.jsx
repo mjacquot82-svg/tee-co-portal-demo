@@ -244,7 +244,7 @@ function ArtworkDetailModal({ file, onClose }) {
             data-artwork-id={file.id || ""}
             data-linked-count={quoteCount}
           >
-            <span>Quotes linked</span>
+            <span>Requests linked</span>
             <strong>{quoteCount}</strong>
           </div>
           <div className="customer-artwork-modal-stat">

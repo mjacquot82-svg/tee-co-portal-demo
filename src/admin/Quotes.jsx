@@ -25,7 +25,7 @@ import {
 
 const EXPANDED_QUOTES_STORAGE_KEY = "teeCoQuotesExpandedState";
 const QUOTE_QUEUE_FILTERS = [
-  { key: "all", label: "All Quotes" },
+  { key: "all", label: "All Requests" },
   { key: "awaiting-approval", label: "Awaiting Approval" },
   { key: "awaiting-artwork", label: "Artwork Follow-Up" },
   { key: "awaiting-deposit", label: "Awaiting Deposit" },
@@ -262,7 +262,7 @@ function buildReadinessSummary(readiness) {
 
 function getCollapsedSummaryFields(quote, summary) {
   return [
-    { label: "Quote #", value: formatValue(quote.order_number) },
+    { label: "Request #", value: formatValue(quote.order_number) },
     { label: "Customer", value: formatValue(quote.customer_name, "Walk-in Customer") },
     { label: "Status", value: formatValue(quote.quote_status, "Draft") },
     {
@@ -305,7 +305,7 @@ function matchesQuoteQueueFilter(quote, summary, filterKey) {
   if (filterKey === "awaiting-approval") return quote.quote_status === "Awaiting Approval";
   if (filterKey === "awaiting-artwork") return quote.quote_status === "Awaiting Artwork Approval";
   if (filterKey === "awaiting-deposit") return quote.quote_status === "Awaiting Deposit";
-  if (filterKey === "ready") return summary.readiness.ready || isQuoteReadyForProduction(quote.quote_status);
+  if (filterKey === "ready") return summary.readiness.ready && isQuoteReadyForProduction(quote.quote_status);
   if (filterKey === "blocked") return !summary.readiness.ready;
   return true;
 }
@@ -321,7 +321,7 @@ export default function Quotes() {
   const orders = useStoredOrders();
   const cardRefs = useRef({});
   const [expandedQuotes, setExpandedQuotes] = useState(readExpandedQuotesState);
-  const [flashTitle, setFlashTitle] = useState(() => location.state?.flashTitle || "Quote Created Successfully");
+  const [flashTitle, setFlashTitle] = useState(() => location.state?.flashTitle || "Request Created Successfully");
   const [flashMessage, setFlashMessage] = useState(() => location.state?.flashMessage || "");
   const [flashTone, setFlashTone] = useState(() => location.state?.flashTone || "default");
   const [highlightedQuote, setHighlightedQuote] = useState(
@@ -347,8 +347,11 @@ export default function Quotes() {
   );
   const statusCounts = useMemo(() => buildStatusCountMap(quotes), [quotes]);
   const readyQuotes = useMemo(
-    () => quotes.filter((quote) => isQuoteReadyForProduction(quote.quote_status)),
-    [quotes]
+    () =>
+      quoteRecords.filter(
+        ({ quote, summary }) => summary.readiness.ready && isQuoteReadyForProduction(quote.quote_status)
+      ),
+    [quoteRecords]
   );
   const filterCounts = useMemo(
     () =>
@@ -400,7 +403,7 @@ export default function Quotes() {
 
     const stateTimer = window.setTimeout(() => {
       if (location.state?.flashMessage) {
-        setFlashTitle(location.state.flashTitle || "Quote Created Successfully");
+        setFlashTitle(location.state.flashTitle || "Request Created Successfully");
         setFlashMessage(location.state.flashMessage);
         setFlashTone(location.state.flashTone || "default");
       }
@@ -489,7 +492,7 @@ export default function Quotes() {
     if (!canViewArchivedQuotes) return;
 
     const confirmed = window.confirm(
-      `Archive quote ${quote.order_number} from the active workflow? It will move to Archived Quotes and stay recoverable.`
+      `Archive request ${quote.order_number} from active review? It will move to Archived Requests and stay recoverable.`
     );
     if (!confirmed) return;
 
@@ -502,8 +505,8 @@ export default function Quotes() {
       activity_note: "Quote archived from active workflow.",
     });
 
-    setFlashTitle("Quote Archived");
-    setFlashMessage(`Quote ${quote.order_number} was removed from active workflow and moved to Archived Quotes.`);
+    setFlashTitle("Request Archived");
+    setFlashMessage(`Request ${quote.order_number} was removed from active review and moved to Archived Requests.`);
     setFlashTone("success");
     setHighlightedQuote("");
     setExpandedQuotes((current) => {
@@ -538,18 +541,18 @@ export default function Quotes() {
               textTransform: "uppercase",
             }}
           >
-            Quotes Workspace
+            Order Requests
           </p>
-          <h1 style={{ margin: "8px 0 6px" }}>Quotes</h1>
+          <h1 style={{ margin: "8px 0 6px" }}>Order Requests</h1>
           <p style={{ margin: 0, color: "#64748b", maxWidth: "760px" }}>
             {isStaffWorkspace
-              ? "Incoming quote work, approvals, and artwork readiness stay here until jobs move into production."
+              ? "Incoming request work, approvals, and artwork readiness stay here until jobs move into production."
               : "Intake, approvals, artwork sign-off, and deposit readiness stay here until work is released into production."}
           </p>
           <p style={{ margin: "8px 0 0", color: "#94a3b8", maxWidth: "760px", fontSize: "14px", fontWeight: 600 }}>
             {canViewArchivedQuotes
-              ? "Archived quotes are intentionally removed from this active workflow view and remain available in Archived Quotes."
-              : "Archived quotes are intentionally removed from this active workflow view."}
+              ? "Archived requests are intentionally removed from this active review view and remain available in Archived Requests."
+              : "Archived requests are intentionally removed from this active workflow view."}
           </p>
         </div>
 
@@ -567,7 +570,7 @@ export default function Quotes() {
                 fontWeight: 700,
               }}
             >
-              Archived Quotes
+              Archived Requests
             </Link>
           ) : null}
           <Link
@@ -581,7 +584,7 @@ export default function Quotes() {
               fontWeight: 700,
             }}
           >
-            {isStaffWorkspace ? "New Intake" : "New Quote"}
+            {isStaffWorkspace ? "New Intake" : "New Order Request"}
           </Link>
         </div>
       </div>
@@ -594,10 +597,10 @@ export default function Quotes() {
           marginBottom: "20px",
         }}
       >
-        <SummaryCard label="Open Quotes" value={quotes.length} />
+        <SummaryCard label="Open Requests" value={quotes.length} />
         <SummaryCard label="Awaiting Approval" value={statusCounts["Awaiting Approval"] || 0} tone="warning" />
         <SummaryCard label="Awaiting Deposit" value={statusCounts["Awaiting Deposit"] || 0} tone="warning" />
-        <SummaryCard label="Ready For Production" value={readyQuotes.length} tone="success" />
+        <SummaryCard label="Ready for Production" value={readyQuotes.length} tone="success" />
       </section>
 
       <section
@@ -639,7 +642,7 @@ export default function Quotes() {
             type="search"
             value={searchTerm}
             onChange={(event) => updateFilters({ q: event.target.value })}
-            placeholder="Search quote, customer, garment, artwork, status"
+            placeholder="Search request, customer, garment, artwork, status"
             style={{
               flex: "1 1 360px",
               minWidth: "240px",
@@ -809,14 +812,14 @@ export default function Quotes() {
                               textTransform: "uppercase",
                             }}
                           >
-                            Quote Summary
+                            Request Summary
                           </p>
                           <p style={{ margin: "6px 0 0", color: "#0f172a", fontSize: "16px", fontWeight: 800 }}>
                             {quote.order_number}
                           </p>
                           {isHighlighted ? (
                             <p style={{ margin: "8px 0 0", color: "#166534", fontSize: "13px", fontWeight: 800 }}>
-                              Newly created quote now in workflow
+                              Newly created request now in workflow
                             </p>
                           ) : null}
                         </div>
@@ -867,7 +870,7 @@ export default function Quotes() {
                           minHeight: canViewArchivedQuotes ? "56px" : "100%",
                         }}
                       >
-                        Open Quote
+                        Open Request
                       </Link>
                       {canViewArchivedQuotes ? (
                         <button
@@ -884,7 +887,7 @@ export default function Quotes() {
                             minHeight: "56px",
                           }}
                         >
-                          Archive Quote
+                          Archive Request
                         </button>
                       ) : null}
                     </div>
@@ -977,7 +980,7 @@ export default function Quotes() {
                                   textTransform: "uppercase",
                                 }}
                               >
-                                Production Readiness
+                                Ready for Production
                               </p>
                               <p
                                 style={{
@@ -987,8 +990,8 @@ export default function Quotes() {
                                 }}
                               >
                                 {summary.readiness.ready
-                                  ? "This quote has everything needed to move into production."
-                                  : "This quote still needs the items below before it can move into production."}
+                                  ? "This request has everything needed to move into production."
+                                  : "This request still needs the items below before it can move into production."}
                               </p>
                             </div>
                             <StatusPill tone={readinessTone}>
@@ -1136,14 +1139,14 @@ export default function Quotes() {
                                   Lifecycle Management
                                 </p>
                                 <p style={{ margin: "4px 0 0", color: "#334155", fontWeight: 700 }}>
-                                  Archive Quote
+                                  Archive Request
                                 </p>
                               </div>
                               <StatusPill tone="warning">Admin / Owner</StatusPill>
                             </div>
 
                             <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
-                              Remove this quote from the active workflow once it should no longer appear in the operational queue, while keeping the full record recoverable in Archived Quotes.
+                              Remove this request from active review once it should no longer appear in the queue, while keeping the full record recoverable in Archived Requests.
                             </p>
 
                             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
@@ -1160,7 +1163,7 @@ export default function Quotes() {
                                   cursor: "pointer",
                                 }}
                               >
-                                Archive Quote
+                                Archive Request
                               </button>
                               <Link
                                 to="/admin/quotes/archived"
@@ -1174,7 +1177,7 @@ export default function Quotes() {
                                   textDecoration: "none",
                                 }}
                               >
-                                View Archived Quotes
+                                View Archived Requests
                               </Link>
                             </div>
                           </section>
@@ -1220,8 +1223,8 @@ export default function Quotes() {
               }}
             >
               {hasActiveFilters
-                ? "No quotes match the current filters."
-                : "No active quotes yet. New intake created from this area will stay in sales workflow until released for production. Archived quotes are removed from this queue."}
+                ? "No requests match the current filters."
+                : "No active requests yet. New intake created from this area will stay in review until released for production. Archived requests are removed from this queue."}
             </div>
           )}
         </div>

@@ -36,9 +36,9 @@ export default function CustomerPortalQuotes() {
 
   return (
     <PortalPage
-      eyebrow="Quotes"
-      title="Quote requests, quotes, and approvals"
-      description="Start lightweight requests from the portal, then review quoted work, deposit progress, and approval-related statuses without stepping into operational workflow details."
+      eyebrow="Order Requests"
+      title="Order requests and approvals"
+      description="Start order requests from the portal, then review staff feedback, artwork needs, deposit progress, and approval-related statuses without stepping into operational workflow details."
     >
       {flashMessage ? (
         <div
@@ -51,7 +51,7 @@ export default function CustomerPortalQuotes() {
           }}
         >
           <strong style={{ display: "block", fontSize: "16px" }}>
-            Request received
+            Order request received
           </strong>
           <p style={{ margin: "6px 0 0", lineHeight: 1.6 }}>
             {flashMessage}
@@ -61,15 +61,15 @@ export default function CustomerPortalQuotes() {
       ) : null}
 
       <SectionCard
-        title="Quote Records"
-        subtitle="Requests and formal quotes stay scoped to your account only."
+        title="Order Request Records"
+        subtitle="Order requests and approvals stay scoped to your account only."
       >
         {quotes.length ? (
           <RecordList records={quotes} type="quotes" />
         ) : (
           <EmptyState
-            title="No quote requests yet"
-            description="Start a request from the portal and Tee & Co will move it into the quote workflow for review."
+            title="No order requests yet"
+            description="Start a request from the portal and Tee & Co will review it before production."
             actionLabel="Start New Order"
             actionTo="/portal/request-order"
           />

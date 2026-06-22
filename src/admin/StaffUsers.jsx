@@ -43,7 +43,7 @@ const notificationPreferencePreviewItems = [
   {
     key: "depositRecorded",
     label: "Deposit Recorded",
-    description: "Payment progress updates when quote work becomes financially cleared.",
+    description: "Payment progress updates when request work becomes cleared for payment.",
   },
   {
     key: "finalPaymentRecorded",

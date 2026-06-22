@@ -160,9 +160,9 @@ export default function InvoicesPayments() {
             textTransform: "uppercase",
           }}
         >
-          Financial Workflow
+          Payments
         </p>
-        <h1 style={{ margin: "8px 0 6px" }}>Invoices & Payments</h1>
+        <h1 style={{ margin: "8px 0 6px" }}>Payments</h1>
         <p style={{ margin: 0, color: "#64748b", maxWidth: "760px" }}>
           Work the billing queue here: deposits, invoices, balances due, and payment follow-up. Detailed historical lookup lives in its own view so this screen can stay operationally calm.
         </p>
@@ -212,7 +212,7 @@ export default function InvoicesPayments() {
                 <th style={{ padding: "12px 10px" }}>Remaining Balance</th>
                 <th style={{ padding: "12px 10px" }}>Amount Due Now</th>
                 <th style={{ padding: "12px 10px" }}>Due Date</th>
-                <th style={{ padding: "12px 10px" }}>Latest Financial Event</th>
+                <th style={{ padding: "12px 10px" }}>Latest Payment Event</th>
               </tr>
             </thead>
             <tbody>
@@ -268,7 +268,7 @@ export default function InvoicesPayments() {
                             </span>
                           </div>
                         ) : (
-                          <span style={{ color: "#94a3b8" }}>No financial activity recorded.</span>
+                          <span style={{ color: "#94a3b8" }}>No payment activity recorded.</span>
                         )}
                       </td>
                     </tr>
@@ -290,7 +290,7 @@ export default function InvoicesPayments() {
       </SectionCard>
 
       <SectionCard
-        title="Recent Financial Activity"
+        title="Recent Payment Activity"
         description="A compact preview of the newest billing movement. Use the full history view for deeper lookup."
         action={
           <Link
@@ -305,7 +305,7 @@ export default function InvoicesPayments() {
               fontWeight: 700,
             }}
           >
-            View Full Financial History
+            View Full Payment History
           </Link>
         }
       >

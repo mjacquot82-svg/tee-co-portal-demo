@@ -99,7 +99,7 @@ function buildWorkflowSnapshotCards(orders = []) {
         snapshot.newRequests += 1;
       }
 
-      if (quoteStatus === "Awaiting Approval") {
+      if (quoteStatus === "Awaiting Approval" || unmetChecks.some((check) => check.label === "Staff Review")) {
         snapshot.awaitingApproval += 1;
       }
 
@@ -111,7 +111,7 @@ function buildWorkflowSnapshotCards(orders = []) {
         snapshot.artworkNeeded += 1;
       }
 
-      if (readiness.ready || quoteStatus === "Ready For Production") {
+      if (readiness.ready && quoteStatus === "Ready For Production") {
         snapshot.readyForProduction += 1;
       }
 
@@ -132,7 +132,7 @@ function buildWorkflowSnapshotCards(orders = []) {
   });
 
   return [
-    { label: "New Requests", value: snapshot.newRequests, tone: "default" },
+    { label: "Pending Staff Review", value: snapshot.newRequests, tone: "default" },
     { label: "Awaiting Approval", value: snapshot.awaitingApproval, tone: "warning" },
     { label: "Awaiting Deposit", value: snapshot.awaitingDeposit, tone: "warning" },
     { label: "Artwork Needed", value: snapshot.artworkNeeded, tone: "warning" },
@@ -201,21 +201,21 @@ function buildOwnerAttentionItems(orders = []) {
     {
       label: "Overdue Production",
       count: metrics.overdue,
-      description: "Jobs past due date need immediate review in Shop Production.",
+      description: "Jobs past due date need immediate review in Production.",
       to: "/admin/orders",
       tone: "danger",
     },
     {
-      label: "New Quote Requests",
-      count: lookup["New Requests"] || 0,
-      description: "Customer-submitted requests are waiting for quote review.",
+      label: "New Order Requests",
+      count: lookup["Pending Staff Review"] || 0,
+      description: "Customer-submitted order requests are waiting for staff review.",
       to: "/admin/quotes",
       tone: "default",
     },
     {
       label: "Awaiting Approval",
       count: lookup["Awaiting Approval"] || 0,
-      description: "Quotes still waiting on customer approval before production can move.",
+      description: "Order requests still waiting on customer approval before production can move.",
       to: "/admin/quotes?queue=awaiting-approval",
       tone: "warning",
     },
@@ -471,7 +471,7 @@ function OwnerDashboard({ orders, operationalEvents }) {
           <Section
             className="owner-dashboard-section-primary"
             title="Owner Attention"
-            description="Only the highest-priority items stay here. Detailed queue management remains in Quotes, Shop Production, Front Counter, Assignments, and Financial."
+            description="Only the highest-priority items stay here. Detailed queue management remains in Order Requests, Production, Front Counter, Assign Work, and Payments."
           >
             {attentionItems.length ? (
               <div className="owner-dashboard-attention-grid" style={{ display: "grid", gap: "12px" }}>

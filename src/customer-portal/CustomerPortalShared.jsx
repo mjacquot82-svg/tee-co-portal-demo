@@ -7,6 +7,17 @@ import {
   buildCustomerWorkflowMessage,
   buildWorkflowStatusBadges,
 } from "../orders/workflowPresentation";
+import {
+  buildDepositContactHref,
+  buildDepositPaymentRoute,
+  getDepositPaymentProviderConfig,
+  isDepositActionRequired,
+} from "../lib/depositPaymentProviders";
+import {
+  buildArtworkActionRoute,
+  getCustomerArtworkActionState,
+  isCustomerArtworkActionRequired,
+} from "../lib/customerArtworkActions";
 
 const EMPTY_RECORDS = Object.freeze([]);
 const STATUS_FALLBACK_CACHE = new Map();
@@ -395,7 +406,148 @@ function resolveArtworkApprovalLabel(record = {}) {
 }
 
 function resolveDepositWorkflowLabel(record = {}) {
+  if (isDepositActionRequired(record)) {
+    return "Action Needed: Deposit Required";
+  }
+
   return record.deposit_workflow_status || (record.deposit_required ? "Awaiting Deposit" : "Deposit Not Required");
+}
+
+function PortalRecordActionNeeded({ record }) {
+  const providerConfig = getDepositPaymentProviderConfig(record);
+  const orderNumber = record.order_number || record.id || "";
+  const contactHref = buildDepositContactHref(record, providerConfig);
+
+  return (
+    <div
+      data-testid="portal-action-needed"
+      style={{
+        borderRadius: "18px",
+        border: "1px solid #fde68a",
+        background: "#fffbeb",
+        padding: "14px",
+        display: "grid",
+        gap: "12px",
+      }}
+    >
+      <div style={{ display: "grid", gap: "4px" }}>
+        <strong style={{ color: "#78350f", fontSize: "16px" }}>
+          Action Needed: Deposit Required
+        </strong>
+        <p style={{ margin: 0, color: "#92400e", lineHeight: 1.6 }}>
+          Tee & Co needs a deposit before this order can continue.
+        </p>
+      </div>
+
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+        <Link
+          to={buildDepositPaymentRoute(orderNumber)}
+          data-testid="portal-pay-deposit-link"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "42px",
+            borderRadius: "999px",
+            background: "#0f766e",
+            color: "#ffffff",
+            padding: "10px 16px",
+            fontWeight: 900,
+            textDecoration: "none",
+            boxShadow: "0 12px 24px rgba(15, 118, 110, 0.18)",
+          }}
+        >
+          Pay Deposit
+        </Link>
+        <a
+          href={contactHref}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "42px",
+            borderRadius: "999px",
+            border: "1px solid #f59e0b",
+            background: "#ffffff",
+            color: "#78350f",
+            padding: "9px 15px",
+            fontWeight: 800,
+            textDecoration: "none",
+          }}
+        >
+          Contact Tee & Co
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function PortalArtworkActionNeeded({ record }) {
+  const orderNumber = record.order_number || record.id || "";
+  const artworkAction = getCustomerArtworkActionState(record);
+
+  return (
+    <div
+      data-testid="portal-artwork-action-needed"
+      style={{
+        borderRadius: "18px",
+        border: "1px solid #bfdbfe",
+        background: "#eff6ff",
+        padding: "14px",
+        display: "grid",
+        gap: "12px",
+      }}
+    >
+      <div style={{ display: "grid", gap: "4px" }}>
+        <strong style={{ color: "#1e3a8a", fontSize: "16px" }}>
+          {artworkAction.label || "Action Needed: Artwork Required"}
+        </strong>
+        <p style={{ margin: 0, color: "#1d4ed8", lineHeight: 1.6 }}>
+          Tee & Co needs artwork details before this order can continue.
+        </p>
+      </div>
+
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+        <Link
+          to={buildArtworkActionRoute(orderNumber)}
+          data-testid="portal-upload-artwork-link"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "42px",
+            borderRadius: "999px",
+            background: "#1d4ed8",
+            color: "#ffffff",
+            padding: "10px 16px",
+            fontWeight: 900,
+            textDecoration: "none",
+            boxShadow: "0 12px 24px rgba(29, 78, 216, 0.18)",
+          }}
+        >
+          {artworkAction.primaryLabel || "Upload Artwork"}
+        </Link>
+        <Link
+          to={`${buildArtworkActionRoute(orderNumber)}?mode=help`}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "42px",
+            borderRadius: "999px",
+            border: "1px solid #93c5fd",
+            background: "#ffffff",
+            color: "#1e3a8a",
+            padding: "9px 15px",
+            fontWeight: 800,
+            textDecoration: "none",
+          }}
+        >
+          Need Artwork Help
+        </Link>
+      </div>
+    </div>
+  );
 }
 
 export function RecordList({ records = [], type = "orders" }) {
@@ -457,6 +609,8 @@ export function RecordList({ records = [], type = "orders" }) {
       {viewModels.map(({ record, total, balance, dueDate, primaryStatus, paymentStatus, timelineNote }) => {
         const workflowBadges =
           type === "orders" ? buildWorkflowStatusBadges(record, { surface: "customer" }) : [];
+        const depositActionRequired = isDepositActionRequired(record);
+        const artworkActionRequired = isCustomerArtworkActionRequired(record);
         return (
           <article
             key={`${type}-${record.order_number || record.id}`}
@@ -532,6 +686,9 @@ export function RecordList({ records = [], type = "orders" }) {
               <DetailPair label="Deposit" value={resolveDepositWorkflowLabel(record)} />
               <DetailPair label="Balance" value={balance} />
             </div>
+
+            {artworkActionRequired ? <PortalArtworkActionNeeded record={record} /> : null}
+            {depositActionRequired ? <PortalRecordActionNeeded record={record} /> : null}
 
             <p
               style={{

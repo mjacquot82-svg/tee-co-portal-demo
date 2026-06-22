@@ -103,11 +103,11 @@ export default function FinancialHistory() {
               textTransform: "uppercase",
             }}
           >
-            Financial Workflow
+            Payments
           </p>
-          <h1 style={{ margin: "8px 0 6px" }}>Financial History</h1>
+          <h1 style={{ margin: "8px 0 6px" }}>Payment History</h1>
           <p style={{ margin: 0, color: "#64748b", maxWidth: "780px" }}>
-            Full billing activity lives here so the main financial workspace can stay focused on balances, deposits, and invoices that need attention now.
+            Full billing activity lives here so Payments can stay focused on balances, deposits, and invoices that need attention now.
           </p>
         </div>
 
@@ -123,7 +123,7 @@ export default function FinancialHistory() {
             fontWeight: 700,
           }}
         >
-          Back to Invoices & Payments
+          Back to Payments
         </Link>
       </div>
 
@@ -137,7 +137,7 @@ export default function FinancialHistory() {
         <SummaryStat
           label="Recorded Events"
           value={allEvents.length}
-          detail="Complete financial activity available for lookup."
+          detail="Complete payment activity available for lookup."
         />
         <SummaryStat
           label="Last 24 Hours"
@@ -147,7 +147,7 @@ export default function FinancialHistory() {
         <SummaryStat
           label="Orders With History"
           value={financialOrders.filter((order) => (order.financial_history || []).length).length}
-          detail="Customer orders contributing to the financial timeline."
+          detail="Customer orders contributing to the payment timeline."
         />
       </section>
 
@@ -209,7 +209,7 @@ export default function FinancialHistory() {
               gap: "8px",
             }}
           >
-            <strong style={{ color: "#0f172a" }}>No financial events match this lookup.</strong>
+            <strong style={{ color: "#0f172a" }}>No payment events match this lookup.</strong>
             <span style={{ color: "#64748b" }}>
               Clear or widen the search to bring more billing history back into view.
             </span>
@@ -238,7 +238,7 @@ export default function FinancialHistory() {
                   }}
                 >
                   <div style={{ display: "grid", gap: "5px" }}>
-                    <strong style={{ color: "#0f172a" }}>{event.note || "Financial event"}</strong>
+                    <strong style={{ color: "#0f172a" }}>{event.note || "Payment event"}</strong>
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", color: "#64748b", fontSize: "13px" }}>
                       <Link to={`/admin/orders/${event.order_number}`} style={{ color: "#0f172a", fontWeight: 700, textDecoration: "none" }}>
                         {event.order_number}

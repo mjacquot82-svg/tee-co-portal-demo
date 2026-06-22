@@ -88,7 +88,7 @@ export default function AssignmentPanel({
         padding: "20px",
       }}
     >
-      <h2 style={{ marginTop: 0 }}>Assignment & Workflow</h2>
+      <h2 style={{ marginTop: 0 }}>Assign Work</h2>
 
       <div style={{ display: "grid", gap: "12px" }}>
         {workflowBadges.length ? (
@@ -107,7 +107,7 @@ export default function AssignmentPanel({
         ) : null}
 
         <div style={{ display: "grid", gap: "6px" }}>
-          <strong>Customer Workflow Message</strong>
+          <strong>Customer Status Message</strong>
           <span data-testid="customer-workflow-message" style={{ color: "#475569", fontWeight: 700 }}>
             {customerWorkflowMessage}
           </span>
@@ -229,7 +229,7 @@ export default function AssignmentPanel({
         >
           <div style={{ display: "grid", gap: "10px" }}>
             <div>
-              <strong>Operational Gates</strong>
+              <strong>Requirements</strong>
               <div style={{ marginTop: "8px", display: "grid", gap: "8px" }}>
                 {(productionGating?.checks || []).map((check) => (
                   <div
@@ -279,7 +279,7 @@ export default function AssignmentPanel({
 
             <div style={{ display: "grid", gap: "10px" }}>
               <div style={{ display: "grid", gap: "6px" }}>
-                <strong style={{ fontSize: "13px" }}>Artwork Workflow</strong>
+                <strong style={{ fontSize: "13px" }}>Artwork Review</strong>
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                   <QuickActionButton
                     actionKey="approve_artwork"
@@ -299,7 +299,7 @@ export default function AssignmentPanel({
               </div>
 
               <div style={{ display: "grid", gap: "6px" }}>
-                <strong style={{ fontSize: "13px" }}>Deposit Workflow</strong>
+                <strong style={{ fontSize: "13px" }}>Deposit Review</strong>
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                   <QuickActionButton
                     actionKey="request_deposit"
@@ -330,12 +330,13 @@ export default function AssignmentPanel({
                 >
                   <option value="Pending Review">Pending Review</option>
                   <option value="Approved">Approved</option>
+                  <option value="Not Required">Not Required</option>
                   <option value="Needs Revision">Needs Revision</option>
                 </select>
               </label>
 
               <label style={{ display: "grid", gap: "6px", fontSize: "13px", fontWeight: 700 }}>
-                Deposit Workflow
+                Deposit Status
                 <select
                   data-testid="deposit-workflow-select"
                   value={order.deposit_workflow_status || "Awaiting Deposit"}
@@ -512,7 +513,7 @@ export default function AssignmentPanel({
             </div>
           ) : (
             <span style={{ color: "#64748b", fontWeight: 700 }}>
-              {canceled ? "Workflow actions disabled on canceled records." : "Final status reached"}
+              {canceled ? "Actions disabled on canceled records." : "Final status reached"}
             </span>
           )}
         </div>

@@ -4,6 +4,8 @@ const ARTWORK_APPROVAL_STATE_ALIASES = {
   "pending review": "Pending Review",
   pending: "Pending Review",
   review: "Pending Review",
+  "not required": "Not Required",
+  not_required: "Not Required",
   "needs revision": "Needs Revision",
   "revision requested": "Needs Revision",
   "customer requested changes": "Needs Revision",
@@ -11,6 +13,8 @@ const ARTWORK_APPROVAL_STATE_ALIASES = {
 };
 
 const DEPOSIT_WORKFLOW_STATE_ALIASES = {
+  "pending decision": "Pending Decision",
+  undecided: "Pending Decision",
   "deposit not required": "Deposit Not Required",
   "not required": "Deposit Not Required",
   not_required: "Deposit Not Required",
@@ -28,10 +32,12 @@ const DEPOSIT_WORKFLOW_STATE_ALIASES = {
 export const ARTWORK_APPROVAL_STATES = [
   "Pending Review",
   "Approved",
+  "Not Required",
   "Needs Revision",
 ];
 
 export const DEPOSIT_WORKFLOW_STATES = [
+  "Pending Decision",
   "Deposit Not Required",
   "Deposit Requested",
   "Awaiting Deposit",
@@ -68,7 +74,7 @@ function resolveRecordedPayments(order = {}) {
 export function normalizeArtworkApprovalStatus(status, options = {}) {
   const trimmed = String(status || "").trim();
   if (!trimmed) {
-    return normalizeBoolean(options.required, true) ? "Pending Review" : "Approved";
+    return normalizeBoolean(options.required, true) ? "Pending Review" : "Not Required";
   }
 
   return ARTWORK_APPROVAL_STATE_ALIASES[normalizeLookup(trimmed)] || trimmed;
@@ -82,6 +88,15 @@ export function normalizeDepositWorkflowStatus(status, order = {}) {
     depositAmount > 0;
   const totalPaid = resolveRecordedPayments(order);
   const trimmed = String(status || "").trim();
+  const explicitStatus = DEPOSIT_WORKFLOW_STATE_ALIASES[normalizeLookup(trimmed)] || trimmed;
+
+  if (explicitStatus === "Pending Decision") {
+    return "Pending Decision";
+  }
+
+  if (trimmed) {
+    return explicitStatus;
+  }
 
   if (!depositRequired) {
     return "Deposit Not Required";
@@ -95,7 +110,7 @@ export function normalizeDepositWorkflowStatus(status, order = {}) {
     return "Awaiting Deposit";
   }
 
-  return DEPOSIT_WORKFLOW_STATE_ALIASES[normalizeLookup(trimmed)] || trimmed;
+  return explicitStatus;
 }
 
 export function normalizeWorkflowOverrides(overrides = {}) {
@@ -144,7 +159,7 @@ export function isArtworkApprovalSatisfied(order = {}) {
   });
   const overrides = normalizeWorkflowOverrides(order.workflow_overrides);
 
-  return !required || approvalStatus === "Approved" || overrides.forceProduction.active || overrides.artworkApprovalRequirement.active;
+  return !required || approvalStatus === "Approved" || approvalStatus === "Not Required" || overrides.forceProduction.active || overrides.artworkApprovalRequirement.active;
 }
 
 export function isDepositRequirementSatisfied(order = {}) {

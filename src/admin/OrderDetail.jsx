@@ -221,18 +221,33 @@ export default function OrderDetail() {
 
     const normalizedStatus = String(nextStatus || "").trim();
     const now = new Date().toISOString();
+    const artworkSatisfied =
+      normalizedStatus === "Approved" || normalizedStatus === "Not Required";
+    const depositStatus = String(order.deposit_workflow_status || "").trim();
+    const depositResolved =
+      depositStatus === "Deposit Not Required" || depositStatus === "Deposit Received";
     saveOrderUpdates({
       artwork_approval_status: normalizedStatus,
+      artwork_status: normalizedStatus,
+      staff_review_status: artworkSatisfied
+        ? "Approved"
+        : normalizedStatus === "Needs Revision"
+        ? "Changes Requested"
+        : "Pending Review",
       approval_status:
         normalizedStatus === "Approved"
-          ? "Customer Approved"
+          ? "Approved"
+          : normalizedStatus === "Not Required"
+          ? "Approved"
           : normalizedStatus === "Needs Revision"
           ? "Revision Requested"
           : "Pending Review",
       quote_status:
         order.operational_visible === false
-          ? normalizedStatus === "Approved"
-            ? order.deposit_required
+          ? artworkSatisfied
+            ? !depositResolved
+              ? order.quote_status
+              : order.deposit_required
               ? "Awaiting Deposit"
               : "Approved"
             : "Awaiting Artwork Approval"
@@ -246,6 +261,8 @@ export default function OrderDetail() {
       activity_note:
         normalizedStatus === "Approved"
           ? `Artwork approved by ${activeStaffUser?.name || "staff"}.`
+          : normalizedStatus === "Not Required"
+          ? `Artwork marked not required by ${activeStaffUser?.name || "staff"}.`
           : normalizedStatus === "Needs Revision"
           ? `Artwork revision requested by ${activeStaffUser?.name || "staff"}.`
           : "Artwork moved to pending review.",
@@ -281,11 +298,16 @@ export default function OrderDetail() {
     saveOrderUpdates({
       deposit_workflow_status: normalizedStatus,
       deposit_required: normalizedStatus !== "Deposit Not Required",
+      deposit_requirement:
+        normalizedStatus === "Deposit Not Required" ? "not_required" : "required",
+      deposit_requirement_status:
+        normalizedStatus === "Deposit Not Required" ? "Not Required" : "Required",
       quote_status:
         order.operational_visible === false
           ? normalizedStatus === "Deposit Requested" || normalizedStatus === "Awaiting Deposit"
             ? "Awaiting Deposit"
-            : order.artwork_approval_status === "Approved"
+            : order.artwork_approval_status === "Approved" ||
+              order.artwork_approval_status === "Not Required"
             ? "Approved"
             : order.quote_status
           : order.quote_status,
@@ -394,7 +416,9 @@ export default function OrderDetail() {
 
     saveOrderUpdates({
       deposit_workflow_status: "Deposit Requested",
-      deposit_required: Number(normalizedOrder.deposit_amount || 0) > 0,
+      deposit_required: true,
+      deposit_requirement: "required",
+      deposit_requirement_status: "Required",
       deposit: {
         ...(order.deposit || {}),
         amount: normalizedOrder.deposit_amount,
@@ -457,7 +481,7 @@ export default function OrderDetail() {
               letterSpacing: "0.08em",
             }}
           >
-            {isStaffWorkspace ? "Production Work Order" : "Production Command Center"}
+            {isStaffWorkspace ? "Production Work Order" : "Production Order"}
           </p>
 
           <h1 style={{ margin: "6px 0" }}>

@@ -2,7 +2,13 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import PricingSummary from "../components/PricingSummary";
 import { formatDateTime } from "../lib/dateFormatting";
-import { getOrderArtworkNames } from "../lib/orderArtwork";
+import {
+  getArtworkAssetUrl,
+  getArtworkDisplayName,
+  getOrderArtworkFiles,
+  getOrderArtworkNames,
+  isArtworkImage,
+} from "../lib/orderArtwork";
 import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
@@ -26,6 +32,10 @@ import {
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
+}
+
+function roundCurrency(value) {
+  return Math.round(Number(value || 0) * 100) / 100;
 }
 
 function formatValue(value, fallback = "—") {
@@ -108,12 +118,12 @@ function ReferenceTimeline({ events = [], compact = false, embedded = false }) {
         </p>
         <h2 style={{ margin: "6px 0 4px", color: "#292524", fontSize: compact ? "18px" : "20px" }}>Timeline</h2>
         <p style={{ margin: 0, color: "#57534e", lineHeight: 1.55, fontSize: compact ? "14px" : "16px" }}>
-          Preserved quote history for reference, including workflow changes and archival events.
+          Preserved request history for reference, including workflow changes and archival events.
         </p>
       </div>
 
       {!events.length ? (
-        <p style={{ margin: 0, color: "#78716c" }}>No recorded activity for this quote yet.</p>
+        <p style={{ margin: 0, color: "#78716c" }}>No recorded activity for this request yet.</p>
       ) : (
         <div style={{ display: "grid", gap: compact ? "8px" : "10px" }}>
           {events.map((event, index) => (
@@ -128,7 +138,7 @@ function ReferenceTimeline({ events = [], compact = false, embedded = false }) {
             >
               <strong style={{ color: "#1c1917", display: "block" }}>
                 {event.type === "canceled" ? "Canceled: " : ""}
-                {event.note || "Quote activity recorded."}
+                {event.note || "Request activity recorded."}
               </strong>
               <span
                 style={{
@@ -298,6 +308,677 @@ function ArchivedAccordionSection({
   );
 }
 
+function PrimaryActionButton({ children, onClick, tone = "default" }) {
+  const tones = {
+    default: { background: "#0f172a", border: "#0f172a", color: "#ffffff" },
+    neutral: { background: "#ffffff", border: "#cbd5e1", color: "#0f172a" },
+    warning: { background: "#fff7ed", border: "#fdba74", color: "#9a3412" },
+    danger: { background: "#fff5f5", border: "#fecaca", color: "#b91c1c" },
+    success: { background: "#ecfdf5", border: "#bbf7d0", color: "#166534" },
+  };
+  const palette = tones[tone] || tones.default;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        border: `1px solid ${palette.border}`,
+        background: palette.background,
+        color: palette.color,
+        borderRadius: "12px",
+        padding: "12px 14px",
+        fontWeight: 800,
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function DepositRequestModal({ order, totalAmount, onCancel, onConfirm }) {
+  const [depositType, setDepositType] = useState("percentage");
+  const [percentage, setPercentage] = useState("50");
+  const [fixedAmount, setFixedAmount] = useState("");
+  const [message, setMessage] = useState(
+    `Please send your deposit by e-transfer to orders@teeandco.ca and include your order number ${order.order_number}.`
+  );
+  const normalizedTotal = roundCurrency(totalAmount);
+  const parsedPercentage = Number(percentage);
+  const parsedFixedAmount = Number(fixedAmount);
+  const calculatedAmount =
+    depositType === "percentage"
+      ? roundCurrency(normalizedTotal * ((Number.isFinite(parsedPercentage) ? parsedPercentage : 0) / 100))
+      : roundCurrency(Number.isFinite(parsedFixedAmount) ? parsedFixedAmount : 0);
+  const remainingBalance = Math.max(roundCurrency(normalizedTotal - calculatedAmount), 0);
+  const hasValidAmount =
+    calculatedAmount > 0 &&
+    normalizedTotal > 0 &&
+    calculatedAmount <= normalizedTotal &&
+    (depositType !== "percentage" || parsedPercentage > 0);
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    if (!hasValidAmount) return;
+
+    onConfirm({
+      amount: calculatedAmount,
+      type: depositType,
+      percentage: depositType === "percentage" ? parsedPercentage : null,
+      message: String(message || "").trim(),
+    });
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="deposit-request-title"
+      data-testid="deposit-request-modal"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 80,
+        background: "rgba(15, 23, 42, 0.48)",
+        display: "grid",
+        placeItems: "center",
+        padding: "24px",
+      }}
+    >
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          width: "min(620px, 100%)",
+          maxHeight: "calc(100vh - 48px)",
+          overflow: "auto",
+          borderRadius: "22px",
+          background: "#ffffff",
+          border: "1px solid #dbe4ee",
+          boxShadow: "0 24px 70px rgba(15, 23, 42, 0.24)",
+          padding: "22px",
+          display: "grid",
+          gap: "16px",
+        }}
+      >
+        <div>
+          <p style={{ margin: 0, color: "#9a3412", fontSize: "12px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Deposit Request
+          </p>
+          <h2 id="deposit-request-title" style={{ margin: "6px 0 0", color: "#0f172a" }}>
+            Set deposit amount
+          </h2>
+          <p style={{ margin: "8px 0 0", color: "#64748b", lineHeight: 1.6 }}>
+            Choose the deposit amount before sending the request to the customer portal.
+          </p>
+        </div>
+
+        <fieldset style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: "10px" }}>
+          <legend style={{ color: "#0f172a", fontWeight: 900, marginBottom: "8px" }}>
+            Deposit Type
+          </legend>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" }}>
+            {[
+              { value: "percentage", label: "Percentage" },
+              { value: "fixed", label: "Fixed Amount" },
+            ].map((option) => (
+              <label
+                key={option.value}
+                style={{
+                  border: depositType === option.value ? "1px solid #0f766e" : "1px solid #cbd5e1",
+                  background: depositType === option.value ? "#f0fdfa" : "#ffffff",
+                  borderRadius: "16px",
+                  padding: "14px",
+                  color: "#0f172a",
+                  fontWeight: 800,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                <input
+                  type="radio"
+                  name="deposit_type"
+                  value={option.value}
+                  checked={depositType === option.value}
+                  onChange={() => setDepositType(option.value)}
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        {depositType === "percentage" ? (
+          <label style={{ display: "grid", gap: "8px", color: "#0f172a", fontWeight: 800 }}>
+            Percentage %
+            <input
+              data-testid="deposit-percentage-input"
+              type="number"
+              min="1"
+              max="100"
+              step="0.01"
+              value={percentage}
+              onChange={(event) => setPercentage(event.target.value)}
+              style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "11px 12px", font: "inherit" }}
+            />
+          </label>
+        ) : (
+          <label style={{ display: "grid", gap: "8px", color: "#0f172a", fontWeight: 800 }}>
+            Amount $
+            <input
+              data-testid="deposit-fixed-amount-input"
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={fixedAmount}
+              onChange={(event) => setFixedAmount(event.target.value)}
+              style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "11px 12px", font: "inherit" }}
+            />
+          </label>
+        )}
+
+        <section
+          data-testid="deposit-preview"
+          style={{
+            borderRadius: "18px",
+            border: "1px solid #fed7aa",
+            background: "#fff7ed",
+            padding: "16px",
+            display: "grid",
+            gap: "10px",
+          }}
+        >
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "12px" }}>
+            <DetailItem label="Order Total" value={money(normalizedTotal)} />
+            <DetailItem label="Deposit" value={money(calculatedAmount)} />
+            <DetailItem label="Remaining" value={money(remainingBalance)} />
+          </div>
+          {!hasValidAmount ? (
+            <p style={{ margin: 0, color: "#9a3412", fontWeight: 800 }}>
+              Enter a deposit amount greater than $0.00 and no more than the order total.
+            </p>
+          ) : null}
+        </section>
+
+        <label style={{ display: "grid", gap: "8px", color: "#0f172a", fontWeight: 800 }}>
+          Optional Message
+          <textarea
+            data-testid="deposit-message-input"
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            rows={4}
+            style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "11px 12px", font: "inherit", resize: "vertical" }}
+          />
+        </label>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{
+              border: "1px solid #cbd5e1",
+              background: "#ffffff",
+              color: "#0f172a",
+              borderRadius: "12px",
+              padding: "12px 14px",
+              fontWeight: 800,
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!hasValidAmount}
+            style={{
+              border: "1px solid #fdba74",
+              background: hasValidAmount ? "#fff7ed" : "#f1f5f9",
+              color: hasValidAmount ? "#9a3412" : "#64748b",
+              borderRadius: "12px",
+              padding: "12px 14px",
+              fontWeight: 900,
+              cursor: hasValidAmount ? "pointer" : "not-allowed",
+            }}
+          >
+            Request Deposit
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function formatSizeBreakdown(sizeBreakdown = {}) {
+  const entries = Object.entries(sizeBreakdown || {})
+    .filter(([, quantity]) => Number(quantity) > 0)
+    .map(([size, quantity]) => `${size}: ${quantity}`);
+
+  return entries.length ? entries.join(", ") : "";
+}
+
+function resolveArtworkChoice(order = {}) {
+  const requirement = String(order.artwork_requirement || "").trim();
+  if (requirement) return requirement;
+  if (Array.isArray(order.artwork_files) && order.artwork_files.length) return "Uploaded";
+  if (order.customer_artwork_id) return "Uploaded";
+  return "Upload Later";
+}
+
+function buildIntakeAttentionItems(order = {}, productionReadiness) {
+  const items = [];
+  const staffReview = String(order.staff_review_status || order.approval_status || "").trim();
+  const artworkStatus = String(order.artwork_status || order.artwork_approval_status || "").trim();
+  const depositStatus = String(order.deposit_workflow_status || "").trim();
+  const requestStatus = String(order.request_status || "").trim();
+
+  if (staffReview !== "Approved") {
+    items.push("Staff Review Pending");
+  }
+
+  if (artworkStatus === "Missing") {
+    items.push("Artwork Missing");
+  } else if (!artworkStatus || artworkStatus === "Pending Review") {
+    items.push("Artwork Pending Review");
+  } else if (artworkStatus === "Needs Revision") {
+    items.push("Customer Response Needed");
+  }
+
+  if (
+    depositStatus === "Pending Decision" ||
+    order.deposit_requirement_status === "Undecided" ||
+    String(order.deposit_requirement || "").trim().toLowerCase() === "undecided"
+  ) {
+    items.push("Deposit Decision Needed");
+  }
+
+  if (order.quote_status === "Draft" || !productionReadiness?.ready) {
+    items.push("Pricing Review Needed");
+  }
+
+  if (requestStatus === "Awaiting Customer Response") {
+    items.push("Awaiting Customer Response");
+  }
+
+  return Array.from(new Set(items));
+}
+
+function IntakeReviewScreen({
+  order,
+  financials,
+  productionReadiness,
+  approvalStatus,
+  depositStatus,
+  historyEvents,
+  canManageArchive,
+  onApproveRequest,
+  onRequestArtwork,
+  onRequestChanges,
+  onRequireDeposit,
+  onMarkDepositNotRequired,
+  onRejectRequest,
+  onArchiveRequest,
+}) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [depositModalOpen, setDepositModalOpen] = useState(false);
+  const submittedAt = formatDateTime(order.created_at, " • ");
+  const artworkFiles = getOrderArtworkFiles(order);
+  const attentionItems = buildIntakeAttentionItems(order, productionReadiness);
+  const sizeSummary =
+    formatSizeBreakdown(order.size_breakdown) ||
+    formatList([order.selected_size, order.size].filter(Boolean));
+  const placementSummary = formatList(
+    (Array.isArray(order.placements) ? order.placements : [])
+      .map((entry) => entry?.placement)
+      .filter(Boolean),
+    order.placement || "—"
+  );
+
+  function handleOpenDepositModal() {
+    setDepositModalOpen(true);
+  }
+
+  function handleConfirmDepositRequest(requestDetails) {
+    setDepositModalOpen(false);
+    onRequireDeposit(requestDetails);
+  }
+
+  return (
+    <div
+      data-testid="intake-review-screen"
+      style={{ maxWidth: "1180px", margin: "0 auto", padding: "24px", display: "grid", gap: "18px" }}
+    >
+      <header
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: "16px",
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <p
+            style={{
+              margin: 0,
+              color: "#0f766e",
+              fontSize: "12px",
+              fontWeight: 900,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Order Request Review
+          </p>
+          <h1 style={{ margin: "6px 0" }}>Order Request {order.order_number}</h1>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+            <StatusPill tone="warning">{order.request_status || "Pending Staff Review"}</StatusPill>
+            <span style={{ color: "#64748b", fontWeight: 700 }}>{submittedAt}</span>
+          </div>
+        </div>
+
+        <Link
+          to="/admin/quotes"
+          style={{
+            background: "#ffffff",
+            color: "#171717",
+            border: "1px solid #d6dbe4",
+            borderRadius: "12px",
+            padding: "11px 14px",
+            textDecoration: "none",
+            fontWeight: 700,
+          }}
+        >
+          Back to Requests
+        </Link>
+      </header>
+
+      <section
+        data-testid="intake-needs-attention"
+        style={{
+          ...cardStyle("#fff7ed"),
+          border: "1px solid #fed7aa",
+          display: "grid",
+          gap: "14px",
+        }}
+      >
+        <div>
+          <p style={{ margin: 0, color: "#9a3412", fontSize: "12px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Needs Attention
+          </p>
+          <h2 style={{ margin: "6px 0 0", color: "#7c2d12" }}>
+            {attentionItems.length ? "Resolve before production" : "Ready for final review"}
+          </h2>
+        </div>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {(attentionItems.length ? attentionItems : ["No open review items"]).map((item) => (
+            <StatusPill key={item} tone={attentionItems.length ? "warning" : "success"}>
+              {item}
+            </StatusPill>
+          ))}
+        </div>
+      </section>
+
+      <section data-testid="intake-primary-actions" style={cardStyle("#ffffff")}>
+        <p style={{ margin: "0 0 12px", color: "#64748b", fontSize: "12px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          Primary Actions
+        </p>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <PrimaryActionButton onClick={onApproveRequest} tone="success">Approve Request</PrimaryActionButton>
+          <PrimaryActionButton onClick={onRequestArtwork} tone="warning">Request Artwork</PrimaryActionButton>
+          <PrimaryActionButton onClick={onRequestChanges} tone="neutral">Request Changes</PrimaryActionButton>
+          <PrimaryActionButton onClick={handleOpenDepositModal} tone="warning">Require Deposit</PrimaryActionButton>
+          <PrimaryActionButton onClick={onMarkDepositNotRequired} tone="neutral">Mark Deposit Not Required</PrimaryActionButton>
+          <PrimaryActionButton onClick={onRejectRequest} tone="danger">Reject Request</PrimaryActionButton>
+        </div>
+      </section>
+
+      {depositModalOpen ? (
+        <DepositRequestModal
+          order={order}
+          totalAmount={financials?.total_amount || 0}
+          onCancel={() => setDepositModalOpen(false)}
+          onConfirm={handleConfirmDepositRequest}
+        />
+      ) : null}
+
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.25fr) minmax(280px, 0.75fr)", gap: "18px", alignItems: "start" }}>
+        <div style={{ display: "grid", gap: "18px" }}>
+          <WorkspaceCard
+            eyebrow="Customer"
+            title="Submitted by"
+            description="Contact details needed during intake review."
+          >
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "14px" }}>
+              <DetailItem label="Name" value={order.customer_name} />
+              <DetailItem label="Email" value={order.customer_email} />
+              <DetailItem label="Phone" value={order.customer_phone} />
+              {order.customer_company ? <DetailItem label="Company" value={order.customer_company} /> : null}
+            </div>
+          </WorkspaceCard>
+
+          <WorkspaceCard
+            eyebrow="Order Details"
+            title="What they want"
+            description="Customer-selected garment, configuration, and notes."
+          >
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "14px" }}>
+              <DetailItem label="Garment" value={order.garment || order.item} />
+              <DetailItem label="Color" value={order.selected_color || order.color} />
+              <DetailItem label="Sizes" value={sizeSummary} />
+              <DetailItem label="Quantity" value={formatValue(order.qty, "0")} />
+              <DetailItem label="Decoration Type" value={order.decoration_type} />
+              <DetailItem label="Placement" value={placementSummary} />
+              <DetailItem label="Needed By" value={order.due_date} />
+              <DetailItem label="Estimated Total" value={money(financials?.total_amount)} />
+            </div>
+            {order.customer_notes || order.request_details || order.notes ? (
+              <div style={{ marginTop: "16px" }}>
+                <p style={{ margin: 0, color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Customer Notes</p>
+                <p style={{ margin: "6px 0 0", color: "#171717", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                  {order.customer_notes || order.request_details || order.notes}
+                </p>
+              </div>
+            ) : null}
+          </WorkspaceCard>
+
+          <WorkspaceCard
+            eyebrow="Artwork"
+            title="Artwork status"
+            description="What the customer selected and what staff still need to review."
+          >
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "14px", marginBottom: "14px" }}>
+              <DetailItem label="Artwork Choice" value={resolveArtworkChoice(order)} />
+              <DetailItem label="Artwork Status" value={order.artwork_status || order.artwork_approval_status || "Pending Review"} />
+            </div>
+
+            {artworkFiles.length ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
+                {artworkFiles.map((file, index) => {
+                  const assetUrl = getArtworkAssetUrl(file);
+                  const displayName = getArtworkDisplayName(file);
+                  const imageFile = isArtworkImage(file) && Boolean(assetUrl);
+
+                  return (
+                    <article
+                      key={file.id || displayName || index}
+                      style={{
+                        border: "1px solid #dbe2ea",
+                        borderRadius: "14px",
+                        padding: "12px",
+                        background: "#f8fafc",
+                        display: "grid",
+                        gap: "8px",
+                      }}
+                    >
+                      {imageFile ? (
+                        <img
+                          src={assetUrl}
+                          alt={displayName}
+                          style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", borderRadius: "10px" }}
+                        />
+                      ) : null}
+                      <strong style={{ color: "#0f172a" }}>{displayName || "Artwork file"}</strong>
+                      {file.notes ? (
+                        <span style={{ color: "#64748b", fontSize: "13px", lineHeight: 1.5 }}>
+                          {file.notes}
+                        </span>
+                      ) : null}
+                      {file.revision ? (
+                        <StatusPill tone="warning">Revision Upload</StatusPill>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <p style={{ margin: 0, color: "#64748b", fontWeight: 700 }}>No artwork uploaded yet.</p>
+            )}
+
+            {order.artwork_help_message || order.customer_artwork_notes ? (
+              <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
+                {order.artwork_help_message ? (
+                  <div
+                    style={{
+                      borderRadius: "14px",
+                      border: "1px solid #bfdbfe",
+                      background: "#eff6ff",
+                      padding: "12px 14px",
+                    }}
+                  >
+                    <p style={{ margin: 0, color: "#1e3a8a", fontSize: "12px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                      Artwork Help Request
+                    </p>
+                    <p style={{ margin: "6px 0 0", color: "#1e3a8a", lineHeight: 1.6 }}>
+                      {order.artwork_help_message}
+                    </p>
+                  </div>
+                ) : null}
+                {order.customer_artwork_notes ? (
+                  <div
+                    style={{
+                      borderRadius: "14px",
+                      border: "1px solid #dbe2ea",
+                      background: "#f8fafc",
+                      padding: "12px 14px",
+                    }}
+                  >
+                    <p style={{ margin: 0, color: "#64748b", fontSize: "12px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                      Customer Artwork Notes
+                    </p>
+                    <p style={{ margin: "6px 0 0", color: "#0f172a", lineHeight: 1.6 }}>
+                      {order.customer_artwork_notes}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </WorkspaceCard>
+        </div>
+
+        <aside style={{ display: "grid", gap: "18px" }}>
+          <WorkspaceCard
+            eyebrow="Financial"
+            title="Review pricing"
+            description="Detailed payment tools stay hidden until expanded or released."
+          >
+            <div style={{ display: "grid", gap: "14px" }}>
+              <DetailItem label="Estimated Total" value={money(financials?.total_amount)} />
+              <DetailItem label="Deposit Decision Status" value={depositStatus} />
+            </div>
+          </WorkspaceCard>
+
+          <section style={{ ...cardStyle("#f8fafc"), padding: 0, overflow: "hidden" }}>
+            <button
+              type="button"
+              onClick={() => setAdvancedOpen((current) => !current)}
+              aria-expanded={advancedOpen}
+              style={{
+                width: "100%",
+                border: "none",
+                background: "transparent",
+                padding: "18px 20px",
+                textAlign: "left",
+                cursor: "pointer",
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "12px",
+              }}
+            >
+              <span>
+                <span style={{ display: "block", color: "#64748b", fontSize: "11px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                  Advanced Details
+                </span>
+                <strong style={{ display: "block", marginTop: "6px", color: "#0f172a" }}>
+                  Workflow, timeline, and raw state
+                </strong>
+              </span>
+              <span style={{ fontWeight: 900 }}>{advancedOpen ? "−" : "+"}</span>
+            </button>
+
+            {advancedOpen ? (
+              <div style={{ borderTop: "1px solid #e2e8f0", padding: "18px 20px", display: "grid", gap: "16px" }}>
+                <div style={{ display: "grid", gap: "12px" }}>
+                  <DetailItem label="Visibility" value="Active intake review" />
+                  <DetailItem label="Review Status" value={order.quote_status} />
+                  <DetailItem label="Operational Visible" value={order.operational_visible ? "Yes" : "No"} />
+                  <DetailItem label="Production Ready" value={order.production_ready ? "Yes" : "No"} />
+                  <DetailItem label="Internal Request Type" value={order.request_type} />
+                  <DetailItem label="Order Number" value={order.order_number} />
+                  <DetailItem label="Staff Review" value={approvalStatus} />
+                  <DetailItem label="Readiness" value={`${productionReadiness.remainingRequirements} requirement${productionReadiness.remainingRequirements === 1 ? "" : "s"} remaining`} />
+                </div>
+
+                <div>
+                  <p style={{ margin: "0 0 8px", color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Readiness Details</p>
+                  <div style={{ display: "grid", gap: "8px" }}>
+                    {productionReadiness.checks.map((check) => (
+                      <div
+                        key={check.label}
+                        style={{
+                          borderRadius: "12px",
+                          border: check.passed ? "1px solid #bbf7d0" : "1px solid #fed7aa",
+                          background: check.passed ? "#ecfdf5" : "#fff7ed",
+                          padding: "10px 12px",
+                        }}
+                      >
+                        <strong>{check.label}</strong>
+                        <span style={{ display: "block", marginTop: "4px", color: check.passed ? "#166534" : "#9a3412", fontWeight: 700 }}>
+                          {check.detail}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {financials ? (
+                  <div>
+                    <p style={{ margin: "0 0 8px", color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Full Payment State</p>
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      <DetailItem label="Deposit Target" value={money(financials.deposit_amount)} />
+                      <DetailItem label="Paid To Date" value={money(financials.total_paid)} />
+                      <DetailItem label="Balance Owing" value={money(financials.balance_due)} />
+                      <DetailItem label="Collection State" value={financials.payment_collection_state} />
+                    </div>
+                  </div>
+                ) : null}
+
+                <ReferenceTimeline events={historyEvents} compact embedded />
+
+                {canManageArchive ? (
+                  <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                    <PrimaryActionButton onClick={onArchiveRequest} tone="neutral">Archive Request</PrimaryActionButton>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
 export default function QuoteDetail() {
   const { orderNumber } = useParams();
   const location = useLocation();
@@ -343,6 +1024,8 @@ export default function QuoteDetail() {
   });
   const archived = isQuoteArchived(order);
   const canceled = isQuoteCanceled(order);
+  const isOrderRequestIntake =
+    order?.request_type === "Order Request" && order?.operational_visible === false && !archived && !canceled;
   const archivedAt = archived ? formatDateTime(order.quote_archived_at, " • ") : "—";
   const canceledAt = canceled
     ? formatDateTime(order.canceled_at || order.quote_canceled_at || order.updated_at, " • ")
@@ -362,7 +1045,7 @@ export default function QuoteDetail() {
     ? `Mark ${getNextQuoteStatus(order.quote_status)}`
     : isQuoteReadyForProduction(order?.quote_status)
     ? "Release to Production"
-    : "Await remaining quote requirements";
+    : "Await remaining request requirements";
 
   useEffect(() => {
     if (!archived || !isStaffWorkspace) return;
@@ -370,17 +1053,23 @@ export default function QuoteDetail() {
     navigate("/admin/quotes", {
       replace: true,
       state: {
-        flashMessage: "Archived quote records are available only in the owner/admin workspace.",
+        flashMessage: "Archived request records are available only in the owner/admin workspace.",
         flashTone: "default",
       },
     });
   }, [archived, isStaffWorkspace, navigate]);
 
+  useEffect(() => {
+    if (!order || order.request_type !== "Order Request" || order.operational_visible !== true) return;
+
+    navigate(`/admin/orders/${order.order_number}`, { replace: true });
+  }, [navigate, order]);
+
   if (!order) {
     return (
       <div style={{ maxWidth: "900px", margin: "0 auto", padding: "24px" }}>
-        <h1>Quote not found</h1>
-        <Link to="/admin/quotes">Back to Quotes</Link>
+        <h1>Request not found</h1>
+        <Link to="/admin/quotes">Back to Order Requests</Link>
       </div>
     );
   }
@@ -473,11 +1162,140 @@ export default function QuoteDetail() {
     });
   }
 
+  function handleApproveRequest() {
+    if (archived || canceled) return;
+
+    updateStoredOrder(order.order_number, {
+      request_status: "Approved - Pending Requirements",
+      staff_review_status: "Approved",
+      approval_status: "Approved",
+      activity_type: "order_request_review",
+      activity_note: `Order request approved by ${activeStaffUser?.name || "staff"}.`,
+    });
+  }
+
+  function handleRequestArtwork() {
+    if (archived || canceled) return;
+
+    updateStoredOrder(order.order_number, {
+      request_status: "Awaiting Artwork",
+      artwork_status: "Missing",
+      artwork_approval_required: true,
+      artwork_approval_status: "Pending Review",
+      quote_status: "Awaiting Artwork Approval",
+      activity_type: "artwork_request",
+      activity_note: `Artwork requested by ${activeStaffUser?.name || "staff"}.`,
+    });
+  }
+
+  function handleRequestChanges() {
+    if (archived || canceled) return;
+
+    updateStoredOrder(order.order_number, {
+      request_status: "Awaiting Customer Response",
+      staff_review_status: "Changes Requested",
+      approval_status: "Revision Requested",
+      quote_status: "Awaiting Approval",
+      activity_type: "order_request_changes",
+      activity_note: `Changes requested by ${activeStaffUser?.name || "staff"}.`,
+    });
+  }
+
+  function handleRequireDeposit(requestDetails = {}) {
+    if (archived || canceled) return;
+
+    const now = new Date().toISOString();
+    const depositAmount = roundCurrency(requestDetails.amount);
+    const depositType = requestDetails.type === "fixed" ? "fixed" : "percentage";
+    const depositPercentage =
+      depositType === "percentage" ? Number(requestDetails.percentage || 0) : null;
+    const depositMessage =
+      String(requestDetails.message || "").trim() ||
+      `Please send your deposit by e-transfer to orders@teeandco.ca and include your order number ${order.order_number}.`;
+
+    if (depositAmount <= 0) return;
+
+    updateStoredOrder(order.order_number, {
+      request_status: "Awaiting Deposit",
+      deposit_required: true,
+      deposit_requirement: "required",
+      deposit_requirement_status: "Required",
+      deposit_workflow_status: "Deposit Requested",
+      deposit_amount: depositAmount,
+      deposit_payment_instructions: depositMessage,
+      deposit_request_message: depositMessage,
+      deposit: {
+        ...(order.deposit || {}),
+        amount: depositAmount,
+        type: depositType,
+        percentage: depositPercentage,
+        status: "pending",
+        requested_at: now,
+        updated_at: now,
+        last_requested_message: depositMessage,
+      },
+      quote_status: "Awaiting Deposit",
+      activity_type: "deposit_request",
+      activity_note: `Deposit of ${money(depositAmount)} required by ${activeStaffUser?.name || "staff"}.`,
+    });
+  }
+
+  function handleMarkDepositNotRequired() {
+    if (archived || canceled) return;
+
+    updateStoredOrder(order.order_number, {
+      deposit_required: false,
+      deposit_requirement: "not_required",
+      deposit_requirement_status: "Not Required",
+      deposit_workflow_status: "Deposit Not Required",
+      activity_type: "deposit_workflow",
+      activity_note: `Deposit marked not required by ${activeStaffUser?.name || "staff"}.`,
+    });
+  }
+
+  function handleRejectRequest() {
+    if (archived || canceled) return;
+
+    updateStoredOrder(order.order_number, {
+      request_status: "Rejected",
+      staff_review_status: "Rejected",
+      approval_status: "Rejected",
+      status: "Canceled",
+      quote_status: "Canceled",
+      operational_visible: false,
+      production_ready: false,
+      canceled_at: new Date().toISOString(),
+      activity_type: "order_request_rejected",
+      activity_note: `Order request rejected by ${activeStaffUser?.name || "staff"}.`,
+    });
+  }
+
   function handleToggleArchivedSection(sectionKey) {
     setArchivedSections((current) => ({
       ...current,
       [sectionKey]: !current[sectionKey],
     }));
+  }
+
+  if (isOrderRequestIntake) {
+    return (
+      <IntakeReviewScreen
+        order={order}
+        financials={financials}
+        productionReadiness={productionReadiness}
+        approvalStatus={approvalStatus}
+        depositStatus={depositStatus}
+        historyEvents={historyEvents}
+        canManageArchive={canManageArchive}
+        onApproveRequest={handleApproveRequest}
+        onRequestArtwork={handleRequestArtwork}
+        onRequestChanges={handleRequestChanges}
+        onRequireDeposit={handleRequireDeposit}
+        onMarkDepositNotRequired={handleMarkDepositNotRequired}
+        onRejectRequest={handleRejectRequest}
+        onArchiveRequest={handleArchiveQuote}
+      />
+    );
   }
 
   return (
@@ -521,17 +1339,17 @@ export default function QuoteDetail() {
             }}
           >
             {archived
-              ? "Archived Quote Record"
+              ? "Archived Request Record"
               : canceled
-              ? "Canceled Quote Record"
-              : "Quote Detail Workspace"}
+              ? "Canceled Request Record"
+              : "Request Review Workspace"}
           </p>
-          <h1 style={{ margin: "6px 0" }}>Quote {order.order_number}</h1>
+          <h1 style={{ margin: "6px 0" }}>Request {order.order_number}</h1>
           <p style={{ margin: 0, color: "#475569", maxWidth: "760px" }}>
             {archived
-              ? "Historical quote record for reference, context, and recovery back into the active quote workflow."
+              ? "Historical request record for reference, context, and recovery back into the active request workflow."
               : canceled
-              ? "Canceled quote record with preserved operational and financial history for historical review."
+              ? "Canceled request record with preserved operational and financial history for historical review."
               : "Focused operational workspace for approvals, readiness, pricing, artwork, and production release."}
           </p>
         </div>
@@ -549,7 +1367,7 @@ export default function QuoteDetail() {
               fontWeight: 700,
             }}
           >
-            {archived ? "Back to Archived Quotes" : canceled ? "Back to Canceled Orders" : "Back to Quotes"}
+            {archived ? "Back to Archived Requests" : canceled ? "Back to Canceled Orders" : "Back to Order Requests"}
           </Link>
           {!archived && !canceled && canAdvanceQuoteStatus(order.quote_status) ? (
             <button
@@ -601,7 +1419,7 @@ export default function QuoteDetail() {
                 cursor: "pointer",
               }}
             >
-              Archive Quote
+              Archive Request
             </button>
           ) : null}
           {!archived && !canceled && canManageArchive ? (
@@ -617,7 +1435,7 @@ export default function QuoteDetail() {
                 fontWeight: 700,
               }}
             >
-              Archived Quotes
+              Archived Requests
             </Link>
           ) : null}
           {!archived && !canceled && canManageArchive ? (
@@ -634,7 +1452,7 @@ export default function QuoteDetail() {
                 cursor: "pointer",
               }}
             >
-              Cancel Quote
+              Cancel Request
             </button>
           ) : null}
           {archived && canManageArchive ? (
@@ -650,7 +1468,7 @@ export default function QuoteDetail() {
                 fontWeight: 700,
               }}
             >
-              Active Quotes
+              Active Requests
             </Link>
           ) : null}
         </div>
@@ -672,10 +1490,10 @@ export default function QuoteDetail() {
         >
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
             <StatusPill>Archived</StatusPill>
-            <strong style={{ color: "#292524" }}>This quote is preserved as a historical record.</strong>
+            <strong style={{ color: "#292524" }}>This request is preserved as a historical record.</strong>
           </div>
           <p style={{ margin: 0, lineHeight: 1.6 }}>
-            It no longer appears in the active quote workflow and remains available here for historical reference.
+            It no longer appears in the active request workflow and remains available here for historical reference.
           </p>
           <p style={{ margin: 0, color: "#78716c", fontSize: "14px" }}>Archived {archivedAt}</p>
           {canManageArchive ? (
@@ -693,7 +1511,7 @@ export default function QuoteDetail() {
                   cursor: "pointer",
                 }}
               >
-                Restore Quote
+                Restore Request
               </button>
             </div>
           ) : null}
@@ -717,11 +1535,11 @@ export default function QuoteDetail() {
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
             <StatusPill tone="danger">Canceled</StatusPill>
             <strong style={{ color: "#7f1d1d" }}>
-              This quote was intentionally terminated and remains preserved for review.
+              This request was intentionally terminated and remains preserved for review.
             </strong>
           </div>
           <p style={{ margin: 0, lineHeight: 1.6 }}>
-            Operational work stopped on {canceledAt}. Financial history, payments, deposits, and timeline events are still available on this record.
+            Operational work stopped on {canceledAt}. Payment history, payments, deposits, and timeline events are still available on this record.
           </p>
         </section>
       ) : null}
@@ -730,8 +1548,8 @@ export default function QuoteDetail() {
         <div style={{ display: "grid", gap: "18px" }}>
           <WorkspaceCard
             eyebrow="Reference Summary"
-            title="Archived quote snapshot"
-            description="Key quote details remain visible here without the active release and movement controls."
+            title="Archived request snapshot"
+            description="Key request details remain visible here without the active release and movement controls."
             background="#fcfcfb"
           >
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "16px" }}>
@@ -752,8 +1570,8 @@ export default function QuoteDetail() {
               <DetailItem label="Archived Date" value={archivedAt} />
               <DetailItem label="Customer" value={order.customer_name} />
               <DetailItem label="Company" value={order.customer_company} />
-              <DetailItem label="Quote Total" value={money(financials?.total_amount)} />
-              <DetailItem label="Quote Status" value={order.quote_status} />
+              <DetailItem label="Total" value={money(financials?.total_amount)} />
+              <DetailItem label="Review Status" value={order.quote_status} />
               <DetailItem label="Archive Status" value="Archived historical record" />
               <DetailItem label="Source" value={order.source} />
               <DetailItem label="Due Date" value={order.due_date} />
@@ -773,8 +1591,8 @@ export default function QuoteDetail() {
                 sectionKey="quoteDetails"
                 expandedSections={archivedSections}
                 onToggle={handleToggleArchivedSection}
-                eyebrow="Original Quote"
-                title="Quote details"
+                eyebrow="Original Request"
+                title="Request details"
                 description="Original customer and order context remain preserved for historical reference."
                 summary={`${formatValue(order.customer_name, "Walk-in Customer")} • ${formatValue(order.garment, "Custom garment")} • ${formatValue(order.qty, "0")} pcs`}
                 background="#fcfcfb"
@@ -824,7 +1642,7 @@ export default function QuoteDetail() {
                     gap: "14px",
                   }}
                 >
-                  <DetailItem label="Customer Approval" value={approvalStatus} />
+                  <DetailItem label="Staff Review" value={approvalStatus} />
                   <DetailItem
                     label="Artwork Files"
                     value={formatList(artworkNames, "No artwork uploaded")}
@@ -854,7 +1672,7 @@ export default function QuoteDetail() {
                   <PricingSummary quote={quoteSnapshot} quantity={order.qty} />
                 ) : (
                   <p style={{ margin: 0, color: "#78716c" }}>
-                    Quote pricing snapshot will appear here once pricing data is available.
+                    Pricing snapshot will appear here once pricing data is available.
                   </p>
                 )}
               </ArchivedAccordionSection>
@@ -867,17 +1685,17 @@ export default function QuoteDetail() {
                 onToggle={handleToggleArchivedSection}
                 eyebrow="Record State"
                 title="Archived context"
-                description="Reference-only context for how this quote now sits outside the active workflow."
+                description="Reference-only context for how this request now sits outside the active workflow."
                 summary="Reference-only workflow state, visibility, and release context."
                 background="#f5f5f4"
                 compact
                 className="archived-quote-reference-card"
               >
                 <div className="archived-quote-context-grid">
-                  <DetailItem label="Workflow Visibility" value="Removed from active workflow" />
-                  <DetailItem label="Production Readiness" value="Reference only while archived" />
-                  <DetailItem label="Release Workflow" value="Hidden until quote is restored" />
-                  <DetailItem label="Deposit Actions" value="Hidden until quote is restored" />
+                  <DetailItem label="Visibility" value="Removed from active workflow" />
+                  <DetailItem label="Ready for Production" value="Reference only while archived" />
+                  <DetailItem label="Release" value="Hidden until request is restored" />
+                  <DetailItem label="Deposit Actions" value="Hidden until request is restored" />
                 </div>
               </ArchivedAccordionSection>
 
@@ -887,7 +1705,7 @@ export default function QuoteDetail() {
                 onToggle={handleToggleArchivedSection}
                 eyebrow="Record History"
                 title="Timeline"
-                description="Preserved quote history, including workflow changes and archival events."
+                description="Preserved request history, including workflow changes and archival events."
                 summary={`${historyEvents.length} recorded event${historyEvents.length === 1 ? "" : "s"} in the archived history`}
                 background="#fcfcfb"
                 compact
@@ -902,11 +1720,11 @@ export default function QuoteDetail() {
         <div style={{ display: "grid", gap: "18px" }}>
         <WorkspaceCard
           eyebrow="Workspace Focus"
-          title={canceled ? "Canceled quote record" : "Operational quote management"}
+          title={canceled ? "Canceled request record" : "Request review"}
           description={
             canceled
               ? "This record is preserved for review, but operational release actions are disabled because the workflow was intentionally terminated."
-              : "This route keeps quote-critical decisions visible at all times. It does not collapse like the list view."
+              : "This route keeps request review decisions visible at all times. It does not collapse like the list view."
           }
           background="#f8fafc"
         >
@@ -936,20 +1754,20 @@ export default function QuoteDetail() {
           >
             <DetailItem label="Customer" value={order.customer_name} />
             <DetailItem label="Company" value={order.customer_company} />
-            <DetailItem label="Quote Status" value={order.quote_status} />
-            <DetailItem label="Production Readiness" value={readinessSummary} />
-            <DetailItem label="Customer Approval" value={approvalStatus} />
+            <DetailItem label="Review Status" value={order.quote_status} />
+            <DetailItem label="Ready for Production" value={readinessSummary} />
+            <DetailItem label="Staff Review" value={approvalStatus} />
             <DetailItem label="Deposit" value={depositStatus} />
             <DetailItem label="Source" value={order.source} />
             <DetailItem label="Due Date" value={order.due_date} />
             <DetailItem
-              label="Workflow Visibility"
+              label="Visibility"
               value={
                 archived
                   ? "Removed from active workflow"
                   : canceled
-                  ? "Canceled operational workflow"
-                  : "Active operational workflow"
+                  ? "Canceled workflow"
+                  : "Active workflow"
               }
             />
             {archived ? <DetailItem label="Archived At" value={archivedAt} /> : null}
@@ -964,14 +1782,14 @@ export default function QuoteDetail() {
 
         {canManageArchive ? (
           <WorkspaceCard
-            eyebrow="Workflow Visibility"
-            title={archived ? "Archived record" : canceled ? "Canceled record" : "Quote lifecycle management"}
+            eyebrow="Visibility"
+            title={archived ? "Archived record" : canceled ? "Canceled record" : "Review Status"}
             description={
               archived
                 ? "This record is preserved for reference, but it is no longer treated as active operational work."
                 : canceled
                 ? "This record was intentionally terminated. It remains preserved for review with no restore or archive action required."
-                : "Archive and restore are normal operational lifecycle actions for owner and admin workflow management."
+                : "Archive and restore are owner and admin actions for managing active request visibility."
             }
             background={archived ? "#f8fafc" : "#ffffff"}
           >
@@ -988,14 +1806,14 @@ export default function QuoteDetail() {
                 <StatusPill tone={archived || canceled ? "danger" : "default"}>
                   {archived ? "Archived" : canceled ? "Canceled" : "Active workflow"}
                 </StatusPill>
-                {!archived && !canceled ? <StatusPill tone="warning">Visible in active quote queue</StatusPill> : null}
+                {!archived && !canceled ? <StatusPill tone="warning">Visible in active request queue</StatusPill> : null}
               </div>
               <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
                 {archived
-                  ? "Archived quotes stay viewable here while remaining out of active workflow and operational queue views."
+                  ? "Archived requests stay viewable here while remaining out of active workflow and operational queue views."
                   : canceled
-                  ? "Canceled quotes remain viewable here while their operational and financial history stays preserved."
-                  : "Archiving removes this quote from the active quote workflow and operational queue visibility without changing the underlying record."}
+                  ? "Canceled requests remain viewable here while their operational and financial history stays preserved."
+                  : "Archiving removes this request from the active request workflow and operational queue visibility without changing the underlying record."}
               </p>
               {archived ? (
                 <p style={{ margin: 0, color: "#64748b", fontWeight: 600 }}>Archived {archivedAt}</p>
@@ -1017,7 +1835,7 @@ export default function QuoteDetail() {
               >
                 <strong style={{ color: "#0f172a" }}>Removed from active work</strong>
                 <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
-                  This quote is archived and no longer appears as active operational work.
+                  This request is archived and no longer appears as active operational work.
                 </p>
               </div>
             ) : canceled ? (
@@ -1033,7 +1851,7 @@ export default function QuoteDetail() {
               >
                 <strong style={{ color: "#7f1d1d" }}>Workflow terminated</strong>
                 <p style={{ margin: 0, color: "#7f1d1d", lineHeight: 1.6 }}>
-                  This quote is canceled, preserved, and excluded from active release actions.
+                  This request is canceled, preserved, and excluded from active release actions.
                 </p>
               </div>
             ) : (
@@ -1047,9 +1865,9 @@ export default function QuoteDetail() {
                   gap: "10px",
                 }}
               >
-                <strong style={{ color: "#0f172a" }}>Archive Quote</strong>
+                <strong style={{ color: "#0f172a" }}>Archive Request</strong>
                 <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
-                  Move this quote out of active operational workflow while keeping the full record available.
+                  Move this request out of active workflow while keeping the full record available.
                 </p>
                 {showArchiveConfirm ? (
                   <>
@@ -1064,7 +1882,7 @@ export default function QuoteDetail() {
                         lineHeight: 1.5,
                       }}
                     >
-                      Archive this quote from active workflow?
+                      Archive this request from active workflow?
                     </div>
                     <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                       <button
@@ -1113,7 +1931,7 @@ export default function QuoteDetail() {
                       cursor: "pointer",
                     }}
                   >
-                    Archive Quote
+                    Archive Request
                   </button>
                 )}
               </div>
@@ -1131,11 +1949,11 @@ export default function QuoteDetail() {
         >
           <WorkspaceCard
             eyebrow="Readiness"
-            title="Production release requirements"
+            title="Requirements"
             description={
               productionReadiness.ready
                 ? "All release requirements are satisfied."
-                : "Resolve the remaining requirements below before moving this quote into production."
+                : "Resolve the remaining requirements below before moving this request into production."
             }
             background={productionReadiness.ready ? "#ecfdf5" : "#fff7ed"}
           >
@@ -1160,7 +1978,7 @@ export default function QuoteDetail() {
                   textTransform: "uppercase",
                 }}
               >
-                Production Readiness
+                Ready for Production
               </p>
               <p
                 style={{
@@ -1171,8 +1989,8 @@ export default function QuoteDetail() {
                 }}
               >
                 {productionReadiness.ready
-                  ? "This quote has everything needed to move into production."
-                  : "This section shows what is still required before this quote can move into production."}
+                  ? "This request has everything needed to move into production."
+                  : "This section shows what is still required before this request can move into production."}
               </p>
             </div>
             <StatusPill tone={productionReadiness.ready ? "success" : "warning"}>
@@ -1224,8 +2042,8 @@ export default function QuoteDetail() {
           </WorkspaceCard>
 
           <WorkspaceCard
-            eyebrow="Release Workflow"
-            title="Move the quote forward"
+            eyebrow="Release"
+            title="Move the request forward"
             description="Production release actions stay visible here instead of being hidden behind an accordion preview."
           >
             <div
@@ -1288,7 +2106,7 @@ export default function QuoteDetail() {
                 <StatusPill>Archived record</StatusPill>
               ) : (
                 <span style={{ color: "#64748b", fontSize: "14px", fontWeight: 600 }}>
-                  Archive control stays in Workflow Visibility so it remains deliberate and easy to find.
+                  Archive control stays in Visibility so it remains deliberate and easy to find.
                 </span>
               )}
             </div>
@@ -1298,7 +2116,7 @@ export default function QuoteDetail() {
         <WorkspaceCard
           eyebrow="Approvals And Artwork"
           title="Customer sign-off and art visibility"
-          description="Artwork, placements, and customer-facing details remain visible while you manage the quote."
+          description="Artwork, placements, and customer-facing details remain visible while you manage the request."
         >
           <div
             style={{
@@ -1336,7 +2154,7 @@ export default function QuoteDetail() {
         <WorkspaceCard
           eyebrow="Pricing"
           title="Pricing and payment position"
-          description="Financial visibility stays persistent in the detail workspace so quote decisions are made with current pricing context."
+          description="Payment visibility stays persistent in the detail workspace so request decisions are made with current pricing context."
         >
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "18px" }}>
             <StatusPill tone={financials?.invoice_status === "Paid" ? "success" : financials?.invoice_status === "Overdue" ? "warning" : "default"}>
@@ -1358,7 +2176,7 @@ export default function QuoteDetail() {
               marginBottom: "18px",
             }}
           >
-            <DetailItem label="Quote Total" value={money(financials?.total_amount)} />
+            <DetailItem label="Total" value={money(financials?.total_amount)} />
             <DetailItem label="Deposit Target" value={money(financials?.deposit_amount)} />
             <DetailItem label="Deposit Applied" value={money(financials?.deposit_applied)} />
             <DetailItem label="Paid To Date" value={money(financials?.total_paid)} />
@@ -1388,7 +2206,7 @@ export default function QuoteDetail() {
             <PricingSummary quote={quoteSnapshot} quantity={order.qty} />
           ) : (
             <p style={{ margin: 0, color: "#64748b" }}>
-              Quote pricing snapshot will appear here once pricing data is available.
+              Pricing snapshot will appear here once pricing data is available.
             </p>
           )}
         </WorkspaceCard>

@@ -54,7 +54,7 @@ export default function ArchivedQuotes() {
     if (!canManageArchive) return;
 
     const confirmed = window.confirm(
-      `Restore quote ${quote.order_number} to the active workflow? It will leave Archived Quotes and become operationally visible again.`
+      `Restore request ${quote.order_number} to the active review workflow? It will leave Archived Requests and become visible again.`
     );
     if (!confirmed) return;
 
@@ -62,14 +62,14 @@ export default function ArchivedQuotes() {
       quote_archived: false,
       quote_archived_at: null,
       activity_type: "quote_restore",
-      activity_note: "Quote restored to active workflow.",
+      activity_note: "Request restored to active review workflow.",
     });
 
     setFlashTone("success");
-    setFlashMessage(`Quote ${quote.order_number} was restored to the active workflow.`);
+    setFlashMessage(`Request ${quote.order_number} was restored to the active review workflow.`);
     navigate(`/admin/quotes/${quote.order_number}`, {
       state: {
-        flashMessage: `Quote ${quote.order_number} was restored to active workflow.`,
+        flashMessage: `Request ${quote.order_number} was restored to active review workflow.`,
         flashTone: "success",
       },
     });
@@ -100,9 +100,9 @@ export default function ArchivedQuotes() {
           >
             Records Archive
           </p>
-          <h1 style={{ margin: "8px 0 6px" }}>Archived Quotes</h1>
+          <h1 style={{ margin: "8px 0 6px" }}>Archived Requests</h1>
           <p style={{ margin: 0, color: "#475569", maxWidth: "760px", lineHeight: 1.6 }}>
-            Historical quote records live here after removal from the active sales workflow. Restore actions remain visible so lifecycle management stays reversible and operational. Canceled records are tracked separately so termination and archiving stay distinct.
+            Historical request records live here after removal from active review. Restore actions remain visible so archive management stays reversible. Canceled records are tracked separately so termination and archiving stay distinct.
           </p>
         </div>
 
@@ -118,7 +118,7 @@ export default function ArchivedQuotes() {
             fontWeight: 700,
           }}
         >
-          View Active Quotes
+          View Active Requests
         </Link>
       </div>
 
@@ -182,7 +182,7 @@ export default function ArchivedQuotes() {
             textTransform: "uppercase",
           }}
         >
-          <span>Quote #</span>
+          <span>Request #</span>
           <span>Customer</span>
           <span>Archived Date</span>
           <span>Total</span>
@@ -232,7 +232,7 @@ export default function ArchivedQuotes() {
                         cursor: "pointer",
                       }}
                     >
-                      Restore Quote
+                      Restore Request
                     </button>
                   ) : null}
                   <Link
@@ -259,7 +259,7 @@ export default function ArchivedQuotes() {
                 background: "#ffffff",
               }}
             >
-              No archived quotes yet. Active quote workflow remains separate until records are intentionally archived.
+              No archived requests yet. Active request review remains separate until records are intentionally archived.
             </div>
           )}
         </div>

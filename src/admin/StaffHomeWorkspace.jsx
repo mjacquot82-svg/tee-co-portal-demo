@@ -198,7 +198,7 @@ export default function StaffHomeWorkspace({ orders, staffUser }) {
         </p>
       </div>
 
-      <Section title="My Queue Snapshot" description="Only work assigned directly to you appears here. Quotes, front-counter actions, and the global shop queue stay in their own workspaces.">
+      <Section title="My Queue Snapshot" description="Only work assigned directly to you appears here. Order requests, front-counter actions, and the global shop queue stay in their own workspaces.">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
           <SummaryCard label="Assigned To Me" value={summary.active} />
           <SummaryCard label="Ready To Start" value={summary.ready} />

@@ -3,15 +3,22 @@ function normalizeLower(value) {
 }
 
 export function buildDepositStatus(order, financials) {
-  return order?.deposit_workflow_status || (Number(financials?.deposit_amount || 0) > 0 ? "Awaiting Deposit" : "Deposit Not Required");
+  if (order?.deposit_workflow_status) return order.deposit_workflow_status;
+  if (
+    order?.deposit_requirement_status === "Undecided" ||
+    String(order?.deposit_requirement || "").trim().toLowerCase() === "undecided"
+  ) {
+    return "Pending Decision";
+  }
+  return Number(financials?.deposit_amount || 0) > 0 ? "Awaiting Deposit" : "Deposit Not Required";
 }
 
 export function buildApprovalStatus(order) {
-  return order?.artwork_approval_status || order?.approval_status || "Pending Review";
+  return order?.staff_review_status || order?.approval_status || order?.artwork_approval_status || "Pending Review";
 }
 
 export function buildArtworkStatus(order) {
-  return buildApprovalStatus(order);
+  return order?.artwork_status || order?.artwork_approval_status || "Pending Review";
 }
 
 export function buildProductionReadiness(order, financials) {
@@ -19,25 +26,25 @@ export function buildProductionReadiness(order, financials) {
   const totalPaid = Number(financials?.total_paid || financials?.amount_paid || 0);
   const depositState = normalizeLower(buildDepositStatus(order, financials));
   const approvalState = normalizeLower(buildApprovalStatus(order));
-  const artworkCount = Array.isArray(order?.artwork_files) ? order.artwork_files.length : 0;
+  const artworkState = normalizeLower(buildArtworkStatus(order));
 
   const checks = [
     {
-      label: "Customer Approval",
+      label: "Staff Review",
       passed: approvalState.includes("approved"),
       detail: buildApprovalStatus(order),
     },
     {
       label: "Deposit",
       passed:
-        depositTarget <= 0 ||
+        depositState === "deposit not required" ||
         depositState === "deposit received" ||
-        totalPaid >= depositTarget,
+        (depositTarget > 0 && totalPaid >= depositTarget),
       detail: buildDepositStatus(order, financials),
     },
     {
       label: "Artwork",
-      passed: artworkCount === 0 || approvalState.includes("approved"),
+      passed: artworkState === "not required" || artworkState.includes("approved"),
       detail: buildArtworkStatus(order),
     },
   ];

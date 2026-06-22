@@ -27,11 +27,11 @@ export function buildWorkflowStatusBadges(order = {}, options = {}) {
       badges.push(buildBadge("Artwork Approved", "success"));
     } else if (artworkStatus === "Needs Revision") {
       badges.push(
-        buildBadge(surface === "customer" ? "Revision Requested" : "Revision Needed", "danger")
+        buildBadge(surface === "customer" ? "Action Needed: Upload Revised Artwork" : "Revision Needed", "danger")
       );
     } else {
       badges.push(
-        buildBadge(surface === "customer" ? "Awaiting Your Approval" : "Awaiting Approval", "warning")
+        buildBadge(surface === "customer" ? "Action Needed: Upload Artwork" : "Awaiting Approval", "warning")
       );
     }
   }
@@ -39,7 +39,9 @@ export function buildWorkflowStatusBadges(order = {}, options = {}) {
   if (depositStatus === "Deposit Requested" || depositStatus === "Awaiting Deposit") {
     badges.push(
       buildBadge(
-        surface === "customer" && depositStatus === "Deposit Requested"
+        surface === "customer"
+          ? "Action Needed: Deposit Required"
+          : depositStatus === "Deposit Requested"
           ? "Deposit Requested"
           : "Awaiting Deposit",
         "warning"
@@ -119,15 +121,15 @@ export function buildCustomerWorkflowMessage(order = {}) {
   const status = normalizeOperationalStatus(order.status);
 
   if (artworkRequired && artworkStatus === "Needs Revision") {
-    return "Revision requested by shop";
+    return "Action needed: upload revised artwork";
   }
 
   if (artworkRequired && artworkStatus !== "Approved") {
-    return "Awaiting your artwork approval";
+    return "Action needed: upload artwork";
   }
 
   if (depositStatus === "Deposit Requested" || depositStatus === "Awaiting Deposit") {
-    return "Deposit requested before production";
+    return "Action needed: deposit required before production";
   }
 
   if (["Ready For Production", "Printing", "Embroidery", "QC / Finishing"].includes(status)) {

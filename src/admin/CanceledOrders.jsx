@@ -53,7 +53,7 @@ function buildCanceledRecords(orders = []) {
         totalPaid: financials.total_paid,
         depositStatus: buildDepositStatus(order, financials),
         approvalStatus: buildApprovalStatus(order),
-        recordContext: productionRecord ? "Production workflow" : "Quote workflow",
+        recordContext: productionRecord ? "Production workflow" : "Request review",
         detailPath: productionRecord
           ? `/admin/orders/${order.order_number}`
           : `/admin/quotes/${order.order_number}`,
@@ -129,7 +129,7 @@ export default function CanceledOrders() {
     [canceledRecords]
   );
   const quoteCanceledRecords = useMemo(
-    () => canceledRecords.filter((record) => record.recordContext === "Quote workflow"),
+    () => canceledRecords.filter((record) => record.recordContext === "Request review"),
     [canceledRecords]
   );
   const totalCanceledValue = useMemo(
@@ -160,7 +160,7 @@ export default function CanceledOrders() {
           Canceled operational records are available only in the owner/admin workspace.
         </p>
         <Link to="/admin/quotes" style={{ color: "#0f172a", fontWeight: 700 }}>
-          Return to Quote Intake
+          Return to Order Requests
         </Link>
       </div>
     );
@@ -211,7 +211,7 @@ export default function CanceledOrders() {
               fontWeight: 700,
             }}
           >
-            View Active Quotes
+            View Active Requests
           </Link>
           <Link
             to="/admin/quotes/archived"
@@ -225,7 +225,7 @@ export default function CanceledOrders() {
               fontWeight: 700,
             }}
           >
-            Archived Quotes
+            Archived Requests
           </Link>
         </div>
       </div>
@@ -240,7 +240,7 @@ export default function CanceledOrders() {
       >
         <SummaryCard label="Canceled Records" value={canceledRecords.length} tone="danger" />
         <SummaryCard label="Canceled Production Records" value={productionCanceledRecords.length} tone="neutral" />
-        <SummaryCard label="Canceled Quote Records" value={quoteCanceledRecords.length} tone="neutral" />
+        <SummaryCard label="Canceled Request Records" value={quoteCanceledRecords.length} tone="neutral" />
         <SummaryCard label="Preserved Record Value" value={money(totalCanceledValue)} />
       </section>
 

@@ -193,10 +193,16 @@ function normalizeStoredOrder(order = {}) {
     order.artwork_approval_status || order.approval_status,
     { required: artworkApprovalRequired }
   );
+  const depositRequirementLookup = String(order.deposit_requirement || "").trim().toLowerCase();
+  const depositRequirementStatusLookup = String(order.deposit_requirement_status || "").trim().toLowerCase();
+  const depositRequirementUndecided =
+    depositRequirementLookup === "undecided" || depositRequirementStatusLookup === "undecided";
   const depositRequired =
-    typeof order.deposit_required === "boolean"
+    depositRequirementUndecided
+      ? null
+      : typeof order.deposit_required === "boolean"
       ? order.deposit_required
-      : String(order.deposit_requirement || "").trim() === "required" ||
+      : depositRequirementLookup === "required" ||
         Number(order.deposit_amount || order.deposit?.amount || 0) > 0;
   const depositWorkflowStatus = normalizeDepositWorkflowStatus(
     order.deposit_workflow_status || order.deposit?.status,

@@ -864,7 +864,7 @@ export default function Orders() {
           >
             Production Queue
           </p>
-          <h1 style={{ margin: 0 }}>Shop Production</h1>
+          <h1 style={{ margin: 0 }}>Production</h1>
           <p style={{ margin: 0, color: "#64748b", maxWidth: "780px" }}>
             Compact execution view for moving jobs through production, QC, pickup readiness, and completion with clear ownership and minimal clutter.
           </p>
@@ -906,7 +906,7 @@ export default function Orders() {
                   gap: "4px",
                 }}
               >
-                <strong>Assignment Dispatch</strong>
+                <strong>Assign Work</strong>
                 <span style={{ color: "#64748b" }}>{workspaceSummary.unassignedOrders} jobs still need assignment or ownership review.</span>
               </Link>
               <Link
