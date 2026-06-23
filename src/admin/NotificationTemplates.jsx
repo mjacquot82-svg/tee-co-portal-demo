@@ -449,8 +449,7 @@ function TemplateEditor({ template, onSave, onReset, saving }) {
 
           {resetConfirmOpen ? (
             <div
-              role="alertdialog"
-              aria-modal="false"
+              role="alert"
               aria-label="Confirm reset to default"
               style={{
                 display: "flex",
