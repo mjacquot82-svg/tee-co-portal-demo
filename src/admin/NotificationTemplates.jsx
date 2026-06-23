@@ -1,0 +1,664 @@
+import { useState, useCallback } from "react";
+import {
+  NOTIFICATION_TYPES,
+  NOTIFICATION_TYPE_LABELS,
+  MERGE_FIELDS,
+  SAMPLE_MERGE_DATA,
+  applyMergeFields,
+  getNotificationTemplates,
+  updateNotificationTemplate,
+  resetNotificationTemplate,
+} from "../lib/notificationTemplatesStore";
+
+const NOTIFICATION_TYPE_LIST = Object.values(NOTIFICATION_TYPES);
+
+const inputStyle = {
+  width: "100%",
+  padding: "10px 12px",
+  borderRadius: "10px",
+  border: "1px solid #d6d3d1",
+  fontSize: "14px",
+  boxSizing: "border-box",
+  fontFamily: "inherit",
+};
+
+const textareaStyle = {
+  ...inputStyle,
+  resize: "vertical",
+  minHeight: "120px",
+  lineHeight: 1.55,
+};
+
+const labelStyle = {
+  display: "block",
+  fontSize: "12px",
+  fontWeight: 700,
+  color: "#57534e",
+  marginBottom: "5px",
+  letterSpacing: "0.01em",
+};
+
+const sectionHeadingStyle = {
+  margin: "0 0 14px",
+  fontSize: "13px",
+  fontWeight: 900,
+  color: "#78716c",
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+};
+
+function ToggleSwitch({ checked, onChange, label, id }) {
+  return (
+    <label
+      htmlFor={id}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        cursor: "pointer",
+        userSelect: "none",
+      }}
+    >
+      <span
+        style={{
+          position: "relative",
+          display: "inline-block",
+          width: "36px",
+          height: "20px",
+          flexShrink: 0,
+        }}
+      >
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          style={{ opacity: 0, width: 0, height: 0, position: "absolute" }}
+        />
+        <span
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: "999px",
+            background: checked ? "#0f766e" : "#d6d3d1",
+            transition: "background 0.15s",
+          }}
+        />
+        <span
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: "3px",
+            left: checked ? "19px" : "3px",
+            width: "14px",
+            height: "14px",
+            borderRadius: "999px",
+            background: "#ffffff",
+            transition: "left 0.15s",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+          }}
+        />
+      </span>
+      <span style={{ fontSize: "14px", color: "#374151" }}>{label}</span>
+    </label>
+  );
+}
+
+function MergeFieldChips({ onInsert }) {
+  return (
+    <div>
+      <p style={{ margin: "0 0 6px", fontSize: "12px", color: "#78716c", fontWeight: 700 }}>
+        Available merge fields — click to copy:
+      </p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+        {MERGE_FIELDS.map((field) => (
+          <button
+            key={field.key}
+            type="button"
+            title={field.label}
+            onClick={() => onInsert(field.key)}
+            style={{
+              padding: "4px 9px",
+              borderRadius: "6px",
+              border: "1px solid #d6d3d1",
+              background: "#f5f5f4",
+              color: "#44403c",
+              fontSize: "12px",
+              fontFamily: "monospace",
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >
+            {field.key}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PreviewPane({ emailSubject, emailBody, smsBody }) {
+  const renderedSubject = applyMergeFields(emailSubject);
+  const renderedBody = applyMergeFields(emailBody);
+  const renderedSms = applyMergeFields(smsBody);
+
+  return (
+    <div style={{ display: "grid", gap: "20px" }}>
+      <div>
+        <p style={sectionHeadingStyle}>Email Preview</p>
+        <div
+          style={{
+            borderRadius: "12px",
+            border: "1px solid #e2e8f0",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: "10px 14px",
+              background: "#f8fafc",
+              borderBottom: "1px solid #e2e8f0",
+            }}
+          >
+            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 700 }}>
+              Subject:{" "}
+            </span>
+            <span style={{ fontSize: "13px", color: "#171717", fontWeight: 600 }}>
+              {renderedSubject || <em style={{ color: "#94a3b8" }}>No subject</em>}
+            </span>
+          </div>
+          <div
+            style={{
+              padding: "16px",
+              background: "#ffffff",
+              fontSize: "14px",
+              color: "#374151",
+              lineHeight: 1.65,
+              whiteSpace: "pre-wrap",
+              minHeight: "80px",
+            }}
+          >
+            {renderedBody || <em style={{ color: "#94a3b8" }}>No email body</em>}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p style={sectionHeadingStyle}>SMS Preview</p>
+        <div
+          style={{
+            padding: "14px 16px",
+            borderRadius: "12px",
+            border: "1px solid #e2e8f0",
+            background: "#ffffff",
+            fontSize: "14px",
+            color: "#374151",
+            lineHeight: 1.55,
+            whiteSpace: "pre-wrap",
+            minHeight: "56px",
+          }}
+        >
+          {renderedSms || <em style={{ color: "#94a3b8" }}>No SMS body</em>}
+        </div>
+        <p style={{ margin: "6px 0 0", fontSize: "12px", color: "#94a3b8" }}>
+          {renderedSms.length} characters
+        </p>
+      </div>
+
+      <div
+        style={{
+          padding: "10px 14px",
+          borderRadius: "10px",
+          background: "#f8fafc",
+          border: "1px solid #e2e8f0",
+        }}
+      >
+        <p style={{ margin: "0 0 6px", fontSize: "12px", fontWeight: 700, color: "#64748b" }}>
+          Sample data used in preview:
+        </p>
+        <div style={{ display: "grid", gap: "3px" }}>
+          {MERGE_FIELDS.map((field) => (
+            <div key={field.key} style={{ display: "flex", gap: "8px", fontSize: "12px" }}>
+              <code style={{ color: "#0f766e", fontFamily: "monospace", flexShrink: 0 }}>
+                {field.key}
+              </code>
+              <span style={{ color: "#64748b" }}>→</span>
+              <span style={{ color: "#374151" }}>{SAMPLE_MERGE_DATA[field.key]}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TemplateEditor({ template, onSave, onReset, saving }) {
+  const [draft, setDraft] = useState(() => ({ ...template }));
+  const [activeTab, setActiveTab] = useState("edit");
+  const [saveStatus, setSaveStatus] = useState(null);
+
+  const isDirty =
+    draft.name !== template.name ||
+    draft.emailSubject !== template.emailSubject ||
+    draft.emailBody !== template.emailBody ||
+    draft.smsBody !== template.smsBody ||
+    draft.emailEnabled !== template.emailEnabled ||
+    draft.smsEnabled !== template.smsEnabled ||
+    draft.staffNotificationEnabled !== template.staffNotificationEnabled;
+
+  function setField(field, value) {
+    setDraft((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function handleInsertMergeField(field) {
+    navigator.clipboard?.writeText(field).catch(() => {});
+  }
+
+  async function handleSave(e) {
+    e.preventDefault();
+    setSaveStatus(null);
+    try {
+      await onSave(template.type, draft);
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus(null), 2500);
+    } catch {
+      setSaveStatus("error");
+    }
+  }
+
+  async function handleReset() {
+    if (!window.confirm("Reset this template to its default content? Your changes will be lost.")) {
+      return;
+    }
+    try {
+      const resetTemplate = await onReset(template.type);
+      setDraft({ ...resetTemplate });
+      setSaveStatus("reset");
+      setTimeout(() => setSaveStatus(null), 2500);
+    } catch {
+      setSaveStatus("error");
+    }
+  }
+
+  const tabStyle = (tab) => ({
+    padding: "8px 16px",
+    borderRadius: "8px 8px 0 0",
+    border: "1px solid",
+    borderBottom: activeTab === tab ? "1px solid #ffffff" : "1px solid #e2e8f0",
+    borderColor: activeTab === tab ? "#e2e8f0" : "transparent",
+    background: activeTab === tab ? "#ffffff" : "transparent",
+    color: activeTab === tab ? "#171717" : "#64748b",
+    fontWeight: activeTab === tab ? 700 : 600,
+    fontSize: "13px",
+    cursor: activeTab === tab ? "default" : "pointer",
+    marginBottom: "-1px",
+    position: "relative",
+  });
+
+  return (
+    <form onSubmit={handleSave} style={{ display: "grid", gap: "0" }}>
+      <div style={{ display: "flex", gap: "4px", borderBottom: "1px solid #e2e8f0", marginBottom: "20px" }}>
+        <button type="button" style={tabStyle("edit")} onClick={() => setActiveTab("edit")}>
+          Edit Template
+        </button>
+        <button type="button" style={tabStyle("preview")} onClick={() => setActiveTab("preview")}>
+          Preview
+        </button>
+      </div>
+
+      {activeTab === "edit" ? (
+        <div style={{ display: "grid", gap: "20px" }}>
+          <div>
+            <label style={labelStyle} htmlFor={`name-${template.type}`}>
+              Template Name
+            </label>
+            <input
+              id={`name-${template.type}`}
+              type="text"
+              value={draft.name}
+              onChange={(e) => setField("name", e.target.value)}
+              style={inputStyle}
+              required
+            />
+          </div>
+
+          <div>
+            <p style={sectionHeadingStyle}>Email</p>
+            <div style={{ display: "grid", gap: "12px" }}>
+              <div>
+                <label style={labelStyle} htmlFor={`emailSubject-${template.type}`}>
+                  Email Subject
+                </label>
+                <input
+                  id={`emailSubject-${template.type}`}
+                  type="text"
+                  value={draft.emailSubject}
+                  onChange={(e) => setField("emailSubject", e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle} htmlFor={`emailBody-${template.type}`}>
+                  Email Body
+                </label>
+                <textarea
+                  id={`emailBody-${template.type}`}
+                  value={draft.emailBody}
+                  onChange={(e) => setField("emailBody", e.target.value)}
+                  style={{ ...textareaStyle, minHeight: "180px" }}
+                />
+              </div>
+              <ToggleSwitch
+                id={`emailEnabled-${template.type}`}
+                checked={draft.emailEnabled}
+                onChange={(val) => setField("emailEnabled", val)}
+                label="Email Enabled"
+              />
+            </div>
+          </div>
+
+          <div>
+            <p style={sectionHeadingStyle}>SMS</p>
+            <div style={{ display: "grid", gap: "12px" }}>
+              <div>
+                <label style={labelStyle} htmlFor={`smsBody-${template.type}`}>
+                  SMS Body
+                </label>
+                <textarea
+                  id={`smsBody-${template.type}`}
+                  value={draft.smsBody}
+                  onChange={(e) => setField("smsBody", e.target.value)}
+                  style={textareaStyle}
+                />
+                <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#94a3b8" }}>
+                  {draft.smsBody.length} characters
+                </p>
+              </div>
+              <ToggleSwitch
+                id={`smsEnabled-${template.type}`}
+                checked={draft.smsEnabled}
+                onChange={(val) => setField("smsEnabled", val)}
+                label="SMS Enabled"
+              />
+            </div>
+          </div>
+
+          <div>
+            <p style={sectionHeadingStyle}>Staff Notifications</p>
+            <ToggleSwitch
+              id={`staffNotificationEnabled-${template.type}`}
+              checked={draft.staffNotificationEnabled}
+              onChange={(val) => setField("staffNotificationEnabled", val)}
+              label="Staff Notification Enabled"
+            />
+          </div>
+
+          <MergeFieldChips onInsert={handleInsertMergeField} />
+        </div>
+      ) : (
+        <PreviewPane
+          emailSubject={draft.emailSubject}
+          emailBody={draft.emailBody}
+          smsBody={draft.smsBody}
+        />
+      )}
+
+      <div
+        style={{
+          display: "flex",
+          gap: "10px",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginTop: "22px",
+          paddingTop: "16px",
+          borderTop: "1px solid #e2e8f0",
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <button
+            type="submit"
+            disabled={saving || !isDirty}
+            style={{
+              padding: "10px 18px",
+              borderRadius: "10px",
+              border: "none",
+              background: isDirty ? "#0f766e" : "#d6d3d1",
+              color: isDirty ? "#ffffff" : "#a8a29e",
+              fontWeight: 700,
+              fontSize: "14px",
+              cursor: isDirty && !saving ? "pointer" : "default",
+            }}
+          >
+            {saving ? "Saving…" : "Save Template"}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleReset}
+            style={{
+              padding: "10px 14px",
+              borderRadius: "10px",
+              border: "1px solid #d6d3d1",
+              background: "#ffffff",
+              color: "#57534e",
+              fontWeight: 700,
+              fontSize: "13px",
+              cursor: "pointer",
+            }}
+          >
+            Reset to Default
+          </button>
+        </div>
+
+        {saveStatus === "saved" && (
+          <span style={{ color: "#166534", fontSize: "13px", fontWeight: 700 }}>
+            ✓ Template saved
+          </span>
+        )}
+        {saveStatus === "reset" && (
+          <span style={{ color: "#166534", fontSize: "13px", fontWeight: 700 }}>
+            ✓ Reset to default
+          </span>
+        )}
+        {saveStatus === "error" && (
+          <span style={{ color: "#b91c1c", fontSize: "13px", fontWeight: 700 }}>
+            Failed to save. Please try again.
+          </span>
+        )}
+      </div>
+    </form>
+  );
+}
+
+export default function NotificationTemplates() {
+  const [templates, setTemplates] = useState(() => getNotificationTemplates());
+  const [expandedType, setExpandedType] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = useCallback(async (type, updates) => {
+    setSaving(true);
+    try {
+      const updated = updateNotificationTemplate(type, updates);
+      setTemplates((prev) => ({ ...prev, [type]: updated }));
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  const handleReset = useCallback(async (type) => {
+    setSaving(true);
+    try {
+      const reset = resetNotificationTemplate(type);
+      setTemplates((prev) => ({ ...prev, [type]: reset }));
+      return reset;
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  return (
+    <div style={{ padding: "32px", maxWidth: "860px" }}>
+      <div style={{ marginBottom: "28px" }}>
+        <p
+          style={{
+            margin: "0 0 4px",
+            fontSize: "12px",
+            fontWeight: 900,
+            color: "#78716c",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
+        >
+          Settings
+        </p>
+        <h1 style={{ margin: "0 0 8px", fontSize: "24px", color: "#171717" }}>
+          Notification Templates
+        </h1>
+        <p style={{ margin: 0, color: "#57534e", fontSize: "14px", lineHeight: 1.55 }}>
+          Manage the email and SMS templates used for customer and staff notifications.
+          Templates are stored locally and can be edited without code changes. Use merge
+          fields to personalize each message.
+        </p>
+      </div>
+
+      <div
+        style={{
+          padding: "12px 16px",
+          borderRadius: "12px",
+          background: "#fff7ed",
+          border: "1px solid #fed7aa",
+          marginBottom: "28px",
+        }}
+      >
+        <p style={{ margin: 0, fontSize: "13px", color: "#9a3412", lineHeight: 1.5 }}>
+          <strong>Preview only.</strong> These templates define future notification content.
+          Actual email and SMS sending is not yet connected. Enable/disable toggles are saved
+          for planning purposes.
+        </p>
+      </div>
+
+      <div style={{ display: "grid", gap: "10px" }}>
+        {NOTIFICATION_TYPE_LIST.map((type) => {
+          const template = templates[type];
+          const label = NOTIFICATION_TYPE_LABELS[type];
+          const isExpanded = expandedType === type;
+          const channelBadges = [
+            template.emailEnabled && "Email",
+            template.smsEnabled && "SMS",
+            template.staffNotificationEnabled && "Staff",
+          ].filter(Boolean);
+
+          return (
+            <div
+              key={type}
+              style={{
+                borderRadius: "14px",
+                border: isExpanded ? "1px solid #cbd5e1" : "1px solid #e2e8f0",
+                background: isExpanded ? "#f8fafc" : "#ffffff",
+                overflow: "hidden",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setExpandedType(isExpanded ? null : type)}
+                aria-expanded={isExpanded}
+                style={{
+                  width: "100%",
+                  padding: "14px 16px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "12px",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                  <strong style={{ fontSize: "15px", color: "#171717" }}>
+                    {template.name || label}
+                  </strong>
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                    {channelBadges.map((badge) => (
+                      <span
+                        key={badge}
+                        style={{
+                          padding: "3px 8px",
+                          borderRadius: "999px",
+                          background: "#dcfce7",
+                          color: "#166534",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          border: "1px solid #bbf7d0",
+                        }}
+                      >
+                        {badge}
+                      </span>
+                    ))}
+                    {channelBadges.length === 0 && (
+                      <span
+                        style={{
+                          padding: "3px 8px",
+                          borderRadius: "999px",
+                          background: "#f5f5f4",
+                          color: "#78716c",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          border: "1px solid #e7e5e4",
+                        }}
+                      >
+                        Disabled
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: "26px",
+                    height: "26px",
+                    borderRadius: "999px",
+                    border: "1px solid #d6d3d1",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#44403c",
+                    fontSize: "13px",
+                    fontWeight: 900,
+                    background: "#ffffff",
+                    flexShrink: 0,
+                  }}
+                >
+                  {isExpanded ? "▲" : "▼"}
+                </span>
+              </button>
+
+              {isExpanded && (
+                <div
+                  style={{
+                    padding: "0 16px 20px",
+                    borderTop: "1px solid #e2e8f0",
+                    marginTop: "-1px",
+                    paddingTop: "20px",
+                  }}
+                >
+                  <TemplateEditor
+                    key={type}
+                    template={template}
+                    onSave={handleSave}
+                    onReset={handleReset}
+                    saving={saving}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

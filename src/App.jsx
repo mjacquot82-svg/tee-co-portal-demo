@@ -38,6 +38,7 @@ import CanceledOrders from "./admin/CanceledOrders";
 import QuoteDetail from "./admin/QuoteDetail";
 import InvoicesPayments from "./admin/InvoicesPayments";
 import FinancialHistory from "./admin/FinancialHistory";
+import NotificationTemplates from "./admin/NotificationTemplates";
 import AppSplash from "./components/AppSplash";
 
 export default function App() {
@@ -91,6 +92,11 @@ export default function App() {
             <Route
               path="admin/staff-users"
               element={<StaffUsers />}
+            />
+
+            <Route
+              path="admin/settings/notifications"
+              element={<NotificationTemplates />}
             />
           </Route>
 
