@@ -34,6 +34,7 @@ import {
   buildWorkflowBlockDetails,
   buildWorkflowStatusBadges,
 } from "../orders/workflowPresentation";
+import PaymentRequestForm from "./PaymentRequestForm";
 
 const cardStyle = {
   background: "#ffffff",
@@ -758,6 +759,19 @@ export default function OrderDetail() {
               onRecordPayment={handleRecordPayment}
               onMarkPickedUp={handleMarkPickedUp}
               onSendDepositRequest={handleSendDepositRequest}
+            />
+          )}
+
+          {isStaffWorkspace || !normalizedOrder ? null : (
+            <PaymentRequestForm
+              title="Create Payment Request"
+              description="Create a staff-managed payment request tied to this order without changing the existing deposit workflow."
+              order={normalizedOrder}
+              defaultType={
+                normalizedOrder.payment_collection_state === "Awaiting Deposit"
+                  ? "deposit"
+                  : "balance"
+              }
             />
           )}
 

@@ -1,13 +1,18 @@
 import {
   backfillOrderPaymentsToPayments,
   createPaymentRequest,
+  getPaymentRequestById,
   getPaymentEventsByOrder,
   getPaymentRequestsByCustomer,
   getPaymentRequestsByOrder,
   getPaymentsByCustomer,
   getPaymentsByOrder,
+  listPaymentEvents,
+  listPaymentRequests,
+  listPayments,
   recordPayment,
   recordPaymentEvent,
+  updatePaymentRequest,
 } from "../lib/paymentsStore";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 
@@ -31,6 +36,52 @@ const paymentsService = {
     return runPaymentOperation(
       async () => supabase.from("payment_requests").insert(input).select("*").single(),
       () => createPaymentRequest(input)
+    );
+  },
+
+  updatePaymentRequest(identifier, updates = {}) {
+    return runPaymentOperation(
+      async () =>
+        supabase
+          .from("payment_requests")
+          .update(updates)
+          .or(`id.eq.${identifier},request_number.eq.${identifier}`)
+          .select("*")
+          .single(),
+      () => updatePaymentRequest(identifier, updates)
+    );
+  },
+
+  getPaymentRequestById(identifier) {
+    return runPaymentOperation(
+      async () =>
+        supabase
+          .from("payment_requests")
+          .select("*")
+          .or(`id.eq.${identifier},request_number.eq.${identifier}`)
+          .single(),
+      () => getPaymentRequestById(identifier)
+    );
+  },
+
+  listPaymentRequests() {
+    return runPaymentOperation(
+      async () => supabase.from("payment_requests").select("*").order("created_at", { ascending: false }),
+      () => listPaymentRequests()
+    );
+  },
+
+  listPayments() {
+    return runPaymentOperation(
+      async () => supabase.from("payments").select("*").order("created_at", { ascending: false }),
+      () => listPayments()
+    );
+  },
+
+  listPaymentEvents() {
+    return runPaymentOperation(
+      async () => supabase.from("payment_events").select("*").order("created_at", { ascending: false }),
+      () => listPaymentEvents()
     );
   },
 
@@ -92,11 +143,16 @@ export default paymentsService;
 export {
   backfillOrderPaymentsToPayments,
   createPaymentRequest,
+  getPaymentRequestById,
   getPaymentEventsByOrder,
   getPaymentRequestsByCustomer,
   getPaymentRequestsByOrder,
   getPaymentsByCustomer,
   getPaymentsByOrder,
+  listPaymentEvents,
+  listPaymentRequests,
+  listPayments,
   recordPayment,
   recordPaymentEvent,
+  updatePaymentRequest,
 };

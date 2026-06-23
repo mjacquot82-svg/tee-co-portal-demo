@@ -40,6 +40,11 @@ export const MERGE_FIELDS = Object.freeze([
   { key: "{{company_name}}", label: "Company Name" },
 ]);
 
+// Flat list of token names (without braces) for test compatibility
+export const NOTIFICATION_MERGE_FIELDS = Object.freeze(
+  MERGE_FIELDS.map((f) => f.key.replace(/[{}]/g, ""))
+);
+
 export const SAMPLE_MERGE_DATA = Object.freeze({
   "{{customer_name}}": "Jane Smith",
   "{{order_number}}": "ORD-2024-001",
@@ -51,6 +56,13 @@ export const SAMPLE_MERGE_DATA = Object.freeze({
   "{{pickup_date}}": "July 15, 2024",
   "{{company_name}}": "Tee & Co",
 });
+
+// Flat sample data keyed by token name (without braces) for renderNotificationTemplatePreview
+export const NOTIFICATION_TEMPLATE_SAMPLE_DATA = Object.freeze(
+  Object.fromEntries(
+    Object.entries(SAMPLE_MERGE_DATA).map(([k, v]) => [k.replace(/[{}]/g, ""), v])
+  )
+);
 
 const DEFAULT_TEMPLATES = Object.freeze({
   [NOTIFICATION_TYPES.newCustomerRequest]: {
@@ -65,7 +77,7 @@ We'll be in touch soon with a quote and next steps.
 
 Thanks,
 The {{company_name}} Team`,
-    smsBody: "Hi {{customer_name}}, we've received your request at {{company_name}} and will be in touch soon!",
+    smsMessage: "Hi {{customer_name}}, we've received your request at {{company_name}} and will be in touch soon!",
     emailEnabled: true,
     smsEnabled: false,
     staffNotificationEnabled: true,
@@ -87,7 +99,7 @@ If you have any questions, don't hesitate to reach out.
 
 Thanks,
 The {{company_name}} Team`,
-    smsBody: "Hi {{customer_name}}, your quote for {{order_number}} is ready! Total: {{quote_total}}. Review here: {{approval_link}}",
+    smsMessage: "Hi {{customer_name}}, your quote for {{order_number}} is ready! Total: {{quote_total}}. Review here: {{approval_link}}",
     emailEnabled: true,
     smsEnabled: false,
     staffNotificationEnabled: false,
@@ -110,7 +122,7 @@ We look forward to creating something great for you!
 
 Thanks,
 The {{company_name}} Team`,
-    smsBody: "Hi {{customer_name}}, your quote {{order_number}} is approved! Deposit due: {{deposit_amount}}. Pay here: {{payment_link}}",
+    smsMessage: "Hi {{customer_name}}, your quote {{order_number}} is approved! Deposit due: {{deposit_amount}}. Pay here: {{payment_link}}",
     emailEnabled: true,
     smsEnabled: false,
     staffNotificationEnabled: true,
@@ -128,7 +140,7 @@ Please log in to your customer portal to review our feedback and upload updated 
 
 Thanks,
 The {{company_name}} Team`,
-    smsBody: "Hi {{customer_name}}, your artwork for order {{order_number}} needs a revision. Please check your portal: {{approval_link}}",
+    smsMessage: "Hi {{customer_name}}, your artwork for order {{order_number}} needs a revision. Please check your portal: {{approval_link}}",
     emailEnabled: true,
     smsEnabled: false,
     staffNotificationEnabled: false,
@@ -145,7 +157,7 @@ We'll keep you updated as your order progresses.
 
 Thanks,
 The {{company_name}} Team`,
-    smsBody: "Hi {{customer_name}}, your artwork for order {{order_number}} is approved and heading to production!",
+    smsMessage: "Hi {{customer_name}}, your artwork for order {{order_number}} is approved and heading to production!",
     emailEnabled: true,
     smsEnabled: false,
     staffNotificationEnabled: false,
@@ -167,7 +179,7 @@ Once your deposit is received, we'll get started right away!
 
 Thanks,
 The {{company_name}} Team`,
-    smsBody: "Hi {{customer_name}}, deposit of {{deposit_amount}} required for order {{order_number}}. Pay here: {{payment_link}}",
+    smsMessage: "Hi {{customer_name}}, deposit of {{deposit_amount}} required for order {{order_number}}. Pay here: {{payment_link}}",
     emailEnabled: true,
     smsEnabled: true,
     staffNotificationEnabled: false,
@@ -187,7 +199,7 @@ We'll keep you updated as your order progresses.
 
 Thanks,
 The {{company_name}} Team`,
-    smsBody: "Hi {{customer_name}}, payment received for order {{order_number}}. Balance due: {{balance_due}}. Thanks!",
+    smsMessage: "Hi {{customer_name}}, payment received for order {{order_number}}. Balance due: {{balance_due}}. Thanks!",
     emailEnabled: true,
     smsEnabled: false,
     staffNotificationEnabled: true,
@@ -204,7 +216,7 @@ We'll notify you when your order is ready for pickup.
 
 Thanks,
 The {{company_name}} Team`,
-    smsBody: "Hi {{customer_name}}, your order {{order_number}} is now in production! We'll let you know when it's ready.",
+    smsMessage: "Hi {{customer_name}}, your order {{order_number}} is now in production! We'll let you know when it's ready.",
     emailEnabled: true,
     smsEnabled: false,
     staffNotificationEnabled: false,
@@ -224,7 +236,7 @@ Please bring your remaining balance when you come to pick up your order.
 
 Thanks,
 The {{company_name}} Team`,
-    smsBody: "Hi {{customer_name}}, your order {{order_number}} is ready for pickup on {{pickup_date}}! Balance due: {{balance_due}}.",
+    smsMessage: "Hi {{customer_name}}, your order {{order_number}} is ready for pickup on {{pickup_date}}! Balance due: {{balance_due}}.",
     emailEnabled: true,
     smsEnabled: true,
     staffNotificationEnabled: false,
@@ -241,12 +253,27 @@ We hope you love your new gear. We'd love to see you again for your next order!
 
 Thanks,
 The {{company_name}} Team`,
-    smsBody: "Hi {{customer_name}}, your order {{order_number}} is complete. Thanks for choosing {{company_name}}!",
+    smsMessage: "Hi {{customer_name}}, your order {{order_number}} is complete. Thanks for choosing {{company_name}}!",
     emailEnabled: true,
     smsEnabled: false,
     staffNotificationEnabled: false,
   },
 });
+
+// Array form of template definitions for test compatibility
+export const NOTIFICATION_TEMPLATE_DEFINITIONS = Object.freeze(
+  Object.values(DEFAULT_TEMPLATES).map((t) => ({
+    type: t.type,
+    label: NOTIFICATION_TYPE_LABELS[t.type],
+    templateName: t.name,
+    emailSubject: t.emailSubject,
+    emailBody: t.emailBody,
+    smsMessage: t.smsMessage,
+    emailEnabled: t.emailEnabled,
+    smsEnabled: t.smsEnabled,
+    staffNotificationEnabled: t.staffNotificationEnabled,
+  }))
+);
 
 export function applyMergeFields(text, data = SAMPLE_MERGE_DATA) {
   if (!text) return "";
@@ -254,6 +281,20 @@ export function applyMergeFields(text, data = SAMPLE_MERGE_DATA) {
     const value = data[field.key] ?? field.key;
     return result.split(field.key).join(value);
   }, text);
+}
+
+// Replace {{token}} placeholders using a flat key→value map (tokens without braces)
+export function renderTemplateContent(templateContent = "", mergeFields = {}) {
+  return String(templateContent || "").replace(
+    /{{\s*([a-z0-9_]+)\s*}}/gi,
+    (matchedText, token) => {
+      const normalizedToken = String(token || "").trim();
+      if (!normalizedToken || mergeFields?.[normalizedToken] == null) {
+        return matchedText;
+      }
+      return String(mergeFields[normalizedToken]);
+    }
+  );
 }
 
 function normalizeTemplate(stored = {}, defaultTemplate = {}) {
@@ -268,8 +309,10 @@ function normalizeTemplate(stored = {}, defaultTemplate = {}) {
       typeof stored.emailBody === "string"
         ? stored.emailBody
         : defaultTemplate.emailBody,
-    smsBody:
-      typeof stored.smsBody === "string" ? stored.smsBody : defaultTemplate.smsBody,
+    smsMessage:
+      typeof stored.smsMessage === "string"
+        ? stored.smsMessage
+        : defaultTemplate.smsMessage,
     emailEnabled:
       typeof stored.emailEnabled === "boolean"
         ? stored.emailEnabled
@@ -299,6 +342,28 @@ export function getNotificationTemplates() {
     return normalizeAllTemplates();
   }
   return normalizeAllTemplates(getJsonStorageItem(STORAGE_KEY, {}));
+}
+
+export function buildDefaultNotificationTemplates() {
+  return NOTIFICATION_TEMPLATE_DEFINITIONS.map((definition) => ({ ...definition }));
+}
+
+export function listNotificationTemplates() {
+  const templatesMap = getNotificationTemplates();
+  return Object.values(NOTIFICATION_TYPES).map((type) => {
+    const t = templatesMap[type];
+    return {
+      type: t.type,
+      label: NOTIFICATION_TYPE_LABELS[t.type],
+      templateName: t.name,
+      emailSubject: t.emailSubject,
+      emailBody: t.emailBody,
+      smsMessage: t.smsMessage,
+      emailEnabled: t.emailEnabled,
+      smsEnabled: t.smsEnabled,
+      staffNotificationEnabled: t.staffNotificationEnabled,
+    };
+  });
 }
 
 export function saveNotificationTemplates(templates) {
@@ -335,4 +400,33 @@ export function resetNotificationTemplate(type) {
     throw new Error("A valid notification template type is required.");
   }
   return updateNotificationTemplate(normalizedType, DEFAULT_TEMPLATES[normalizedType]);
+}
+
+export function resetNotificationTemplatesToDefaults() {
+  Object.values(NOTIFICATION_TYPES).forEach((type) => {
+    updateNotificationTemplate(type, DEFAULT_TEMPLATES[type]);
+  });
+  return listNotificationTemplates();
+}
+
+export function renderNotificationTemplatePreview(template, mergeFields = {}) {
+  const resolvedTemplate =
+    typeof template === "string"
+      ? listNotificationTemplates().find((item) => item.type === template)
+      : template;
+
+  if (!resolvedTemplate) {
+    throw new Error("A valid notification template is required.");
+  }
+
+  const previewData = {
+    ...NOTIFICATION_TEMPLATE_SAMPLE_DATA,
+    ...(mergeFields && typeof mergeFields === "object" ? mergeFields : {}),
+  };
+
+  return {
+    emailSubject: renderTemplateContent(resolvedTemplate.emailSubject, previewData),
+    emailBody: renderTemplateContent(resolvedTemplate.emailBody, previewData),
+    smsMessage: renderTemplateContent(resolvedTemplate.smsMessage, previewData),
+  };
 }

@@ -191,6 +191,11 @@ function getAdminSections(staffUser) {
       links: [
         { to: "/admin", label: "Dashboard", navKey: "dashboard" },
         { to: "/admin/staff-users", label: "Staff", navKey: "staffUsers" },
+        {
+          to: "/admin/settings/notifications",
+          label: "Notification Templates",
+          navKey: "notificationTemplates",
+        },
       ],
     },
     {
@@ -260,6 +265,7 @@ function getActiveSidebarLink(pathname, staffUser) {
   if (pathname.startsWith("/admin/products")) return "products";
   if (pathname.startsWith("/admin/customers")) return "customers";
   if (pathname.startsWith("/admin/staff-users")) return "staffUsers";
+  if (pathname.startsWith("/admin/settings/notifications")) return "notificationTemplates";
   if (pathname === "/admin/records/canceled") return "canceledOrders";
   if (pathname === "/admin/quotes/archived") return "archivedQuotes";
   if (pathname === "/admin/quotes") return "quotes";

@@ -151,10 +151,10 @@ function MergeFieldChips({ onInsert }) {
   );
 }
 
-function PreviewPane({ emailSubject, emailBody, smsBody }) {
+function PreviewPane({ emailSubject, emailBody, smsMessage }) {
   const renderedSubject = applyMergeFields(emailSubject);
   const renderedBody = applyMergeFields(emailBody);
-  const renderedSms = applyMergeFields(smsBody);
+  const renderedSms = applyMergeFields(smsMessage);
 
   return (
     <div style={{ display: "grid", gap: "20px" }}>
@@ -257,7 +257,7 @@ function TemplateEditor({ template, onSave, onReset, saving }) {
     draft.name !== template.name ||
     draft.emailSubject !== template.emailSubject ||
     draft.emailBody !== template.emailBody ||
-    draft.smsBody !== template.smsBody ||
+    draft.smsMessage !== template.smsMessage ||
     draft.emailEnabled !== template.emailEnabled ||
     draft.smsEnabled !== template.smsEnabled ||
     draft.staffNotificationEnabled !== template.staffNotificationEnabled;
@@ -375,17 +375,17 @@ function TemplateEditor({ template, onSave, onReset, saving }) {
             <p style={sectionHeadingStyle}>SMS</p>
             <div style={{ display: "grid", gap: "12px" }}>
               <div>
-                <label style={labelStyle} htmlFor={`smsBody-${template.type}`}>
+                <label style={labelStyle} htmlFor={`smsMessage-${template.type}`}>
                   SMS Body
                 </label>
                 <textarea
-                  id={`smsBody-${template.type}`}
-                  value={draft.smsBody}
-                  onChange={(e) => setField("smsBody", e.target.value)}
+                  id={`smsMessage-${template.type}`}
+                  value={draft.smsMessage}
+                  onChange={(e) => setField("smsMessage", e.target.value)}
                   style={textareaStyle}
                 />
                 <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#94a3b8" }}>
-                  {draft.smsBody.length} characters
+                  {draft.smsMessage.length} characters
                 </p>
               </div>
               <ToggleSwitch
@@ -413,7 +413,7 @@ function TemplateEditor({ template, onSave, onReset, saving }) {
         <PreviewPane
           emailSubject={draft.emailSubject}
           emailBody={draft.emailBody}
-          smsBody={draft.smsBody}
+          smsMessage={draft.smsMessage}
         />
       )}
 
