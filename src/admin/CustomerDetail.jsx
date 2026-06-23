@@ -19,6 +19,7 @@ import {
   isWorkflowCompletedState,
 } from "../lib/operationalWorkflow";
 import { canManageCustomerMerges, getAdminViewer } from "./adminRoleView";
+import PaymentRequestForm from "./PaymentRequestForm";
 
 function currency(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -790,6 +791,16 @@ export default function CustomerDetail() {
           </span>
         </article>
       </section>
+
+      <div style={{ marginBottom: "18px" }}>
+        <PaymentRequestForm
+          title="Create Payment Request"
+          description="Create a staff-managed payment request for this customer or one of their linked orders."
+          customer={customer}
+          orders={customerOrders}
+          defaultType={operationalSummary.orderBalanceDue > 0 ? "balance" : "custom_amount"}
+        />
+      </div>
 
       <div style={{ display: "grid", gap: "18px" }}>
         {canManageMerges ? (

@@ -145,6 +145,40 @@ function normalizePaymentEvent(input = {}) {
   };
 }
 
+function compareCreatedAtDesc(left, right) {
+  return new Date(right?.created_at || 0).getTime() - new Date(left?.created_at || 0).getTime();
+}
+
+function normalizeIdentifier(value) {
+  return normalizeText(value).toLowerCase();
+}
+
+export function resolvePaymentRequestStatus(paymentRequest = {}, requestPayments = []) {
+  const amountRequested = normalizeAmount(paymentRequest.amount_requested);
+  const amountPaid = requestPayments
+    .filter((payment) => payment.status !== "failed" && payment.status !== "voided")
+    .reduce((total, payment) => total + normalizeAmount(payment.amount), 0);
+
+  if (amountRequested > 0 && amountPaid >= amountRequested) return "paid";
+  if (amountPaid > 0) return "partially_paid";
+  return paymentRequest.status || "open";
+}
+
+function hydratePaymentRequest(paymentRequest = {}) {
+  const requestPayments = getStoredPayments().filter(
+    (payment) => payment.payment_request_id === paymentRequest.id
+  );
+  const amountPaid = requestPayments
+    .filter((payment) => payment.status !== "failed" && payment.status !== "voided")
+    .reduce((total, payment) => total + normalizeAmount(payment.amount), 0);
+
+  return {
+    ...paymentRequest,
+    amount_paid: amountPaid,
+    status: resolvePaymentRequestStatus(paymentRequest, requestPayments),
+  };
+}
+
 export function getStoredPaymentRequests() {
   return getStoredList(PAYMENT_REQUESTS_STORAGE_KEY, "paymentRequests");
 }
@@ -155,6 +189,18 @@ export function getStoredPayments() {
 
 export function getStoredPaymentEvents() {
   return getStoredList(PAYMENT_EVENTS_STORAGE_KEY, "paymentEvents");
+}
+
+export function listPaymentRequests() {
+  return getStoredPaymentRequests().map(hydratePaymentRequest).sort(compareCreatedAtDesc);
+}
+
+export function listPayments() {
+  return [...getStoredPayments()].sort(compareCreatedAtDesc);
+}
+
+export function listPaymentEvents() {
+  return [...getStoredPaymentEvents()].sort(compareCreatedAtDesc);
 }
 
 export function saveStoredPaymentRequests(paymentRequests) {
@@ -195,6 +241,75 @@ export function createPaymentRequest(input = {}) {
   return paymentRequest;
 }
 
+export function getPaymentRequestById(identifier) {
+  const normalizedIdentifier = normalizeIdentifier(identifier);
+  if (!normalizedIdentifier) return null;
+
+  const paymentRequest = getStoredPaymentRequests().find(
+    (request) =>
+      normalizeIdentifier(request.id) === normalizedIdentifier ||
+      normalizeIdentifier(request.request_number) === normalizedIdentifier
+  );
+
+  return paymentRequest ? hydratePaymentRequest(paymentRequest) : null;
+}
+
+export function updatePaymentRequest(identifier, updates = {}) {
+  const normalizedIdentifier = normalizeIdentifier(identifier);
+  if (!normalizedIdentifier) return null;
+
+  let updatedRequest = null;
+  const nextRequests = getStoredPaymentRequests().map((request) => {
+    const isMatch =
+      normalizeIdentifier(request.id) === normalizedIdentifier ||
+      normalizeIdentifier(request.request_number) === normalizedIdentifier;
+    if (!isMatch) return request;
+
+    updatedRequest = hydratePaymentRequest({
+      ...request,
+      ...updates,
+      amount_requested: updates.amount_requested ?? updates.amount ?? request.amount_requested,
+      updated_at: updates.updated_at || nowIso(),
+    });
+    return updatedRequest;
+  });
+
+  if (!updatedRequest) return null;
+
+  saveStoredPaymentRequests(nextRequests);
+  recordPaymentEvent({
+    payment_request_id: updatedRequest.id,
+    order_number: updatedRequest.order_number,
+    event_type: "payment_request_updated",
+    event_source: "staff",
+    summary: `Payment request ${updatedRequest.request_number} updated.`,
+    payload: { updates },
+    staff_user_id: updates.staff_user_id || "",
+  });
+  return updatedRequest;
+}
+
+export function syncPaymentRequestTotals(identifier) {
+  const paymentRequest = getPaymentRequestById(identifier);
+  if (!paymentRequest) return null;
+
+  const syncedRequest = hydratePaymentRequest(paymentRequest);
+  const nextRequests = getStoredPaymentRequests().map((request) =>
+    request.id === syncedRequest.id
+      ? {
+          ...request,
+          amount_paid: syncedRequest.amount_paid,
+          status: syncedRequest.status,
+          paid_at: syncedRequest.status === "paid" ? request.paid_at || nowIso() : request.paid_at || null,
+          updated_at: nowIso(),
+        }
+      : request
+  );
+
+  saveStoredPaymentRequests(nextRequests);
+  return getPaymentRequestById(syncedRequest.id);
+}
+
 export function recordPayment(input = {}) {
   const payment = normalizePayment(input);
   const current = getStoredPayments();
@@ -211,6 +326,9 @@ export function recordPayment(input = {}) {
   if (existing) return existing;
 
   saveStoredPayments([payment, ...current]);
+  if (payment.payment_request_id) {
+    syncPaymentRequestTotals(payment.payment_request_id);
+  }
   recordPaymentEvent({
     payment_id: payment.id,
     payment_request_id: payment.payment_request_id,
@@ -246,35 +364,35 @@ export function getPaymentsByOrder(orderNumber) {
   const normalizedOrderNumber = normalizeText(orderNumber);
   if (!normalizedOrderNumber) return [];
 
-  return getStoredPayments().filter((payment) => payment.order_number === normalizedOrderNumber);
+  return listPayments().filter((payment) => payment.order_number === normalizedOrderNumber);
 }
 
 export function getPaymentRequestsByOrder(orderNumber) {
   const normalizedOrderNumber = normalizeText(orderNumber);
   if (!normalizedOrderNumber) return [];
 
-  return getStoredPaymentRequests().filter((request) => request.order_number === normalizedOrderNumber);
+  return listPaymentRequests().filter((request) => request.order_number === normalizedOrderNumber);
 }
 
 export function getPaymentEventsByOrder(orderNumber) {
   const normalizedOrderNumber = normalizeText(orderNumber);
   if (!normalizedOrderNumber) return [];
 
-  return getStoredPaymentEvents().filter((event) => event.order_number === normalizedOrderNumber);
+  return listPaymentEvents().filter((event) => event.order_number === normalizedOrderNumber);
 }
 
 export function getPaymentsByCustomer(customerId) {
   const normalizedCustomerId = normalizeCustomerId(customerId);
   if (!normalizedCustomerId) return [];
 
-  return getStoredPayments().filter((payment) => payment.customer_id === normalizedCustomerId);
+  return listPayments().filter((payment) => payment.customer_id === normalizedCustomerId);
 }
 
 export function getPaymentRequestsByCustomer(customerId) {
   const normalizedCustomerId = normalizeCustomerId(customerId);
   if (!normalizedCustomerId) return [];
 
-  return getStoredPaymentRequests().filter((request) => request.customer_id === normalizedCustomerId);
+  return listPaymentRequests().filter((request) => request.customer_id === normalizedCustomerId);
 }
 
 function isDepositPayment(order = {}, payment = {}) {

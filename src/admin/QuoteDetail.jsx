@@ -29,6 +29,7 @@ import {
   getAdminViewer,
   isStaffWorkspaceView,
 } from "./adminRoleView";
+import PaymentRequestForm from "./PaymentRequestForm";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -2201,6 +2202,13 @@ export default function QuoteDetail() {
               {formatValue(financials?.balance_summary)}
             </p>
           </div>
+
+          <PaymentRequestForm
+            title="Create Payment Request"
+            description="Create a staff-managed payment request for this quote while the legacy deposit visibility remains unchanged."
+            order={financials}
+            defaultType={financials?.payment_collection_state === "Awaiting Deposit" ? "deposit" : "balance"}
+          />
 
           {quoteSnapshot ? (
             <PricingSummary quote={quoteSnapshot} quantity={order.qty} />
