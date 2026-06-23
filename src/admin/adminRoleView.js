@@ -2,7 +2,6 @@ import {
   OPERATIONAL_ROLES,
   PERMISSIONS,
   getPermissionListForUser,
-  hasAnyPermission,
   hasPermission,
   normalizeOperationalRole as normalizePermissionRole,
 } from "../lib/permissions";
@@ -20,6 +19,7 @@ export const MANAGEMENT_EXACT_PATHS = [
   "/admin/records/canceled",
   "/admin/sales",
   "/admin/staff-users",
+  "/admin/settings/notifications",
   "/admin/quotes/archived",
 ];
 
@@ -125,6 +125,12 @@ const ADMIN_ROUTE_PERMISSION_RULES = [
     type: "exact",
     value: "/admin/staff-users",
     permissions: [PERMISSIONS.staffManage],
+    classification: "protected-management",
+  },
+  {
+    type: "exact",
+    value: "/admin/settings/notifications",
+    permissions: [PERMISSIONS.settingsManage],
     classification: "protected-management",
   },
   {
