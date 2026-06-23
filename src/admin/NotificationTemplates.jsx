@@ -106,33 +106,46 @@ function ToggleSwitch({ checked, onChange, label, id }) {
 }
 
 function MergeFieldChips({ onInsert }) {
+  const [copiedKey, setCopiedKey] = useState(null);
+
+  function handleCopy(key) {
+    onInsert(key);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 1800);
+  }
+
   return (
     <div>
       <p style={{ margin: "0 0 6px", fontSize: "12px", color: "#78716c", fontWeight: 700 }}>
         Available merge fields — click to copy:
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-        {MERGE_FIELDS.map((field) => (
-          <button
-            key={field.key}
-            type="button"
-            title={field.label}
-            onClick={() => onInsert(field.key)}
-            style={{
-              padding: "4px 9px",
-              borderRadius: "6px",
-              border: "1px solid #d6d3d1",
-              background: "#f5f5f4",
-              color: "#44403c",
-              fontSize: "12px",
-              fontFamily: "monospace",
-              cursor: "pointer",
-              fontWeight: 600,
-            }}
-          >
-            {field.key}
-          </button>
-        ))}
+        {MERGE_FIELDS.map((field) => {
+          const copied = copiedKey === field.key;
+          return (
+            <button
+              key={field.key}
+              type="button"
+              title={`Copy ${field.label}`}
+              aria-label={copied ? `${field.label} copied` : `Copy merge field ${field.label}`}
+              onClick={() => handleCopy(field.key)}
+              style={{
+                padding: "4px 9px",
+                borderRadius: "6px",
+                border: `1px solid ${copied ? "#bbf7d0" : "#d6d3d1"}`,
+                background: copied ? "#dcfce7" : "#f5f5f4",
+                color: copied ? "#166534" : "#44403c",
+                fontSize: "12px",
+                fontFamily: "monospace",
+                cursor: "pointer",
+                fontWeight: 600,
+                transition: "background 0.15s, border-color 0.15s, color 0.15s",
+              }}
+            >
+              {copied ? "✓ copied" : field.key}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -238,6 +251,8 @@ function TemplateEditor({ template, onSave, onReset, saving }) {
   const [activeTab, setActiveTab] = useState("edit");
   const [saveStatus, setSaveStatus] = useState(null);
 
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+
   const isDirty =
     draft.name !== template.name ||
     draft.emailSubject !== template.emailSubject ||
@@ -267,10 +282,8 @@ function TemplateEditor({ template, onSave, onReset, saving }) {
     }
   }
 
-  async function handleReset() {
-    if (!window.confirm("Reset this template to its default content? Your changes will be lost.")) {
-      return;
-    }
+  async function handleResetConfirmed() {
+    setResetConfirmOpen(false);
     try {
       const resetTemplate = await onReset(template.type);
       setDraft({ ...resetTemplate });
@@ -416,7 +429,7 @@ function TemplateEditor({ template, onSave, onReset, saving }) {
           flexWrap: "wrap",
         }}
       >
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
           <button
             type="submit"
             disabled={saving || !isDirty}
@@ -434,22 +447,76 @@ function TemplateEditor({ template, onSave, onReset, saving }) {
             {saving ? "Saving…" : "Save Template"}
           </button>
 
-          <button
-            type="button"
-            onClick={handleReset}
-            style={{
-              padding: "10px 14px",
-              borderRadius: "10px",
-              border: "1px solid #d6d3d1",
-              background: "#ffffff",
-              color: "#57534e",
-              fontWeight: 700,
-              fontSize: "13px",
-              cursor: "pointer",
-            }}
-          >
-            Reset to Default
-          </button>
+          {resetConfirmOpen ? (
+            <div
+              role="alertdialog"
+              aria-modal="false"
+              aria-label="Confirm reset to default"
+              style={{
+                display: "flex",
+                gap: "8px",
+                alignItems: "center",
+                padding: "8px 12px",
+                borderRadius: "10px",
+                border: "1px solid #fecaca",
+                background: "#fef2f2",
+                flexWrap: "wrap",
+              }}
+            >
+              <span style={{ fontSize: "13px", color: "#7f1d1d", fontWeight: 600 }}>
+                Reset to default? This will discard your changes.
+              </span>
+              <button
+                type="button"
+                onClick={handleResetConfirmed}
+                style={{
+                  padding: "5px 12px",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: "#dc2626",
+                  color: "#ffffff",
+                  fontWeight: 700,
+                  fontSize: "12px",
+                  cursor: "pointer",
+                }}
+              >
+                Yes, reset
+              </button>
+              <button
+                type="button"
+                onClick={() => setResetConfirmOpen(false)}
+                style={{
+                  padding: "5px 12px",
+                  borderRadius: "8px",
+                  border: "1px solid #fca5a5",
+                  background: "#ffffff",
+                  color: "#57534e",
+                  fontWeight: 700,
+                  fontSize: "12px",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setResetConfirmOpen(true)}
+              style={{
+                padding: "10px 14px",
+                borderRadius: "10px",
+                border: "1px solid #d6d3d1",
+                background: "#ffffff",
+                color: "#57534e",
+                fontWeight: 700,
+                fontSize: "13px",
+                cursor: "pointer",
+              }}
+            >
+              Reset to Default
+            </button>
+          )}
         </div>
 
         {saveStatus === "saved" && (
