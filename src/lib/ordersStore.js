@@ -24,6 +24,7 @@ import { getRawStorageItem, hasBrowserStorage, setRawStorageItem } from "./brows
 import { formatShortDate, toIsoTimestamp } from "./dateFormatting";
 import { getArtworkDisplayName, getOrderArtworkFiles } from "./orderArtwork";
 import { createOperationalEvent } from "./operationalEventsStore";
+import { backfillOrderPaymentsToPayments, recordPayment } from "./paymentsStore";
 import { normalizeCustomerId } from "./customerIds";
 import { addCustomerTimelineEvent } from "./customerTimelineStore";
 import { resolveCustomerForRecord } from "./customerRecordMatching";
@@ -212,6 +213,11 @@ function normalizeStoredOrder(order = {}) {
     }
   );
   const workflowOverrides = normalizeWorkflowOverrides(order.workflow_overrides);
+  backfillOrderPaymentsToPayments({
+    ...order,
+    customer_id:
+      normalizeCustomerId(order.customer_id) || resolveCustomerForRecord(order)?.id || "",
+  });
 
   return normalizeOrderFinancials({
     ...order,
@@ -1528,9 +1534,44 @@ export function recordStoredOrderPayment(orderNumber, paymentInput = {}, options
     nextFinancials.payment_status === "Paid"
       ? " Order is now paid in full."
       : ` Remaining balance: ${money(nextFinancials.balance_due)}.`;
+  const depositPaidAmount =
+    Number(nextFinancials.deposit_amount || 0) > 0
+      ? Number(nextFinancials.deposit_applied || 0)
+      : Number(order.deposit_paid_amount || 0) || 0;
+  const prePaymentDepositOutstanding = Number(normalizedOrder.deposit_outstanding || 0);
+
+  recordPayment({
+    customer_id: order.customer_id,
+    order_id: order.id || "",
+    order_number: order.order_number,
+    payment_type:
+      prePaymentDepositOutstanding > 0 && Number(paymentEntry.amount || 0) <= prePaymentDepositOutstanding
+        ? "deposit"
+        : nextFinancials.payment_status === "Paid"
+        ? "full"
+        : "partial",
+    status: "captured",
+    amount: paymentEntry.amount,
+    method: paymentEntry.method,
+    provider: "manual",
+    recorded_by_staff_user_id: activeStaff?.id || "",
+    captured_at: paymentEntry.timestamp,
+    note: paymentEntry.note,
+    metadata: {
+      source: "legacy_order_payment_recording",
+      legacyPaymentId: paymentEntry.id,
+    },
+    created_at: paymentEntry.timestamp,
+    updated_at: paymentEntry.timestamp,
+  });
 
   return updateStoredOrder(orderNumber, {
     payment_history: paymentHistory,
+    payment_status: nextFinancials.payment_status,
+    total_paid: nextFinancials.total_paid,
+    amount_paid: nextFinancials.total_paid,
+    balance_due: nextFinancials.balance_due,
+    deposit_paid_amount: depositPaidAmount,
     deposit_workflow_status:
       Number(nextFinancials.deposit_amount || 0) > 0 &&
       Number(nextFinancials.deposit_applied || 0) >= Number(nextFinancials.deposit_amount || 0)
