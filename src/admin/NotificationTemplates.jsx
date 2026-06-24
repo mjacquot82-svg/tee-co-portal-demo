@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   NOTIFICATION_TYPES,
   NOTIFICATION_TYPE_LABELS,
@@ -8,6 +8,7 @@ import {
   getNotificationTemplates,
   updateNotificationTemplate,
   resetNotificationTemplate,
+  subscribeToNotificationTemplates,
 } from "../lib/notificationTemplatesStore";
 
 const NOTIFICATION_TYPE_LIST = Object.values(NOTIFICATION_TYPES);
@@ -543,6 +544,13 @@ export default function NotificationTemplates() {
   const [expandedType, setExpandedType] = useState(null);
   const [saving, setSaving] = useState(false);
 
+  // Re-sync templates when Supabase hydration completes or another device saves
+  useEffect(() => {
+    return subscribeToNotificationTemplates(() => {
+      setTemplates(getNotificationTemplates());
+    });
+  }, []);
+
   const handleSave = useCallback(async (type, updates) => {
     setSaving(true);
     try {
@@ -584,7 +592,7 @@ export default function NotificationTemplates() {
         </h1>
         <p style={{ margin: 0, color: "#57534e", fontSize: "14px", lineHeight: 1.55 }}>
           Manage the email and SMS templates used for customer and staff notifications.
-          Templates are stored locally and can be edited without code changes. Use merge
+          Templates are stored in Supabase and synchronized across devices. Use merge
           fields to personalize each message.
         </p>
       </div>

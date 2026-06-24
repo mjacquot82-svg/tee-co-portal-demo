@@ -30,7 +30,9 @@ import { getUserInitials } from "../utils/getUserInitials";
 import AdminDiagnosticsPanel from "./AdminDiagnosticsPanel";
 import { useStaffAssignmentAttention } from "../lib/staffAssignmentAttentionStore";
 import { buildStaffAssignmentAttentionItems } from "../staff/buildStaffAssignmentAttentionItems";
-import { useUnreadStaffNotificationCount } from "../lib/staffNotificationsStore";
+import { useUnreadStaffNotificationCount, ensureStaffNotificationsHydrated } from "../lib/staffNotificationsStore";
+import { ensureNotificationTemplatesHydrated } from "../lib/notificationTemplatesStore";
+import { ensureNotificationActivityHydrated } from "../lib/notificationDeliveryService";
 import {
   ensureOperationalAuthInitialized,
   getOperationalAuthUser,
@@ -1225,6 +1227,13 @@ export default function Layout() {
       setAuthenticatedOperationalUser(snapshot.operationalUser);
       setActiveStaffUser(getActiveStaffUser());
     });
+  }, []);
+
+  // Hydrate notification stores from Supabase on mount
+  useEffect(() => {
+    void ensureNotificationTemplatesHydrated();
+    void ensureStaffNotificationsHydrated();
+    void ensureNotificationActivityHydrated();
   }, []);
 
   useEffect(() => {

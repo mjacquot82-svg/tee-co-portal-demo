@@ -5,8 +5,11 @@ import {
   listNotificationTemplates,
   renderNotificationTemplatePreview,
 } from "./notificationTemplatesStore";
+import { supabase } from "./supabaseClient";
 
 const STORAGE_KEY = "teeCoNotificationActivity";
+const SUPABASE_TABLE = "notification_activity";
+const MIGRATION_SENTINEL_KEY = "teeCoNotificationActivityMigratedToSupabase";
 const COMPANY_NAME = "Tee & Co";
 
 const notificationListeners = new Set();
@@ -14,6 +17,8 @@ const notificationListeners = new Set();
 const memoryStore = {
   records: [],
 };
+
+let activityHydrationPromise = null;
 
 function nowIso() {
   return new Date().toISOString();
@@ -115,29 +120,87 @@ function buildDefaultMergeFields(context = {}) {
 }
 
 function readNotificationActivity() {
-  if (!hasBrowserStorage()) return memoryStore.records;
-  const records = getJsonStorageItem(STORAGE_KEY, []);
-  return Array.isArray(records) ? records : [];
+  // After hydration the memoryStore is the authoritative source
+  if (memoryStore.records.length > 0) return memoryStore.records;
+  // Before hydration: seed from localStorage
+  if (hasBrowserStorage()) {
+    const records = getJsonStorageItem(STORAGE_KEY, []);
+    if (Array.isArray(records) && records.length > 0) {
+      memoryStore.records = records;
+      return memoryStore.records;
+    }
+  }
+  return memoryStore.records;
 }
 
 function emitNotificationActivityUpdated() {
   notificationListeners.forEach((listener) => listener());
 }
 
+// --- Supabase persistence helpers ---
+
+function shouldUseSupabase() {
+  return Boolean(supabase?.from);
+}
+
+function buildActivityRow(record) {
+  return {
+    id: record.id,
+    event_type: record.eventType,
+    recipient_type: record.recipientType,
+    recipient: record.recipient || {},
+    template_type: record.templateType,
+    template_name: record.templateName,
+    generated_content: record.generatedContent || {},
+    channels: record.channels || {},
+    metadata: record.metadata || {},
+    created_at: record.created_at,
+  };
+}
+
+function mapActivityRow(row) {
+  return {
+    id: row.id,
+    eventType: row.event_type,
+    recipientType: row.recipient_type,
+    recipient: row.recipient || {},
+    templateType: row.template_type,
+    templateName: row.template_name,
+    generatedContent: row.generated_content || {},
+    channels: row.channels || {},
+    metadata: row.metadata || {},
+    created_at: row.created_at,
+  };
+}
+
+async function insertActivityRecordsToSupabase(records) {
+  if (!shouldUseSupabase() || !records.length) return;
+  try {
+    const rows = records.map(buildActivityRow);
+    const { error } = await supabase
+      .from(SUPABASE_TABLE)
+      .upsert(rows, { onConflict: "id" });
+    if (error) {
+      console.error("[notificationDeliveryService] Supabase insert failed", error);
+    }
+  } catch (err) {
+    console.error("[notificationDeliveryService] Supabase insert threw", err);
+  }
+}
+
 function saveNotificationActivity(records) {
   const safeRecords = Array.isArray(records) ? records : [];
 
-  if (!hasBrowserStorage()) {
-    memoryStore.records = safeRecords;
-    emitNotificationActivityUpdated();
-    return true;
+  // Always update in-memory store immediately
+  memoryStore.records = safeRecords;
+  emitNotificationActivityUpdated();
+
+  // Persist to localStorage as local cache
+  if (hasBrowserStorage()) {
+    setJsonStorageItem(STORAGE_KEY, safeRecords);
   }
 
-  const saved = setJsonStorageItem(STORAGE_KEY, safeRecords);
-  if (saved) {
-    emitNotificationActivityUpdated();
-  }
-  return saved;
+  return true;
 }
 
 function resolveTemplate(templateType) {
@@ -298,9 +361,67 @@ export function triggerNotificationEvent(eventType, context = {}) {
   }
 
   saveNotificationActivity([...records, ...readNotificationActivity()]);
+  insertActivityRecordsToSupabase(records);
   return records;
 }
 
 export function resetNotificationActivityForTests() {
   saveNotificationActivity([]);
+}
+
+// --- Supabase hydration + localStorage migration ---
+
+async function hydrateNotificationActivityFromSupabase() {
+  if (!shouldUseSupabase()) return;
+
+  try {
+    const { data, error } = await supabase
+      .from(SUPABASE_TABLE)
+      .select("id, event_type, recipient_type, recipient, template_type, template_name, generated_content, channels, metadata, created_at")
+      .order("created_at", { ascending: false })
+      .limit(500);
+
+    if (error) {
+      console.warn("[notificationDeliveryService] Supabase hydration failed", error);
+      return;
+    }
+
+    const rows = Array.isArray(data) ? data : [];
+
+    // One-time migration: if Supabase has no rows and localStorage has data
+    const alreadyMigrated = hasBrowserStorage()
+      ? getJsonStorageItem(MIGRATION_SENTINEL_KEY, false)
+      : false;
+
+    if (!alreadyMigrated && rows.length === 0) {
+      const localRecords = hasBrowserStorage() ? getJsonStorageItem(STORAGE_KEY, []) : [];
+      if (Array.isArray(localRecords) && localRecords.length > 0) {
+        console.info("[notificationDeliveryService] Migrating localStorage activity to Supabase");
+        await insertActivityRecordsToSupabase(localRecords);
+        if (hasBrowserStorage()) setJsonStorageItem(MIGRATION_SENTINEL_KEY, true);
+        saveNotificationActivity(localRecords);
+        return;
+      }
+    }
+
+    if (!alreadyMigrated && hasBrowserStorage()) {
+      setJsonStorageItem(MIGRATION_SENTINEL_KEY, true);
+    }
+
+    const hydrated = rows.map(mapActivityRow);
+    if (hasBrowserStorage()) {
+      setJsonStorageItem(STORAGE_KEY, hydrated);
+    }
+    saveNotificationActivity(hydrated);
+  } catch (err) {
+    console.error("[notificationDeliveryService] Supabase hydration threw", err);
+  }
+}
+
+export function ensureNotificationActivityHydrated() {
+  if (activityHydrationPromise) return activityHydrationPromise;
+  activityHydrationPromise = hydrateNotificationActivityFromSupabase().catch((err) => {
+    console.error("[notificationDeliveryService] Hydration promise rejected", err);
+  });
+  return activityHydrationPromise;
 }
