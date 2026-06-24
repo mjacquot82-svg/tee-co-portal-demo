@@ -8,6 +8,8 @@ import CustomerPortalAccount from "./customer-portal/CustomerPortalAccount";
 import CustomerPortalRequestOrder from "./customer-portal/CustomerPortalRequestOrder";
 import CustomerPortalDeposit from "./customer-portal/CustomerPortalDeposit";
 import CustomerPortalArtwork from "./customer-portal/CustomerPortalArtwork";
+import CustomerPortalPayments from "./customer-portal/CustomerPortalPayments";
+import CustomerPortalPaymentRequestDetail from "./customer-portal/CustomerPortalPaymentRequestDetail";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -107,6 +109,8 @@ export default function App() {
             <Route path="orders" element={<CustomerPortalOrders />} />
             <Route path="orders/:orderNumber/deposit" element={<CustomerPortalDeposit />} />
             <Route path="orders/:orderNumber/artwork" element={<CustomerPortalArtwork />} />
+            <Route path="payments" element={<CustomerPortalPayments />} />
+            <Route path="payments/:requestId" element={<CustomerPortalPaymentRequestDetail />} />
             <Route path="quotes" element={<CustomerPortalQuotes />} />
             <Route path="invoices" element={<CustomerPortalInvoices />} />
             <Route path="account" element={<CustomerPortalAccount />} />
