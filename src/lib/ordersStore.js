@@ -33,6 +33,7 @@ import { updateArtworkApprovalStatus } from "./customerArtworkStore";
 import { linkCustomerArtworkToOrder, linkCustomerArtworkToQuote } from "../services/customerArtworkService";
 import { triggerNotificationEvent } from "./notificationDeliveryService";
 import { NOTIFICATION_TYPES } from "./notificationTemplatesStore";
+import { createStaffNotification, STAFF_NOTIFICATION_TYPES } from "./staffNotificationsStore";
 
 const STORAGE_KEY = "teeCoStaffOrders";
 const orderListeners = new Set();
@@ -1503,6 +1504,10 @@ export function updateStoredOrder(orderNumber, updates) {
     const nextDepositStatus = normalizeStatusText(updatedOrder.deposit_workflow_status);
     const previousStatus = normalizeStatusText(previousOrder.status);
     const nextStatus = normalizeStatusText(updatedOrder.status);
+    const previousAssignedId = String(previousOrder.assigned_to_staff_id || "").trim();
+    const nextAssignedId = String(updatedOrder.assigned_to_staff_id || "").trim();
+    const nextAssignedName = String(updatedOrder.assigned_to_staff_name || "").trim();
+    const orderPath = `/admin/orders/${updatedOrder.order_number}`;
 
     if (previousQuoteStatus !== nextQuoteStatus && nextQuoteStatus === "Awaiting Approval") {
       triggerOrderNotification(NOTIFICATION_TYPES.quoteReadyForApproval, updatedOrder);
@@ -1520,6 +1525,14 @@ export function updateStoredOrder(orderNumber, updates) {
       nextArtworkStatus === "Needs Revision"
     ) {
       triggerOrderNotification(NOTIFICATION_TYPES.artworkRevisionRequested, updatedOrder);
+      createStaffNotification({
+        type: STAFF_NOTIFICATION_TYPES.artworkRequired,
+        orderNumber: updatedOrder.order_number,
+        assignedToStaffId: updatedOrder.assigned_to_staff_id || "",
+        assignedToStaffName: nextAssignedName,
+        description: `Artwork revision needed for order ${updatedOrder.order_number}${updatedOrder.customer_name ? ` (${updatedOrder.customer_name})` : ""}.`,
+        linkTo: orderPath,
+      });
     }
 
     if (
@@ -1534,6 +1547,29 @@ export function updateStoredOrder(orderNumber, updates) {
       nextDepositStatus === "Deposit Requested"
     ) {
       triggerOrderNotification(NOTIFICATION_TYPES.depositRequested, updatedOrder);
+      createStaffNotification({
+        type: STAFF_NOTIFICATION_TYPES.paymentHold,
+        orderNumber: updatedOrder.order_number,
+        assignedToStaffId: updatedOrder.assigned_to_staff_id || "",
+        assignedToStaffName: nextAssignedName,
+        description: `Deposit requested for order ${updatedOrder.order_number}${updatedOrder.customer_name ? ` (${updatedOrder.customer_name})` : ""}. Awaiting payment before production can proceed.`,
+        linkTo: orderPath,
+      });
+    }
+
+    if (
+      previousStatus !== "Awaiting Deposit" &&
+      nextStatus === "Awaiting Deposit" &&
+      previousDepositStatus === nextDepositStatus
+    ) {
+      createStaffNotification({
+        type: STAFF_NOTIFICATION_TYPES.paymentHold,
+        orderNumber: updatedOrder.order_number,
+        assignedToStaffId: updatedOrder.assigned_to_staff_id || "",
+        assignedToStaffName: nextAssignedName,
+        description: `Order ${updatedOrder.order_number} is awaiting deposit${updatedOrder.customer_name ? ` from ${updatedOrder.customer_name}` : ""}. Production is on hold.`,
+        linkTo: orderPath,
+      });
     }
 
     if (
@@ -1543,12 +1579,88 @@ export function updateStoredOrder(orderNumber, updates) {
       triggerOrderNotification(NOTIFICATION_TYPES.orderInProduction, updatedOrder);
     }
 
+    if (previousStatus !== "Ready For Production" && nextStatus === "Ready For Production") {
+      createStaffNotification({
+        type: STAFF_NOTIFICATION_TYPES.readyForProduction,
+        orderNumber: updatedOrder.order_number,
+        assignedToStaffId: updatedOrder.assigned_to_staff_id || "",
+        assignedToStaffName: nextAssignedName,
+        description: `Order ${updatedOrder.order_number} is ready for production${updatedOrder.customer_name ? ` (${updatedOrder.customer_name})` : ""}.`,
+        linkTo: orderPath,
+      });
+    }
+
+    if (
+      ["Printing", "Embroidery", "QC / Finishing"].includes(nextStatus) &&
+      previousStatus !== nextStatus
+    ) {
+      createStaffNotification({
+        type: STAFF_NOTIFICATION_TYPES.productionStatusChanged,
+        orderNumber: updatedOrder.order_number,
+        assignedToStaffId: updatedOrder.assigned_to_staff_id || "",
+        assignedToStaffName: nextAssignedName,
+        description: `Order ${updatedOrder.order_number} moved to ${nextStatus}${updatedOrder.customer_name ? ` (${updatedOrder.customer_name})` : ""}.`,
+        linkTo: orderPath,
+      });
+    }
+
     if (previousStatus !== "Ready For Pickup" && nextStatus === "Ready For Pickup") {
       triggerOrderNotification(NOTIFICATION_TYPES.orderReadyForPickup, updatedOrder);
+      createStaffNotification({
+        type: STAFF_NOTIFICATION_TYPES.readyForPickup,
+        orderNumber: updatedOrder.order_number,
+        assignedToStaffId: updatedOrder.assigned_to_staff_id || "",
+        assignedToStaffName: nextAssignedName,
+        description: `Order ${updatedOrder.order_number} is ready for pickup${updatedOrder.customer_name ? ` — ${updatedOrder.customer_name}` : ""}.`,
+        linkTo: orderPath,
+      });
     }
 
     if (previousStatus !== "Completed" && nextStatus === "Completed") {
       triggerOrderNotification(NOTIFICATION_TYPES.orderCompleted, updatedOrder);
+      createStaffNotification({
+        type: STAFF_NOTIFICATION_TYPES.orderCompleted,
+        orderNumber: updatedOrder.order_number,
+        assignedToStaffId: updatedOrder.assigned_to_staff_id || "",
+        assignedToStaffName: nextAssignedName,
+        description: `Order ${updatedOrder.order_number} completed${updatedOrder.customer_name ? ` for ${updatedOrder.customer_name}` : ""}.`,
+        linkTo: orderPath,
+      });
+    }
+
+    if (updates.activity_type === "production_blocked") {
+      createStaffNotification({
+        type: STAFF_NOTIFICATION_TYPES.orderBlocked,
+        orderNumber: updatedOrder.order_number,
+        assignedToStaffId: updatedOrder.assigned_to_staff_id || "",
+        assignedToStaffName: nextAssignedName,
+        description: updates.activity_note
+          ? `Order ${updatedOrder.order_number} blocked: ${updates.activity_note}`
+          : `Order ${updatedOrder.order_number} is blocked and cannot proceed.`,
+        linkTo: orderPath,
+      });
+    }
+
+    if (previousAssignedId !== nextAssignedId) {
+      if (!previousAssignedId && nextAssignedId) {
+        createStaffNotification({
+          type: STAFF_NOTIFICATION_TYPES.newWorkAssigned,
+          orderNumber: updatedOrder.order_number,
+          assignedToStaffId: nextAssignedId,
+          assignedToStaffName: nextAssignedName,
+          description: `Order ${updatedOrder.order_number} assigned to ${nextAssignedName || "staff"}${updatedOrder.customer_name ? ` (${updatedOrder.customer_name})` : ""}.`,
+          linkTo: orderPath,
+        });
+      } else if (previousAssignedId && nextAssignedId && previousAssignedId !== nextAssignedId) {
+        createStaffNotification({
+          type: STAFF_NOTIFICATION_TYPES.assignmentChanged,
+          orderNumber: updatedOrder.order_number,
+          assignedToStaffId: nextAssignedId,
+          assignedToStaffName: nextAssignedName,
+          description: `Order ${updatedOrder.order_number} reassigned from ${previousOrder.assigned_to_staff_name || "staff"} to ${nextAssignedName || "staff"}${updatedOrder.customer_name ? ` (${updatedOrder.customer_name})` : ""}.`,
+          linkTo: orderPath,
+        });
+      }
     }
   }
 
