@@ -126,3 +126,68 @@ export function resolvePortalNextAction(order = {}, paymentRequests = []) {
 
   return "Order In Progress";
 }
+
+function buildOrderActionRoute(orderNumber, pathSuffix = "") {
+  return `/portal/orders/${encodeURIComponent(orderNumber || "")}${pathSuffix}`;
+}
+
+function resolveOpenPaymentRequest(paymentRequests = []) {
+  return paymentRequests.find((request) => {
+    const status = getCustomerPaymentStatusLabel(request);
+    return !["Paid", "Cancelled", "Refunded"].includes(status);
+  });
+}
+
+export function resolvePortalNextActionDetails(order = {}, paymentRequests = []) {
+  const orderNumber = order.order_number || order.id || "";
+  const encodedOrderNumber = encodeURIComponent(orderNumber);
+
+  if (isCustomerArtworkActionRequired(order)) {
+    const artworkAction = getCustomerArtworkActionState(order);
+    return {
+      label: artworkAction.primaryLabel || "Upload Artwork",
+      to: buildOrderActionRoute(orderNumber, "/artwork"),
+    };
+  }
+
+  const quoteStatus = normalizeText(order.quote_status);
+  if (["Sent", "Draft"].includes(quoteStatus)) {
+    return {
+      label: "Review Quote",
+      to: `/quote/${encodedOrderNumber}`,
+    };
+  }
+  if (["Awaiting Approval", "Awaiting Artwork Approval"].includes(quoteStatus)) {
+    return {
+      label: "Approve Quote",
+      to: `/approval/${encodedOrderNumber}`,
+    };
+  }
+
+  const openPaymentRequest = resolveOpenPaymentRequest(paymentRequests);
+  if (openPaymentRequest) {
+    if (normalizeLower(openPaymentRequest.request_type) === "deposit") {
+      return {
+        label: "Mark Payment Sent",
+        to: buildOrderActionRoute(orderNumber, "/deposit"),
+      };
+    }
+
+    return {
+      label: "View Payment Request",
+      to: `/portal/payments/${encodeURIComponent(openPaymentRequest.id || "")}`,
+    };
+  }
+
+  if (hasCompleted(order) || hasReadyForPickup(order) || hasProductionStarted(order)) {
+    return {
+      label: "View Order Progress",
+      to: `${buildOrderActionRoute(orderNumber)}#activity-timeline`,
+    };
+  }
+
+  return {
+    label: "View Order Progress",
+    to: `${buildOrderActionRoute(orderNumber)}#activity-timeline`,
+  };
+}

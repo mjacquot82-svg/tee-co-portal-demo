@@ -13,7 +13,7 @@ import {
 import { formatCurrency, useCustomerPortalData } from "./useCustomerPortalData";
 import {
   buildPortalOrderTimeline,
-  resolvePortalNextAction,
+  resolvePortalNextActionDetails,
 } from "./portalOrderDetail";
 
 function TimelineStep({ step }) {
@@ -85,7 +85,8 @@ export default function CustomerPortalOrderDetail() {
     (left, right) =>
       new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime()
   );
-  const nextAction = resolvePortalNextAction(order, sortedPaymentRequests);
+  const nextActionDetails = resolvePortalNextActionDetails(order, sortedPaymentRequests);
+  const nextAction = nextActionDetails.label;
   const timeline = buildPortalOrderTimeline(order, paymentRequests, payments, paymentEvents);
   const latestPaymentRequest = sortedPaymentRequests[0] || null;
 
@@ -109,6 +110,22 @@ export default function CustomerPortalOrderDetail() {
           <strong style={{ fontSize: "18px", color: "#115e59" }}>{nextAction}</strong>
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
             <Link
+              to={nextActionDetails.to}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                minHeight: "40px",
+                borderRadius: "999px",
+                background: "#0f766e",
+                color: "#ffffff",
+                padding: "9px 14px",
+                textDecoration: "none",
+                fontWeight: 800,
+              }}
+            >
+              {nextActionDetails.label}
+            </Link>
+            <Link
               to="/portal/orders"
               style={{
                 display: "inline-flex",
@@ -125,7 +142,7 @@ export default function CustomerPortalOrderDetail() {
             >
               Back to My Orders
             </Link>
-            {latestPaymentRequest ? (
+            {latestPaymentRequest && nextActionDetails.label !== "View Payment Request" ? (
               <Link
                 to={`/portal/payments/${encodeURIComponent(latestPaymentRequest.id)}`}
                 style={{
@@ -201,11 +218,16 @@ export default function CustomerPortalOrderDetail() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Activity Timeline" subtitle="Consolidated progress from request through completion.">
+      <SectionCard
+        title="Activity Timeline"
+        subtitle="Consolidated progress from request through completion."
+      >
         <div style={{ display: "grid", gap: "8px" }}>
-          {timeline.map((step) => (
-            <TimelineStep key={step.label} step={step} />
-          ))}
+          <div id="activity-timeline">
+            {timeline.map((step) => (
+              <TimelineStep key={step.label} step={step} />
+            ))}
+          </div>
         </div>
       </SectionCard>
     </PortalPage>
