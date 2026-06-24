@@ -1648,7 +1648,7 @@ export function updateStoredOrder(orderNumber, updates) {
           orderNumber: updatedOrder.order_number,
           assignedToStaffId: nextAssignedId,
           assignedToStaffName: nextAssignedName,
-          description: `Order ${updatedOrder.order_number} assigned to ${nextAssignedName || "staff"}${updatedOrder.customer_name ? ` (${updatedOrder.customer_name})` : ""}.`,
+          description: `Order ${updatedOrder.order_number} assigned to ${nextAssignedName || "a team member"}${updatedOrder.customer_name ? ` (${updatedOrder.customer_name})` : ""}.`,
           linkTo: orderPath,
         });
       } else if (previousAssignedId && nextAssignedId) {
@@ -1657,7 +1657,7 @@ export function updateStoredOrder(orderNumber, updates) {
           orderNumber: updatedOrder.order_number,
           assignedToStaffId: nextAssignedId,
           assignedToStaffName: nextAssignedName,
-          description: `Order ${updatedOrder.order_number} reassigned from ${previousOrder.assigned_to_staff_name || "staff"} to ${nextAssignedName || "staff"}${updatedOrder.customer_name ? ` (${updatedOrder.customer_name})` : ""}.`,
+          description: `Order ${updatedOrder.order_number} reassigned from ${previousOrder.assigned_to_staff_name || "previous assignee"} to ${nextAssignedName || "a team member"}${updatedOrder.customer_name ? ` (${updatedOrder.customer_name})` : ""}.`,
           linkTo: orderPath,
         });
       }
