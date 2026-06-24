@@ -21,6 +21,7 @@ import {
   getInsightTone,
   getPaymentConfidenceLabel,
 } from "../services/paymentReconciliation";
+import { listPaymentReconciliationReviews } from "../lib/paymentReconciliationStore";
 import PaymentRequestForm from "./PaymentRequestForm";
 
 function money(value) {
@@ -291,12 +292,14 @@ export default function InvoicesPayments() {
   const paymentRequests = listPaymentRequests();
   const payments = listPayments();
   const paymentEvents = listPaymentEvents();
+  const reconciliationReviews = listPaymentReconciliationReviews();
   const reconciliationRecords = paymentRequests
     .map((request) => {
       const insights = buildPaymentReconciliationInsights({
         paymentRequest: request,
         payments,
         paymentEvents,
+        reviews: reconciliationReviews,
       });
       return {
         request,
@@ -430,6 +433,23 @@ export default function InvoicesPayments() {
       </SectionCard>
 
       <SectionCard title="Payment Reconciliation" description="Square payment confidence and manual review signals from webhook, payment, and request records.">
+        <div>
+          <Link
+            to="/admin/financial/reconciliation"
+            style={{
+              display: "inline-flex",
+              border: "1px solid #cbd5e1",
+              borderRadius: "12px",
+              padding: "10px 13px",
+              color: "#0f172a",
+              fontWeight: 800,
+              textDecoration: "none",
+              background: "#ffffff",
+            }}
+          >
+            Open Reconciliation Workspace
+          </Link>
+        </div>
         {!reconciliationRecords.length ? (
           <EmptyState title="No provider reconciliation issues." detail="Square payment confidence and exception signals will appear here after provider activity." />
         ) : (

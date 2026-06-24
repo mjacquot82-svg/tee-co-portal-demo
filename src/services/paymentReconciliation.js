@@ -48,6 +48,7 @@ export function buildPaymentReconciliationInsights({
   paymentRequest = {},
   payments = [],
   paymentEvents = [],
+  reviews = [],
 } = {}) {
   const requestPayments = payments.filter((payment) => paymentMatchesRequest(payment, paymentRequest));
   const requestEvents = paymentEvents.filter((event) => eventMatchesRequest(event, paymentRequest));
@@ -67,8 +68,11 @@ export function buildPaymentReconciliationInsights({
     const eventType = normalizeLower(event.event_type);
     return eventType.includes("failed") || eventType.includes("canceled");
   });
+  const webhookFailures = requestEvents.filter((event) => normalizeLower(event.event_type) === "square_webhook_processing_failed");
   const explicitIssues = requestEvents.flatMap((event) =>
-    Array.isArray(event.payload?.reconciliation_issues) ? event.payload.reconciliation_issues : []
+    event.event_source === "square_webhook" && Array.isArray(event.payload?.reconciliation_issues)
+      ? event.payload.reconciliation_issues
+      : []
   );
 
   duplicateEventIds.forEach((eventId) => {
@@ -107,6 +111,29 @@ export function buildPaymentReconciliationInsights({
     });
   }
 
+  if (
+    amountRequested > 0 &&
+    squarePayments.length === 1 &&
+    manualPayments.length === 0 &&
+    Math.abs(normalizeAmount(squarePayments[0].amount) - amountRequested) > 0.009
+  ) {
+    insights.push({
+      code: "payment_mismatch",
+      severity: "high",
+      label: "Payment Mismatch",
+      detail: `Square recorded ${normalizeAmount(squarePayments[0].amount).toFixed(2)} against a ${amountRequested.toFixed(2)} request.`,
+    });
+  }
+
+  webhookFailures.forEach((event) => {
+    insights.push({
+      code: "webhook_processing_failed",
+      severity: "high",
+      label: "Webhook Processing Failed",
+      detail: event.payload?.error_message || "Square webhook processing failed and should be retried.",
+    });
+  });
+
   if (hasFailureEvent && hasSuccessfulSquarePayment) {
     insights.push({
       code: "failed_event_after_success",
@@ -143,13 +170,27 @@ export function buildPaymentReconciliationInsights({
     });
   }
 
-  return insights;
+  return insights.map((insight) => {
+    const review = reviews.find(
+      (entry) =>
+        entry.payment_request_id === paymentRequest.id &&
+        entry.issue_code === insight.code
+    );
+    return {
+      ...insight,
+      reviewed: Boolean(review),
+      reviewAction: review?.action || "",
+      reviewedAt: review?.reviewed_at || "",
+      reviewNote: review?.note || "",
+    };
+  });
 }
 
 export function getPaymentConfidenceLabel(insights = [], paymentRequest = {}) {
-  if (insights.some((insight) => insight.severity === "high")) return "Manual Review Required";
-  if (insights.some((insight) => insight.code === "duplicate_webhook")) return "Duplicate Payment Detected";
-  if (insights.some((insight) => insight.code === "awaiting_webhook_confirmation")) return "Awaiting Webhook Confirmation";
+  const activeInsights = insights.filter((insight) => !insight.reviewed || insight.reviewAction === "mark_reviewed");
+  if (activeInsights.some((insight) => insight.severity === "high")) return "Manual Review Required";
+  if (activeInsights.some((insight) => insight.code === "duplicate_webhook")) return "Duplicate Payment Detected";
+  if (activeInsights.some((insight) => insight.code === "awaiting_webhook_confirmation")) return "Awaiting Webhook Confirmation";
   if (insights.some((insight) => insight.code === "payment_verified")) return "Payment Verified";
   if (normalizeLower(paymentRequest.status) === "processing") return "Awaiting Webhook Confirmation";
   if (normalizeLower(paymentRequest.status) === "failed") return "Manual Review Required";
@@ -157,8 +198,39 @@ export function getPaymentConfidenceLabel(insights = [], paymentRequest = {}) {
 }
 
 export function getInsightTone(insight = {}) {
+  if (insight.reviewed && insight.reviewAction !== "mark_reviewed") return "success";
   if (insight.severity === "high") return "danger";
   if (insight.severity === "medium") return "warning";
   if (insight.severity === "low") return "warning";
   return "success";
+}
+
+export function isActionableReconciliationInsight(insight = {}) {
+  if (insight.code === "payment_verified") return false;
+  if (insight.reviewed && ["resolve_duplicate", "ignore_false_positive"].includes(insight.reviewAction)) return false;
+  return true;
+}
+
+export function buildPaymentExceptionQueue({
+  paymentRequests = [],
+  payments = [],
+  paymentEvents = [],
+  reviews = [],
+} = {}) {
+  return paymentRequests.flatMap((paymentRequest) => {
+    const insights = buildPaymentReconciliationInsights({
+      paymentRequest,
+      payments,
+      paymentEvents,
+      reviews,
+    }).filter(isActionableReconciliationInsight);
+    const confidence = getPaymentConfidenceLabel(insights, paymentRequest);
+
+    return insights.map((insight) => ({
+      id: `${paymentRequest.id}-${insight.code}-${insight.detail}`,
+      paymentRequest,
+      insight,
+      confidence,
+    }));
+  });
 }

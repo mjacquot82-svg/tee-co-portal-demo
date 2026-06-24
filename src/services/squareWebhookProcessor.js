@@ -561,3 +561,34 @@ export async function processSquareWebhookEvent(webhookEvent = {}, options = {})
 
   return operation();
 }
+
+export async function recordSquareWebhookProcessingFailure(webhookEvent = {}, error, options = {}) {
+  const adapter = options.adapter || buildDefaultAdapter();
+  const payment = extractSquarePayment(webhookEvent);
+  const metadata = getRequestMetadataMatch(payment);
+  const squareEventId = normalizeText(webhookEvent.event_id || webhookEvent.id);
+  const failureEventId = `failure:${squareEventId || Date.now()}`;
+  const existingEvents = typeof adapter.listPaymentEvents === "function" ? await adapter.listPaymentEvents() : [];
+  const duplicateFailure = existingEvents.some((event) => event.payload?.square_failure_event_id === failureEventId);
+
+  if (duplicateFailure || typeof adapter.recordPaymentEvent !== "function") {
+    return null;
+  }
+
+  return adapter.recordPaymentEvent({
+    payment_request_id: metadata.paymentRequestId,
+    order_number: metadata.orderNumber,
+    event_type: "square_webhook_processing_failed",
+    event_source: "square_webhook",
+    summary: "Square webhook processing failed and is safe to retry.",
+    payload: {
+      square_failure_event_id: failureEventId,
+      original_square_event_id: squareEventId,
+      square_event_type: normalizeText(webhookEvent.type),
+      square_payment_id: normalizeText(payment.id),
+      error_message: error instanceof Error ? error.message : normalizeText(error, "Unknown webhook processing error."),
+      retryable: true,
+    },
+    created_at: new Date().toISOString(),
+  });
+}

@@ -3,6 +3,7 @@
 import { createClient } from "@supabase/supabase-js";
 import {
   processSquareWebhookEvent,
+  recordSquareWebhookProcessingFailure,
   verifySquareWebhookSignature,
 } from "../../src/services/squareWebhookProcessor.js";
 
@@ -261,10 +262,21 @@ export async function handler(event) {
     });
   }
 
-  const result = await processSquareWebhookEvent(webhookEvent, {
-    adapter: buildSupabaseAdapter(supabase),
-    triggerNotifications: false,
-  });
+  const adapter = buildSupabaseAdapter(supabase);
 
-  return json(200, result);
+  try {
+    const result = await processSquareWebhookEvent(webhookEvent, {
+      adapter,
+      triggerNotifications: false,
+    });
+
+    return json(200, result);
+  } catch (error) {
+    await recordSquareWebhookProcessingFailure(webhookEvent, error, { adapter }).catch(() => null);
+    return json(500, {
+      error: "Square webhook processing failed.",
+      message: error instanceof Error ? error.message : "Unknown webhook processing error.",
+      retryable: true,
+    });
+  }
 }

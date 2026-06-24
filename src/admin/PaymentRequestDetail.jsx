@@ -24,6 +24,7 @@ import {
   getInsightTone,
   getPaymentConfidenceLabel,
 } from "../services/paymentReconciliation";
+import { listPaymentReconciliationReviews } from "../lib/paymentReconciliationStore";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -99,6 +100,7 @@ export default function PaymentRequestDetail() {
     paymentRequest: request,
     payments: listPayments(),
     paymentEvents: listPaymentEvents(),
+    reviews: listPaymentReconciliationReviews(),
   });
   const paymentConfidence = getPaymentConfidenceLabel(reconciliationInsights, request);
   const squareLink = request.metadata?.square_payment_link || {};

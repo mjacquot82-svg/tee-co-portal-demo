@@ -8,6 +8,17 @@ import {
 } from "../orders/depositRequests";
 import PaymentStatusBadge from "../components/PaymentStatusBadge";
 import { normalizeOperationalStatus } from "../orders/orderWorkflow";
+import {
+  getPaymentEventsByOrder,
+  getPaymentRequestsByOrder,
+  getPaymentsByOrder,
+} from "../lib/paymentsStore";
+import { listPaymentReconciliationReviews } from "../lib/paymentReconciliationStore";
+import {
+  buildPaymentReconciliationInsights,
+  getInsightTone,
+  getPaymentConfidenceLabel,
+} from "../services/paymentReconciliation";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -55,6 +66,15 @@ const fieldStyle = {
   background: "#ffffff",
 };
 
+function confidencePalette(tone) {
+  const palettes = {
+    danger: { border: "#fecaca", background: "#fef2f2", color: "#991b1b" },
+    warning: { border: "#fed7aa", background: "#fff7ed", color: "#9a3412" },
+    success: { border: "#bbf7d0", background: "#ecfdf5", color: "#166534" },
+  };
+  return palettes[tone] || { border: "#e2e8f0", background: "#f8fafc", color: "#334155" };
+}
+
 export default function FinancialSummaryPanel({
   order,
   onRecordPayment,
@@ -78,6 +98,30 @@ export default function FinancialSummaryPanel({
   const paymentError = error || (!paymentValidation.valid ? paymentValidation.message : "");
   const canSendDepositRequest =
     !canceled && (Number(order.deposit_amount || 0) > 0 || Number(order.balance_due || 0) > 0);
+  const paymentRequests = getPaymentRequestsByOrder(order.order_number);
+  const orderPayments = getPaymentsByOrder(order.order_number);
+  const paymentEvents = getPaymentEventsByOrder(order.order_number);
+  const reconciliationReviews = listPaymentReconciliationReviews();
+  const reconciliationRecords = paymentRequests.map((paymentRequest) => {
+    const insights = buildPaymentReconciliationInsights({
+      paymentRequest,
+      payments: orderPayments,
+      paymentEvents,
+      reviews: reconciliationReviews,
+    });
+    return {
+      paymentRequest,
+      insights,
+      confidence: getPaymentConfidenceLabel(insights, paymentRequest),
+    };
+  });
+  const priorityRecord =
+    reconciliationRecords.find((record) => record.insights.some((insight) => insight.severity === "high" && !insight.reviewed)) ||
+    reconciliationRecords.find((record) => record.confidence === "Awaiting Webhook Confirmation") ||
+    reconciliationRecords.find((record) => record.confidence === "Payment Verified") ||
+    null;
+  const priorityInsight = priorityRecord?.insights.find((insight) => !insight.reviewed) || priorityRecord?.insights[0] || null;
+  const priorityPalette = confidencePalette(getInsightTone(priorityInsight || {}));
 
   const canMarkPickedUp =
     !canceled &&
@@ -312,6 +356,26 @@ export default function FinancialSummaryPanel({
             </p>
           </div>
         </div>
+
+        {priorityRecord ? (
+          <div
+            style={{
+              gridColumn: "1 / -1",
+              border: `1px solid ${priorityPalette.border}`,
+              borderRadius: "16px",
+              padding: "14px 16px",
+              background: priorityPalette.background,
+            }}
+          >
+            <span style={rowLabelStyle}>Payment Confidence</span>
+            <p style={{ margin: "6px 0 4px", color: priorityPalette.color, fontWeight: 900 }}>
+              {priorityRecord.confidence}
+            </p>
+            <p style={{ margin: 0, color: "#475569" }}>
+              {priorityInsight?.detail || "Square payment activity is linked to this order."}
+            </p>
+          </div>
+        ) : null}
 
         <div style={{ display: "grid", gap: "4px" }}>
           <span style={rowLabelStyle}>Subtotal</span>
