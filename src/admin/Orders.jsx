@@ -41,6 +41,8 @@ import {
   STAFF_NOTIFICATION_TYPES,
 } from "../lib/staffNotificationsStore";
 
+const ESCALATION_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
 function FilterPill({ active, children, count, tone = "default", onClick, testId }) {
   const activeBackground =
     tone === "warning"
@@ -1193,8 +1195,7 @@ export default function Orders() {
     if (!order?.order_number) return;
     // Avoid duplicate escalations within 24 hours
     const lastEscalated = order.last_escalated_at ? new Date(order.last_escalated_at).getTime() : 0;
-    const twentyFourHours = 24 * 60 * 60 * 1000;
-    if (Date.now() - lastEscalated < twentyFourHours) return;
+    if (Date.now() - lastEscalated < ESCALATION_COOLDOWN_MS) return;
 
     const now = new Date().toISOString();
     const escalatorName = staffUser?.name || "Staff";
