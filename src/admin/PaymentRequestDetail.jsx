@@ -14,6 +14,11 @@ import {
 } from "../lib/paymentsStore";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
 import { deriveOwnerPaymentRequestNextAction } from "../orders/ownerWorkflowActions";
+import {
+  buildSquarePaymentRequestUpdates,
+  createSquarePaymentLink,
+  hasProviderCheckoutUrl,
+} from "../services/squareService";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -50,6 +55,7 @@ export default function PaymentRequestDetail() {
   const { requestId } = useParams();
   const [refreshToken, setRefreshToken] = useState(0);
   const [feedback, setFeedback] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const orders = useStoredOrders();
   const customers = useStoredCustomers();
   void refreshToken;
@@ -75,12 +81,40 @@ export default function PaymentRequestDetail() {
     (event) => event.payment_request_id === request.id || requestPayments.some((payment) => payment.id === event.payment_id)
   );
   const nextAction = deriveOwnerPaymentRequestNextAction(request, financials);
+  const squareLink = request.metadata?.square_payment_link || {};
+  const linkCreated = Boolean(squareLink.created_at || request.provider_payment_link_id || request.provider_checkout_url);
+  const linkStatus = squareLink.status || (hasProviderCheckoutUrl(request) ? "created" : "");
 
-  function handleNextAction(actionKey) {
+  async function handleNextAction(actionKey) {
     if (actionKey !== "mark_payment_request_sent") return;
+    if (isSending) return;
 
+    setIsSending(true);
+    setFeedback("");
     const sentAt = new Date().toISOString();
+    let linkUpdates = {};
+
+    try {
+      const providerLink = await createSquarePaymentLink(request);
+      linkUpdates = buildSquarePaymentRequestUpdates(request, providerLink);
+
+      recordPaymentEvent({
+        payment_request_id: request.id,
+        order_number: request.order_number,
+        event_type: "square_payment_link_created",
+        event_source: "system",
+        summary: `Square payment link created for ${request.request_number}.`,
+        payload: { providerLink },
+        created_at: sentAt,
+      });
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Square payment link creation failed.");
+      setIsSending(false);
+      return;
+    }
+
     const updatedRequest = updatePaymentRequest(request.id, {
+      ...linkUpdates,
       status: "sent",
       sent_at: sentAt,
     });
@@ -96,9 +130,10 @@ export default function PaymentRequestDetail() {
 
     setFeedback(
       updatedRequest
-        ? `${updatedRequest.request_number} marked sent. Customer outreach is now complete for this request.`
+        ? `${updatedRequest.request_number} marked sent with a Square payment link.`
         : "Payment request marked sent."
     );
+    setIsSending(false);
     setRefreshToken((current) => current + 1);
   }
 
@@ -185,6 +220,24 @@ export default function PaymentRequestDetail() {
             value={financials?.canonical_payment_state || financials?.payment_collection_state || "—"}
           />
         </div>
+      </SectionCard>
+
+      <SectionCard title="Provider Link">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "14px" }}>
+          <DetailItem label="Payment Provider" value={request.payment_provider || "manual"} />
+          <DetailItem label="Link Created" value={linkCreated ? formatDateTime(squareLink.created_at || request.updated_at) : "Not created"} />
+          <DetailItem label="Provider Payment Link ID" value={request.provider_payment_link_id || "—"} />
+          <DetailItem label="Link Status" value={linkStatus || "Not available"} />
+        </div>
+        <DetailItem label="Checkout URL">
+          {hasProviderCheckoutUrl(request) ? (
+            <a href={request.provider_checkout_url} target="_blank" rel="noreferrer" style={{ color: "#0f766e", overflowWrap: "anywhere" }}>
+              {request.provider_checkout_url}
+            </a>
+          ) : (
+            "No provider checkout link yet"
+          )}
+        </DetailItem>
       </SectionCard>
 
       <SectionCard title="Associated Payments">

@@ -10,6 +10,7 @@ import {
 } from "./customerPortalPayments";
 import { EmptyState, PortalPage, SectionCard, DetailPair } from "./CustomerPortalShared";
 import { formatCurrency, useCustomerPortalData } from "./useCustomerPortalData";
+import { hasProviderCheckoutUrl } from "../services/squareService";
 
 function TimelineItem({ event }) {
   return (
@@ -123,6 +124,10 @@ export default function CustomerPortalPaymentRequestDetail() {
     portalData.paymentRequests,
     paymentRequest.order_number
   );
+  const canPayNow = hasProviderCheckoutUrl(paymentRequest);
+  const providerName = paymentRequest.payment_provider
+    ? paymentRequest.payment_provider.replace(/_/g, " ").replace(/\b\w/g, (character) => character.toUpperCase())
+    : "Manual";
 
   return (
     <PortalPage
@@ -170,6 +175,7 @@ export default function CustomerPortalPaymentRequestDetail() {
             label="Due Date"
             value={paymentRequest.due_at ? formatShortDate(paymentRequest.due_at) : "No due date"}
           />
+          <DetailPair label="Payment Provider" value={providerName} />
         </div>
 
         <div
@@ -179,6 +185,26 @@ export default function CustomerPortalPaymentRequestDetail() {
             flexWrap: "wrap",
           }}
         >
+          {canPayNow ? (
+            <a
+              href={paymentRequest.provider_checkout_url}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                minHeight: "42px",
+                borderRadius: "999px",
+                background: "#0f766e",
+                color: "#ffffff",
+                padding: "10px 16px",
+                textDecoration: "none",
+                fontWeight: 900,
+              }}
+            >
+              Pay Now
+            </a>
+          ) : null}
           {relatedOrder ? (
             <Link
               to={`/portal/orders#order-${encodeURIComponent(relatedOrder.order_number)}`}

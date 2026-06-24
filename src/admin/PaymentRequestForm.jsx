@@ -50,7 +50,7 @@ function deriveRequestAmount(requestType, financials, customAmount) {
 export default function PaymentRequestForm({
   id,
   title = "Create Payment Request",
-  description = "Create an internal payment request record for staff follow-up. This does not send a payment link.",
+  description = "Create an internal payment request record for staff follow-up. Square links are created when the request is sent.",
   customer = null,
   order = null,
   orders = [],

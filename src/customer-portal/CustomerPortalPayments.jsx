@@ -7,6 +7,7 @@ import {
   getCustomerPaymentStatusLabel,
   getRemainingPaymentAmount,
 } from "./customerPortalPayments";
+import { hasProviderCheckoutUrl } from "../services/squareService";
 import {
   EmptyState,
   MetricCard,
@@ -19,6 +20,7 @@ import { formatCurrency, useCustomerPortalData } from "./useCustomerPortalData";
 function PaymentRequestCard({ paymentRequest }) {
   const statusLabel = getCustomerPaymentStatusLabel(paymentRequest);
   const remainingAmount = getRemainingPaymentAmount(paymentRequest);
+  const canPayNow = hasProviderCheckoutUrl(paymentRequest);
 
   return (
     <article
@@ -48,22 +50,45 @@ function PaymentRequestCard({ paymentRequest }) {
             <PaymentStatusBadge status={statusLabel} />
           </div>
         </div>
-        <Link
-          to={`/portal/payments/${encodeURIComponent(paymentRequest.id)}`}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            minHeight: "40px",
-            borderRadius: "999px",
-            background: "#0f766e",
-            color: "#ffffff",
-            padding: "10px 14px",
-            textDecoration: "none",
-            fontWeight: 800,
-          }}
-        >
-          View Details
-        </Link>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          {canPayNow ? (
+            <a
+              href={paymentRequest.provider_checkout_url}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                minHeight: "40px",
+                borderRadius: "999px",
+                background: "#0f766e",
+                color: "#ffffff",
+                padding: "10px 14px",
+                textDecoration: "none",
+                fontWeight: 800,
+              }}
+            >
+              Pay Now
+            </a>
+          ) : null}
+          <Link
+            to={`/portal/payments/${encodeURIComponent(paymentRequest.id)}`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              minHeight: "40px",
+              borderRadius: "999px",
+              border: canPayNow ? "1px solid #cbd5e1" : "none",
+              background: canPayNow ? "#ffffff" : "#0f766e",
+              color: canPayNow ? "#0f172a" : "#ffffff",
+              padding: "10px 14px",
+              textDecoration: "none",
+              fontWeight: 800,
+            }}
+          >
+            View Details
+          </Link>
+        </div>
       </div>
 
       <div
