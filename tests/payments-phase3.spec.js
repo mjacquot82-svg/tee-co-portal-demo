@@ -126,3 +126,17 @@ test("customer payment helpers present customer-friendly request details and sup
     "payment-request-deposit"
   );
 });
+
+test("customer portal payment summary uses a neutral status when there is no payment activity", () => {
+  const summary = getCustomerPortalPaymentData({
+    orders: [],
+    customerIds: [],
+    paymentRequests: [],
+    payments: [],
+    paymentEvents: [],
+  });
+
+  expect(summary.amountOwing).toBe(0);
+  expect(summary.totalPaid).toBe(0);
+  expect(summary.paymentStatus).toBe("No Balance Due");
+});

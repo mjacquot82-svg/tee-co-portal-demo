@@ -131,7 +131,7 @@ function resolveAccountPaymentStatus({ openPaymentRequests, totalPaid, allPaymen
     return "Paid";
   }
 
-  return "Paid";
+  return "No Balance Due";
 }
 
 export function getCustomerPortalPaymentData({

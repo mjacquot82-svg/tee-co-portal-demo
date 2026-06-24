@@ -29,7 +29,7 @@ const EMPTY_PORTAL_DATA = Object.freeze({
   paymentSummary: Object.freeze({
     amountOwing: 0,
     totalPaid: 0,
-    paymentStatus: "Paid",
+    paymentStatus: "No Balance Due",
   }),
   summary: EMPTY_PORTAL_SUMMARY,
 });
