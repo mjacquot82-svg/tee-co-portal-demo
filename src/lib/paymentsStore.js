@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react";
 import { getJsonStorageItem, hasBrowserStorage, setJsonStorageItem } from "./browserStorage";
 import { normalizeCustomerId } from "./customerIds";
 
@@ -10,6 +11,8 @@ const memoryStore = {
   payments: [],
   paymentEvents: [],
 };
+const paymentListeners = new Set();
+const EMPTY_PAYMENTS = Object.freeze([]);
 
 function nowIso() {
   return new Date().toISOString();
@@ -42,9 +45,15 @@ function saveStoredList(storageKey, memoryKey, records) {
   const safeRecords = Array.isArray(records) ? records : [];
   if (!hasBrowserStorage()) {
     memoryStore[memoryKey] = safeRecords;
+    emitPaymentsUpdated();
     return;
   }
   setJsonStorageItem(storageKey, safeRecords);
+  emitPaymentsUpdated();
+}
+
+function emitPaymentsUpdated() {
+  paymentListeners.forEach((listener) => listener());
 }
 
 function normalizePaymentMethod(method) {
@@ -491,4 +500,48 @@ export function resetStoredPaymentsForTests() {
   saveStoredPaymentRequests([]);
   saveStoredPayments([]);
   saveStoredPaymentEvents([]);
+}
+
+export function subscribeToStoredPayments(listener) {
+  if (typeof listener !== "function") {
+    return () => {};
+  }
+
+  paymentListeners.add(listener);
+
+  if (typeof window === "undefined") {
+    return () => {
+      paymentListeners.delete(listener);
+    };
+  }
+
+  const handleStorage = (event) => {
+    if (
+      !event.key ||
+      event.key === PAYMENT_REQUESTS_STORAGE_KEY ||
+      event.key === PAYMENTS_STORAGE_KEY ||
+      event.key === PAYMENT_EVENTS_STORAGE_KEY
+    ) {
+      listener();
+    }
+  };
+
+  window.addEventListener("storage", handleStorage);
+
+  return () => {
+    paymentListeners.delete(listener);
+    window.removeEventListener("storage", handleStorage);
+  };
+}
+
+export function useStoredPaymentRequests() {
+  return useSyncExternalStore(subscribeToStoredPayments, listPaymentRequests, () => EMPTY_PAYMENTS);
+}
+
+export function useStoredPayments() {
+  return useSyncExternalStore(subscribeToStoredPayments, listPayments, () => EMPTY_PAYMENTS);
+}
+
+export function useStoredPaymentEvents() {
+  return useSyncExternalStore(subscribeToStoredPayments, listPaymentEvents, () => EMPTY_PAYMENTS);
 }
