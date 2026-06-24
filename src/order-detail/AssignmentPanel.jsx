@@ -1,4 +1,5 @@
-import { isCanceledOperationalStatus } from "../orders/orderWorkflow";
+import { useState } from "react";
+import { isCanceledOperationalStatus, isOnHoldOperationalStatus } from "../orders/orderWorkflow";
 import WorkflowBadge from "../components/WorkflowBadge";
 import {
   buildProductionReadinessSummary,
@@ -62,6 +63,8 @@ export default function AssignmentPanel({
   workflowActions = [],
   onRunWorkflowAction,
   canManageAssignments = true,
+  canSelfAssign = false,
+  onSelfAssign,
   productionGating = null,
   onArtworkApprovalChange,
   onDepositWorkflowChange,
@@ -69,8 +72,33 @@ export default function AssignmentPanel({
   onForceMoveToProduction,
   workflowFeedback = null,
 }) {
+  const [pendingHoldAction, setPendingHoldAction] = useState(null);
+  const [holdReasonInput, setHoldReasonInput] = useState("");
+
+  function handleActionClick(action) {
+    if (action.key === "put_on_hold") {
+      setPendingHoldAction(action);
+      setHoldReasonInput("");
+      return;
+    }
+    onRunWorkflowAction?.(action, order);
+  }
+
+  function handleConfirmHold() {
+    if (!holdReasonInput.trim()) return;
+    onRunWorkflowAction?.({ ...pendingHoldAction, holdReason: holdReasonInput.trim() }, order);
+    setPendingHoldAction(null);
+    setHoldReasonInput("");
+  }
+
+  function handleCancelHold() {
+    setPendingHoldAction(null);
+    setHoldReasonInput("");
+  }
+
   const assignedWorker = order.assigned_to_staff_name || "Unassigned";
   const canceled = isCanceledOperationalStatus(order.status);
+  const isOnHold = isOnHoldOperationalStatus(order.status);
   const activeOverrides = Array.isArray(productionGating?.activeOverrides)
     ? productionGating.activeOverrides
     : [];
@@ -226,6 +254,37 @@ export default function AssignmentPanel({
             }}
           >
             Assignment changes are disabled on canceled records.
+          </div>
+        ) : canSelfAssign && !canceled ? (
+          <div style={{ display: "grid", gap: "8px" }}>
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: "14px",
+                background: "#fffbeb",
+                border: "1px solid #fde68a",
+                color: "#92400e",
+                fontWeight: 700,
+              }}
+            >
+              This job is unassigned. You can claim it to add it to your work queue.
+            </div>
+            <button
+              type="button"
+              data-testid="claim-job-button"
+              onClick={onSelfAssign}
+              style={{
+                border: "1px solid #171717",
+                background: "#171717",
+                color: "#ffffff",
+                borderRadius: "12px",
+                padding: "10px 14px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Claim This Job
+            </button>
           </div>
         ) : (
           <div
@@ -506,6 +565,29 @@ export default function AssignmentPanel({
             <div style={{ marginTop: "4px", color: "#475569" }}>{order.status}</div>
           </div>
 
+          {isOnHold && order.production_hold_reason ? (
+            <div
+              data-testid="assignment-panel-hold-reason"
+              style={{
+                padding: "12px 14px",
+                borderRadius: "14px",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                color: "#991b1b",
+                display: "grid",
+                gap: "4px",
+              }}
+            >
+              <strong style={{ fontSize: "13px" }}>Hold Reason</strong>
+              <span style={{ fontWeight: 700 }}>{order.production_hold_reason}</span>
+              {order.production_hold_staff_name ? (
+                <span style={{ fontSize: "13px" }}>
+                  Held by: {order.production_hold_staff_name}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+
           {!canceled && workflowActions.length ? (
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
               {workflowActions.map((action) => (
@@ -516,7 +598,7 @@ export default function AssignmentPanel({
                   data-action-key={action.key}
                   data-target-status={action.targetStatus || ""}
                   data-blocked={action.blocked ? "true" : "false"}
-                  onClick={() => onRunWorkflowAction?.(action, order)}
+                  onClick={() => handleActionClick(action)}
                   style={{
                     background: action.blocked
                       ? "#fff7ed"
@@ -550,6 +632,73 @@ export default function AssignmentPanel({
               {canceled ? "Actions disabled on canceled records." : "Final status reached"}
             </span>
           )}
+
+          {pendingHoldAction ? (
+            <div
+              data-testid="hold-reason-dialog"
+              style={{
+                padding: "16px",
+                borderRadius: "14px",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                display: "grid",
+                gap: "12px",
+              }}
+            >
+              <strong style={{ color: "#991b1b" }}>Hold Reason Required</strong>
+              <p style={{ margin: 0, color: "#991b1b", fontSize: "13px", fontWeight: 700 }}>
+                Provide a reason before placing this order on hold. This will be recorded in the activity timeline.
+              </p>
+              <input
+                type="text"
+                data-testid="hold-reason-input"
+                value={holdReasonInput}
+                onChange={(e) => setHoldReasonInput(e.target.value)}
+                placeholder="e.g. Waiting for customer approval, material shortage..."
+                style={{
+                  border: "1px solid #fecaca",
+                  borderRadius: "10px",
+                  padding: "10px 12px",
+                  fontSize: "14px",
+                  outline: "none",
+                }}
+              />
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  type="button"
+                  data-testid="hold-reason-confirm"
+                  disabled={!holdReasonInput.trim()}
+                  onClick={handleConfirmHold}
+                  style={{
+                    border: "1px solid #be123c",
+                    background: holdReasonInput.trim() ? "#be123c" : "#f8fafc",
+                    color: holdReasonInput.trim() ? "#ffffff" : "#94a3b8",
+                    borderRadius: "10px",
+                    padding: "10px 14px",
+                    fontWeight: 700,
+                    cursor: holdReasonInput.trim() ? "pointer" : "not-allowed",
+                  }}
+                >
+                  Confirm Hold
+                </button>
+                <button
+                  type="button"
+                  data-testid="hold-reason-cancel"
+                  onClick={handleCancelHold}
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    borderRadius: "10px",
+                    padding: "10px 14px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {canManageAssignments && !canceled ? (

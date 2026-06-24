@@ -21,10 +21,24 @@ export function buildWorkflowActionUpdates(order, actionInput) {
 
   if (action.key === "put_on_hold") {
     updates.production_hold_previous_status = normalizeOperationalStatus(order.status);
+    updates.production_hold_reason = action.holdReason || "";
+    updates.production_hold_staff_name = action.holdStaffName || "";
+    updates.production_hold_at = now;
+    if (action.holdReason) {
+      updates.activity_note = `Placed on hold. Reason: ${action.holdReason}.`;
+    }
   }
 
   if (action.key === "resume_from_hold") {
+    const prevReason = String(order.production_hold_reason || "").trim();
     updates.production_hold_previous_status = "";
+    updates.production_resume_staff_name = action.resumeStaffName || "";
+    updates.production_resume_at = now;
+    if (prevReason) {
+      updates.activity_note = action.resumeStaffName
+        ? `Resumed from hold. Previous hold reason: ${prevReason}. Resumed by ${action.resumeStaffName}.`
+        : `Resumed from hold. Previous hold reason: ${prevReason}.`;
+    }
   }
 
   if (targetStatus === "Ready For Production") {

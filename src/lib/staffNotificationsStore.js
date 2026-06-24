@@ -24,6 +24,7 @@ export const STAFF_NOTIFICATION_TYPES = Object.freeze({
   readyForPickup: "ready_for_pickup",
   productionStatusChanged: "production_status_changed",
   orderCompleted: "order_completed",
+  orderEscalated: "order_escalated",
 });
 
 export const STAFF_NOTIFICATION_TYPE_LABELS = Object.freeze({
@@ -36,6 +37,7 @@ export const STAFF_NOTIFICATION_TYPE_LABELS = Object.freeze({
   [STAFF_NOTIFICATION_TYPES.readyForPickup]: "Ready For Pickup",
   [STAFF_NOTIFICATION_TYPES.productionStatusChanged]: "Production Status Changed",
   [STAFF_NOTIFICATION_TYPES.orderCompleted]: "Order Completed",
+  [STAFF_NOTIFICATION_TYPES.orderEscalated]: "Order Escalated to Owner",
 });
 
 // Priority: high = red indicator, medium = orange, normal = default
@@ -49,6 +51,7 @@ export const STAFF_NOTIFICATION_PRIORITY = Object.freeze({
   [STAFF_NOTIFICATION_TYPES.readyForPickup]: "high",
   [STAFF_NOTIFICATION_TYPES.productionStatusChanged]: "normal",
   [STAFF_NOTIFICATION_TYPES.orderCompleted]: "normal",
+  [STAFF_NOTIFICATION_TYPES.orderEscalated]: "high",
 });
 
 function generateNotificationId() {
