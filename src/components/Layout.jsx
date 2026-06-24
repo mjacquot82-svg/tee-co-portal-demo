@@ -196,6 +196,11 @@ function getAdminSections(staffUser) {
           label: "Notification Templates",
           navKey: "notificationTemplates",
         },
+        {
+          to: "/admin/settings/notifications/activity",
+          label: "Notification Activity",
+          navKey: "notificationActivity",
+        },
       ],
     },
     {
@@ -265,6 +270,7 @@ function getActiveSidebarLink(pathname, staffUser) {
   if (pathname.startsWith("/admin/products")) return "products";
   if (pathname.startsWith("/admin/customers")) return "customers";
   if (pathname.startsWith("/admin/staff-users")) return "staffUsers";
+  if (pathname.startsWith("/admin/settings/notifications/activity")) return "notificationActivity";
   if (pathname.startsWith("/admin/settings/notifications")) return "notificationTemplates";
   if (pathname === "/admin/records/canceled") return "canceledOrders";
   if (pathname === "/admin/quotes/archived") return "archivedQuotes";
@@ -278,6 +284,7 @@ function getActiveSidebarLink(pathname, staffUser) {
   }
   if (pathname === "/admin/orders") return "productionOrders";
   if (pathname.startsWith("/admin/orders/")) return "productionOrders";
+  if (pathname.startsWith("/admin/settings/notifications/activity")) return "notificationActivity";
   if (pathname.startsWith("/admin/settings/notifications")) return "notificationTemplates";
   if (pathname === "/admin") {
     return isStaffWorkspaceView(staffUser) ? "assignments" : "dashboard";

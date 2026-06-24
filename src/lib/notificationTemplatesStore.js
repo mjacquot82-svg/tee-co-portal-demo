@@ -9,6 +9,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   artworkRevisionRequested: "artwork_revision_requested",
   artworkApproved: "artwork_approved",
   depositRequested: "deposit_requested",
+  paymentRequestCreated: "payment_request_created",
   paymentReceived: "payment_received",
   orderInProduction: "order_in_production",
   orderReadyForPickup: "order_ready_for_pickup",
@@ -22,6 +23,7 @@ export const NOTIFICATION_TYPE_LABELS = Object.freeze({
   [NOTIFICATION_TYPES.artworkRevisionRequested]: "Artwork Revision Requested",
   [NOTIFICATION_TYPES.artworkApproved]: "Artwork Approved",
   [NOTIFICATION_TYPES.depositRequested]: "Deposit Requested",
+  [NOTIFICATION_TYPES.paymentRequestCreated]: "Payment Request Created",
   [NOTIFICATION_TYPES.paymentReceived]: "Payment Received",
   [NOTIFICATION_TYPES.orderInProduction]: "Order In Production",
   [NOTIFICATION_TYPES.orderReadyForPickup]: "Order Ready For Pickup",
@@ -183,6 +185,26 @@ The {{company_name}} Team`,
     emailEnabled: true,
     smsEnabled: true,
     staffNotificationEnabled: false,
+  },
+  [NOTIFICATION_TYPES.paymentRequestCreated]: {
+    type: NOTIFICATION_TYPES.paymentRequestCreated,
+    name: "Payment Request Created",
+    emailSubject: "Payment request created — {{order_number}}",
+    emailBody: `Hi {{customer_name}},
+
+A new payment request has been created for order {{order_number}}.
+
+Amount Requested: {{deposit_amount}}
+Payment Link: {{payment_link}}
+
+Please use the payment link when you're ready.
+
+Thanks,
+The {{company_name}} Team`,
+    smsMessage: "Hi {{customer_name}}, a payment request for {{order_number}} is ready. Amount: {{deposit_amount}}. Pay here: {{payment_link}}",
+    emailEnabled: true,
+    smsEnabled: false,
+    staffNotificationEnabled: true,
   },
   [NOTIFICATION_TYPES.paymentReceived]: {
     type: NOTIFICATION_TYPES.paymentReceived,
