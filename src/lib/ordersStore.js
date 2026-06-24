@@ -1501,8 +1501,8 @@ export function updateStoredOrder(orderNumber, updates) {
     const nextArtworkStatus = normalizeStatusText(updatedOrder.artwork_approval_status);
     const previousDepositStatus = normalizeStatusText(previousOrder.deposit_workflow_status);
     const nextDepositStatus = normalizeStatusText(updatedOrder.deposit_workflow_status);
-    const previousStatus = normalizeOperationalStatus(previousOrder.status);
-    const nextStatus = normalizeOperationalStatus(updatedOrder.status);
+    const previousStatus = normalizeStatusText(previousOrder.status);
+    const nextStatus = normalizeStatusText(updatedOrder.status);
 
     if (previousQuoteStatus !== nextQuoteStatus && nextQuoteStatus === "Awaiting Approval") {
       triggerOrderNotification(NOTIFICATION_TYPES.quoteReadyForApproval, updatedOrder);

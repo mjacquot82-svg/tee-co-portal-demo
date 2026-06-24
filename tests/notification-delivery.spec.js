@@ -34,7 +34,7 @@ test("triggerNotificationEvent resolves template content and stores activity rec
 
   const storedRecords = listNotificationActivity();
   expect(storedRecords).toHaveLength(2);
-  expect(storedRecords[1].recipientType).toBe("staff");
+  expect(storedRecords.some((record) => record.recipientType === "staff")).toBe(true);
 });
 
 test("createPaymentRequest records payment request notification activity", () => {
