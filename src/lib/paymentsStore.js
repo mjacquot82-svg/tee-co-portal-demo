@@ -1,5 +1,7 @@
 import { getJsonStorageItem, hasBrowserStorage, setJsonStorageItem } from "./browserStorage";
 import { normalizeCustomerId } from "./customerIds";
+import { triggerNotificationEvent } from "./notificationDeliveryService";
+import { NOTIFICATION_TYPES } from "./notificationTemplatesStore";
 
 const PAYMENT_REQUESTS_STORAGE_KEY = "teeCoPaymentRequests";
 const PAYMENTS_STORAGE_KEY = "teeCoPayments";
@@ -238,6 +240,29 @@ export function createPaymentRequest(input = {}) {
     payload: { paymentRequest },
     created_at: paymentRequest.created_at,
   });
+
+  if (paymentRequest.metadata?.source !== "legacy_order_payment_history") {
+    triggerNotificationEvent(NOTIFICATION_TYPES.paymentRequestCreated, {
+      paymentRequest,
+      source: "payments_store",
+      customerName: paymentRequest.metadata?.customer_name || "",
+      orderNumber: paymentRequest.order_number,
+      depositAmount: paymentRequest.amount_requested,
+      paymentLink: paymentRequest.provider_checkout_url,
+    });
+
+    if (String(paymentRequest.request_type || "").trim().toLowerCase() === "deposit") {
+      triggerNotificationEvent(NOTIFICATION_TYPES.depositRequested, {
+        paymentRequest,
+        source: "payments_store",
+        customerName: paymentRequest.metadata?.customer_name || "",
+        orderNumber: paymentRequest.order_number,
+        depositAmount: paymentRequest.amount_requested,
+        paymentLink: paymentRequest.provider_checkout_url,
+      });
+    }
+  }
+
   return paymentRequest;
 }
 
@@ -340,6 +365,16 @@ export function recordPayment(input = {}) {
     staff_user_id: payment.recorded_by_staff_user_id,
     created_at: payment.created_at,
   });
+
+  if (payment.metadata?.source !== "legacy_order_payment_history") {
+    triggerNotificationEvent(NOTIFICATION_TYPES.paymentReceived, {
+      payment,
+      source: "payments_store",
+      orderNumber: payment.order_number,
+      depositAmount: payment.amount,
+    });
+  }
+
   return payment;
 }
 

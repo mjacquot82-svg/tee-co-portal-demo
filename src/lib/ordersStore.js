@@ -31,6 +31,8 @@ import { resolveCustomerForRecord } from "./customerRecordMatching";
 import { deriveOperationalWorkflowState } from "./operationalWorkflow";
 import { updateArtworkApprovalStatus } from "./customerArtworkStore";
 import { linkCustomerArtworkToOrder, linkCustomerArtworkToQuote } from "../services/customerArtworkService";
+import { triggerNotificationEvent } from "./notificationDeliveryService";
+import { NOTIFICATION_TYPES } from "./notificationTemplatesStore";
 
 const STORAGE_KEY = "teeCoStaffOrders";
 const orderListeners = new Set();
@@ -68,6 +70,37 @@ function persistArtworkApprovalMetadata(artworkIds, approvalStatus) {
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
+}
+
+function normalizeStatusText(value) {
+  return String(value || "").trim();
+}
+
+function isApprovedState(value) {
+  const normalizedValue = normalizeStatusText(value).toLowerCase();
+  return new Set(["approved", "customer approved", "quote approved"]).has(
+    normalizedValue
+  );
+}
+
+function buildOrderNotificationContext(order, source = "orders_store") {
+  return {
+    order,
+    source,
+    customerName: order?.customer_name || "",
+    customerEmail: order?.customer_email || order?.email || "",
+    customerPhone: order?.customer_phone || "",
+    orderNumber: order?.order_number || "",
+    quoteTotal: order?.total_amount,
+    depositAmount: order?.deposit_amount || order?.deposit?.amount,
+    balanceDue: order?.balance_due,
+    pickupDate: order?.pickup_date || order?.due_date || "",
+  };
+}
+
+function triggerOrderNotification(eventType, order, source = "orders_store") {
+  if (!order) return;
+  triggerNotificationEvent(eventType, buildOrderNotificationContext(order, source));
 }
 
 function normalizePlacements(order = {}) {
@@ -1365,6 +1398,8 @@ export function createStoredOrder(orderInput) {
     createdAt
   );
 
+  triggerOrderNotification(NOTIFICATION_TYPES.newCustomerRequest, normalizeStoredOrder(order));
+
   if (order.customer_artwork_id) {
     if (order.operational_visible === false || order.quote_status !== "Ready For Production") {
       persistArtworkRelationship(
@@ -1455,6 +1490,66 @@ export function updateStoredOrder(orderNumber, updates) {
       ],
       updatedOrder.artwork_approval_status
     );
+  }
+
+  if (updatedOrder && previousOrder) {
+    const previousQuoteStatus = normalizeStatusText(previousOrder.quote_status);
+    const nextQuoteStatus = normalizeStatusText(updatedOrder.quote_status);
+    const previousApprovalStatus = normalizeStatusText(previousOrder.approval_status);
+    const nextApprovalStatus = normalizeStatusText(updatedOrder.approval_status);
+    const previousArtworkStatus = normalizeStatusText(previousOrder.artwork_approval_status);
+    const nextArtworkStatus = normalizeStatusText(updatedOrder.artwork_approval_status);
+    const previousDepositStatus = normalizeStatusText(previousOrder.deposit_workflow_status);
+    const nextDepositStatus = normalizeStatusText(updatedOrder.deposit_workflow_status);
+    const previousStatus = normalizeStatusText(previousOrder.status);
+    const nextStatus = normalizeStatusText(updatedOrder.status);
+
+    if (previousQuoteStatus !== nextQuoteStatus && nextQuoteStatus === "Awaiting Approval") {
+      triggerOrderNotification(NOTIFICATION_TYPES.quoteReadyForApproval, updatedOrder);
+    }
+
+    if (
+      (!isApprovedState(previousApprovalStatus) && isApprovedState(nextApprovalStatus)) ||
+      (previousQuoteStatus !== "Approved" && nextQuoteStatus === "Approved")
+    ) {
+      triggerOrderNotification(NOTIFICATION_TYPES.quoteApproved, updatedOrder);
+    }
+
+    if (
+      previousArtworkStatus !== nextArtworkStatus &&
+      nextArtworkStatus === "Needs Revision"
+    ) {
+      triggerOrderNotification(NOTIFICATION_TYPES.artworkRevisionRequested, updatedOrder);
+    }
+
+    if (
+      previousArtworkStatus !== nextArtworkStatus &&
+      nextArtworkStatus === "Approved"
+    ) {
+      triggerOrderNotification(NOTIFICATION_TYPES.artworkApproved, updatedOrder);
+    }
+
+    if (
+      previousDepositStatus !== nextDepositStatus &&
+      nextDepositStatus === "Deposit Requested"
+    ) {
+      triggerOrderNotification(NOTIFICATION_TYPES.depositRequested, updatedOrder);
+    }
+
+    if (
+      !["Ready For Production", "Printing", "Embroidery"].includes(previousStatus) &&
+      ["Ready For Production", "Printing", "Embroidery"].includes(nextStatus)
+    ) {
+      triggerOrderNotification(NOTIFICATION_TYPES.orderInProduction, updatedOrder);
+    }
+
+    if (previousStatus !== "Ready For Pickup" && nextStatus === "Ready For Pickup") {
+      triggerOrderNotification(NOTIFICATION_TYPES.orderReadyForPickup, updatedOrder);
+    }
+
+    if (previousStatus !== "Completed" && nextStatus === "Completed") {
+      triggerOrderNotification(NOTIFICATION_TYPES.orderCompleted, updatedOrder);
+    }
   }
 
   if (updatedOrder?.customer_artwork_id) {
