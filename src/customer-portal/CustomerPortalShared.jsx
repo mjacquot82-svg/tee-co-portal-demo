@@ -795,6 +795,29 @@ export function RecordList({ records = [], type = "orders" }) {
               />
             ) : null}
 
+            {type === "orders" ? (
+              <div>
+                <Link
+                  to={`/portal/orders/${encodeURIComponent(record.order_number || "")}`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    minHeight: "40px",
+                    borderRadius: "999px",
+                    border: "1px solid #cbd5e1",
+                    background: "#ffffff",
+                    color: "#0f172a",
+                    padding: "9px 14px",
+                    textDecoration: "none",
+                    fontWeight: 800,
+                  }}
+                >
+                  View Order Detail
+                </Link>
+              </div>
+            ) : null}
+
             <p
               style={{
                 margin: 0,
