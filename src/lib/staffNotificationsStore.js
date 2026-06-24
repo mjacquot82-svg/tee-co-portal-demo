@@ -96,9 +96,13 @@ function emitNotificationsUpdated() {
 export function listStaffNotifications() {
   return [...readStoredNotifications()]
     .map(normalizeStaffNotification)
-    .sort(
-      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-    );
+    .sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      const aValid = Number.isFinite(aTime) ? aTime : 0;
+      const bValid = Number.isFinite(bTime) ? bTime : 0;
+      return bValid - aValid;
+    });
 }
 
 export function getUnreadStaffNotificationCount() {

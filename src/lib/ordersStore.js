@@ -1651,7 +1651,7 @@ export function updateStoredOrder(orderNumber, updates) {
           description: `Order ${updatedOrder.order_number} assigned to ${nextAssignedName || "staff"}${updatedOrder.customer_name ? ` (${updatedOrder.customer_name})` : ""}.`,
           linkTo: orderPath,
         });
-      } else if (previousAssignedId && nextAssignedId && previousAssignedId !== nextAssignedId) {
+      } else if (previousAssignedId && nextAssignedId) {
         createStaffNotification({
           type: STAFF_NOTIFICATION_TYPES.assignmentChanged,
           orderNumber: updatedOrder.order_number,
