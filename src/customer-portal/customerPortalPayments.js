@@ -67,6 +67,10 @@ export function getCustomerPaymentStatusLabel(record = {}) {
     return "Processing";
   }
 
+  if (["failed", "declined"].includes(rawStatus)) {
+    return "Payment Failed";
+  }
+
   if (["cancelled", "canceled", "voided", "expired"].includes(rawStatus)) {
     return "Cancelled";
   }
@@ -81,6 +85,7 @@ export function getCustomerPaymentStatusLabel(record = {}) {
 export function getCustomerPaymentStatusTone(statusLabel) {
   if (statusLabel === "Paid") return "success";
   if (statusLabel === "Partially Paid" || statusLabel === "Processing") return "warning";
+  if (statusLabel === "Payment Failed") return "danger";
   if (statusLabel === "Cancelled" || statusLabel === "Refunded") return "neutral";
   return "info";
 }

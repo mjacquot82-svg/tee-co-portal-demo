@@ -155,6 +155,13 @@ function normalizeIdentifier(value) {
   return normalizeText(value).toLowerCase();
 }
 
+function isSuccessfulPaymentStatus(status) {
+  const normalized = normalizeText(status).toLowerCase();
+  if (!normalized) return true;
+  if (["failed", "declined", "voided", "canceled", "cancelled"].includes(normalized)) return false;
+  return ["captured", "paid", "succeeded", "success", "settled", "completed"].includes(normalized);
+}
+
 export function resolvePaymentRequestStatus(paymentRequest = {}, requestPayments = []) {
   const amountRequested = normalizeAmount(paymentRequest.amount_requested);
   const amountPaid = requestPayments
@@ -366,7 +373,7 @@ export function recordPayment(input = {}) {
     created_at: payment.created_at,
   });
 
-  if (payment.metadata?.source !== "legacy_order_payment_history") {
+  if (payment.metadata?.source !== "legacy_order_payment_history" && isSuccessfulPaymentStatus(payment.status)) {
     triggerNotificationEvent(NOTIFICATION_TYPES.paymentReceived, {
       payment,
       source: "payments_store",

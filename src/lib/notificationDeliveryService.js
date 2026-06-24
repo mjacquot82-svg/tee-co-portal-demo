@@ -212,6 +212,7 @@ export const NOTIFICATION_EVENT_TEMPLATE_MAP = Object.freeze({
   [NOTIFICATION_TYPES.depositRequested]: NOTIFICATION_TYPES.depositRequested,
   [NOTIFICATION_TYPES.paymentRequestCreated]: NOTIFICATION_TYPES.paymentRequestCreated,
   [NOTIFICATION_TYPES.paymentReceived]: NOTIFICATION_TYPES.paymentReceived,
+  [NOTIFICATION_TYPES.paymentFailed]: NOTIFICATION_TYPES.paymentFailed,
   [NOTIFICATION_TYPES.orderInProduction]: NOTIFICATION_TYPES.orderInProduction,
   [NOTIFICATION_TYPES.orderReadyForPickup]: NOTIFICATION_TYPES.orderReadyForPickup,
   [NOTIFICATION_TYPES.orderCompleted]: NOTIFICATION_TYPES.orderCompleted,

@@ -11,6 +11,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   depositRequested: "deposit_requested",
   paymentRequestCreated: "payment_request_created",
   paymentReceived: "payment_received",
+  paymentFailed: "payment_failed",
   orderInProduction: "order_in_production",
   orderReadyForPickup: "order_ready_for_pickup",
   orderCompleted: "order_completed",
@@ -25,6 +26,7 @@ export const NOTIFICATION_TYPE_LABELS = Object.freeze({
   [NOTIFICATION_TYPES.depositRequested]: "Deposit Requested",
   [NOTIFICATION_TYPES.paymentRequestCreated]: "Payment Request Created",
   [NOTIFICATION_TYPES.paymentReceived]: "Payment Received",
+  [NOTIFICATION_TYPES.paymentFailed]: "Payment Failed",
   [NOTIFICATION_TYPES.orderInProduction]: "Order In Production",
   [NOTIFICATION_TYPES.orderReadyForPickup]: "Order Ready For Pickup",
   [NOTIFICATION_TYPES.orderCompleted]: "Order Completed",
@@ -222,6 +224,26 @@ We'll keep you updated as your order progresses.
 Thanks,
 The {{company_name}} Team`,
     smsMessage: "Hi {{customer_name}}, payment received for order {{order_number}}. Balance due: {{balance_due}}. Thanks!",
+    emailEnabled: true,
+    smsEnabled: false,
+    staffNotificationEnabled: true,
+  },
+  [NOTIFICATION_TYPES.paymentFailed]: {
+    type: NOTIFICATION_TYPES.paymentFailed,
+    name: "Payment Failed",
+    emailSubject: "Payment could not be completed — {{order_number}}",
+    emailBody: `Hi {{customer_name}},
+
+We were unable to complete the payment for order {{order_number}}.
+
+Amount: {{deposit_amount}}
+Payment Link: {{payment_link}}
+
+Please try again or contact Tee & Co if you have questions.
+
+Thanks,
+The {{company_name}} Team`,
+    smsMessage: "Hi {{customer_name}}, payment for {{order_number}} could not be completed. Please try again: {{payment_link}}",
     emailEnabled: true,
     smsEnabled: false,
     staffNotificationEnabled: true,
