@@ -2,7 +2,7 @@
 
 ## Project Status
 
-Tee & Co has reached a strong pre-launch operational state. The customer portal, owner workflows, staff workflows, production readiness, notifications foundation, canonical workflow state, and Square payment infrastructure are in place. The current focus is production hardening: moving remaining local-only operational data to durable storage, verifying Square sandbox behavior end to end, tightening deployment readiness, and preparing for a limited production pilot.
+Tee & Co is in the sandbox and production-pilot readiness stage. The customer, owner, staff, production, notification, and payment foundations are complete, including Square payment links, Square webhook synchronization, payment reliability hardening, notification persistence in Supabase, and the owner payment reconciliation workspace. The next project focus is a controlled end-to-end Square sandbox pilot, followed by production launch verification and the next Square lifecycle phase.
 
 ---
 
@@ -13,10 +13,12 @@ Tee & Co has reached a strong pre-launch operational state. The customer portal,
 - Customer portal foundation.
 - Customer account and order visibility.
 - Portal order detail.
+- Portal action completion pass.
 - Customer artwork workflows.
 - Customer quote approval workflows.
 - Customer payment dashboard.
 - Customer payment request detail.
+- Customer Portal Payments.
 - Customer Pay Now support for Square payment links.
 - Customer-friendly payment status presentation.
 - Legacy deposit workflow compatibility.
@@ -32,7 +34,9 @@ Tee & Co has reached a strong pre-launch operational state. The customer portal,
 - Owner workflow action completion pass.
 - Owner production readiness and blocker visibility.
 - Owner-facing payment confidence indicators.
-- Owner reconciliation signals for Square payment issues.
+- Owner payment reconciliation workspace.
+- Owner payment exception queue.
+- Owner reconciliation actions for payment review, duplicates, and false positives.
 
 ## Staff Experience
 
@@ -55,18 +59,20 @@ Tee & Co has reached a strong pre-launch operational state. The customer portal,
 - Payment Request Detail.
 - Canonical Payment & Workflow State Layer.
 - Existing deposit workflow compatibility.
-- Square payment link generation.
+- Square Integration Phase 1: Payment Links.
+- Square Integration Phase 2: Webhook Processing.
+- Square Integration Phase 2A: Payment Reliability.
+- Square Integration Phase 2B: Payment Reconciliation Workspace.
 - Square provider metadata persistence.
-- Customer Pay Now support.
 - Secure Square webhook endpoint.
 - Square HMAC signature verification.
 - Idempotent webhook processing.
 - Payment state synchronization.
 - Payment failed notification events.
-- Payment reliability and reconciliation hardening.
 - Out-of-order webhook protection.
 - Duplicate payment detection.
 - Manual plus Square payment conflict detection.
+- Payment exception visibility and reconciliation audit trail.
 - Production gating protection for payment reconciliation issues.
 
 ## Production
@@ -76,7 +82,7 @@ Tee & Co has reached a strong pre-launch operational state. The customer portal,
 - Assign Work workflows.
 - Production readiness indicators.
 - Production status presentation cleanup.
-- Production workflow reliability pass.
+- Production Workflow Reliability & Readiness Pass.
 - Blocked order explanations.
 - Readiness and blocker visibility.
 - Production gating integration with canonical payment state.
@@ -84,9 +90,10 @@ Tee & Co has reached a strong pre-launch operational state. The customer portal,
 
 ## Notifications
 
-- Notification Templates foundation.
+- Notification Templates.
 - Notification Framework.
 - Notification Activity.
+- Notification Persistence Migration to Supabase.
 - Staff Notification Center.
 - Payment Requested notifications.
 - Payment Received notifications.
@@ -102,7 +109,8 @@ Tee & Co has reached a strong pre-launch operational state. The customer portal,
 - Payment provider metadata model.
 - Square provider service foundation.
 - Square webhook processor.
-- Reconciliation helper layer.
+- Payment reconciliation helper layer.
+- Supabase-backed notification persistence.
 - Supabase payment reliability indexes.
 - Legacy compatibility layers for payments and deposits.
 
@@ -110,25 +118,26 @@ Tee & Co has reached a strong pre-launch operational state. The customer portal,
 
 # 🚧 In Progress
 
-- Square sandbox verification.
-- Payment reliability validation.
-- Production launch readiness review.
-- Supabase persistence hardening.
-- Operational data migration planning.
+- Square sandbox pilot execution.
 - Deployment environment verification.
+- Supabase RLS verification.
+- Multi-device launch testing.
+- Limited internal production pilot planning.
 
 ---
 
 # 🎯 Production Readiness
 
-- [ ] Move Notification Templates from localStorage to Supabase.
-- [ ] Move Staff Notifications from localStorage to Supabase.
-- [ ] Persist Notification Activity server-side.
+- [x] Move Notification Templates from localStorage to Supabase.
+- [x] Move Staff Notifications from localStorage to Supabase.
+- [x] Persist Notification Activity server-side.
+- [x] Complete Production Workflow Reliability & Readiness Pass.
+- [x] Complete Square payment reliability and reconciliation workspace.
 - [ ] Verify Supabase RLS for customers, orders, payments, notifications, and staff data.
 - [ ] Verify Square webhook deployment URL.
 - [ ] Verify Square webhook signature configuration.
-- [ ] Apply Square payment reliability indexes in Supabase.
-- [ ] Complete Square sandbox payment verification.
+- [ ] Confirm Square payment reliability indexes in Supabase.
+- [ ] Complete first end-to-end Square sandbox payment verification.
 - [ ] Test delayed, duplicate, failed, and completed Square webhook scenarios in sandbox.
 - [ ] Multi-device testing for customer, owner, and staff workflows.
 - [ ] Validate customer portal behavior on mobile.
@@ -157,7 +166,7 @@ Status: Completed
 
 ## Phase 2
 
-Status: Current
+Status: Completed
 
 - Secure Square webhook endpoint.
 - Square HMAC signature verification.
@@ -168,14 +177,35 @@ Status: Current
 - Customer payment status updates.
 - Production gating integration.
 - Payment failed notification events.
-- Payment reliability and reconciliation hardening.
-- Duplicate webhook protection.
+
+## Phase 2A
+
+Status: Completed
+
+- Database-level payment idempotency.
+- Atomic webhook processing.
 - Out-of-order webhook protection.
-- Manual plus Square conflict detection.
+- Duplicate webhook protection.
+- Duplicate payment detection.
+- Manual plus Square payment conflict detection.
+- Payment confidence indicators.
+- Production gating safety hardening.
+
+## Phase 2B
+
+Status: Completed
+
+- Owner payment reconciliation workspace.
+- Payment exception queue.
+- Payment synchronization warnings.
+- Safe webhook recovery and retry behavior.
+- Payment reconciliation actions.
+- Payment timeline and Square metadata visibility.
+- Payment audit trail improvements.
 
 ## Phase 3
 
-Status: Planned
+Status: Next Planned Phase
 
 - Refunds.
 - Partial refunds.
@@ -194,7 +224,14 @@ Status: Planned
 - Advanced reconciliation workflows.
 - Square dashboard reconciliation review.
 - Expanded owner exception handling.
-- Optional terminal and in-store payment planning.
+
+## Phase 5
+
+Status: Future
+
+- Square Terminal support.
+- In-store payment workflows.
+- Expanded payment provider reporting.
 
 ---
 
@@ -202,9 +239,10 @@ Status: Planned
 
 ## Completed
 
-- Notification Templates foundation.
+- Notification Templates.
 - Notification Framework.
 - Notification Activity.
+- Notification Persistence Migration to Supabase.
 - Staff Notification Center.
 - Quote approval notifications.
 - Artwork notifications.
@@ -216,12 +254,11 @@ Status: Planned
 
 ## Remaining
 
-- Move Notification Templates from localStorage to Supabase.
-- Move Staff Notifications from localStorage to Supabase.
-- Persist Notification Activity server-side.
 - Confirm notification visibility across devices.
-- Add owner-facing notification delivery confidence.
 - Verify notification template RLS.
+- Verify notification activity RLS.
+- Add owner-facing notification delivery confidence.
+- Review notification activity under limited pilot usage.
 
 ## Future
 
@@ -239,8 +276,11 @@ Status: Planned
 
 ## Customer
 
+- [x] Customer portal foundation.
+- [x] Customer order detail.
+- [x] Customer payment request detail.
+- [x] Customer Pay Now support.
 - [ ] Customer portal smoke test.
-- [ ] Customer order detail review.
 - [ ] Customer quote approval review.
 - [ ] Customer artwork workflow review.
 - [ ] Customer payment flow sandbox test.
@@ -248,24 +288,34 @@ Status: Planned
 
 ## Owner
 
+- [x] Owner workflow action completion pass.
+- [x] Owner payment request workflows.
+- [x] Owner reconciliation workspace.
+- [x] Owner production readiness visibility.
 - [ ] Owner dashboard review.
 - [ ] Owner order workflow review.
-- [ ] Owner quote workflow review.
 - [ ] Owner payment workflow review.
 - [ ] Owner reconciliation workflow review.
 - [ ] Owner production readiness review.
 
 ## Staff
 
+- [x] Staff notification center.
+- [x] Staff assignment visibility.
+- [x] Staff production workflow visibility.
+- [x] Staff blocked work context.
 - [ ] Staff login review.
 - [ ] Staff assignments review.
 - [ ] Staff notification center review.
 - [ ] Staff production queue review.
-- [ ] Staff blocked work review.
 - [ ] Staff shop-device testing.
 
 ## Payments
 
+- [x] Square payment link foundation.
+- [x] Square webhook processing.
+- [x] Payment reliability hardening.
+- [x] Payment reconciliation workspace.
 - [ ] Square payment link sandbox test.
 - [ ] Square successful payment webhook test.
 - [ ] Square failed payment webhook test.
@@ -276,10 +326,14 @@ Status: Planned
 
 ## Notifications
 
+- [x] Notification templates.
+- [x] Notification framework.
+- [x] Staff notifications.
+- [x] Server-side notification persistence.
 - [ ] Notification templates review.
 - [ ] Staff notifications review.
 - [ ] Payment notification review.
-- [ ] Server-side notification persistence review.
+- [ ] Notification cross-device review.
 
 ## Security
 
@@ -297,12 +351,12 @@ Status: Planned
 
 ## Testing
 
-- [ ] Run production build.
-- [ ] Run payment tests.
-- [ ] Run workflow tests.
-- [ ] Run notification tests.
-- [ ] Run production queue tests.
-- [ ] Run browser smoke tests.
+- [ ] Run production build before launch.
+- [ ] Run payment regression tests before launch.
+- [ ] Run workflow regression tests before launch.
+- [ ] Run notification regression tests before launch.
+- [ ] Run production queue regression tests before launch.
+- [ ] Run browser smoke tests before launch.
 
 ## Deployment
 
@@ -318,15 +372,16 @@ Status: Planned
 # 🛠 Technical Debt
 
 - Repo-wide lint cleanup.
-- LocalStorage migrations.
-- Legacy compatibility layers.
-- Bundle optimization.
-- Supabase schema alignment.
+- Large Vite bundle warning.
+- Remaining legacy compatibility layers.
+- Remaining local fallback behavior.
+- Remaining localStorage migrations for non-notification operational data, if still required.
+- Supabase schema and RLS verification.
 - Test environment cleanup.
 - Customer data fallback cleanup.
-- Payment reconciliation polish.
-- Notification persistence migration.
-- Operational logging improvements.
+- Payment reconciliation polish after sandbox testing.
+- Operational logging and monitoring improvements.
+- Unrelated known repo issues should remain isolated from launch-critical payment work.
 
 ---
 
@@ -356,12 +411,12 @@ Status: Planned
 
 ## Top Priority
 
-Move operational notification data to Supabase and persist notification activity server-side.
+Execute the first end-to-end Square sandbox pilot, including payment request creation, customer Pay Now checkout, webhook synchronization, canonical payment state updates, production gating, notifications, and reconciliation workspace validation.
 
 ## Second Priority
 
-Complete Square sandbox verification, including successful payment, failed payment, delayed webhook, duplicate webhook, and manual payment conflict scenarios.
+Implement Square Refunds and Partial Refunds after the sandbox pilot confirms the core payment lifecycle is reliable.
 
 ## Third Priority
 
-Complete production launch readiness: RLS verification, deployment environment validation, multi-device testing, backups, and limited production pilot planning.
+Complete production pilot readiness: Supabase RLS verification, deployment environment validation, multi-device testing, backups, monitoring, and limited production pilot planning.
