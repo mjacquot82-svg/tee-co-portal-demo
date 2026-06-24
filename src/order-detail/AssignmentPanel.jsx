@@ -1,6 +1,7 @@
 import { isCanceledOperationalStatus } from "../orders/orderWorkflow";
 import WorkflowBadge from "../components/WorkflowBadge";
 import {
+  buildProductionReadinessSummary,
   buildWorkflowBlockDetails,
   buildCustomerWorkflowMessage,
   buildWorkflowStatusBadges,
@@ -76,6 +77,7 @@ export default function AssignmentPanel({
   const workflowBadges = buildWorkflowStatusBadges(order);
   const blockDetails = buildWorkflowBlockDetails(order, { targetStatus: "Ready For Production" });
   const customerWorkflowMessage = buildCustomerWorkflowMessage(order);
+  const readiness = buildProductionReadinessSummary(order);
 
   return (
     <section
@@ -110,6 +112,29 @@ export default function AssignmentPanel({
           <strong>Customer Status Message</strong>
           <span data-testid="customer-workflow-message" style={{ color: "#475569", fontWeight: 700 }}>
             {customerWorkflowMessage}
+          </span>
+        </div>
+
+        <div
+          data-testid="production-readiness-summary"
+          data-production-readiness={readiness.statusKey || ""}
+          style={{
+            display: "grid",
+            gap: "6px",
+            padding: "12px 14px",
+            borderRadius: "14px",
+            border: readiness.blocked ? "1px solid #fecaca" : "1px solid #bbf7d0",
+            background: readiness.blocked ? "#fff5f5" : "#ecfdf5",
+            color: readiness.blocked ? "#991b1b" : "#166534",
+          }}
+        >
+          <strong>Production Readiness: {readiness.label}</strong>
+          <span style={{ fontWeight: 700 }}>{readiness.detail}</span>
+          <span style={{ fontSize: "13px", fontWeight: 700 }}>
+            Next recommended action: {readiness.nextRecommendedAction}
+          </span>
+          <span style={{ fontSize: "13px", fontWeight: 700 }}>
+            Responsible: {readiness.responsibleParty}
           </span>
         </div>
 
@@ -370,6 +395,15 @@ export default function AssignmentPanel({
                 <strong>{blockDetails.summary}</strong>
                 <span style={{ fontWeight: 700 }}>{blockDetails.detail}</span>
                 <span style={{ fontSize: "13px" }}>Next action: {blockDetails.nextActionLabel}</span>
+                {(blockDetails.blockers || []).map((blocker) => (
+                  <span
+                    key={blocker.key}
+                    data-testid="production-blocker-detail"
+                    style={{ fontSize: "13px", fontWeight: 700 }}
+                  >
+                    {blocker.reason} Required action: {blocker.requiredAction} Responsible: {blocker.responsibleParty}
+                  </span>
+                ))}
               </div>
             ) : null}
 
@@ -428,7 +462,7 @@ export default function AssignmentPanel({
                 {blockDetails.blocked ? (
                   <QuickActionButton
                     actionKey="force_move_to_production"
-                    label="Override and Continue"
+                    label="Force Move To Production"
                     tone="dark"
                     onClick={onForceMoveToProduction}
                   />

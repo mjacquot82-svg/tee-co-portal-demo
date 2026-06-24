@@ -7,6 +7,7 @@ import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
 import { buildWorkflowActionUpdates } from "../orders/buildWorkflowActionUpdates";
 import { sortOrdersByOperationalStatus } from "../orders/orderWorkflow";
 import {
+  buildProductionReadinessSummary,
   buildWorkflowBlockDetails,
   buildWorkflowStatusBadges,
   formatWorkflowTimelineEvent,
@@ -127,6 +128,8 @@ function QueueFlag({ label, tone = "default" }) {
       ? { background: "#fef2f2", color: "#b91c1c", border: "#fecaca" }
       : tone === "warning"
       ? { background: "#fff7ed", color: "#9a3412", border: "#fed7aa" }
+      : tone === "success"
+      ? { background: "#ecfdf5", color: "#166534", border: "#bbf7d0" }
       : tone === "info"
       ? { background: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe" }
       : { background: "#f8fafc", color: "#334155", border: "#e2e8f0" };
@@ -190,17 +193,29 @@ function QueueActionButton({ action, onClick, emphasis = "secondary" }) {
 }
 
 function QueueRow({ order, onRunAction, onOpenDetail, actionFeedback = null }) {
-  const visibleActions = order.available_actions?.slice(0, 3) || [];
+  const visibleActions = (order.available_actions || [])
+    .filter((action) => action.blocked !== true)
+    .slice(0, 3);
   const priority = order.queue_priority || {};
   const dueTone = priority.overdue ? "danger" : priority.dueSoon ? "warning" : "default";
   const dueLabel = order.due_date ? formatShortDate(order.due_date) : "No due date";
   const workflowBadges = buildWorkflowStatusBadges(order);
+  const readiness = order.production_readiness || buildProductionReadinessSummary(order);
+  const readinessTone =
+    readiness.tone === "danger"
+      ? "danger"
+      : readiness.tone === "success"
+      ? "success"
+      : readiness.tone === "info"
+      ? "info"
+      : "default";
 
   return (
     <article
       data-testid="production-queue-row"
       data-order-number={order.order_number || ""}
       data-workflow-state={order.workflow_state || order.status || ""}
+      data-production-readiness={readiness.statusKey || ""}
       style={{
         display: "grid",
         gridTemplateColumns: "minmax(0, 2.3fr) minmax(0, 0.8fr) minmax(0, 0.9fr) auto",
@@ -242,6 +257,7 @@ function QueueRow({ order, onRunAction, onOpenDetail, actionFeedback = null }) {
           {!priority.overdue && priority.dueSoon ? <QueueFlag label="Due Soon" tone="warning" /> : null}
           {order.rush_active ? <QueueFlag label="Rush" tone="warning" /> : null}
           {order.linked_artwork ? <QueueFlag label={`Artwork ${order.artwork_count || 1}`} tone="info" /> : null}
+          <QueueFlag label={readiness.label} tone={readinessTone} />
           {workflowBadges.map((badge) => (
             <WorkflowBadge
               key={`${order.order_number}-${badge.label}`}
@@ -256,6 +272,36 @@ function QueueRow({ order, onRunAction, onOpenDetail, actionFeedback = null }) {
           <span style={{ color: "#64748b" }}>{order.garment}</span>
           <span style={{ color: "#64748b" }}>{order.decoration_type}</span>
         </div>
+
+        {readiness.blocked ? (
+          <div
+            data-testid="production-queue-row-blockers"
+            style={{
+              display: "grid",
+              gap: "4px",
+              borderRadius: "12px",
+              border: "1px solid #fecaca",
+              background: "#fff5f5",
+              color: "#991b1b",
+              padding: "10px 12px",
+              fontSize: "13px",
+              lineHeight: 1.4,
+            }}
+          >
+            <strong>Blocked: {readiness.detail}</strong>
+            <span>
+              Next recommended action: {readiness.nextRecommendedAction}
+            </span>
+            <span>Responsible: {readiness.responsibleParty}</span>
+          </div>
+        ) : (
+          <div
+            data-testid="production-queue-row-next-action"
+            style={{ color: "#475569", fontSize: "13px", fontWeight: 700 }}
+          >
+            Next recommended action: {readiness.nextRecommendedAction}
+          </div>
+        )}
       </div>
 
       <div style={{ display: "grid", gap: "3px" }}>
@@ -376,6 +422,8 @@ function ProductionDetailDrawer({
 
   const artworkFiles = Array.isArray(order.artwork_files) ? order.artwork_files : [];
   const workflowBadges = buildWorkflowStatusBadges(order);
+  const readiness = order.production_readiness || buildProductionReadinessSummary(order);
+  const executableActions = (order.available_actions || []).filter((action) => action.blocked !== true);
 
   return (
     <aside
@@ -399,6 +447,7 @@ function ProductionDetailDrawer({
           <strong style={{ fontSize: "18px" }}>{order.order_number}</strong>
           <span style={{ color: "#64748b" }}>{order.workflow_state}</span>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <QueueFlag label={readiness.label} tone={readiness.tone === "danger" ? "danger" : readiness.tone === "success" ? "success" : "info"} />
             {workflowBadges.map((badge) => (
               <WorkflowBadge
                 key={`${order.order_number}-drawer-${badge.label}`}
@@ -426,6 +475,62 @@ function ProductionDetailDrawer({
       </div>
 
       <div style={{ display: "grid", gap: "12px" }}>
+        <div style={{ display: "grid", gap: "4px" }}>
+          <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 800, textTransform: "uppercase" }}>
+            Production Readiness
+          </span>
+          <div
+            data-testid="production-queue-detail-readiness"
+            data-production-readiness={readiness.statusKey || ""}
+            style={{
+              border: readiness.blocked ? "1px solid #fecaca" : "1px solid #bbf7d0",
+              background: readiness.blocked ? "#fff5f5" : "#ecfdf5",
+              color: readiness.blocked ? "#991b1b" : "#166534",
+              borderRadius: "14px",
+              padding: "12px",
+              display: "grid",
+              gap: "6px",
+              lineHeight: 1.45,
+            }}
+          >
+            <strong>{readiness.label}</strong>
+            <span>{readiness.detail}</span>
+            <span style={{ fontWeight: 700 }}>
+              Next recommended action: {readiness.nextRecommendedAction}
+            </span>
+            <span style={{ fontWeight: 700 }}>
+              Responsible: {readiness.responsibleParty}
+            </span>
+          </div>
+        </div>
+
+        {readiness.blockers?.length ? (
+          <div style={{ display: "grid", gap: "8px" }}>
+            <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 800, textTransform: "uppercase" }}>
+              Blocking Reasons
+            </span>
+            {readiness.blockers.map((blocker) => (
+              <div
+                key={blocker.key}
+                data-testid="production-queue-detail-blocker"
+                style={{
+                  border: "1px solid #fecaca",
+                  background: "#fff5f5",
+                  color: "#991b1b",
+                  borderRadius: "12px",
+                  padding: "10px 12px",
+                  display: "grid",
+                  gap: "4px",
+                }}
+              >
+                <strong>{blocker.reason}</strong>
+                <span>Required action: {blocker.requiredAction}</span>
+                <span>Responsible: {blocker.responsibleParty}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         <div style={{ display: "grid", gap: "4px" }}>
           <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 800, textTransform: "uppercase" }}>
             Customer Reference
@@ -467,7 +572,7 @@ function ProductionDetailDrawer({
         </div>
 
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          {order.available_actions?.map((action, index) => (
+          {executableActions.map((action, index) => (
             <QueueActionButton
               key={action.key}
               action={action}
@@ -475,6 +580,11 @@ function ProductionDetailDrawer({
               onClick={() => onRunAction(order, action)}
             />
           ))}
+          {!executableActions.length ? (
+            <span style={{ color: "#64748b", fontWeight: 700 }}>
+              No production action is currently available.
+            </span>
+          ) : null}
         </div>
         {actionFeedback ? (
           <div
@@ -879,6 +989,7 @@ export default function Orders() {
           >
             <SummaryCard label="Active Work" value={workspaceSummary.activeOrders} />
             <SummaryCard label="Ready For Production" value={workspaceSummary.readyForProductionOrders} />
+            <SummaryCard label="Blocked" value={workspaceSummary.blockedOrders} tone="danger" />
             <SummaryCard label="Urgent" value={workspaceSummary.urgentOrders} tone="warning" />
             <SummaryCard label="On Hold" value={workspaceSummary.onHoldOrders} tone="danger" />
             <SummaryCard label="Unassigned" value={workspaceSummary.unassignedOrders} tone="warning" />
@@ -939,7 +1050,7 @@ export default function Orders() {
                 tone={
                   filter.key === "completed"
                     ? "success"
-                    : filter.key === "canceled" || filter.key === "on-hold"
+                    : filter.key === "canceled" || filter.key === "on-hold" || filter.key === "blocked"
                     ? "danger"
                     : filter.key === "urgent" || filter.key === "unassigned"
                     ? "warning"

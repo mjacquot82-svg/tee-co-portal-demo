@@ -13,10 +13,12 @@ import {
   isOnHoldOperationalStatus,
   normalizeOperationalStatus,
 } from "../orders/orderWorkflow";
+import { buildProductionReadinessSummary } from "../orders/workflowPresentation";
 import { buildQueuePriority } from "../queue/buildQueuePriority";
 
 export const PRODUCTION_STATUS_FILTERS = [
   { key: "active", label: "All Active Work" },
+  { key: "blocked", label: "Blocked" },
   { key: "awaiting-deposit", label: "Awaiting Deposit" },
   { key: "ready-for-production", label: "Ready For Production" },
   { key: "printing", label: "Printing" },
@@ -57,9 +59,14 @@ export function normalizeLookup(value) {
 export function normalizeProductionOrder(order) {
   const normalizedStatus = normalizeOperationalStatus(order.status || "New");
   const workflowState = normalizeWorkflowState(
-    order.workflow_state || getOrderWorkflowState({ ...order, status: normalizedStatus })
+    getOrderWorkflowState({ ...order, status: normalizedStatus })
   );
   const queuePriority = buildQueuePriority({ ...order, status: normalizedStatus });
+  const productionReadiness = buildProductionReadinessSummary({
+    ...order,
+    status: normalizedStatus,
+    workflow_state: workflowState,
+  });
 
   return {
     ...order,
@@ -72,6 +79,7 @@ export function normalizeProductionOrder(order) {
     status: normalizedStatus,
     workflow_state: workflowState,
     workflow_tone: getWorkflowStateTone(workflowState),
+    production_readiness: productionReadiness,
     artwork_count:
       Number(order.artwork_count) ||
       (Array.isArray(order.artwork_files) ? order.artwork_files.length : 0) ||
@@ -212,6 +220,7 @@ export function matchesProductionStatus(order, activeStatus) {
   const normalizedStatus = normalizeOperationalStatus(order.status);
   const workflowState = normalizeWorkflowState(order.workflow_state || normalizedStatus);
   const queuePriority = buildQueuePriority(order);
+  const readiness = order.production_readiness || buildProductionReadinessSummary(order);
 
   if (activeStatus === "active") {
     return (
@@ -220,12 +229,16 @@ export function matchesProductionStatus(order, activeStatus) {
     );
   }
 
+  if (activeStatus === "blocked") {
+    return readiness.blocked === true;
+  }
+
   if (activeStatus === "awaiting-deposit") {
-    return workflowState === "Awaiting Deposit";
+    return workflowState === "Awaiting Deposit" || readiness.label === "Awaiting Payment";
   }
 
   if (activeStatus === "ready-for-production") {
-    return workflowState === "Ready For Production";
+    return readiness.statusKey === "ready-for-production";
   }
 
   if (activeStatus === "printing") {
@@ -317,12 +330,16 @@ export function buildProductionWorkspaceSummary(orders = []) {
   const readyForProductionOrders = orders.filter((order) =>
     matchesProductionStatus(order, "ready-for-production")
   );
+  const blockedOrders = orders.filter((order) =>
+    matchesProductionStatus(order, "blocked")
+  );
 
   return {
     activeOrders: activeOrders.length,
     urgentOrders: urgentOrders.length,
     unassignedOrders: unassignedOrders.length,
     readyForProductionOrders: readyForProductionOrders.length,
+    blockedOrders: blockedOrders.length,
     onHoldOrders: onHoldOrders.length,
     completedOrders: completedOrders.length,
     canceledOrders: canceledOrders.length,

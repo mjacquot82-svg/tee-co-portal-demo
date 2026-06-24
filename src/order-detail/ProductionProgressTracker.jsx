@@ -5,6 +5,7 @@ import {
 } from "../orders/orderWorkflow";
 import WorkflowBadge from "../components/WorkflowBadge";
 import {
+  buildProductionReadinessSummary,
   buildWorkflowBlockDetails,
   buildWorkflowStatusBadges,
 } from "../orders/workflowPresentation";
@@ -14,6 +15,7 @@ export default function ProductionProgressTracker({ order }) {
   const isOnHold = isOnHoldOperationalStatus(order.status);
   const gating = buildWorkflowBlockDetails(order, { targetStatus: "Ready For Production" });
   const workflowBadges = buildWorkflowStatusBadges(order);
+  const readiness = buildProductionReadinessSummary(order);
 
   return (
     <section
@@ -35,6 +37,28 @@ export default function ProductionProgressTracker({ order }) {
           ))}
         </div>
       ) : null}
+
+      <div
+        data-testid="production-readiness-indicator"
+        data-production-readiness={readiness.statusKey || ""}
+        style={{
+          marginBottom: "12px",
+          borderRadius: "14px",
+          border: readiness.blocked ? "1px solid #fecaca" : "1px solid #bfdbfe",
+          background: readiness.blocked ? "#fff5f5" : "#eff6ff",
+          color: readiness.blocked ? "#991b1b" : "#1d4ed8",
+          padding: "12px 14px",
+          display: "grid",
+          gap: "4px",
+          lineHeight: 1.45,
+        }}
+      >
+        <strong>Production Readiness: {readiness.label}</strong>
+        <span style={{ fontWeight: 700 }}>{readiness.detail}</span>
+        <span style={{ fontSize: "13px", fontWeight: 700 }}>
+          Next recommended action: {readiness.nextRecommendedAction}
+        </span>
+      </div>
 
       <div
         style={{
@@ -117,6 +141,11 @@ export default function ProductionProgressTracker({ order }) {
         >
           <strong>{gating.summary}</strong>
           <span style={{ fontWeight: 700 }}>{gating.detail}</span>
+          {(gating.blockers || []).map((blocker) => (
+            <span key={blocker.key} style={{ fontSize: "13px", fontWeight: 700 }}>
+              Required action: {blocker.requiredAction} Responsible: {blocker.responsibleParty}
+            </span>
+          ))}
         </div>
       ) : null}
     </section>

@@ -153,7 +153,25 @@ export function normalizeOperationalStatus(status) {
 }
 
 export function getOrderWorkflowState(order = {}) {
-  return normalizeWorkflowState(order.workflow_state || order.status || "Draft");
+  const operationalStatus = normalizeOperationalStatus(order.status);
+
+  if (
+    [
+      "Awaiting Deposit",
+      "Ready For Production",
+      "Printing",
+      "Embroidery",
+      "QC / Finishing",
+      "Ready For Pickup",
+      "On Hold",
+      "Completed",
+      "Canceled",
+    ].includes(operationalStatus)
+  ) {
+    return operationalStatus;
+  }
+
+  return normalizeWorkflowState(order.workflow_state || operationalStatus || "Draft");
 }
 
 export function getOperationalStatusIndex(status) {

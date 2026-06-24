@@ -238,13 +238,52 @@ test("production workflow state transitions stay consistent across queue, detail
   await page.goto("/login?redirectTo=/admin/orders");
   await loginThroughOperationalPin(page, config, "/admin/orders");
 
-  const { row, orderNumber } = await findEligibleProductionOrder(page, config);
+  const seededOrderNumber = `TC-PROD-${Date.now().toString().slice(-6)}`;
+  await page.evaluate((orderNumber) => {
+    const storageKey = "teeCoStaffOrders";
+    const currentOrders = JSON.parse(window.localStorage.getItem(storageKey) || "[]");
+    const seedOrder = currentOrders[0] || {};
+    const now = new Date().toISOString();
+
+    currentOrders.unshift({
+      ...seedOrder,
+      order_number: orderNumber,
+      customer_name: "Production Movement Test",
+      garment: seedOrder.garment || "Production Tee",
+      status: "New",
+      workflow_state: "New",
+      operational_visible: true,
+      quote_status: "Approved",
+      artwork_approval_required: false,
+      artwork_approval_status: "Not Required",
+      deposit_required: false,
+      deposit_amount: 0,
+      deposit_workflow_status: "Deposit Not Required",
+      workflow_overrides: {},
+      payment_history: [],
+      total_paid: 0,
+      activity_log: [],
+      created_at: now,
+      updated_at: now,
+    });
+
+    window.localStorage.setItem(storageKey, JSON.stringify(currentOrders));
+  }, seededOrderNumber);
+
+  await page.reload();
+  const { row, orderNumber } = await findEligibleProductionOrder(page, {
+    ...config,
+    productionOrderText: seededOrderNumber,
+  });
   const initialWorkflowState = (await row.getAttribute("data-workflow-state")) || "New";
   await openOrderDetailFromQueue(page, row, orderNumber);
-  await expectDetailWorkflowState(page, initialWorkflowState);
+  await expect(page.getByTestId("order-detail-page")).toHaveAttribute("data-workflow-state", "New");
+  await expect(page.getByTestId("order-detail-current-status")).toContainText("New");
+  await expectAssignmentVisibility(page);
 
   const queuePage = await page.context().newPage();
-  await queuePage.goto("/admin/orders");
+  await queuePage.goto("/login?redirectTo=/admin/orders");
+  await loginThroughOperationalPin(queuePage, config, "/admin/orders");
   await expectQueueWorkflowState(queuePage, orderNumber, "active", initialWorkflowState);
 
   let timelineCount = await getTimelineItemCount(page);
@@ -313,9 +352,13 @@ test("production gating blocks movement until an override is used", async ({ pag
   await focusQueueOnOrder(page, blockedOrderNumber, "active");
   const row = getQueueRow(page, blockedOrderNumber);
   await expect(row).toBeVisible();
+  await expect(row).toHaveAttribute("data-production-readiness", "blocked");
+  await expect(row.getByTestId("production-queue-row-blockers")).toContainText("Blocked");
+  await expect(row.getByTestId("production-queue-row-blockers")).toContainText("Next recommended action");
+  await expect(row.getByTestId("production-queue-row-blockers")).toContainText("Responsible");
   await expect(
     row.locator('[data-testid="production-workflow-action"][data-action-key="move_to_production"]')
-  ).toHaveAttribute("data-blocked", "true");
+  ).toHaveCount(0);
 
   await openOrderDetailFromQueue(page, row, blockedOrderNumber);
   const initialTimelineCount = await getTimelineItemCount(page);
@@ -334,4 +377,63 @@ test("production gating blocks movement until an override is used", async ({ pag
   await expectDetailWorkflowState(page, "Ready For Production");
   await expect(getWorkflowActionButton(page, "start_printing")).toBeVisible();
   await expectTimelineToMention(page, ["override", "forced", "production"]);
+});
+
+test("completed orders do not expose production start actions even with stale workflow state", async ({
+  page,
+}) => {
+  const config = getOperationalConfig();
+
+  await page.goto("/login?redirectTo=/admin/orders");
+  await loginThroughOperationalPin(page, config, "/admin/orders");
+
+  const completedOrderNumber = `TC-DONE-${Date.now().toString().slice(-6)}`;
+  await page.evaluate((orderNumber) => {
+    const storageKey = "teeCoStaffOrders";
+    const currentOrders = JSON.parse(window.localStorage.getItem(storageKey) || "[]");
+    const seedOrder = currentOrders[0] || {};
+    const now = new Date().toISOString();
+
+    currentOrders.unshift({
+      ...seedOrder,
+      order_number: orderNumber,
+      customer_name: "Completed Workflow Test",
+      garment: seedOrder.garment || "Completed Tee",
+      status: "Completed",
+      workflow_state: "Ready For Production",
+      operational_visible: true,
+      quote_status: "Approved",
+      artwork_approval_required: false,
+      artwork_approval_status: "Not Required",
+      deposit_required: false,
+      deposit_workflow_status: "Deposit Not Required",
+      workflow_overrides: {},
+      activity_log: [],
+      completed_at: now,
+      created_at: now,
+      updated_at: now,
+    });
+
+    window.localStorage.setItem(storageKey, JSON.stringify(currentOrders));
+  }, completedOrderNumber);
+
+  await page.goto(`/admin/orders/${completedOrderNumber}`);
+  await expect(page.getByTestId("order-detail-page")).toHaveAttribute("data-workflow-state", "Completed");
+  await expect(page.getByTestId("production-readiness-indicator")).toHaveAttribute(
+    "data-production-readiness",
+    "completed"
+  );
+  await expect(page.getByTestId("production-readiness-summary")).toHaveAttribute(
+    "data-production-readiness",
+    "completed"
+  );
+  await expect(getWorkflowActionButton(page, "move_to_production")).toHaveCount(0);
+  await expect(getWorkflowActionButton(page, "start_printing")).toHaveCount(0);
+
+  await page.goto("/admin/orders");
+  await focusQueueOnOrder(page, completedOrderNumber, "completed");
+  const row = getQueueRow(page, completedOrderNumber);
+  await expect(row).toHaveAttribute("data-workflow-state", "Completed");
+  await expect(row).toHaveAttribute("data-production-readiness", "completed");
+  await expect(row.locator('[data-testid="production-workflow-action"]')).toHaveCount(0);
 });
