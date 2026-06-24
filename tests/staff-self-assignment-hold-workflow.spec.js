@@ -53,7 +53,7 @@ async function seedSyntheticOrder(page, overrides = {}) {
     const existing = JSON.parse(window.localStorage.getItem(storageKey) || "[]");
     const base = existing[0] || {};
     const now = new Date().toISOString();
-    const orderNumber = `TC-TEST-${Date.now().toString().slice(-6)}`;
+    const orderNumber = `TC-TEST-${Date.now().toString().slice(-6)}-${Math.random().toString(36).slice(-4)}`;
 
     const seedOrder = {
       ...base,

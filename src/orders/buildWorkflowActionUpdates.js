@@ -35,8 +35,9 @@ export function buildWorkflowActionUpdates(order, actionInput) {
     updates.production_resume_staff_name = action.resumeStaffName || "";
     updates.production_resume_at = now;
     if (prevReason) {
-      const resumerSuffix = action.resumeStaffName ? ` Resumed by ${action.resumeStaffName}.` : "";
-      updates.activity_note = `Resumed from hold. Previous hold reason: ${prevReason}.${resumerSuffix}`;
+      updates.activity_note = action.resumeStaffName
+        ? `Resumed from hold. Previous hold reason: ${prevReason}. Resumed by ${action.resumeStaffName}.`
+        : `Resumed from hold. Previous hold reason: ${prevReason}.`;
     }
   }
 

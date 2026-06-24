@@ -324,6 +324,11 @@ function QueueRow({ order, onRunAction, onOpenDetail, onEscalate, currentStaffUs
                 data-testid="escalate-to-owner-button"
                 data-order-number={order.order_number || ""}
                 disabled={Boolean(order.last_escalated_at)}
+                title={
+                  order.last_escalated_at
+                    ? `Already escalated to owner — duplicate escalations are blocked for 24 hours (escalated by ${order.escalated_by_staff_name || "staff"})`
+                    : "Notify the owner that this order is blocked and needs attention"
+                }
                 onClick={() => onEscalate(order)}
                 style={{
                   marginTop: "4px",
