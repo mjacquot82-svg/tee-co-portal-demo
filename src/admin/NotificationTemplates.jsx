@@ -592,7 +592,7 @@ export default function NotificationTemplates() {
         </h1>
         <p style={{ margin: 0, color: "#57534e", fontSize: "14px", lineHeight: 1.55 }}>
           Manage the email and SMS templates used for customer and staff notifications.
-          Templates are stored in Supabase and synchronized across devices. Use merge
+          Templates are stored in Supabase and synchronized across devices on page load. Use merge
           fields to personalize each message.
         </p>
       </div>
