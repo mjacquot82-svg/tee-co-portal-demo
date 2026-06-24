@@ -48,6 +48,7 @@ function deriveRequestAmount(requestType, financials, customAmount) {
 }
 
 export default function PaymentRequestForm({
+  id,
   title = "Create Payment Request",
   description = "Create an internal payment request record for staff follow-up. This does not send a payment link.",
   customer = null,
@@ -112,6 +113,7 @@ export default function PaymentRequestForm({
 
   return (
     <section
+      id={id}
       style={{
         border: "1px solid #e2e8f0",
         borderRadius: "18px",

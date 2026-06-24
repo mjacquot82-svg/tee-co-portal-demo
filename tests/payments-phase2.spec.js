@@ -20,6 +20,11 @@ import {
   isBalancePaid,
   isDepositSatisfied,
 } from "../src/orders/canonicalState.js";
+import {
+  deriveOwnerOrderNextAction,
+  deriveOwnerPaymentRequestNextAction,
+  deriveOwnerQuoteNextAction,
+} from "../src/orders/ownerWorkflowActions.js";
 import { isDepositActionRequired } from "../src/lib/depositPaymentProviders.js";
 
 test.beforeEach(() => {
@@ -229,4 +234,95 @@ test("canonical workflow state derives customer and owner workflow labels consis
       status: "Canceled",
     }).workflowState
   ).toBe("Cancelled");
+});
+
+test("owner next actions guide payment request outreach and blocked production work", () => {
+  const order = {
+    order_number: "TC-P2-1010",
+    customer_id: "customer-phase2-10",
+    deposit_required: true,
+    deposit_requirement: "required",
+    deposit_amount: 175,
+    total_amount: 700,
+    deposit_workflow_status: "Deposit Requested",
+    artwork_approval_required: false,
+  };
+  const request = createPaymentRequest({
+    customer_id: order.customer_id,
+    order_number: order.order_number,
+    request_type: "deposit",
+    status: "open",
+    amount_requested: 175,
+  });
+
+  expect(deriveOwnerOrderNextAction(order)).toMatchObject({
+    label: "Send or follow up on payment request",
+    href: `/admin/financial/requests/${request.id}`,
+    tone: "warning",
+  });
+
+  expect(deriveOwnerPaymentRequestNextAction(request, order)).toMatchObject({
+    label: "Send now",
+    actionKey: "mark_payment_request_sent",
+  });
+
+  const blockedOrder = {
+    order_number: "TC-P2-1011",
+    status: "New",
+    deposit_required: false,
+    artwork_approval_required: true,
+    artwork_approval_status: "Pending Review",
+  };
+
+  expect(deriveOwnerOrderNextAction(blockedOrder)).toMatchObject({
+    label: "View blocking reason",
+    tone: "danger",
+  });
+});
+
+test("owner next actions guide quote release and paid request follow-up", () => {
+  const readyQuote = {
+    order_number: "TC-P2-1012",
+    quote_status: "Approved",
+    deposit_required: false,
+    artwork_approval_required: false,
+  };
+  const readiness = {
+    ready: true,
+    remainingRequirements: 0,
+    checks: [],
+  };
+
+  expect(deriveOwnerQuoteNextAction(readyQuote, readiness)).toMatchObject({
+    label: "Release to production",
+    actionKey: "release_to_production",
+    tone: "success",
+  });
+
+  const paidRequest = {
+    id: "payment-request-paid",
+    request_number: "PR-PAID",
+    customer_id: "customer-phase2-12",
+    order_number: "TC-P2-1013",
+    request_type: "deposit",
+    status: "paid",
+    amount_requested: 200,
+    amount_paid: 200,
+    sent_at: "2026-06-01T12:00:00.000Z",
+  };
+  const paidOrder = {
+    order_number: "TC-P2-1013",
+    customer_id: "customer-phase2-12",
+    status: "New",
+    deposit_required: true,
+    deposit_amount: 200,
+    deposit_workflow_status: "Deposit Received",
+    artwork_approval_required: false,
+    payment_requests: [paidRequest],
+  };
+
+  expect(deriveOwnerPaymentRequestNextAction(paidRequest, paidOrder)).toMatchObject({
+    label: "Release to production",
+    tone: "success",
+  });
 });

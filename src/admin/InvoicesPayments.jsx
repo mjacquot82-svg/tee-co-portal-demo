@@ -10,6 +10,10 @@ import {
   listPayments,
 } from "../lib/paymentsStore";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
+import {
+  deriveOwnerOrderNextAction,
+  deriveOwnerPaymentRequestNextAction,
+} from "../orders/ownerWorkflowActions";
 import { isCanceledOperationalStatus } from "../orders/orderWorkflow";
 import { isQuoteCanceled } from "../quotes/quoteWorkflow";
 import PaymentRequestForm from "./PaymentRequestForm";
@@ -107,7 +111,7 @@ function EmptyState({ title, detail }) {
   );
 }
 
-function RequestTable({ requests, customerById }) {
+function RequestTable({ requests, customerById, orderByNumber }) {
   if (!requests.length) {
     return <EmptyState title="No payment requests in this section." detail="Requests created from orders, quotes, or customer records will appear here." />;
   }
@@ -124,43 +128,59 @@ function RequestTable({ requests, customerById }) {
             <th style={{ padding: "12px 10px" }}>Status</th>
             <th style={{ padding: "12px 10px" }}>Requested</th>
             <th style={{ padding: "12px 10px" }}>Paid</th>
+            <th style={{ padding: "12px 10px" }}>Next Action</th>
             <th style={{ padding: "12px 10px" }}>Created</th>
           </tr>
         </thead>
         <tbody>
-          {requests.map((request) => (
-            <tr key={request.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-              <td style={{ padding: "14px 10px", whiteSpace: "nowrap" }}>
-                <Link
-                  to={`/admin/financial/requests/${request.id}`}
-                  style={{ color: "#0f172a", fontWeight: 800, textDecoration: "none" }}
-                >
-                  {request.request_number}
-                </Link>
-              </td>
-              <td style={{ padding: "14px 10px" }}>
-                {customerById.get(request.customer_id)?.name || request.metadata?.customer_name || "Customer"}
-              </td>
-              <td style={{ padding: "14px 10px", whiteSpace: "nowrap" }}>
-                {request.order_number ? (
-                  <Link to={`/admin/orders/${request.order_number}`} style={{ color: "#334155", fontWeight: 700 }}>
-                    {request.order_number}
+          {requests.map((request) => {
+            const relatedOrder = orderByNumber.get(request.order_number) || null;
+            const nextAction = deriveOwnerPaymentRequestNextAction(request, relatedOrder);
+            return (
+              <tr key={request.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                <td style={{ padding: "14px 10px", whiteSpace: "nowrap" }}>
+                  <Link
+                    to={`/admin/financial/requests/${request.id}`}
+                    style={{ color: "#0f172a", fontWeight: 800, textDecoration: "none" }}
+                  >
+                    {request.request_number}
                   </Link>
-                ) : (
-                  <span style={{ color: "#94a3b8" }}>No order</span>
-                )}
-              </td>
-              <td style={{ padding: "14px 10px", textTransform: "capitalize" }}>
-                {String(request.request_type || "").replace(/_/g, " ")}
-              </td>
-              <td style={{ padding: "14px 10px" }}>
-                <PaymentStatusBadge status={String(request.status || "open").replace(/_/g, " ")} />
-              </td>
-              <td style={{ padding: "14px 10px", whiteSpace: "nowrap", fontWeight: 700 }}>{money(request.amount_requested)}</td>
-              <td style={{ padding: "14px 10px", whiteSpace: "nowrap" }}>{money(request.amount_paid)}</td>
-              <td style={{ padding: "14px 10px", whiteSpace: "nowrap" }}>{formatShortDate(request.created_at)}</td>
-            </tr>
-          ))}
+                </td>
+                <td style={{ padding: "14px 10px" }}>
+                  {customerById.get(request.customer_id)?.name || request.metadata?.customer_name || "Customer"}
+                </td>
+                <td style={{ padding: "14px 10px", whiteSpace: "nowrap" }}>
+                  {request.order_number ? (
+                    <Link to={`/admin/orders/${request.order_number}`} style={{ color: "#334155", fontWeight: 700 }}>
+                      {request.order_number}
+                    </Link>
+                  ) : (
+                    <span style={{ color: "#94a3b8" }}>No order</span>
+                  )}
+                </td>
+                <td style={{ padding: "14px 10px", textTransform: "capitalize" }}>
+                  {String(request.request_type || "").replace(/_/g, " ")}
+                </td>
+                <td style={{ padding: "14px 10px" }}>
+                  <PaymentStatusBadge status={String(request.status || "open").replace(/_/g, " ")} />
+                </td>
+                <td style={{ padding: "14px 10px", whiteSpace: "nowrap", fontWeight: 700 }}>{money(request.amount_requested)}</td>
+                <td style={{ padding: "14px 10px", whiteSpace: "nowrap" }}>{money(request.amount_paid)}</td>
+                <td style={{ padding: "14px 10px", minWidth: "180px" }}>
+                  <Link
+                    to={`/admin/financial/requests/${request.id}`}
+                    style={{ color: "#0f172a", fontWeight: 800, textDecoration: "none" }}
+                  >
+                    {nextAction.label}
+                  </Link>
+                  <div style={{ color: "#64748b", fontSize: "12px", marginTop: "4px" }}>
+                    {nextAction.detail}
+                  </div>
+                </td>
+                <td style={{ padding: "14px 10px", whiteSpace: "nowrap" }}>{formatShortDate(request.created_at)}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -184,11 +204,14 @@ function OrderTable({ orders }) {
             <th style={{ padding: "12px 10px" }}>Deposit</th>
             <th style={{ padding: "12px 10px" }}>Paid</th>
             <th style={{ padding: "12px 10px" }}>Balance</th>
+            <th style={{ padding: "12px 10px" }}>Next Action</th>
             <th style={{ padding: "12px 10px" }}>Due</th>
           </tr>
         </thead>
         <tbody>
-          {orders.map((order) => (
+          {orders.map((order) => {
+            const nextAction = deriveOwnerOrderNextAction(order);
+            return (
             <tr key={order.order_number} style={{ borderBottom: "1px solid #e2e8f0" }}>
               <td style={{ padding: "14px 10px", whiteSpace: "nowrap" }}>
                 <Link to={`/admin/orders/${order.order_number}`} style={{ color: "#0f172a", fontWeight: 800, textDecoration: "none" }}>
@@ -212,11 +235,23 @@ function OrderTable({ orders }) {
               <td style={{ padding: "14px 10px", whiteSpace: "nowrap", color: order.balance_due > 0 ? "#991b1b" : "#166534", fontWeight: 800 }}>
                 {money(order.balance_due)}
               </td>
+              <td style={{ padding: "14px 10px", minWidth: "180px" }}>
+                <Link
+                  to={nextAction.href || `/admin/orders/${order.order_number}`}
+                  style={{ color: "#0f172a", fontWeight: 800, textDecoration: "none" }}
+                >
+                  {nextAction.label}
+                </Link>
+                <div style={{ color: "#64748b", fontSize: "12px", marginTop: "4px" }}>
+                  {nextAction.detail}
+                </div>
+              </td>
               <td style={{ padding: "14px 10px", whiteSpace: "nowrap" }}>
                 {order.invoice_due_date ? formatShortDate(order.invoice_due_date) : "—"}
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -234,6 +269,10 @@ export default function InvoicesPayments() {
   const customerById = useMemo(
     () => new Map(customers.map((customer) => [customer.id, customer])),
     [customers]
+  );
+  const orderByNumber = useMemo(
+    () => new Map(financialOrders.map((order) => [order.order_number, order])),
+    [financialOrders]
   );
   const paymentRequests = listPaymentRequests();
   const payments = listPayments();
@@ -316,16 +355,16 @@ export default function InvoicesPayments() {
         title="Open Payment Requests"
         description="Native payment request records created through the Phase 2 admin layer."
       >
-        <RequestTable requests={openPaymentRequests} customerById={customerById} />
+        <RequestTable requests={openPaymentRequests} customerById={customerById} orderByNumber={orderByNumber} />
       </SectionCard>
 
       <SectionCard title="Awaiting Deposit" description="Open deposit requests plus legacy order records still waiting for deposit collection.">
-        <RequestTable requests={awaitingDepositRequests} customerById={customerById} />
+        <RequestTable requests={awaitingDepositRequests} customerById={customerById} orderByNumber={orderByNumber} />
         <OrderTable orders={awaitingDepositOrders} />
       </SectionCard>
 
       <SectionCard title="Awaiting Balance" description="Balance requests and orders with an outstanding balance after deposits or partial payments.">
-        <RequestTable requests={awaitingBalanceRequests} customerById={customerById} />
+        <RequestTable requests={awaitingBalanceRequests} customerById={customerById} orderByNumber={orderByNumber} />
         <OrderTable orders={awaitingBalanceOrders} />
       </SectionCard>
 

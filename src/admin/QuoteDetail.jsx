@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import PricingSummary from "../components/PricingSummary";
+import OwnerNextActionCard from "../components/OwnerNextActionCard";
 import { formatDateTime } from "../lib/dateFormatting";
 import {
   getArtworkAssetUrl,
@@ -24,6 +25,7 @@ import {
   buildDepositStatus,
   buildProductionReadiness,
 } from "../quotes/productionReadiness";
+import { deriveOwnerQuoteNextAction } from "../orders/ownerWorkflowActions";
 import {
   canManageArchivedQuotes,
   getAdminViewer,
@@ -176,9 +178,9 @@ function ReferenceTimeline({ events = [], compact = false, embedded = false }) {
   );
 }
 
-function WorkspaceCard({ eyebrow, title, description, children, background = "#ffffff", compact = false, className }) {
+function WorkspaceCard({ eyebrow, title, description, children, background = "#ffffff", compact = false, className, id }) {
   return (
-    <section className={className} style={cardStyle(background, compact)}>
+    <section id={id} className={className} style={cardStyle(background, compact)}>
       <div style={{ marginBottom: compact ? "12px" : "16px" }}>
         <p
           style={{
@@ -1014,6 +1016,13 @@ export default function QuoteDetail() {
     () => buildProductionReadiness(order, financials),
     [order, financials]
   );
+  const ownerNextAction = useMemo(
+    () => (order ? deriveOwnerQuoteNextAction(financials || order, productionReadiness) : null),
+    [financials, order, productionReadiness]
+  );
+  const quoteNextAction = ownerNextAction?.actionKey
+    ? { ...ownerNextAction, href: "" }
+    : ownerNextAction;
   const artworkNames = useMemo(() => getOrderArtworkNames(order), [order]);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [archivedSections, setArchivedSections] = useState({
@@ -1099,6 +1108,28 @@ export default function QuoteDetail() {
       activity_type: "release_to_production",
       activity_note: "Quote released into Production Orders.",
     });
+  }
+
+  function handleOwnerNextAction(actionKey) {
+    if (actionKey === "release_to_production") {
+      handleReleaseToProduction();
+      return;
+    }
+
+    if (actionKey === "create_payment_request") {
+      document.getElementById("quote-payment-request-form")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      return;
+    }
+
+    if (actionKey === "open_artwork" || actionKey === "open_approval") {
+      document.getElementById("quote-artwork-approval")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
   }
 
   function handleArchiveQuote() {
@@ -1543,6 +1574,12 @@ export default function QuoteDetail() {
             Operational work stopped on {canceledAt}. Payment history, payments, deposits, and timeline events are still available on this record.
           </p>
         </section>
+      ) : null}
+
+      {!archived && quoteNextAction ? (
+        <div style={{ marginBottom: "20px" }}>
+          <OwnerNextActionCard action={quoteNextAction} onAction={handleOwnerNextAction} />
+        </div>
       ) : null}
 
       {archived ? (
@@ -2115,6 +2152,7 @@ export default function QuoteDetail() {
         </div>
 
         <WorkspaceCard
+          id="quote-artwork-approval"
           eyebrow="Approvals And Artwork"
           title="Customer sign-off and art visibility"
           description="Artwork, placements, and customer-facing details remain visible while you manage the request."
@@ -2204,6 +2242,7 @@ export default function QuoteDetail() {
           </div>
 
           <PaymentRequestForm
+            id="quote-payment-request-form"
             title="Create Payment Request"
             description="Create a staff-managed payment request for this quote while the legacy deposit visibility remains unchanged."
             order={financials}

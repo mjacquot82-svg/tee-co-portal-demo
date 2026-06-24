@@ -30,10 +30,12 @@ import { buildProductionGatingState } from "../orders/workflowGating";
 import { isAdminWorkspaceView, isStaffWorkspaceView } from "./adminRoleView";
 import { markAssignmentAttentionSeen } from "../lib/staffAssignmentAttentionStore";
 import WorkflowBadge from "../components/WorkflowBadge";
+import OwnerNextActionCard from "../components/OwnerNextActionCard";
 import {
   buildWorkflowBlockDetails,
   buildWorkflowStatusBadges,
 } from "../orders/workflowPresentation";
+import { deriveOwnerOrderNextAction } from "../orders/ownerWorkflowActions";
 import PaymentRequestForm from "./PaymentRequestForm";
 
 const cardStyle = {
@@ -115,6 +117,13 @@ export default function OrderDetail() {
     [order]
   );
   const workflowBadges = useMemo(() => (order ? buildWorkflowStatusBadges(order) : []), [order]);
+  const ownerNextAction = useMemo(
+    () => (normalizedOrder ? deriveOwnerOrderNextAction(normalizedOrder) : null),
+    [normalizedOrder]
+  );
+  const orderNextAction = ownerNextAction?.actionKey
+    ? { ...ownerNextAction, href: "" }
+    : ownerNextAction;
 
   useEffect(() => {
     return subscribeToStaffUsers((nextUsers) => {
@@ -435,6 +444,29 @@ export default function OrderDetail() {
     });
   }
 
+  function handleOwnerNextAction(actionKey) {
+    if (actionKey === "create_payment_request") {
+      document.getElementById("owner-payment-request-form")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      return;
+    }
+
+    if (actionKey === "move_to_production") {
+      const action = workflowActions.find((entry) => entry.key === "move_to_production");
+      if (action) handleWorkflowAction(action);
+      return;
+    }
+
+    if (actionKey === "view_blocking_reason") {
+      document.querySelector("[data-testid='production-gating-alert']")?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }
+
   function handleCancelProductionOrder() {
     if (isCanceledOperationalStatus(order.status)) return;
 
@@ -753,6 +785,10 @@ export default function OrderDetail() {
         </div>
 
         <aside style={{ display: "grid", gap: "18px" }}>
+          {isStaffWorkspace || !orderNextAction ? null : (
+            <OwnerNextActionCard action={orderNextAction} onAction={handleOwnerNextAction} />
+          )}
+
           {isStaffWorkspace ? null : (
             <FinancialSummaryPanel
               order={normalizedOrder}
@@ -764,6 +800,7 @@ export default function OrderDetail() {
 
           {isStaffWorkspace || !normalizedOrder ? null : (
             <PaymentRequestForm
+              id="owner-payment-request-form"
               title="Create Payment Request"
               description="Create a staff-managed payment request tied to this order without changing the existing deposit workflow."
               order={normalizedOrder}

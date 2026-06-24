@@ -16,6 +16,10 @@ function formatEventLabel(eventType = "") {
     .join(" ");
 }
 
+function buildOrderNumber(record = {}) {
+  return String(record.metadata?.orderNumber || "").trim();
+}
+
 export default function NotificationActivity() {
   const records = useNotificationActivity();
 
@@ -94,6 +98,14 @@ export default function NotificationActivity() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "8px", color: "#334155", fontSize: "14px" }}>
                 <span><strong>Recipient:</strong> {buildRecipientLabel(record)}</span>
                 <span><strong>Template:</strong> {record.templateName || record.templateType}</span>
+                {buildOrderNumber(record) ? (
+                  <span>
+                    <strong>Order:</strong>{" "}
+                    <Link to={`/admin/orders/${buildOrderNumber(record)}`} style={{ color: "#0f172a", fontWeight: 800 }}>
+                      {buildOrderNumber(record)}
+                    </Link>
+                  </span>
+                ) : null}
               </div>
 
               <div style={{ display: "grid", gap: "6px", color: "#334155", fontSize: "13px" }}>

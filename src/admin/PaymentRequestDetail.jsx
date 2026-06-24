@@ -1,4 +1,6 @@
 import { Link, useParams } from "react-router-dom";
+import { useState } from "react";
+import OwnerNextActionCard from "../components/OwnerNextActionCard";
 import PaymentStatusBadge from "../components/PaymentStatusBadge";
 import { formatDateTime } from "../lib/dateFormatting";
 import { useStoredCustomers } from "../lib/customersStore";
@@ -7,8 +9,11 @@ import {
   getPaymentRequestById,
   listPaymentEvents,
   listPayments,
+  recordPaymentEvent,
+  updatePaymentRequest,
 } from "../lib/paymentsStore";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
+import { deriveOwnerPaymentRequestNextAction } from "../orders/ownerWorkflowActions";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -43,8 +48,11 @@ function SectionCard({ title, children }) {
 
 export default function PaymentRequestDetail() {
   const { requestId } = useParams();
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [feedback, setFeedback] = useState("");
   const orders = useStoredOrders();
   const customers = useStoredCustomers();
+  void refreshToken;
   const request = getPaymentRequestById(requestId);
 
   if (!request) {
@@ -66,6 +74,33 @@ export default function PaymentRequestDetail() {
   const requestEvents = listPaymentEvents().filter(
     (event) => event.payment_request_id === request.id || requestPayments.some((payment) => payment.id === event.payment_id)
   );
+  const nextAction = deriveOwnerPaymentRequestNextAction(request, financials);
+
+  function handleNextAction(actionKey) {
+    if (actionKey !== "mark_payment_request_sent") return;
+
+    const sentAt = new Date().toISOString();
+    const updatedRequest = updatePaymentRequest(request.id, {
+      status: "sent",
+      sent_at: sentAt,
+    });
+
+    recordPaymentEvent({
+      payment_request_id: request.id,
+      order_number: request.order_number,
+      event_type: "payment_request_sent",
+      event_source: "staff",
+      summary: `Payment request ${request.request_number} marked sent to customer.`,
+      created_at: sentAt,
+    });
+
+    setFeedback(
+      updatedRequest
+        ? `${updatedRequest.request_number} marked sent. Customer outreach is now complete for this request.`
+        : "Payment request marked sent."
+    );
+    setRefreshToken((current) => current + 1);
+  }
 
   return (
     <div style={{ maxWidth: "1120px", margin: "0 auto", padding: "24px", display: "grid", gap: "20px" }}>
@@ -105,6 +140,24 @@ export default function PaymentRequestDetail() {
           <DetailItem label="Created" value={formatDateTime(request.created_at)} />
         </div>
       </SectionCard>
+
+      <OwnerNextActionCard action={nextAction} onAction={handleNextAction} />
+
+      {feedback ? (
+        <section
+          aria-live="polite"
+          style={{
+            border: "1px solid #bbf7d0",
+            borderRadius: "16px",
+            background: "#ecfdf5",
+            color: "#166534",
+            padding: "14px 16px",
+            fontWeight: 800,
+          }}
+        >
+          {feedback}
+        </section>
+      ) : null}
 
       <SectionCard title="Related Records">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "14px" }}>
