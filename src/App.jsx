@@ -44,6 +44,7 @@ import PaymentRequestDetail from "./admin/PaymentRequestDetail";
 import FinancialHistory from "./admin/FinancialHistory";
 import NotificationTemplates from "./admin/NotificationTemplates";
 import NotificationActivity from "./admin/NotificationActivity";
+import StaffNotifications from "./admin/StaffNotifications";
 import AppSplash from "./components/AppSplash";
 
 export default function App() {
@@ -106,6 +107,10 @@ export default function App() {
             <Route
               path="admin/settings/notifications/activity"
               element={<NotificationActivity />}
+            />
+            <Route
+              path="admin/notifications"
+              element={<StaffNotifications />}
             />
           </Route>
 

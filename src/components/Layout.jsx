@@ -30,6 +30,7 @@ import { getUserInitials } from "../utils/getUserInitials";
 import AdminDiagnosticsPanel from "./AdminDiagnosticsPanel";
 import { useStaffAssignmentAttention } from "../lib/staffAssignmentAttentionStore";
 import { buildStaffAssignmentAttentionItems } from "../staff/buildStaffAssignmentAttentionItems";
+import { useUnreadStaffNotificationCount } from "../lib/staffNotificationsStore";
 import {
   ensureOperationalAuthInitialized,
   getOperationalAuthUser,
@@ -171,6 +172,12 @@ function getAdminSections(staffUser) {
             navKey: "productionOrders",
             badgeKey: "productionOrders",
           },
+          {
+            to: "/admin/notifications",
+            label: "Notifications",
+            navKey: "staffNotifications",
+            badgeKey: "staffNotifications",
+          },
         ],
       },
     ];
@@ -191,6 +198,12 @@ function getAdminSections(staffUser) {
       links: [
         { to: "/admin", label: "Dashboard", navKey: "dashboard" },
         { to: "/admin/staff-users", label: "Staff", navKey: "staffUsers" },
+        {
+          to: "/admin/notifications",
+          label: "Staff Notifications",
+          navKey: "staffNotifications",
+          badgeKey: "staffNotifications",
+        },
         {
           to: "/admin/settings/notifications",
           label: "Notification Templates",
@@ -265,6 +278,7 @@ function getAdminSections(staffUser) {
 }
 
 function getActiveSidebarLink(pathname, staffUser) {
+  if (pathname.startsWith("/admin/notifications")) return "staffNotifications";
   if (pathname.startsWith("/admin/assignments")) return "assignments";
   if (pathname.startsWith("/admin/garments")) return "garments";
   if (pathname.startsWith("/admin/products")) return "products";
@@ -496,6 +510,7 @@ function SocialLinks({ compact = false }) {
 function AdminSidebar({ pathname, staffUser }) {
   const orders = useStoredOrders();
   const assignmentAttentionState = useStaffAssignmentAttention();
+  const unreadNotificationCount = useUnreadStaffNotificationCount();
   const staffWorkspace = isStaffWorkspaceView(staffUser);
   const operationalOrders = isAdminWorkspaceView(staffUser)
     ? orders
@@ -503,11 +518,14 @@ function AdminSidebar({ pathname, staffUser }) {
   const assignedOrders = isAdminWorkspaceView(staffUser)
     ? orders
     : getAssignedOrdersForStaff(orders, staffUser);
-  const badgeCounts = getSidebarCounts({
-    operationalOrders,
-    assignedOrders,
-    staffWorkspace,
-  });
+  const badgeCounts = {
+    ...getSidebarCounts({
+      operationalOrders,
+      assignedOrders,
+      staffWorkspace,
+    }),
+    staffNotifications: unreadNotificationCount,
+  };
   const activeLink = getActiveSidebarLink(pathname, staffUser);
   const adminSections = getAdminSections(staffUser);
   const workspaceLabel = staffWorkspace

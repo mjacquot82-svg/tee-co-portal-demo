@@ -158,6 +158,12 @@ const ADMIN_ROUTE_PERMISSION_RULES = [
     permissions: [PERMISSIONS.settingsManage],
     classification: "protected-management",
   },
+  {
+    type: "exact",
+    value: "/admin/notifications",
+    permissions: [PERMISSIONS.productionManage, PERMISSIONS.orderManage, PERMISSIONS.assignmentManage],
+    classification: "operational",
+  },
 ];
 
 function normalizeRoutePathname(pathname = "") {
