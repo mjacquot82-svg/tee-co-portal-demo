@@ -21,6 +21,7 @@ export const MANAGEMENT_EXACT_PATHS = [
   "/admin/staff-users",
   "/admin/settings/notifications",
   "/admin/quotes/archived",
+  "/admin/settings/notifications",
 ];
 
 export const MANAGEMENT_PATH_PREFIXES = [
@@ -149,6 +150,12 @@ const ADMIN_ROUTE_PERMISSION_RULES = [
     type: "prefix",
     value: "/admin/products",
     permissions: [PERMISSIONS.catalogManage],
+    classification: "protected-management",
+  },
+  {
+    type: "exact",
+    value: "/admin/settings/notifications",
+    permissions: [PERMISSIONS.settingsManage],
     classification: "protected-management",
   },
 ];

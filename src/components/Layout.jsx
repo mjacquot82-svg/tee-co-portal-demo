@@ -241,6 +241,16 @@ function getAdminSections(staffUser) {
         },
       ],
     },
+    {
+      title: "Settings",
+      links: [
+        {
+          to: "/admin/settings/notifications",
+          label: "Notification Templates",
+          navKey: "notificationTemplates",
+        },
+      ],
+    },
   ]
     .map((section) => ({
       ...section,
@@ -268,6 +278,7 @@ function getActiveSidebarLink(pathname, staffUser) {
   }
   if (pathname === "/admin/orders") return "productionOrders";
   if (pathname.startsWith("/admin/orders/")) return "productionOrders";
+  if (pathname.startsWith("/admin/settings/notifications")) return "notificationTemplates";
   if (pathname === "/admin") {
     return isStaffWorkspaceView(staffUser) ? "assignments" : "dashboard";
   }
