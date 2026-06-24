@@ -1,6 +1,34 @@
+import { useSyncExternalStore } from "react";
 import { getJsonStorageItem, hasBrowserStorage, setJsonStorageItem } from "./browserStorage";
+import { supabase } from "./supabaseClient";
 
 const STORAGE_KEY = "teeCoNotificationTemplates";
+const SUPABASE_TABLE = "notification_templates";
+const MIGRATION_SENTINEL_KEY = "teeCoNotificationTemplatesMigratedToSupabase";
+
+// In-memory cache (null = not yet seeded)
+let cachedTemplatesMap = null;
+const templateListeners = new Set();
+
+let templatesHydrationPromise = null;
+
+function shouldUseSupabase() {
+  return Boolean(supabase?.from);
+}
+
+function setCachedTemplatesMap(templates) {
+  cachedTemplatesMap = templates;
+}
+
+function emitTemplatesUpdated() {
+  templateListeners.forEach((listener) => listener());
+}
+
+export function subscribeToNotificationTemplates(listener) {
+  if (typeof listener !== "function") return () => {};
+  templateListeners.add(listener);
+  return () => templateListeners.delete(listener);
+}
 
 export const NOTIFICATION_TYPES = Object.freeze({
   newCustomerRequest: "new_customer_request",
@@ -382,10 +410,16 @@ function normalizeAllTemplates(stored = {}) {
 }
 
 export function getNotificationTemplates() {
-  if (!hasBrowserStorage()) {
-    return normalizeAllTemplates();
+  // Return in-memory cache if seeded (by hydration or prior save)
+  if (cachedTemplatesMap !== null) {
+    return cachedTemplatesMap;
   }
-  return normalizeAllTemplates(getJsonStorageItem(STORAGE_KEY, {}));
+
+  // Seed from localStorage on first synchronous call
+  const localData = hasBrowserStorage() ? getJsonStorageItem(STORAGE_KEY, {}) : {};
+  const normalized = normalizeAllTemplates(localData);
+  cachedTemplatesMap = normalized;
+  return normalized;
 }
 
 export function buildDefaultNotificationTemplates() {
@@ -410,9 +444,142 @@ export function listNotificationTemplates() {
   });
 }
 
+// --- Supabase persistence helpers ---
+
+function buildTemplateRow(template) {
+  return {
+    type: template.type,
+    name: template.name || "",
+    email_subject: template.emailSubject || "",
+    email_body: template.emailBody || "",
+    sms_message: template.smsMessage || "",
+    email_enabled: Boolean(template.emailEnabled),
+    sms_enabled: Boolean(template.smsEnabled),
+    staff_notification_enabled: Boolean(template.staffNotificationEnabled),
+  };
+}
+
+function mapTemplateRow(row) {
+  return {
+    type: row.type,
+    name: row.name,
+    emailSubject: row.email_subject,
+    emailBody: row.email_body,
+    smsMessage: row.sms_message,
+    emailEnabled: row.email_enabled,
+    smsEnabled: row.sms_enabled,
+    staffNotificationEnabled: row.staff_notification_enabled,
+  };
+}
+
+async function persistTemplatesToSupabase(normalizedMap) {
+  if (!shouldUseSupabase()) return;
+  const rows = Object.values(normalizedMap).map(buildTemplateRow);
+  try {
+    const { error } = await supabase
+      .from(SUPABASE_TABLE)
+      .upsert(rows, { onConflict: "type" });
+    if (error) {
+      console.error("[notificationTemplatesStore] Supabase upsert failed", error);
+    }
+  } catch (err) {
+    console.error("[notificationTemplatesStore] Supabase upsert threw", err);
+  }
+}
+
 export function saveNotificationTemplates(templates) {
-  if (!hasBrowserStorage()) return false;
-  return setJsonStorageItem(STORAGE_KEY, normalizeAllTemplates(templates));
+  const normalized = normalizeAllTemplates(templates);
+
+  // Update in-memory cache immediately
+  setCachedTemplatesMap(normalized);
+  emitTemplatesUpdated();
+
+  // Persist to localStorage
+  const localSaved = hasBrowserStorage() ? setJsonStorageItem(STORAGE_KEY, normalized) : false;
+
+  // Persist to Supabase async (fire-and-forget)
+  if (shouldUseSupabase()) {
+    persistTemplatesToSupabase(normalized);
+  }
+
+  return localSaved || shouldUseSupabase();
+}
+
+// --- Supabase hydration + localStorage migration ---
+
+async function hydrateNotificationTemplatesFromSupabase() {
+  if (!shouldUseSupabase()) return;
+
+  try {
+    const { data, error } = await supabase
+      .from(SUPABASE_TABLE)
+      .select("type, name, email_subject, email_body, sms_message, email_enabled, sms_enabled, staff_notification_enabled");
+
+    if (error) {
+      console.warn("[notificationTemplatesStore] Supabase hydration failed", error);
+      return;
+    }
+
+    const rows = Array.isArray(data) ? data : [];
+
+    // One-time migration: if Supabase has no rows and localStorage has customized templates
+    const alreadyMigrated = hasBrowserStorage()
+      ? getJsonStorageItem(MIGRATION_SENTINEL_KEY, false)
+      : false;
+
+    if (!alreadyMigrated && rows.length === 0) {
+      const localData = hasBrowserStorage() ? getJsonStorageItem(STORAGE_KEY, {}) : {};
+      const hasLocalCustomizations = Object.keys(localData).length > 0;
+      if (hasLocalCustomizations) {
+        console.info("[notificationTemplatesStore] Migrating localStorage templates to Supabase");
+        const normalized = normalizeAllTemplates(localData);
+        await persistTemplatesToSupabase(normalized);
+        if (hasBrowserStorage()) {
+          setJsonStorageItem(MIGRATION_SENTINEL_KEY, true);
+        }
+        setCachedTemplatesMap(normalized);
+        emitTemplatesUpdated();
+        return;
+      }
+    }
+
+    // Mark migration as complete (even if there was nothing to migrate)
+    if (!alreadyMigrated && hasBrowserStorage()) {
+      setJsonStorageItem(MIGRATION_SENTINEL_KEY, true);
+    }
+
+    if (rows.length > 0) {
+      // Build a map from Supabase rows, falling back to defaults for any missing type
+      const remoteMap = Object.fromEntries(rows.map((row) => [row.type, mapTemplateRow(row)]));
+      const normalized = normalizeAllTemplates(remoteMap);
+      // Also keep localStorage in sync as a local cache
+      if (hasBrowserStorage()) {
+        setJsonStorageItem(STORAGE_KEY, normalized);
+      }
+      setCachedTemplatesMap(normalized);
+      emitTemplatesUpdated();
+    }
+  } catch (err) {
+    console.error("[notificationTemplatesStore] Supabase hydration threw", err);
+  }
+}
+
+export function ensureNotificationTemplatesHydrated() {
+  if (templatesHydrationPromise) return templatesHydrationPromise;
+  templatesHydrationPromise = hydrateNotificationTemplatesFromSupabase().catch((err) => {
+    console.error("[notificationTemplatesStore] Hydration promise rejected", err);
+  });
+  return templatesHydrationPromise;
+}
+
+// --- React hook ---
+
+export function useNotificationTemplates() {
+  return useSyncExternalStore(
+    subscribeToNotificationTemplates,
+    getNotificationTemplates,
+    getNotificationTemplates
+  );
 }
 
 export function updateNotificationTemplate(type, updates = {}) {

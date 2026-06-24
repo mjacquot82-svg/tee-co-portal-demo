@@ -1,13 +1,18 @@
 import { useSyncExternalStore } from "react";
 import { getJsonStorageItem, hasBrowserStorage, setJsonStorageItem } from "./browserStorage";
+import { supabase } from "./supabaseClient";
 
 const STORAGE_KEY = "teeCoStaffNotifications";
+const SUPABASE_TABLE = "staff_notifications";
+const MIGRATION_SENTINEL_KEY = "teeCoStaffNotificationsMigratedToSupabase";
 
 const notificationListeners = new Set();
 
 const memoryStore = {
   records: [],
 };
+
+let staffNotificationsHydrationPromise = null;
 
 export const STAFF_NOTIFICATION_TYPES = Object.freeze({
   newWorkAssigned: "new_work_assigned",
@@ -53,6 +58,10 @@ function generateNotificationId() {
   return `staff-notif-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function shouldUseSupabase() {
+  return Boolean(supabase?.from);
+}
+
 function normalizeStaffNotification(record = {}) {
   return {
     id: String(record.id || ""),
@@ -68,25 +77,106 @@ function normalizeStaffNotification(record = {}) {
 }
 
 function readStoredNotifications() {
-  if (!hasBrowserStorage()) return memoryStore.records;
-  const records = getJsonStorageItem(STORAGE_KEY, []);
-  return Array.isArray(records) ? records : [];
+  // After hydration the memoryStore is the authoritative source
+  if (memoryStore.records.length > 0) return memoryStore.records;
+  // Before hydration: seed from localStorage so first render isn't empty
+  if (hasBrowserStorage()) {
+    const records = getJsonStorageItem(STORAGE_KEY, []);
+    if (Array.isArray(records) && records.length > 0) {
+      memoryStore.records = records;
+      return memoryStore.records;
+    }
+  }
+  return memoryStore.records;
+}
+
+// --- Supabase persistence helpers ---
+
+function buildStaffNotificationRow(record) {
+  return {
+    id: record.id,
+    type: record.type,
+    order_number: record.orderNumber,
+    assigned_to_staff_id: record.assignedToStaffId,
+    assigned_to_staff_name: record.assignedToStaffName,
+    description: record.description,
+    link_to: record.linkTo,
+    read: record.read,
+    created_at: record.createdAt,
+  };
+}
+
+function mapStaffNotificationRow(row) {
+  return normalizeStaffNotification({
+    id: row.id,
+    type: row.type,
+    orderNumber: row.order_number,
+    assignedToStaffId: row.assigned_to_staff_id,
+    assignedToStaffName: row.assigned_to_staff_name,
+    description: row.description,
+    linkTo: row.link_to,
+    read: row.read,
+    createdAt: row.created_at,
+  });
+}
+
+async function insertStaffNotificationToSupabase(record) {
+  if (!shouldUseSupabase()) return;
+  try {
+    const { error } = await supabase
+      .from(SUPABASE_TABLE)
+      .insert(buildStaffNotificationRow(record));
+    if (error) {
+      console.error("[staffNotificationsStore] Supabase insert failed", error);
+    }
+  } catch (err) {
+    console.error("[staffNotificationsStore] Supabase insert threw", err);
+  }
+}
+
+async function markReadInSupabase(id) {
+  if (!shouldUseSupabase()) return;
+  try {
+    const { error } = await supabase
+      .from(SUPABASE_TABLE)
+      .update({ read: true })
+      .eq("id", id);
+    if (error) {
+      console.error("[staffNotificationsStore] Supabase mark-read failed", error);
+    }
+  } catch (err) {
+    console.error("[staffNotificationsStore] Supabase mark-read threw", err);
+  }
+}
+
+async function markAllReadInSupabase() {
+  if (!shouldUseSupabase()) return;
+  try {
+    const { error } = await supabase
+      .from(SUPABASE_TABLE)
+      .update({ read: true })
+      .eq("read", false);
+    if (error) {
+      console.error("[staffNotificationsStore] Supabase mark-all-read failed", error);
+    }
+  } catch (err) {
+    console.error("[staffNotificationsStore] Supabase mark-all-read threw", err);
+  }
 }
 
 function saveStoredNotifications(records) {
   const safeRecords = Array.isArray(records) ? records : [];
 
-  if (!hasBrowserStorage()) {
-    memoryStore.records = safeRecords;
-    emitNotificationsUpdated();
-    return true;
+  // Always update in-memory store immediately
+  memoryStore.records = safeRecords;
+  emitNotificationsUpdated();
+
+  // Persist to localStorage as local cache
+  if (hasBrowserStorage()) {
+    setJsonStorageItem(STORAGE_KEY, safeRecords);
   }
 
-  const saved = setJsonStorageItem(STORAGE_KEY, safeRecords);
-  if (saved) {
-    emitNotificationsUpdated();
-  }
-  return saved;
+  return true;
 }
 
 function emitNotificationsUpdated() {
@@ -175,6 +265,7 @@ export function createStaffNotification(input = {}) {
 
   const current = readStoredNotifications();
   saveStoredNotifications([record, ...current]);
+  insertStaffNotificationToSupabase(record);
   return record;
 }
 
@@ -186,15 +277,86 @@ export function markStaffNotificationRead(id) {
   const next = current.map((record) =>
     record.id === normalizedId ? { ...record, read: true } : record
   );
-  return saveStoredNotifications(next);
+  const result = saveStoredNotifications(next);
+  markReadInSupabase(normalizedId);
+  return result;
 }
 
 export function markAllStaffNotificationsRead() {
   const current = readStoredNotifications();
   const next = current.map((record) => ({ ...record, read: true }));
-  return saveStoredNotifications(next);
+  const result = saveStoredNotifications(next);
+  markAllReadInSupabase();
+  return result;
 }
 
 export function clearStaffNotificationsForTests() {
   saveStoredNotifications([]);
+}
+
+// --- Supabase hydration + localStorage migration ---
+
+async function hydrateStaffNotificationsFromSupabase() {
+  if (!shouldUseSupabase()) return;
+
+  try {
+    const { data, error } = await supabase
+      .from(SUPABASE_TABLE)
+      .select("id, type, order_number, assigned_to_staff_id, assigned_to_staff_name, description, link_to, read, created_at")
+      .order("created_at", { ascending: false })
+      .limit(500);
+
+    if (error) {
+      console.warn("[staffNotificationsStore] Supabase hydration failed", error);
+      return;
+    }
+
+    const rows = Array.isArray(data) ? data : [];
+
+    // One-time migration: if Supabase has no rows and localStorage has data
+    const alreadyMigrated = hasBrowserStorage()
+      ? getJsonStorageItem(MIGRATION_SENTINEL_KEY, false)
+      : false;
+
+    if (!alreadyMigrated && rows.length === 0) {
+      const localRecords = hasBrowserStorage() ? getJsonStorageItem(STORAGE_KEY, []) : [];
+      if (Array.isArray(localRecords) && localRecords.length > 0) {
+        console.info("[staffNotificationsStore] Migrating localStorage staff notifications to Supabase");
+        const migrateRows = localRecords
+          .map((r) => normalizeStaffNotification(r))
+          .map(buildStaffNotificationRow);
+        const { error: insertError } = await supabase
+          .from(SUPABASE_TABLE)
+          .upsert(migrateRows, { onConflict: "id" });
+        if (insertError) {
+          console.error("[staffNotificationsStore] Migration insert failed", insertError);
+        } else {
+          if (hasBrowserStorage()) setJsonStorageItem(MIGRATION_SENTINEL_KEY, true);
+          saveStoredNotifications(localRecords.map((r) => normalizeStaffNotification(r)));
+        }
+        return;
+      }
+    }
+
+    if (!alreadyMigrated && hasBrowserStorage()) {
+      setJsonStorageItem(MIGRATION_SENTINEL_KEY, true);
+    }
+
+    const hydrated = rows.map(mapStaffNotificationRow);
+    // Update localStorage cache
+    if (hasBrowserStorage()) {
+      setJsonStorageItem(STORAGE_KEY, hydrated);
+    }
+    saveStoredNotifications(hydrated);
+  } catch (err) {
+    console.error("[staffNotificationsStore] Supabase hydration threw", err);
+  }
+}
+
+export function ensureStaffNotificationsHydrated() {
+  if (staffNotificationsHydrationPromise) return staffNotificationsHydrationPromise;
+  staffNotificationsHydrationPromise = hydrateStaffNotificationsFromSupabase().catch((err) => {
+    console.error("[staffNotificationsStore] Hydration promise rejected", err);
+  });
+  return staffNotificationsHydrationPromise;
 }
