@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { formatShortDate } from "../lib/dateFormatting";
 import { formatCurrency } from "./useCustomerPortalData";
@@ -18,6 +18,12 @@ import {
   getCustomerArtworkActionState,
   isCustomerArtworkActionRequired,
 } from "../lib/customerArtworkActions";
+import { getPaymentRequestsByOrder, getPaymentsByOrder } from "../lib/paymentsStore";
+import {
+  formatPaymentRequestType,
+  getCustomerPaymentStatusLabel,
+  getCustomerPaymentStatusTone,
+} from "./customerPortalPayments";
 
 const EMPTY_RECORDS = Object.freeze([]);
 const STATUS_FALLBACK_CACHE = new Map();
@@ -550,16 +556,107 @@ function PortalArtworkActionNeeded({ record }) {
   );
 }
 
+function PortalOrderPayments({ paymentRequests, payments }) {
+  if (!paymentRequests.length && !payments.length) {
+    return null;
+  }
+
+  const latestPaymentRequest = paymentRequests[0] || null;
+  const latestPayment = payments[0] || null;
+  const latestStatus = latestPaymentRequest
+    ? getCustomerPaymentStatusLabel(latestPaymentRequest)
+    : latestPayment
+    ? getCustomerPaymentStatusLabel(latestPayment)
+    : null;
+
+  return (
+    <div
+      style={{
+        borderRadius: "18px",
+        border: "1px solid #dbe4ee",
+        background: "#f8fafc",
+        padding: "14px",
+        display: "grid",
+        gap: "12px",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: "10px",
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ display: "grid", gap: "4px" }}>
+          <strong style={{ color: "#0f172a", fontSize: "16px" }}>Payments</strong>
+          <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
+            {paymentRequests.length} request{paymentRequests.length === 1 ? "" : "s"} · {payments.length} payment{payments.length === 1 ? "" : "s"} recorded
+          </p>
+        </div>
+        {latestStatus ? <PortalStatusBadge label={latestStatus} tone={getCustomerPaymentStatusTone(latestStatus)} /> : null}
+      </div>
+
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+        {latestPaymentRequest ? (
+          <Link
+            to={`/portal/payments/${encodeURIComponent(latestPaymentRequest.id)}`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: "42px",
+              borderRadius: "999px",
+              background: "#0f766e",
+              color: "#ffffff",
+              padding: "10px 16px",
+              fontWeight: 900,
+              textDecoration: "none",
+            }}
+          >
+            View {formatPaymentRequestType(latestPaymentRequest.request_type)} Request
+          </Link>
+        ) : null}
+        <Link
+          to="/portal/payments"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "42px",
+            borderRadius: "999px",
+            border: "1px solid #cbd5e1",
+            background: "#ffffff",
+            color: "#0f172a",
+            padding: "9px 15px",
+            fontWeight: 800,
+            textDecoration: "none",
+          }}
+        >
+          View Payment History
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export function RecordList({ records = [], type = "orders" }) {
   const safeRecords = Array.isArray(records) ? records : EMPTY_RECORDS;
-  const renderCountRef = useRef(0);
-  renderCountRef.current += 1;
   const viewModels = useMemo(
     () => {
       const nextViewModels = safeRecords.map((record) => {
         const total = formatCurrency(record.total_amount || record.total || 0);
         const balance = formatCurrency(record.balance_due || 0);
         const dueDate = record.invoice_due_date || record.due_date || "";
+        const relatedPaymentRequests =
+          type === "orders" || type === "invoices"
+            ? getPaymentRequestsByOrder(record.order_number)
+            : [];
+        const relatedPayments =
+          type === "orders" || type === "invoices"
+            ? getPaymentsByOrder(record.order_number)
+            : [];
         const primaryStatus =
           type === "quotes"
             ? resolveCustomerQuoteStatus(record)
@@ -578,6 +675,8 @@ export function RecordList({ records = [], type = "orders" }) {
           total,
           balance,
           dueDate,
+          relatedPaymentRequests,
+          relatedPayments,
           primaryStatus,
           paymentStatus,
           timelineNote: resolveTimelineNote(record),
@@ -586,7 +685,6 @@ export function RecordList({ records = [], type = "orders" }) {
 
       console.debug("[portal] RecordList view models", {
         type,
-        renderCount: renderCountRef.current,
         recordCount: safeRecords.length,
         statuses: nextViewModels.map(({ record, primaryStatus, paymentStatus }) => ({
           orderNumber: record.order_number || record.id || "unknown",
@@ -606,7 +704,7 @@ export function RecordList({ records = [], type = "orders" }) {
 
   return (
     <div style={{ display: "grid", gap: "14px" }}>
-      {viewModels.map(({ record, total, balance, dueDate, primaryStatus, paymentStatus, timelineNote }) => {
+      {viewModels.map(({ record, total, balance, dueDate, relatedPaymentRequests, relatedPayments, primaryStatus, paymentStatus, timelineNote }) => {
         const workflowBadges =
           type === "orders" ? buildWorkflowStatusBadges(record, { surface: "customer" }) : [];
         const depositActionRequired = isDepositActionRequired(record);
@@ -614,6 +712,7 @@ export function RecordList({ records = [], type = "orders" }) {
         return (
           <article
             key={`${type}-${record.order_number || record.id}`}
+            id={type === "orders" ? `order-${record.order_number}` : undefined}
             style={{
               borderRadius: "20px",
               border: "1px solid #dbe4ee",
@@ -689,6 +788,12 @@ export function RecordList({ records = [], type = "orders" }) {
 
             {artworkActionRequired ? <PortalArtworkActionNeeded record={record} /> : null}
             {depositActionRequired ? <PortalRecordActionNeeded record={record} /> : null}
+            {type === "orders" || type === "invoices" ? (
+              <PortalOrderPayments
+                paymentRequests={relatedPaymentRequests}
+                payments={relatedPayments}
+              />
+            ) : null}
 
             <p
               style={{

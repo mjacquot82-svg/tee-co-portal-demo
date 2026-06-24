@@ -17,6 +17,7 @@ import {
 const portalLinks = [
   { to: "/portal/request-order", label: "Start New Order" },
   { to: "/portal/orders", label: "My Orders" },
+  { to: "/portal/payments", label: "Payments" },
   { to: "/portal/quotes", label: "Quotes" },
   { to: "/portal/invoices", label: "Invoices" },
   { to: "/portal/account", label: "Account" },

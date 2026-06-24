@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 import {
   EMPTY_PORTAL_SUMMARY,
   buildCustomerPortalSummary,
@@ -9,8 +9,10 @@ import {
   getCustomerQuotes,
   getCustomerScopedOrders,
 } from "../lib/customerPortalData";
+import { listPaymentEvents, listPaymentRequests, listPayments } from "../lib/paymentsStore";
 import { useStoredCustomers } from "../lib/customersStore";
 import { useStoredOrders } from "../lib/ordersStore";
+import { getCustomerPortalPaymentData } from "./customerPortalPayments";
 
 const EMPTY_PORTAL_DATA = Object.freeze({
   profile: null,
@@ -20,6 +22,15 @@ const EMPTY_PORTAL_DATA = Object.freeze({
   allOrders: Object.freeze([]),
   quotes: Object.freeze([]),
   invoices: Object.freeze([]),
+  paymentRequests: Object.freeze([]),
+  openPaymentRequests: Object.freeze([]),
+  payments: Object.freeze([]),
+  paymentEvents: Object.freeze([]),
+  paymentSummary: Object.freeze({
+    amountOwing: 0,
+    totalPaid: 0,
+    paymentStatus: "Paid",
+  }),
   summary: EMPTY_PORTAL_SUMMARY,
 });
 
@@ -30,14 +41,10 @@ export function formatCurrency(value) {
 export function useCustomerPortalData(session) {
   const orders = useStoredOrders();
   const customers = useStoredCustomers();
-  const renderCountRef = useRef(0);
 
   return useMemo(() => {
-    renderCountRef.current += 1;
-
     if (!session) {
       console.debug("[portal] useCustomerPortalData render", {
-        renderCount: renderCountRef.current,
         hasSession: false,
       });
       return EMPTY_PORTAL_DATA;
@@ -54,9 +61,23 @@ export function useCustomerPortalData(session) {
     const quotes = getCustomerQuotes(scopedOrders);
     const invoices = getCustomerInvoices(scopedOrders);
     const summary = buildCustomerPortalSummary(activeOrders);
-
+    const customerIds = Array.from(
+      new Set(
+        [
+          profile?.id,
+          profile?.customer_id,
+          ...scopedOrders.map((order) => order.customer_id),
+        ].filter(Boolean)
+      )
+    );
+    const portalPayments = getCustomerPortalPaymentData({
+      orders: scopedOrders,
+      customerIds,
+      paymentRequests: listPaymentRequests(),
+      payments: listPayments(),
+      paymentEvents: listPaymentEvents(),
+    });
     console.debug("[portal] useCustomerPortalData render", {
-      renderCount: renderCountRef.current,
       sessionId: session.id || "",
       customerCount: customers.length,
       orderCount: orders.length,
@@ -65,6 +86,8 @@ export function useCustomerPortalData(session) {
       archivedOrderCount: archivedOrders.length,
       quoteCount: quotes.length,
       invoiceCount: invoices.length,
+      paymentRequestCount: portalPayments.paymentRequests.length,
+      paymentCount: portalPayments.payments.length,
       summary,
       profileId: profile?.id || "",
     });
@@ -77,6 +100,15 @@ export function useCustomerPortalData(session) {
       allOrders: scopedOrders,
       quotes,
       invoices,
+      paymentRequests: portalPayments.paymentRequests,
+      openPaymentRequests: portalPayments.openPaymentRequests,
+      payments: portalPayments.payments,
+      paymentEvents: portalPayments.paymentEvents,
+      paymentSummary: {
+        amountOwing: portalPayments.amountOwing,
+        totalPaid: portalPayments.totalPaid,
+        paymentStatus: portalPayments.paymentStatus,
+      },
       summary,
     };
   }, [customers, orders, session]);

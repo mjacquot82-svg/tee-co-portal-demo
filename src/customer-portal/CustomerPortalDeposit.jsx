@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useOutletContext, useParams } from "react-router-dom";
+import { Link, Navigate, useOutletContext, useParams } from "react-router-dom";
 import {
   buildDepositContactHref,
   getDepositPaymentProviderConfig,
@@ -10,6 +10,7 @@ import {
 import { updateStoredOrder } from "../lib/ordersStore";
 import { formatShortDate } from "../lib/dateFormatting";
 import { EmptyState, PortalPage, SectionCard, DetailPair } from "./CustomerPortalShared";
+import { findPaymentRequestForOrder } from "./customerPortalPayments";
 import { formatCurrency, useCustomerPortalData } from "./useCustomerPortalData";
 
 function normalizeText(value) {
@@ -114,6 +115,11 @@ export default function CustomerPortalDeposit() {
   const [submitted, setSubmitted] = useState(false);
 
   const record = localRecord || scopedRecord;
+  const depositPaymentRequest = findPaymentRequestForOrder(
+    portalData.paymentRequests,
+    decodedOrderNumber,
+    "deposit"
+  );
 
   if (!record) {
     return (
@@ -129,6 +135,15 @@ export default function CustomerPortalDeposit() {
           actionTo="/portal/orders"
         />
       </PortalPage>
+    );
+  }
+
+  if (depositPaymentRequest) {
+    return (
+      <Navigate
+        to={`/portal/payments/${encodeURIComponent(depositPaymentRequest.id)}`}
+        replace
+      />
     );
   }
 
