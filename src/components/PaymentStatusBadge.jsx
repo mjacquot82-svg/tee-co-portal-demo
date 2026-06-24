@@ -20,14 +20,16 @@ function getPaymentStatusStyle(status) {
     status === "Partial" ||
     status === "Deposit Applied" ||
     status === "Deposit Paid" ||
-    status === "Partially Paid"
+    status === "Partially Paid" ||
+    status === "Deposit Received" ||
+    status === "Balance Due"
   ) {
     return badgeStyle("#fef3c7", "#92400e");
   }
-  if (status === "Awaiting Deposit" || status === "Overdue") {
+  if (status === "Awaiting Deposit" || status === "Deposit Required" || status === "Overdue" || status === "Payment Failed") {
     return badgeStyle("#fef2f2", "#b91c1c");
   }
-  if (status === "Sent" || status === "Awaiting Payment" || status === "Awaiting Final Payment") {
+  if (status === "Sent" || status === "Awaiting Payment" || status === "Awaiting Final Payment" || status === "Payment Sent - Awaiting Verification") {
     return badgeStyle("#dbeafe", "#1d4ed8");
   }
   if (status === "Processing") {

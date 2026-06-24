@@ -1,3 +1,5 @@
+import { deriveOrderPaymentState, deriveOrderWorkflowState } from "./canonicalState";
+
 export const PAYMENT_STATUS_OPTIONS = [
   "Draft",
   "Awaiting Payment",
@@ -787,6 +789,19 @@ export function deriveOrderFinancials(order = {}, options = {}) {
     invoice_due_date: invoiceDueDate,
     payment_history: paymentHistory,
   });
+  const canonicalOrder = {
+    ...order,
+    total_amount: totalAmount,
+    deposit_amount: depositAmount,
+    total_paid: totalPaid,
+    balance_due: balanceDue,
+    payment_history: paymentHistory,
+    payment_status: paymentStatus,
+    payment_collection_state: paymentCollectionState,
+    invoice_status: invoiceStatus,
+  };
+  const canonicalPaymentState = deriveOrderPaymentState(canonicalOrder);
+  const canonicalWorkflowState = deriveOrderWorkflowState(canonicalOrder);
 
   return {
     subtotal,
@@ -803,6 +818,12 @@ export function deriveOrderFinancials(order = {}, options = {}) {
     payment_status: paymentStatus,
     payment_collection_state: paymentCollectionState,
     invoice_status: invoiceStatus,
+    canonical_payment_state: canonicalPaymentState.ownerPaymentState,
+    canonical_workflow_state: canonicalWorkflowState.workflowState,
+    canonical_state: {
+      payment: canonicalPaymentState,
+      workflow: canonicalWorkflowState,
+    },
     invoice_due_date: invoiceDueDate,
     is_payment_overdue: invoiceStatus === "Overdue",
     deposit_credited_message: depositCreditedMessage,

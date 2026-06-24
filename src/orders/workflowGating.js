@@ -1,3 +1,5 @@
+import { isDepositSatisfied } from "./canonicalState";
+
 const ARTWORK_APPROVAL_STATE_ALIASES = {
   approved: "Approved",
   "customer approved": "Approved",
@@ -167,8 +169,8 @@ export function isDepositRequirementSatisfied(order = {}) {
   const overrides = normalizeWorkflowOverrides(order.workflow_overrides);
 
   return (
+    isDepositSatisfied(order) ||
     depositStatus === "Deposit Not Required" ||
-    depositStatus === "Deposit Received" ||
     overrides.forceProduction.active ||
     overrides.depositRequirement.active
   );

@@ -127,7 +127,10 @@ export default function PaymentRequestDetail() {
             )}
           </DetailItem>
           <DetailItem label="Order Balance" value={financials ? money(financials.balance_due) : "—"} />
-          <DetailItem label="Order Payment State" value={financials?.payment_collection_state || "—"} />
+          <DetailItem
+            label="Order Payment State"
+            value={financials?.canonical_payment_state || financials?.payment_collection_state || "—"}
+          />
         </div>
       </SectionCard>
 

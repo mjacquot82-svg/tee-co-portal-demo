@@ -199,8 +199,10 @@ function OrderTable({ orders }) {
               <td style={{ padding: "14px 10px" }}><PaymentStatusBadge status={order.invoice_status} /></td>
               <td style={{ padding: "14px 10px" }}>
                 <div style={{ display: "grid", gap: "5px" }}>
-                  <PaymentStatusBadge status={order.payment_status} />
-                  <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 700 }}>{order.payment_collection_state}</span>
+                  <PaymentStatusBadge status={order.canonical_payment_state || order.payment_status} />
+                  <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
+                    {order.canonical_workflow_state || order.payment_collection_state}
+                  </span>
                 </div>
               </td>
               <td style={{ padding: "14px 10px", whiteSpace: "nowrap" }}>
@@ -244,9 +246,16 @@ export default function InvoicesPayments() {
     ...payments.filter(isFailedPayment),
     ...paymentRequests.filter((request) => String(request.status || "").toLowerCase() === "failed"),
   ];
-  const awaitingDepositOrders = financialOrders.filter((order) => order.payment_collection_state === "Awaiting Deposit");
+  const awaitingDepositOrders = financialOrders.filter(
+    (order) =>
+      (order.canonical_payment_state || order.payment_collection_state) === "Deposit Required" ||
+      order.payment_collection_state === "Awaiting Deposit"
+  );
   const awaitingBalanceOrders = financialOrders.filter(
-    (order) => order.payment_collection_state !== "Awaiting Deposit" && Number(order.balance_due || 0) > 0
+    (order) =>
+      (order.canonical_payment_state || order.payment_collection_state) !== "Deposit Required" &&
+      order.payment_collection_state !== "Awaiting Deposit" &&
+      Number(order.balance_due || 0) > 0
   );
   const partiallyPaidOrders = financialOrders.filter(
     (order) => order.invoice_status === "Partial Payment" || String(order.payment_status || "").includes("Partial")

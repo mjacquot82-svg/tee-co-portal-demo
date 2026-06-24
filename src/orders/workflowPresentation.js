@@ -1,4 +1,10 @@
 import { formatDateTime } from "../lib/dateFormatting";
+import {
+  deriveOrderPaymentState,
+  deriveOrderWorkflowState,
+  ORDER_WORKFLOW_STATES,
+  OWNER_PAYMENT_STATES,
+} from "./canonicalState";
 import { normalizeOperationalStatus } from "./orderWorkflow";
 import {
   buildProductionGatingState,
@@ -18,6 +24,7 @@ export function buildWorkflowStatusBadges(order = {}, options = {}) {
   const artworkStatus = normalizeArtworkApprovalStatus(order.artwork_approval_status, {
     required: artworkRequired,
   });
+  const paymentState = deriveOrderPaymentState(order);
   const depositStatus = normalizeDepositWorkflowStatus(order.deposit_workflow_status, order);
   const gating = buildProductionGatingState(order, { targetStatus: "Ready For Production" });
   const status = normalizeOperationalStatus(order.status);
@@ -36,19 +43,32 @@ export function buildWorkflowStatusBadges(order = {}, options = {}) {
     }
   }
 
-  if (depositStatus === "Deposit Requested" || depositStatus === "Awaiting Deposit") {
+  if (
+    paymentState.ownerPaymentState === OWNER_PAYMENT_STATES.DEPOSIT_REQUIRED ||
+    paymentState.ownerPaymentState === OWNER_PAYMENT_STATES.AWAITING_PAYMENT
+  ) {
     badges.push(
       buildBadge(
         surface === "customer"
-          ? "Action Needed: Deposit Required"
-          : depositStatus === "Deposit Requested"
-          ? "Deposit Requested"
-          : "Awaiting Deposit",
+          ? paymentState.depositRequired && !paymentState.depositSatisfied
+            ? "Action Needed: Deposit Required"
+            : "Action Needed: Payment Required"
+          : paymentState.ownerPaymentState,
         "warning"
       )
     );
-  } else if (depositStatus === "Deposit Received") {
+  } else if (
+    paymentState.ownerPaymentState === OWNER_PAYMENT_STATES.AWAITING_VERIFICATION ||
+    paymentState.ownerPaymentState === OWNER_PAYMENT_STATES.BALANCE_DUE
+  ) {
+    badges.push(buildBadge(paymentState.ownerPaymentState, "info"));
+  } else if (
+    paymentState.ownerPaymentState === OWNER_PAYMENT_STATES.DEPOSIT_RECEIVED ||
+    depositStatus === "Deposit Received"
+  ) {
     badges.push(buildBadge("Deposit Received", "success"));
+  } else if (paymentState.ownerPaymentState === OWNER_PAYMENT_STATES.FAILED) {
+    badges.push(buildBadge("Payment Failed", "danger"));
   }
 
   if (gating.blocked) {
@@ -113,34 +133,34 @@ export function buildWorkflowBlockDetails(order = {}, action = null) {
 }
 
 export function buildCustomerWorkflowMessage(order = {}) {
-  const artworkRequired = getArtworkApprovalRequirement(order);
-  const artworkStatus = normalizeArtworkApprovalStatus(order.artwork_approval_status, {
-    required: artworkRequired,
-  });
-  const depositStatus = normalizeDepositWorkflowStatus(order.deposit_workflow_status, order);
-  const status = normalizeOperationalStatus(order.status);
+  const workflowState = deriveOrderWorkflowState(order);
 
-  if (artworkRequired && artworkStatus === "Needs Revision") {
-    return "Action needed: upload revised artwork";
+  if (workflowState.workflowState === ORDER_WORKFLOW_STATES.ARTWORK_NEEDED) {
+    const artworkStatus = normalizeArtworkApprovalStatus(order.artwork_approval_status, {
+      required: getArtworkApprovalRequirement(order),
+    });
+    return artworkStatus === "Needs Revision"
+      ? "Action needed: upload revised artwork"
+      : "Action needed: upload artwork";
   }
 
-  if (artworkRequired && artworkStatus !== "Approved") {
-    return "Action needed: upload artwork";
+  if (workflowState.workflowState === ORDER_WORKFLOW_STATES.AWAITING_PAYMENT) {
+    return "Action needed: payment required before production";
   }
 
-  if (depositStatus === "Deposit Requested" || depositStatus === "Awaiting Deposit") {
-    return "Action needed: deposit required before production";
-  }
-
-  if (["Ready For Production", "Printing", "Embroidery", "QC / Finishing"].includes(status)) {
+  if (workflowState.workflowState === ORDER_WORKFLOW_STATES.READY_FOR_PRODUCTION) {
     return "Ready for production";
   }
 
-  if (status === "Ready For Pickup") {
+  if (workflowState.workflowState === ORDER_WORKFLOW_STATES.IN_PRODUCTION) {
+    return "In production";
+  }
+
+  if (workflowState.workflowState === ORDER_WORKFLOW_STATES.READY_FOR_PICKUP) {
     return "Ready for pickup";
   }
 
-  if (status === "Completed") {
+  if (workflowState.workflowState === ORDER_WORKFLOW_STATES.COMPLETED) {
     return "Completed and released";
   }
 
