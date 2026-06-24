@@ -196,6 +196,13 @@ async function exerciseHoldResumeIfAvailable(detailPage, queuePage, orderNumber)
   const beforeHoldCount = await getTimelineItemCount(detailPage);
   await putOnHoldButton.click();
 
+  // Fill in the required hold reason dialog before proceeding.
+  const holdDialog = detailPage.getByTestId("hold-reason-dialog");
+  if (await holdDialog.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await holdDialog.getByTestId("hold-reason-input").fill("Workflow regression hold");
+    await holdDialog.getByTestId("hold-reason-confirm").click();
+  }
+
   await expect(detailPage.getByTestId("order-detail-page")).toHaveAttribute(
     "data-workflow-state",
     "On Hold"

@@ -27,7 +27,7 @@ import {
   normalizeOperationalStatus,
 } from "../orders/orderWorkflow";
 import { buildProductionGatingState } from "../orders/workflowGating";
-import { isAdminWorkspaceView, isStaffWorkspaceView } from "./adminRoleView";
+import { isAdminWorkspaceView, isStaffWorkspaceView, canSelfAssignOrder } from "./adminRoleView";
 import { markAssignmentAttentionSeen } from "../lib/staffAssignmentAttentionStore";
 import WorkflowBadge from "../components/WorkflowBadge";
 import OwnerNextActionCard from "../components/OwnerNextActionCard";
@@ -84,6 +84,7 @@ export default function OrderDetail() {
   const activeStaffUser = getActiveStaffUser();
   const isStaffWorkspace = isStaffWorkspaceView(activeStaffUser);
   const canManageAssignments = isAdminWorkspaceView(activeStaffUser);
+  const selfAssignAllowed = order ? canSelfAssignOrder(order, activeStaffUser) : false;
 
   const selectedProduct = useMemo(() => {
     if (!order) return null;
@@ -195,14 +196,36 @@ export default function OrderDetail() {
     });
   }
 
+  function handleSelfAssign() {
+    if (!activeStaffUser?.id || isCanceledOperationalStatus(order.status)) return;
+    // Staff may only claim unassigned work
+    if (order.assigned_to_staff_id || order.assigned_to_staff_name) return;
+
+    saveOrderUpdates({
+      assigned_to_staff_id: activeStaffUser.id,
+      assigned_to_staff_name: activeStaffUser.name || "",
+      assigned_to_staff_role: activeStaffUser.role || "",
+      assigned_at: new Date().toISOString(),
+      needs_assignment: false,
+      activity_type: "assignment",
+      activity_note: `${activeStaffUser.name || "Staff"} claimed this job.`,
+    });
+  }
+
   function handleWorkflowAction(action) {
     if (isCanceledOperationalStatus(order.status)) return;
 
-    const gating = buildWorkflowBlockDetails(order, action);
+    // Enrich resume_from_hold with who resumed
+    const enrichedAction =
+      action.key === "resume_from_hold"
+        ? { ...action, resumeStaffName: activeStaffUser?.name || "" }
+        : action;
+
+    const gating = buildWorkflowBlockDetails(order, enrichedAction);
     if (gating.blocked) {
       saveOrderUpdates({
         activity_type: "production_blocked",
-        activity_note: `${action.label} blocked. ${gating.blockingReasons.join(" ")}`,
+        activity_note: `${enrichedAction.label} blocked. ${gating.blockingReasons.join(" ")}`,
         last_production_blocked_at: new Date().toISOString(),
         last_production_blocked_reasons: gating.blockingReasons,
       });
@@ -215,11 +238,11 @@ export default function OrderDetail() {
       return;
     }
 
-    const updates = buildWorkflowActionUpdates(order, action);
+    const updates = buildWorkflowActionUpdates(order, enrichedAction);
     if (!updates) return;
     setWorkflowFeedback({
       tone: "info",
-      summary: `${action.label} completed.`,
+      summary: `${enrichedAction.label} completed.`,
       detail: "",
       nextActionLabel: "",
     });
@@ -855,6 +878,8 @@ export default function OrderDetail() {
           workflowActions={workflowActions}
           onRunWorkflowAction={handleWorkflowAction}
           canManageAssignments={canManageAssignments}
+          canSelfAssign={selfAssignAllowed}
+          onSelfAssign={handleSelfAssign}
           productionGating={productionGating}
           onArtworkApprovalChange={handleArtworkApprovalChange}
           onDepositWorkflowChange={handleDepositWorkflowChange}

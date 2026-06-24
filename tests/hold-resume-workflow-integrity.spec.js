@@ -202,6 +202,12 @@ test("hold and resume preserve centralized production workflow integrity", async
   // Holding the order must take it out of active execution without breaking assignment or timeline history.
   await getWorkflowActionButton(page, "put_on_hold").click();
 
+  // Fill in the required hold reason before the hold is saved.
+  const holdDialog = page.getByTestId("hold-reason-dialog");
+  await expect(holdDialog).toBeVisible({ timeout: 5_000 });
+  await holdDialog.getByTestId("hold-reason-input").fill("Integration test hold");
+  await holdDialog.getByTestId("hold-reason-confirm").click();
+
   await expectDetailWorkflowState(page, "On Hold");
   await expectQueueWorkflowState(queuePage, orderNumber, "on-hold", "On Hold");
   await expect(page.getByTestId("production-hold-indicator")).toBeVisible();

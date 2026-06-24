@@ -253,6 +253,12 @@ export function canManageStaffUsers(staffUser = getActiveStaffUser()) {
   return hasPermission(staffUser, PERMISSIONS.staffManage);
 }
 
+export function canSelfAssignOrder(order = {}, staffUser = getActiveStaffUser()) {
+  if (!isStaffWorkspaceView(staffUser)) return false;
+  // Staff may only claim work that is currently unassigned
+  return !order.assigned_to_staff_id && !order.assigned_to_staff_name;
+}
+
 export function canManageAssignments(staffUser = getActiveStaffUser()) {
   return hasPermission(staffUser, PERMISSIONS.assignmentManage);
 }

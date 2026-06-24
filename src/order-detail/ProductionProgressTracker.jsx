@@ -120,9 +120,17 @@ export default function ProductionProgressTracker({ order }) {
             padding: "12px 14px",
             color: "#991b1b",
             fontWeight: 700,
+            display: "grid",
+            gap: "4px",
           }}
         >
-          This order is currently on hold. Resume it from the workflow actions when production can continue.
+          <span>This order is currently on hold. Resume it from the workflow actions when production can continue.</span>
+          {order.production_hold_reason ? (
+            <span data-testid="production-hold-reason" style={{ fontSize: "13px" }}>
+              Reason: {order.production_hold_reason}
+              {order.production_hold_staff_name ? ` — ${order.production_hold_staff_name}` : ""}
+            </span>
+          ) : null}
         </div>
       ) : null}
 

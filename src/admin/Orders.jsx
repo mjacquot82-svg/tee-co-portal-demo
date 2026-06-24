@@ -5,7 +5,7 @@ import WorkflowBadge from "../components/WorkflowBadge";
 import { formatShortDate } from "../lib/dateFormatting";
 import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
 import { buildWorkflowActionUpdates } from "../orders/buildWorkflowActionUpdates";
-import { sortOrdersByOperationalStatus } from "../orders/orderWorkflow";
+import { isOnHoldOperationalStatus, sortOrdersByOperationalStatus } from "../orders/orderWorkflow";
 import {
   buildProductionReadinessSummary,
   buildWorkflowBlockDetails,
@@ -31,7 +31,15 @@ import {
 } from "../production/productionWorkspace";
 import { sortQueueByPriority } from "../queue/buildQueuePriority";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
-import { getOperationalOrdersForStaff, isStaffWorkspaceView } from "./adminRoleView";
+import {
+  canSelfAssignOrder,
+  getOperationalOrdersForStaff,
+  isStaffWorkspaceView,
+} from "./adminRoleView";
+import {
+  createStaffNotification,
+  STAFF_NOTIFICATION_TYPES,
+} from "../lib/staffNotificationsStore";
 
 function FilterPill({ active, children, count, tone = "default", onClick, testId }) {
   const activeBackground =
@@ -192,7 +200,7 @@ function QueueActionButton({ action, onClick, emphasis = "secondary" }) {
   );
 }
 
-function QueueRow({ order, onRunAction, onOpenDetail, actionFeedback = null }) {
+function QueueRow({ order, onRunAction, onOpenDetail, onEscalate, currentStaffUser = null, actionFeedback = null }) {
   const visibleActions = (order.available_actions || [])
     .filter((action) => action.blocked !== true)
     .slice(0, 3);
@@ -209,6 +217,22 @@ function QueueRow({ order, onRunAction, onOpenDetail, actionFeedback = null }) {
       : readiness.tone === "info"
       ? "info"
       : "default";
+  const isOnHold = isOnHoldOperationalStatus(order.status);
+  const isBlocked = readiness.blocked === true;
+  const isAssignedToMe =
+    currentStaffUser?.id && order.assigned_to_staff_id === currentStaffUser.id;
+  const isUnassigned =
+    !order.assigned_to_staff_id && !order.assigned_to_staff_name;
+
+  const rowStyle = isOnHold
+    ? { background: "#fff7ed", border: "1px solid #fed7aa" }
+    : isBlocked
+    ? { background: "#fef2f2", border: "1px solid #fecaca" }
+    : isAssignedToMe
+    ? { background: "#f0fdf4", border: "1px solid #bbf7d0" }
+    : isUnassigned
+    ? { background: "#fffbeb", border: "1px solid #fde68a" }
+    : { background: "#ffffff", border: "1px solid #e2e8f0" };
 
   return (
     <article
@@ -216,14 +240,15 @@ function QueueRow({ order, onRunAction, onOpenDetail, actionFeedback = null }) {
       data-order-number={order.order_number || ""}
       data-workflow-state={order.workflow_state || order.status || ""}
       data-production-readiness={readiness.statusKey || ""}
+      data-assigned-to-me={isAssignedToMe ? "true" : "false"}
+      data-unassigned={isUnassigned ? "true" : "false"}
       style={{
         display: "grid",
         gridTemplateColumns: "minmax(0, 2.3fr) minmax(0, 0.8fr) minmax(0, 0.9fr) auto",
         gap: "12px",
         alignItems: "center",
-        border: "1px solid #e2e8f0",
+        ...rowStyle,
         borderRadius: "14px",
-        background: "#ffffff",
         padding: "12px 14px",
       }}
     >
@@ -293,6 +318,46 @@ function QueueRow({ order, onRunAction, onOpenDetail, actionFeedback = null }) {
               Next recommended action: {readiness.nextRecommendedAction}
             </span>
             <span>Responsible: {readiness.responsibleParty}</span>
+            {onEscalate ? (
+              <button
+                type="button"
+                data-testid="escalate-to-owner-button"
+                data-order-number={order.order_number || ""}
+                disabled={Boolean(order.last_escalated_at)}
+                onClick={() => onEscalate(order)}
+                style={{
+                  marginTop: "4px",
+                  border: order.last_escalated_at ? "1px solid #cbd5e1" : "1px solid #991b1b",
+                  background: order.last_escalated_at ? "#f8fafc" : "#ffffff",
+                  color: order.last_escalated_at ? "#94a3b8" : "#991b1b",
+                  borderRadius: "8px",
+                  padding: "7px 10px",
+                  fontWeight: 700,
+                  cursor: order.last_escalated_at ? "not-allowed" : "pointer",
+                  fontSize: "12px",
+                  alignSelf: "start",
+                  justifySelf: "start",
+                }}
+              >
+                {order.last_escalated_at ? "Escalated to Owner" : "Escalate to Owner"}
+              </button>
+            ) : null}
+          </div>
+        ) : isOnHold && order.production_hold_reason ? (
+          <div
+            data-testid="production-queue-row-hold-reason"
+            style={{
+              borderRadius: "12px",
+              border: "1px solid #fed7aa",
+              background: "#fff7ed",
+              color: "#9a3412",
+              padding: "10px 12px",
+              fontSize: "13px",
+              fontWeight: 700,
+            }}
+          >
+            On Hold: {order.production_hold_reason}
+            {order.production_hold_staff_name ? ` — ${order.production_hold_staff_name}` : ""}
           </div>
         ) : (
           <div
@@ -406,10 +471,15 @@ function ProductionDetailDrawer({
   order,
   onClose,
   onAssign,
+  onClaim,
   onRunAction,
   staffUsers,
+  currentStaffUser = null,
   actionFeedback = null,
 }) {
+  const [pendingHoldAction, setPendingHoldAction] = useState(null);
+  const [holdReasonInput, setHoldReasonInput] = useState("");
+
   const customerTimeline = useCustomerTimeline(order?.customer_id);
 
   const orderTimeline = useMemo(() => {
@@ -424,6 +494,29 @@ function ProductionDetailDrawer({
   const workflowBadges = buildWorkflowStatusBadges(order);
   const readiness = order.production_readiness || buildProductionReadinessSummary(order);
   const executableActions = (order.available_actions || []).filter((action) => action.blocked !== true);
+  const isOnHold = isOnHoldOperationalStatus(order.status);
+  const canClaim = currentStaffUser && canSelfAssignOrder(order, currentStaffUser);
+
+  function handleActionClick(action) {
+    if (action.key === "put_on_hold") {
+      setPendingHoldAction(action);
+      setHoldReasonInput("");
+      return;
+    }
+    onRunAction(order, action);
+  }
+
+  function handleConfirmHold() {
+    if (!holdReasonInput.trim()) return;
+    onRunAction(order, { ...pendingHoldAction, holdReason: holdReasonInput.trim() });
+    setPendingHoldAction(null);
+    setHoldReasonInput("");
+  }
+
+  function handleCancelHold() {
+    setPendingHoldAction(null);
+    setHoldReasonInput("");
+  }
 
   return (
     <aside
@@ -545,25 +638,59 @@ function ProductionDetailDrawer({
           <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 800, textTransform: "uppercase" }}>
             Assignment
           </span>
-          <select
-            data-testid="production-queue-detail-assignment-select"
-            value={order.assigned_to_staff_id || ""}
-            onChange={(event) => onAssign(order, event.target.value)}
-            style={{
-              border: "1px solid #cbd5e1",
-              borderRadius: "12px",
-              padding: "10px 12px",
-              background: "#ffffff",
-            }}
-          >
-            <option value="">Unassigned</option>
-            {staffUsers.map((staff) => (
-              <option key={staff.id} value={staff.id}>
-                {staff.name}
-                {staff.role ? ` (${staff.role})` : ""}
-              </option>
-            ))}
-          </select>
+          {canClaim ? (
+            <div style={{ display: "grid", gap: "8px" }}>
+              <div
+                style={{
+                  borderRadius: "10px",
+                  border: "1px solid #fde68a",
+                  background: "#fffbeb",
+                  color: "#92400e",
+                  padding: "8px 10px",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                }}
+              >
+                Unassigned — you can claim this job.
+              </div>
+              <button
+                type="button"
+                data-testid="claim-job-button"
+                onClick={() => onClaim && onClaim(order)}
+                style={{
+                  border: "1px solid #171717",
+                  background: "#171717",
+                  color: "#ffffff",
+                  borderRadius: "10px",
+                  padding: "8px 10px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Claim This Job
+              </button>
+            </div>
+          ) : (
+            <select
+              data-testid="production-queue-detail-assignment-select"
+              value={order.assigned_to_staff_id || ""}
+              onChange={(event) => onAssign(order, event.target.value)}
+              style={{
+                border: "1px solid #cbd5e1",
+                borderRadius: "12px",
+                padding: "10px 12px",
+                background: "#ffffff",
+              }}
+            >
+              <option value="">Unassigned</option>
+              {staffUsers.map((staff) => (
+                <option key={staff.id} value={staff.id}>
+                  {staff.name}
+                  {staff.role ? ` (${staff.role})` : ""}
+                </option>
+              ))}
+            </select>
+          )}
           <span style={{ color: "#64748b", fontSize: "13px" }}>
             <span data-testid="production-queue-detail-owner">
             Owner: {order.production_owner_staff_name || "Unassigned"}
@@ -571,13 +698,34 @@ function ProductionDetailDrawer({
           </span>
         </div>
 
+        {isOnHold && order.production_hold_reason ? (
+          <div
+            data-testid="drawer-hold-reason"
+            style={{
+              borderRadius: "12px",
+              border: "1px solid #fecaca",
+              background: "#fef2f2",
+              color: "#991b1b",
+              padding: "10px 12px",
+              display: "grid",
+              gap: "4px",
+            }}
+          >
+            <strong style={{ fontSize: "13px" }}>Hold Reason</strong>
+            <span style={{ fontWeight: 700 }}>{order.production_hold_reason}</span>
+            {order.production_hold_staff_name ? (
+              <span style={{ fontSize: "12px" }}>Held by: {order.production_hold_staff_name}</span>
+            ) : null}
+          </div>
+        ) : null}
+
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           {executableActions.map((action, index) => (
             <QueueActionButton
               key={action.key}
               action={action}
               emphasis={index === 0 ? "primary" : "secondary"}
-              onClick={() => onRunAction(order, action)}
+              onClick={() => handleActionClick(action)}
             />
           ))}
           {!executableActions.length ? (
@@ -586,6 +734,72 @@ function ProductionDetailDrawer({
             </span>
           ) : null}
         </div>
+
+        {pendingHoldAction ? (
+          <div
+            data-testid="hold-reason-dialog"
+            style={{
+              padding: "14px",
+              borderRadius: "12px",
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              display: "grid",
+              gap: "10px",
+            }}
+          >
+            <strong style={{ color: "#991b1b", fontSize: "13px" }}>Hold Reason Required</strong>
+            <input
+              type="text"
+              data-testid="hold-reason-input"
+              value={holdReasonInput}
+              onChange={(e) => setHoldReasonInput(e.target.value)}
+              placeholder="e.g. Waiting for customer approval..."
+              style={{
+                border: "1px solid #fecaca",
+                borderRadius: "8px",
+                padding: "8px 10px",
+                fontSize: "13px",
+              }}
+            />
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                type="button"
+                data-testid="hold-reason-confirm"
+                disabled={!holdReasonInput.trim()}
+                onClick={handleConfirmHold}
+                style={{
+                  border: "1px solid #be123c",
+                  background: holdReasonInput.trim() ? "#be123c" : "#f8fafc",
+                  color: holdReasonInput.trim() ? "#ffffff" : "#94a3b8",
+                  borderRadius: "8px",
+                  padding: "8px 12px",
+                  fontWeight: 700,
+                  cursor: holdReasonInput.trim() ? "pointer" : "not-allowed",
+                  fontSize: "13px",
+                }}
+              >
+                Confirm Hold
+              </button>
+              <button
+                type="button"
+                data-testid="hold-reason-cancel"
+                onClick={handleCancelHold}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  background: "#ffffff",
+                  borderRadius: "8px",
+                  padding: "8px 12px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontSize: "13px",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {actionFeedback ? (
           <div
             style={{
@@ -885,11 +1099,17 @@ export default function Orders() {
   }
 
   function handleRunAction(order, action) {
-    const gating = buildWorkflowBlockDetails(order, action);
+    // Enrich resume_from_hold with who resumed
+    const enrichedAction =
+      action.key === "resume_from_hold"
+        ? { ...action, resumeStaffName: staffUser?.name || "" }
+        : action;
+
+    const gating = buildWorkflowBlockDetails(order, enrichedAction);
     if (gating.blocked) {
       updateStoredOrder(order.order_number, {
         activity_type: "production_blocked",
-        activity_note: `${action.label} blocked. ${gating.blockingReasons.join(" ")}`,
+        activity_note: `${enrichedAction.label} blocked. ${gating.blockingReasons.join(" ")}`,
         last_production_blocked_at: new Date().toISOString(),
         last_production_blocked_reasons: gating.blockingReasons,
       });
@@ -905,13 +1125,13 @@ export default function Orders() {
       return;
     }
 
-    const updates = buildWorkflowActionUpdates(order, action);
+    const updates = buildWorkflowActionUpdates(order, enrichedAction);
     if (!updates) return;
     setActionFeedbackByOrder((current) => ({
       ...current,
       [order.order_number]: {
         tone: "info",
-        summary: `${action.label} completed.`,
+        summary: `${enrichedAction.label} completed.`,
         detail: "",
         nextActionLabel: "",
       },
@@ -945,6 +1165,49 @@ export default function Orders() {
       needs_assignment: !selectedWorker,
       activity_type: "assignment",
       activity_note: activityNote,
+    });
+  }
+
+  function handleClaim(order) {
+    if (!staffUser?.id) return;
+    // Staff may only claim unassigned work
+    if (order.assigned_to_staff_id || order.assigned_to_staff_name) return;
+
+    updateStoredOrder(order.order_number, {
+      assigned_to_staff_id: staffUser.id,
+      assigned_to_staff_name: staffUser.name || "",
+      assigned_to_staff_role: staffUser.role || "",
+      assigned_at: new Date().toISOString(),
+      needs_assignment: false,
+      activity_type: "assignment",
+      activity_note: `${staffUser.name || "Staff"} claimed this job.`,
+    });
+  }
+
+  function handleEscalate(order) {
+    if (!order?.order_number) return;
+    // Avoid duplicate escalations within 24 hours
+    const lastEscalated = order.last_escalated_at ? new Date(order.last_escalated_at).getTime() : 0;
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+    if (Date.now() - lastEscalated < twentyFourHours) return;
+
+    const now = new Date().toISOString();
+    const escalatorName = staffUser?.name || "Staff";
+    const readiness = order.production_readiness || buildProductionReadinessSummary(order);
+    const blockDetail = readiness.detail || "Blocked order requires owner attention.";
+
+    updateStoredOrder(order.order_number, {
+      last_escalated_at: now,
+      escalated_by_staff_name: escalatorName,
+      activity_type: "order_escalated",
+      activity_note: `Escalated to owner by ${escalatorName}. ${blockDetail}`,
+    });
+
+    createStaffNotification({
+      type: STAFF_NOTIFICATION_TYPES.orderEscalated,
+      orderNumber: order.order_number,
+      description: `${order.order_number} escalated by ${escalatorName}: ${blockDetail}`,
+      linkTo: `/admin/orders/${order.order_number}`,
     });
   }
 
@@ -1162,6 +1425,8 @@ export default function Orders() {
                   order={order}
                   onRunAction={handleRunAction}
                   onOpenDetail={handleOpenDetail}
+                  onEscalate={handleEscalate}
+                  currentStaffUser={staffUser}
                   actionFeedback={actionFeedbackByOrder[order.order_number] || null}
                 />
               ))
@@ -1188,8 +1453,10 @@ export default function Orders() {
             order={selectedOrder}
             onClose={() => updateFilters({ order: "" })}
             onAssign={handleAssign}
+            onClaim={handleClaim}
             onRunAction={handleRunAction}
             staffUsers={staffUsers}
+            currentStaffUser={staffUser}
             actionFeedback={actionFeedbackByOrder[selectedOrder.order_number] || null}
           />
         ) : null}
