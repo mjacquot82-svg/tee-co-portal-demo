@@ -284,8 +284,6 @@ function getActiveSidebarLink(pathname, staffUser) {
   }
   if (pathname === "/admin/orders") return "productionOrders";
   if (pathname.startsWith("/admin/orders/")) return "productionOrders";
-  if (pathname.startsWith("/admin/settings/notifications/activity")) return "notificationActivity";
-  if (pathname.startsWith("/admin/settings/notifications")) return "notificationTemplates";
   if (pathname === "/admin") {
     return isStaffWorkspaceView(staffUser) ? "assignments" : "dashboard";
   }

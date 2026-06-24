@@ -251,7 +251,7 @@ export function createPaymentRequest(input = {}) {
       paymentLink: paymentRequest.provider_checkout_url,
     });
 
-    if (String(paymentRequest.request_type || "").trim().toLowerCase() === "deposit") {
+    if (normalizeText(paymentRequest.request_type).toLowerCase() === "deposit") {
       triggerNotificationEvent(NOTIFICATION_TYPES.depositRequested, {
         paymentRequest,
         source: "payments_store",

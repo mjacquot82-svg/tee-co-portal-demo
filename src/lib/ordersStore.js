@@ -77,7 +77,10 @@ function normalizeStatusText(value) {
 }
 
 function isApprovedState(value) {
-  return normalizeStatusText(value).toLowerCase().includes("approved");
+  const normalizedValue = normalizeStatusText(value).toLowerCase();
+  return new Set(["approved", "customer approved", "quote approved"]).has(
+    normalizedValue
+  );
 }
 
 function buildOrderNotificationContext(order, source = "orders_store") {

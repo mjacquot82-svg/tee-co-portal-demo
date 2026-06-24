@@ -19,6 +19,13 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function generateNotificationId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `notification-${crypto.randomUUID()}`;
+  }
+  return `notification-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function normalizeText(value, fallback = "") {
   const trimmed = String(value || "").trim();
   return trimmed || fallback;
@@ -176,7 +183,7 @@ function buildNotificationRecord({
 }) {
   const timestamp = context.timestamp || nowIso();
   return {
-    id: `notification-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: generateNotificationId(),
     eventType,
     recipientType,
     recipient,
