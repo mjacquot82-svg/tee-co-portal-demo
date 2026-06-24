@@ -1,4 +1,4 @@
-import { isDepositSatisfied } from "./canonicalState";
+import { deriveOrderPaymentState, isDepositSatisfied } from "./canonicalState";
 
 const ARTWORK_APPROVAL_STATE_ALIASES = {
   approved: "Approved",
@@ -167,10 +167,11 @@ export function isArtworkApprovalSatisfied(order = {}) {
 export function isDepositRequirementSatisfied(order = {}) {
   const depositStatus = normalizeDepositWorkflowStatus(order.deposit_workflow_status, order);
   const overrides = normalizeWorkflowOverrides(order.workflow_overrides);
+  const paymentState = deriveOrderPaymentState(order);
 
   return (
-    isDepositSatisfied(order) ||
-    depositStatus === "Deposit Not Required" ||
+    (!paymentState.hasFailedPayment && isDepositSatisfied(order)) ||
+    (!paymentState.hasFailedPayment && depositStatus === "Deposit Not Required") ||
     overrides.forceProduction.active ||
     overrides.depositRequirement.active
   );

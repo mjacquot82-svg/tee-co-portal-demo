@@ -225,6 +225,19 @@ function hasFailedEvent(paymentEvents = []) {
   });
 }
 
+function hasHighSeverityReconciliationIssue(paymentEvents = []) {
+  return paymentEvents.some((event) => {
+    const confidence = normalizeLower(event.payload?.payment_confidence);
+    const issues = Array.isArray(event.payload?.reconciliation_issues)
+      ? event.payload.reconciliation_issues
+      : [];
+    return (
+      confidence === "manual review required" ||
+      issues.some((issue) => normalizeLower(issue?.severity) === "high")
+    );
+  });
+}
+
 function hasVerificationPendingPayment(payments = [], paymentEvents = []) {
   const pendingPayment = payments.some((payment) => {
     const status = normalizeLower(payment.status || payment.provider_status);
@@ -294,7 +307,8 @@ export function deriveOrderPaymentState(order = {}) {
   const failed =
     payments.some(isFailedPayment) ||
     paymentRequests.some((request) => FAILED_REQUEST_STATUSES.has(getRequestStatus(request))) ||
-    hasFailedEvent(paymentEvents);
+    hasFailedEvent(paymentEvents) ||
+    hasHighSeverityReconciliationIssue(paymentEvents);
   const depositPaidByRequest = depositRequests.some((request) => {
     const requested = normalizeAmount(request.amount_requested ?? request.amount);
     return isPaidRequest(request) || (requested > 0 && resolveRequestAmountPaid(request, payments) >= requested);

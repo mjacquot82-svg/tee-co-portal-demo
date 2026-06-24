@@ -128,6 +128,12 @@ function buildSupabaseAdapter(supabase) {
       return result.data || [];
     },
 
+    async listPayments() {
+      const result = await supabase.from("payments").select("*");
+      if (result.error) throw result.error;
+      return result.data || [];
+    },
+
     async updatePaymentRequest(identifier, updates = {}) {
       const result = await supabase
         .from("payment_requests")
@@ -151,14 +157,63 @@ function buildSupabaseAdapter(supabase) {
       }
 
       const result = await supabase.from("payments").insert(input).select("*").single();
-      if (result.error) throw result.error;
+      if (result.error) {
+        const isUniqueConflict = result.error.code === "23505";
+        if (!isUniqueConflict) throw result.error;
+
+        const existing = await supabase
+          .from("payments")
+          .select("*")
+          .eq("idempotency_key", input.idempotency_key)
+          .maybeSingle();
+        if (existing.error) throw existing.error;
+        if (existing.data) return existing.data;
+        throw result.error;
+      }
       await syncSupabasePaymentRequestTotals(supabase, input.payment_request_id);
       return result.data;
     },
 
-    async recordPaymentEvent(input = {}) {
-      const result = await supabase.from("payment_events").insert(input).select("*").single();
+    async updatePayment(identifier, updates = {}) {
+      const result = await supabase
+        .from("payments")
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq("id", identifier)
+        .select("*")
+        .maybeSingle();
       if (result.error) throw result.error;
+      if (result.data?.payment_request_id) {
+        await syncSupabasePaymentRequestTotals(supabase, result.data.payment_request_id);
+      }
+      return result.data;
+    },
+
+    async recordPaymentEvent(input = {}) {
+      const squareEventId = normalizeText(input.payload?.square_event_id);
+      if (squareEventId) {
+        const existing = await supabase
+          .from("payment_events")
+          .select("*")
+          .eq("payload->>square_event_id", squareEventId)
+          .maybeSingle();
+        if (existing.error) throw existing.error;
+        if (existing.data) return existing.data;
+      }
+
+      const result = await supabase.from("payment_events").insert(input).select("*").single();
+      if (result.error) {
+        const isUniqueConflict = result.error.code === "23505";
+        if (!isUniqueConflict || !squareEventId) throw result.error;
+
+        const existing = await supabase
+          .from("payment_events")
+          .select("*")
+          .eq("payload->>square_event_id", squareEventId)
+          .maybeSingle();
+        if (existing.error) throw existing.error;
+        if (existing.data) return existing.data;
+        throw result.error;
+      }
       return result.data;
     },
   };

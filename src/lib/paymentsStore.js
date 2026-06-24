@@ -385,6 +385,39 @@ export function recordPayment(input = {}) {
   return payment;
 }
 
+export function updatePayment(identifier, updates = {}) {
+  const normalizedIdentifier = normalizeIdentifier(identifier);
+  if (!normalizedIdentifier) return null;
+
+  let updatedPayment = null;
+  const nextPayments = getStoredPayments().map((payment) => {
+    const isMatch =
+      normalizeIdentifier(payment.id) === normalizedIdentifier ||
+      normalizeIdentifier(payment.payment_number) === normalizedIdentifier ||
+      normalizeIdentifier(payment.idempotency_key) === normalizedIdentifier ||
+      normalizeIdentifier(payment.provider_payment_id) === normalizedIdentifier;
+    if (!isMatch) return payment;
+
+    updatedPayment = normalizePayment({
+      ...payment,
+      ...updates,
+      id: payment.id,
+      payment_number: payment.payment_number,
+      amount: updates.amount ?? payment.amount,
+      updated_at: updates.updated_at || nowIso(),
+    });
+    return updatedPayment;
+  });
+
+  if (!updatedPayment) return null;
+
+  saveStoredPayments(nextPayments);
+  if (updatedPayment.payment_request_id) {
+    syncPaymentRequestTotals(updatedPayment.payment_request_id);
+  }
+  return updatedPayment;
+}
+
 export function recordPaymentEvent(input = {}) {
   const event = normalizePaymentEvent(input);
   const current = getStoredPaymentEvents();

@@ -19,6 +19,11 @@ import {
   createSquarePaymentLink,
   hasProviderCheckoutUrl,
 } from "../services/squareService";
+import {
+  buildPaymentReconciliationInsights,
+  getInsightTone,
+  getPaymentConfidenceLabel,
+} from "../services/paymentReconciliation";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -51,6 +56,15 @@ function SectionCard({ title, children }) {
   );
 }
 
+function insightPalette(tone) {
+  const palettes = {
+    danger: { border: "#fecaca", background: "#fef2f2", color: "#991b1b" },
+    warning: { border: "#fed7aa", background: "#fff7ed", color: "#9a3412" },
+    success: { border: "#bbf7d0", background: "#ecfdf5", color: "#166534" },
+  };
+  return palettes[tone] || { border: "#e2e8f0", background: "#f8fafc", color: "#334155" };
+}
+
 export default function PaymentRequestDetail() {
   const { requestId } = useParams();
   const [refreshToken, setRefreshToken] = useState(0);
@@ -81,6 +95,12 @@ export default function PaymentRequestDetail() {
     (event) => event.payment_request_id === request.id || requestPayments.some((payment) => payment.id === event.payment_id)
   );
   const nextAction = deriveOwnerPaymentRequestNextAction(request, financials);
+  const reconciliationInsights = buildPaymentReconciliationInsights({
+    paymentRequest: request,
+    payments: listPayments(),
+    paymentEvents: listPaymentEvents(),
+  });
+  const paymentConfidence = getPaymentConfidenceLabel(reconciliationInsights, request);
   const squareLink = request.metadata?.square_payment_link || {};
   const linkCreated = Boolean(squareLink.created_at || request.provider_payment_link_id || request.provider_checkout_url);
   const linkStatus = squareLink.status || (hasProviderCheckoutUrl(request) ? "created" : "");
@@ -238,6 +258,45 @@ export default function PaymentRequestDetail() {
             "No provider checkout link yet"
           )}
         </DetailItem>
+      </SectionCard>
+
+      <SectionCard title="Payment Confidence">
+        <div
+          style={{
+            border: "1px solid #e2e8f0",
+            borderRadius: "14px",
+            padding: "14px",
+            background: "#f8fafc",
+            display: "grid",
+            gap: "6px",
+          }}
+        >
+          <strong style={{ color: "#0f172a" }}>{paymentConfidence}</strong>
+          <span style={{ color: "#64748b" }}>
+            Confidence is derived from Square webhook events, provider payments, manual payments, and request totals.
+          </span>
+        </div>
+        {reconciliationInsights.length ? (
+          <div style={{ display: "grid", gap: "10px" }}>
+            {reconciliationInsights.map((insight) => {
+              const palette = insightPalette(getInsightTone(insight));
+              return (
+                <article
+                  key={`${insight.code}-${insight.detail}`}
+                  style={{
+                    border: `1px solid ${palette.border}`,
+                    borderRadius: "14px",
+                    padding: "12px 14px",
+                    background: palette.background,
+                  }}
+                >
+                  <strong style={{ color: palette.color }}>{insight.label}</strong>
+                  <p style={{ margin: "4px 0 0", color: "#475569" }}>{insight.detail}</p>
+                </article>
+              );
+            })}
+          </div>
+        ) : null}
       </SectionCard>
 
       <SectionCard title="Associated Payments">

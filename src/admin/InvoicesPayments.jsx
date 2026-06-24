@@ -16,6 +16,11 @@ import {
 } from "../orders/ownerWorkflowActions";
 import { isCanceledOperationalStatus } from "../orders/orderWorkflow";
 import { isQuoteCanceled } from "../quotes/quoteWorkflow";
+import {
+  buildPaymentReconciliationInsights,
+  getInsightTone,
+  getPaymentConfidenceLabel,
+} from "../services/paymentReconciliation";
 import PaymentRequestForm from "./PaymentRequestForm";
 
 function money(value) {
@@ -109,6 +114,15 @@ function EmptyState({ title, detail }) {
       {detail ? <span>{detail}</span> : null}
     </div>
   );
+}
+
+function getTonePalette(tone) {
+  const palettes = {
+    danger: { border: "#fecaca", background: "#fef2f2", color: "#991b1b" },
+    warning: { border: "#fed7aa", background: "#fff7ed", color: "#9a3412" },
+    success: { border: "#bbf7d0", background: "#ecfdf5", color: "#166534" },
+  };
+  return palettes[tone] || { border: "#e2e8f0", background: "#f8fafc", color: "#334155" };
 }
 
 function RequestTable({ requests, customerById, orderByNumber }) {
@@ -277,6 +291,27 @@ export default function InvoicesPayments() {
   const paymentRequests = listPaymentRequests();
   const payments = listPayments();
   const paymentEvents = listPaymentEvents();
+  const reconciliationRecords = paymentRequests
+    .map((request) => {
+      const insights = buildPaymentReconciliationInsights({
+        paymentRequest: request,
+        payments,
+        paymentEvents,
+      });
+      return {
+        request,
+        insights,
+        confidence: getPaymentConfidenceLabel(insights, request),
+      };
+    })
+    .filter(
+      (record) =>
+        record.confidence !== "No Provider Activity" ||
+        record.insights.some((insight) => insight.severity === "high" || insight.severity === "medium")
+    );
+  const manualReviewRecords = reconciliationRecords.filter((record) =>
+    record.insights.some((insight) => insight.severity === "high")
+  );
 
   const openPaymentRequests = paymentRequests.filter(isOpenRequest);
   const awaitingDepositRequests = openPaymentRequests.filter((request) => request.request_type === "deposit");
@@ -342,6 +377,7 @@ export default function InvoicesPayments() {
         <SummaryCard label="Partially Paid" value={partiallyPaidOrders.length} />
         <SummaryCard label="Paid Orders" value={paidOrders.length} tone="success" />
         <SummaryCard label="Failed Payments" value={failedPayments.length} tone={failedPayments.length ? "danger" : "default"} />
+        <SummaryCard label="Manual Review" value={manualReviewRecords.length} tone={manualReviewRecords.length ? "danger" : "default"} />
       </div>
 
       <PaymentRequestForm
@@ -389,6 +425,47 @@ export default function InvoicesPayments() {
                 </div>
               </article>
             ))}
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard title="Payment Reconciliation" description="Square payment confidence and manual review signals from webhook, payment, and request records.">
+        {!reconciliationRecords.length ? (
+          <EmptyState title="No provider reconciliation issues." detail="Square payment confidence and exception signals will appear here after provider activity." />
+        ) : (
+          <div style={{ display: "grid", gap: "10px" }}>
+            {reconciliationRecords.map(({ request, insights, confidence }) => {
+              const primaryInsight = insights[0] || {};
+              const palette = getTonePalette(getInsightTone(primaryInsight));
+              return (
+                <article
+                  key={request.id}
+                  style={{
+                    border: `1px solid ${palette.border}`,
+                    borderRadius: "14px",
+                    padding: "14px",
+                    background: palette.background,
+                    display: "grid",
+                    gap: "6px",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+                    <Link to={`/admin/financial/requests/${request.id}`} style={{ color: "#0f172a", fontWeight: 900 }}>
+                      {request.request_number}
+                    </Link>
+                    <strong style={{ color: palette.color }}>{confidence}</strong>
+                  </div>
+                  <div style={{ color: "#64748b", fontSize: "13px" }}>
+                    {request.order_number || "No order"} · {money(request.amount_requested)} requested · {money(request.amount_paid)} paid
+                  </div>
+                  {insights.map((insight) => (
+                    <div key={`${request.id}-${insight.code}-${insight.detail}`} style={{ color: "#475569", fontSize: "13px" }}>
+                      <strong>{insight.label}:</strong> {insight.detail}
+                    </div>
+                  ))}
+                </article>
+              );
+            })}
           </div>
         )}
       </SectionCard>
