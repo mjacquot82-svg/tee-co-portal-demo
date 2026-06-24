@@ -80,18 +80,21 @@ test("resolvePortalNextActionDetails maps direct customer action routes", () => 
     artwork_approval_status: "Pending Review",
   };
   expect(resolvePortalNextActionDetails(artworkOrder, [])).toEqual({
+    actionType: "artwork",
     label: "Upload Artwork",
     to: "/portal/orders/TC-DETAIL-2000/artwork",
   });
 
   const quoteOrder = { order_number: "TC-DETAIL-2001", quote_status: "Sent" };
   expect(resolvePortalNextActionDetails(quoteOrder, [])).toEqual({
+    actionType: "quote_review",
     label: "Review Quote",
     to: "/quote/TC-DETAIL-2001",
   });
 
   const approvalOrder = { order_number: "TC-DETAIL-2002", quote_status: "Awaiting Approval" };
   expect(resolvePortalNextActionDetails(approvalOrder, [])).toEqual({
+    actionType: "quote_approval",
     label: "Approve Quote",
     to: "/approval/TC-DETAIL-2002",
   });
@@ -100,6 +103,7 @@ test("resolvePortalNextActionDetails maps direct customer action routes", () => 
   expect(
     resolvePortalNextActionDetails(depositOrder, [{ id: "pr-1", request_type: "deposit", status: "sent" }])
   ).toEqual({
+    actionType: "payment_sent_confirmation",
     label: "Mark Payment Sent",
     to: "/portal/orders/TC-DETAIL-2003/deposit",
   });
@@ -108,12 +112,14 @@ test("resolvePortalNextActionDetails maps direct customer action routes", () => 
   expect(
     resolvePortalNextActionDetails(balanceOrder, [{ id: "pr-2", request_type: "balance", status: "sent" }])
   ).toEqual({
+    actionType: "payment_request",
     label: "View Payment Request",
     to: "/portal/payments/pr-2",
   });
 
   const productionOrder = { order_number: "TC-DETAIL-2005", status: "Printing" };
   expect(resolvePortalNextActionDetails(productionOrder, [])).toEqual({
+    actionType: "order_progress",
     label: "View Order Progress",
     to: "/portal/orders/TC-DETAIL-2005#activity-timeline",
   });

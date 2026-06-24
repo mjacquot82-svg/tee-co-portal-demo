@@ -142,7 +142,7 @@ export default function CustomerPortalOrderDetail() {
             >
               Back to My Orders
             </Link>
-            {latestPaymentRequest && nextActionDetails.label !== "View Payment Request" ? (
+            {latestPaymentRequest && nextActionDetails.actionType !== "payment_request" ? (
               <Link
                 to={`/portal/payments/${encodeURIComponent(latestPaymentRequest.id)}`}
                 style={{
@@ -223,7 +223,7 @@ export default function CustomerPortalOrderDetail() {
         subtitle="Consolidated progress from request through completion."
       >
         <div style={{ display: "grid", gap: "8px" }}>
-          <div id="activity-timeline">
+          <div id="activity-timeline" role="region" aria-label="Activity timeline steps">
             {timeline.map((step) => (
               <TimelineStep key={step.label} step={step} />
             ))}

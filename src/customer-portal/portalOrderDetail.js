@@ -96,11 +96,11 @@ export function resolvePortalNextAction(order = {}, paymentRequests = []) {
     return artworkAction.primaryLabel || "Upload Artwork";
   }
 
-  const quoteStatus = normalizeText(order.quote_status);
-  if (["Sent", "Draft"].includes(quoteStatus)) {
+  const quoteStatus = normalizeLower(order.quote_status);
+  if (["sent", "draft"].includes(quoteStatus)) {
     return "Review Quote";
   }
-  if (["Awaiting Approval", "Awaiting Artwork Approval"].includes(quoteStatus)) {
+  if (["awaiting approval", "awaiting artwork approval"].includes(quoteStatus)) {
     return "Approve Quote";
   }
 
@@ -145,20 +145,23 @@ export function resolvePortalNextActionDetails(order = {}, paymentRequests = [])
   if (isCustomerArtworkActionRequired(order)) {
     const artworkAction = getCustomerArtworkActionState(order);
     return {
+      actionType: "artwork",
       label: artworkAction.primaryLabel || "Upload Artwork",
       to: buildOrderActionRoute(orderNumber, "/artwork"),
     };
   }
 
-  const quoteStatus = normalizeText(order.quote_status);
-  if (["Sent", "Draft"].includes(quoteStatus)) {
+  const quoteStatus = normalizeLower(order.quote_status);
+  if (["sent", "draft"].includes(quoteStatus)) {
     return {
+      actionType: "quote_review",
       label: "Review Quote",
       to: `/quote/${encodedOrderNumber}`,
     };
   }
-  if (["Awaiting Approval", "Awaiting Artwork Approval"].includes(quoteStatus)) {
+  if (["awaiting approval", "awaiting artwork approval"].includes(quoteStatus)) {
     return {
+      actionType: "quote_approval",
       label: "Approve Quote",
       to: `/approval/${encodedOrderNumber}`,
     };
@@ -168,25 +171,21 @@ export function resolvePortalNextActionDetails(order = {}, paymentRequests = [])
   if (openPaymentRequest) {
     if (normalizeLower(openPaymentRequest.request_type) === "deposit") {
       return {
+        actionType: "payment_sent_confirmation",
         label: "Mark Payment Sent",
         to: buildOrderActionRoute(orderNumber, "/deposit"),
       };
     }
 
     return {
+      actionType: "payment_request",
       label: "View Payment Request",
       to: `/portal/payments/${encodeURIComponent(openPaymentRequest.id || "")}`,
     };
   }
 
-  if (hasCompleted(order) || hasReadyForPickup(order) || hasProductionStarted(order)) {
-    return {
-      label: "View Order Progress",
-      to: `${buildOrderActionRoute(orderNumber)}#activity-timeline`,
-    };
-  }
-
   return {
+    actionType: "order_progress",
     label: "View Order Progress",
     to: `${buildOrderActionRoute(orderNumber)}#activity-timeline`,
   };
