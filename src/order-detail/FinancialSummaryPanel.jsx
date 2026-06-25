@@ -12,6 +12,7 @@ import {
   getPaymentEventsByOrder,
   getPaymentRequestsByOrder,
   getPaymentsByOrder,
+  usePaymentsSnapshot,
 } from "../lib/paymentsStore";
 import { listPaymentReconciliationReviews } from "../lib/paymentReconciliationStore";
 import {
@@ -90,6 +91,7 @@ export default function FinancialSummaryPanel({
   const [method, setMethod] = useState(PAYMENT_METHOD_OPTIONS[0]);
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
+  usePaymentsSnapshot();
   const depositRequest = buildDepositRequestContent(order);
   const paymentValidation = validatePaymentAmount({
     amount,

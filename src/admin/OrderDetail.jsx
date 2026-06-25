@@ -37,6 +37,7 @@ import {
 } from "../orders/workflowPresentation";
 import { deriveOwnerOrderNextAction } from "../orders/ownerWorkflowActions";
 import PaymentRequestForm from "./PaymentRequestForm";
+import { usePaymentsSnapshot } from "../lib/paymentsStore";
 
 const cardStyle = {
   background: "#ffffff",
@@ -73,6 +74,7 @@ export default function OrderDetail() {
   const { orderNumber } = useParams();
   const storedOrders = useStoredOrders();
   const storedProducts = useStoredProducts();
+  const paymentsSnapshot = usePaymentsSnapshot();
   const [staffUsers, setStaffUsers] = useState(() =>
     getOperationalStaffUsers().filter((staffUser) => staffUser.status !== "Inactive")
   );
@@ -108,7 +110,7 @@ export default function OrderDetail() {
         ? [{ label: "generatedQuoteSnapshot", value: quoteSnapshot }]
         : [],
     });
-  }, [order, quoteSnapshot]);
+  }, [order, paymentsSnapshot, quoteSnapshot]);
   const workflowActions = useMemo(
     () => (order ? getAvailableProductionActions(order) : []),
     [order]

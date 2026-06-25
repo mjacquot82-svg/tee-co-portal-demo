@@ -1,7 +1,9 @@
+import { useSyncExternalStore } from "react";
 import { getJsonStorageItem, hasBrowserStorage, setJsonStorageItem } from "./browserStorage";
 import { normalizeCustomerId } from "./customerIds";
 import { triggerNotificationEvent } from "./notificationDeliveryService";
 import { NOTIFICATION_TYPES } from "./notificationTemplatesStore";
+import { isSupabaseConfigured, supabase } from "./supabaseClient";
 
 const PAYMENT_REQUESTS_STORAGE_KEY = "teeCoPaymentRequests";
 const PAYMENTS_STORAGE_KEY = "teeCoPayments";
@@ -12,6 +14,17 @@ const memoryStore = {
   payments: [],
   paymentEvents: [],
 };
+
+const paymentListeners = new Set();
+
+let testSupabaseClient = null;
+let testSupabaseConfigured = null;
+let supabaseHydrationStarted = false;
+let supabaseHydrationPromise = null;
+let pendingSupabaseWrites = Promise.resolve();
+let supabasePersistenceDisabled = false;
+let paymentsSnapshotVersion = 0;
+let cachedPaymentsSnapshot = null;
 
 function nowIso() {
   return new Date().toISOString();
@@ -35,18 +48,307 @@ function numberSuffix() {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.toUpperCase();
 }
 
+function emitPaymentsUpdated() {
+  paymentsSnapshotVersion += 1;
+  cachedPaymentsSnapshot = null;
+  paymentListeners.forEach((listener) => listener());
+}
+
+function getSupabaseClient() {
+  return testSupabaseClient || supabase;
+}
+
+function shouldUseSupabasePersistence() {
+  if (supabasePersistenceDisabled) return false;
+  if (testSupabaseConfigured !== null) {
+    return Boolean(testSupabaseConfigured && getSupabaseClient());
+  }
+  return Boolean(isSupabaseConfigured && supabase);
+}
+
+function generateRecordId(prefix) {
+  if (shouldUseSupabasePersistence() && typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return generateId(prefix);
+}
+
+function setMemoryList(memoryKey, records) {
+  memoryStore[memoryKey] = Array.isArray(records) ? records : [];
+  emitPaymentsUpdated();
+}
+
+function mergeById(existing = [], incoming = []) {
+  const recordsById = new Map();
+  [...existing, ...incoming].forEach((record) => {
+    if (!record?.id) return;
+    recordsById.set(record.id, record);
+  });
+  return Array.from(recordsById.values()).sort(compareCreatedAtDesc);
+}
+
+function startSupabaseHydration() {
+  if (!shouldUseSupabasePersistence() || supabaseHydrationStarted) return supabaseHydrationPromise;
+  supabaseHydrationStarted = true;
+  supabaseHydrationPromise = refreshPaymentsFromSupabase();
+  return supabaseHydrationPromise;
+}
+
+function queueSupabaseWrite(operation) {
+  if (!shouldUseSupabasePersistence()) return;
+  pendingSupabaseWrites = pendingSupabaseWrites
+    .then(operation)
+    .catch((error) => {
+      console.error("[paymentsStore] Supabase payment persistence failed", error);
+    });
+}
+
+async function runSupabaseQuery(query) {
+  const result = await query;
+  if (result?.error) throw result.error;
+  return result?.data ?? null;
+}
+
+async function fetchSupabaseTable(tableName) {
+  const client = getSupabaseClient();
+  const data = await runSupabaseQuery(
+    client.from(tableName).select("*").order("created_at", { ascending: false })
+  );
+  return Array.isArray(data) ? data : [];
+}
+
+async function findSupabasePaymentRequestByIdentifier(identifier) {
+  const normalizedIdentifier = normalizeIdentifier(identifier);
+  if (!normalizedIdentifier) return null;
+  const client = getSupabaseClient();
+  const data = await runSupabaseQuery(
+    client
+      .from("payment_requests")
+      .select("*")
+      .or(`id.eq.${identifier},request_number.eq.${identifier}`)
+      .maybeSingle()
+  );
+  return data || null;
+}
+
+async function findSupabasePaymentByIdempotencyKey(idempotencyKey) {
+  const normalizedKey = normalizeText(idempotencyKey);
+  if (!normalizedKey) return null;
+  const client = getSupabaseClient();
+  const data = await runSupabaseQuery(
+    client.from("payments").select("*").eq("idempotency_key", normalizedKey).maybeSingle()
+  );
+  return data || null;
+}
+
+async function findSupabasePaymentEventDuplicate(event = {}) {
+  const squareEventId = normalizeText(event.payload?.square_event_id);
+  const client = getSupabaseClient();
+
+  if (squareEventId) {
+    const data = await runSupabaseQuery(
+      client.from("payment_events").select("*").eq("payload->>square_event_id", squareEventId).maybeSingle()
+    );
+    if (data) return data;
+  }
+
+  const events = await fetchSupabaseTable("payment_events");
+  return (
+    events.find(
+      (entry) =>
+        entry.payment_id === event.payment_id &&
+        entry.payment_request_id === event.payment_request_id &&
+        entry.event_type === event.event_type &&
+        entry.created_at === event.created_at
+    ) || null
+  );
+}
+
+async function persistSupabasePaymentRequest(paymentRequest) {
+  const client = getSupabaseClient();
+  const existing = await findSupabasePaymentRequestByIdentifier(paymentRequest.id);
+  const result = existing
+    ? await runSupabaseQuery(
+        client
+          .from("payment_requests")
+          .update({ ...paymentRequest, updated_at: paymentRequest.updated_at || nowIso() })
+          .eq("id", existing.id)
+          .select("*")
+          .maybeSingle()
+      )
+    : await runSupabaseQuery(client.from("payment_requests").insert(paymentRequest).select("*").single());
+  if (result) {
+    saveStoredPaymentRequests(mergeById(getStoredPaymentRequests(), [result]));
+  }
+  return result || paymentRequest;
+}
+
+async function persistSupabasePaymentRequestUpdate(identifier, updates = {}) {
+  const client = getSupabaseClient();
+  const existing = await findSupabasePaymentRequestByIdentifier(identifier);
+  if (!existing) return null;
+  const result = await runSupabaseQuery(
+    client
+      .from("payment_requests")
+      .update({ ...updates, updated_at: updates.updated_at || nowIso() })
+      .eq("id", existing.id)
+      .select("*")
+      .maybeSingle()
+  );
+  if (result) {
+    saveStoredPaymentRequests(mergeById(getStoredPaymentRequests(), [result]));
+  }
+  return result;
+}
+
+async function syncSupabasePaymentRequestTotals(identifier) {
+  const paymentRequest = await findSupabasePaymentRequestByIdentifier(identifier);
+  if (!paymentRequest) return null;
+  const client = getSupabaseClient();
+  const payments = await runSupabaseQuery(
+    client.from("payments").select("*").eq("payment_request_id", paymentRequest.id)
+  );
+  const requestPayments = Array.isArray(payments) ? payments : [];
+  const amountPaid = requestPayments
+    .filter((payment) => payment.status !== "failed" && payment.status !== "voided")
+    .reduce((total, payment) => total + normalizeAmount(payment.amount), 0);
+  const status = resolvePaymentRequestStatus(paymentRequest, requestPayments);
+  const result = await persistSupabasePaymentRequestUpdate(paymentRequest.id, {
+    amount_paid: amountPaid,
+    status,
+    paid_at: status === "paid" ? paymentRequest.paid_at || nowIso() : paymentRequest.paid_at || null,
+  });
+  return result;
+}
+
+async function persistSupabasePayment(payment) {
+  const client = getSupabaseClient();
+  const existing = payment.idempotency_key ? await findSupabasePaymentByIdempotencyKey(payment.idempotency_key) : null;
+  if (existing) {
+    saveStoredPayments(mergeById(getStoredPayments(), [existing]));
+    if (existing.payment_request_id) {
+      await syncSupabasePaymentRequestTotals(existing.payment_request_id);
+    }
+    return existing;
+  }
+
+  let result = null;
+  try {
+    result = await runSupabaseQuery(client.from("payments").insert(payment).select("*").single());
+  } catch (error) {
+    if (error?.code !== "23505" || !payment.idempotency_key) throw error;
+    result = await findSupabasePaymentByIdempotencyKey(payment.idempotency_key);
+  }
+
+  if (result) {
+    saveStoredPayments(mergeById(getStoredPayments(), [result]));
+    if (result.payment_request_id) {
+      await syncSupabasePaymentRequestTotals(result.payment_request_id);
+    }
+  }
+  return result || payment;
+}
+
+async function persistSupabasePaymentUpdate(identifier, updates = {}) {
+  const normalizedIdentifier = normalizeIdentifier(identifier);
+  if (!normalizedIdentifier) return null;
+  const client = getSupabaseClient();
+  const existing =
+    getStoredPayments().find(
+      (payment) =>
+        normalizeIdentifier(payment.id) === normalizedIdentifier ||
+        normalizeIdentifier(payment.payment_number) === normalizedIdentifier ||
+        normalizeIdentifier(payment.idempotency_key) === normalizedIdentifier ||
+        normalizeIdentifier(payment.provider_payment_id) === normalizedIdentifier
+    ) || null;
+  if (!existing) return null;
+  const result = await runSupabaseQuery(
+    client
+      .from("payments")
+      .update({ ...updates, updated_at: updates.updated_at || nowIso() })
+      .eq("id", existing.id)
+      .select("*")
+      .maybeSingle()
+  );
+  if (result) {
+    saveStoredPayments(mergeById(getStoredPayments(), [result]));
+    if (result.payment_request_id) {
+      await syncSupabasePaymentRequestTotals(result.payment_request_id);
+    }
+  }
+  return result;
+}
+
+async function persistSupabasePaymentEvent(event) {
+  const duplicate = await findSupabasePaymentEventDuplicate(event);
+  if (duplicate) return duplicate;
+  const client = getSupabaseClient();
+  let result = null;
+  try {
+    result = await runSupabaseQuery(client.from("payment_events").insert(event).select("*").single());
+  } catch (error) {
+    if (error?.code !== "23505") throw error;
+    result = await findSupabasePaymentEventDuplicate(event);
+  }
+  if (result) {
+    saveStoredPaymentEvents(mergeById(getStoredPaymentEvents(), [result]));
+  }
+  return result || event;
+}
+
+export async function refreshPaymentsFromSupabase() {
+  if (!shouldUseSupabasePersistence()) {
+    return {
+      paymentRequests: listPaymentRequests(),
+      payments: listPayments(),
+      paymentEvents: listPaymentEvents(),
+    };
+  }
+
+  try {
+    const [paymentRequests, payments, paymentEvents] = await Promise.all([
+      fetchSupabaseTable("payment_requests"),
+      fetchSupabaseTable("payments"),
+      fetchSupabaseTable("payment_events"),
+    ]);
+    setMemoryList("paymentRequests", paymentRequests);
+    setMemoryList("payments", payments);
+    setMemoryList("paymentEvents", paymentEvents);
+    return { paymentRequests, payments, paymentEvents };
+  } catch (error) {
+    console.error("[paymentsStore] Supabase hydration failed; using local fallback cache", error);
+    supabasePersistenceDisabled = true;
+    return {
+      paymentRequests: listPaymentRequests(),
+      payments: listPayments(),
+      paymentEvents: listPaymentEvents(),
+    };
+  }
+}
+
 function getStoredList(storageKey, memoryKey) {
+  if (shouldUseSupabasePersistence()) {
+    startSupabaseHydration();
+    return memoryStore[memoryKey];
+  }
   if (!hasBrowserStorage()) return memoryStore[memoryKey];
   return getJsonStorageItem(storageKey, []);
 }
 
 function saveStoredList(storageKey, memoryKey, records) {
   const safeRecords = Array.isArray(records) ? records : [];
+  if (shouldUseSupabasePersistence()) {
+    memoryStore[memoryKey] = safeRecords;
+    emitPaymentsUpdated();
+    return;
+  }
   if (!hasBrowserStorage()) {
     memoryStore[memoryKey] = safeRecords;
+    emitPaymentsUpdated();
     return;
   }
   setJsonStorageItem(storageKey, safeRecords);
+  emitPaymentsUpdated();
 }
 
 function normalizePaymentMethod(method) {
@@ -66,7 +368,7 @@ function normalizePaymentRequest(input = {}) {
   const amountPaid = normalizeAmount(input.amount_paid);
 
   return {
-    id: input.id || generateId("payment-request"),
+    id: input.id || generateRecordId("payment-request"),
     request_number: input.request_number || `PR-${numberSuffix()}`,
     customer_id: normalizeCustomerId(input.customer_id),
     order_id: input.order_id || "",
@@ -101,7 +403,7 @@ function normalizePayment(input = {}) {
   const amount = normalizeAmount(input.amount);
 
   return {
-    id: input.id || generateId("payment"),
+    id: input.id || generateRecordId("payment"),
     payment_number: input.payment_number || `PAY-${numberSuffix()}`,
     customer_id: normalizeCustomerId(input.customer_id),
     order_id: input.order_id || "",
@@ -133,7 +435,7 @@ function normalizePayment(input = {}) {
 
 function normalizePaymentEvent(input = {}) {
   return {
-    id: input.id || generateId("payment-event"),
+    id: input.id || generateRecordId("payment-event"),
     payment_id: input.payment_id || "",
     payment_request_id: input.payment_request_id || "",
     order_id: input.order_id || "",
@@ -238,6 +540,7 @@ export function createPaymentRequest(input = {}) {
   if (existing) return existing;
 
   saveStoredPaymentRequests([paymentRequest, ...current]);
+  queueSupabaseWrite(() => persistSupabasePaymentRequest(paymentRequest));
   recordPaymentEvent({
     payment_request_id: paymentRequest.id,
     order_number: paymentRequest.order_number,
@@ -309,6 +612,7 @@ export function updatePaymentRequest(identifier, updates = {}) {
   if (!updatedRequest) return null;
 
   saveStoredPaymentRequests(nextRequests);
+  queueSupabaseWrite(() => persistSupabasePaymentRequestUpdate(updatedRequest.id, updatedRequest));
   recordPaymentEvent({
     payment_request_id: updatedRequest.id,
     order_number: updatedRequest.order_number,
@@ -339,6 +643,7 @@ export function syncPaymentRequestTotals(identifier) {
   );
 
   saveStoredPaymentRequests(nextRequests);
+  queueSupabaseWrite(() => syncSupabasePaymentRequestTotals(syncedRequest.id));
   return getPaymentRequestById(syncedRequest.id);
 }
 
@@ -358,6 +663,7 @@ export function recordPayment(input = {}) {
   if (existing) return existing;
 
   saveStoredPayments([payment, ...current]);
+  queueSupabaseWrite(() => persistSupabasePayment(payment));
   if (payment.payment_request_id) {
     syncPaymentRequestTotals(payment.payment_request_id);
   }
@@ -412,6 +718,7 @@ export function updatePayment(identifier, updates = {}) {
   if (!updatedPayment) return null;
 
   saveStoredPayments(nextPayments);
+  queueSupabaseWrite(() => persistSupabasePaymentUpdate(updatedPayment.id, updatedPayment));
   if (updatedPayment.payment_request_id) {
     syncPaymentRequestTotals(updatedPayment.payment_request_id);
   }
@@ -432,6 +739,7 @@ export function recordPaymentEvent(input = {}) {
   if (duplicate) return duplicate;
 
   saveStoredPaymentEvents([event, ...current]);
+  queueSupabaseWrite(() => persistSupabasePaymentEvent(event));
   return event;
 }
 
@@ -566,4 +874,50 @@ export function resetStoredPaymentsForTests() {
   saveStoredPaymentRequests([]);
   saveStoredPayments([]);
   saveStoredPaymentEvents([]);
+}
+
+export function subscribeToPayments(listener) {
+  if (typeof listener !== "function") return () => {};
+  paymentListeners.add(listener);
+  startSupabaseHydration();
+  return () => {
+    paymentListeners.delete(listener);
+  };
+}
+
+function getPaymentsSnapshot() {
+  startSupabaseHydration();
+  if (cachedPaymentsSnapshot?.version === paymentsSnapshotVersion) {
+    return cachedPaymentsSnapshot;
+  }
+  cachedPaymentsSnapshot = {
+    version: paymentsSnapshotVersion,
+    paymentRequests: listPaymentRequests(),
+    payments: listPayments(),
+    paymentEvents: listPaymentEvents(),
+  };
+  return cachedPaymentsSnapshot;
+}
+
+export function usePaymentsSnapshot() {
+  return useSyncExternalStore(subscribeToPayments, getPaymentsSnapshot, getPaymentsSnapshot);
+}
+
+export function configurePaymentsPersistenceForTests({ supabaseClient = null, enabled = false } = {}) {
+  testSupabaseClient = supabaseClient;
+  testSupabaseConfigured = enabled;
+  supabasePersistenceDisabled = false;
+  supabaseHydrationStarted = false;
+  supabaseHydrationPromise = null;
+  pendingSupabaseWrites = Promise.resolve();
+  setMemoryList("paymentRequests", []);
+  setMemoryList("payments", []);
+  setMemoryList("paymentEvents", []);
+}
+
+export async function flushPaymentsPersistenceForTests() {
+  await pendingSupabaseWrites;
+  if (shouldUseSupabasePersistence()) {
+    await refreshPaymentsFromSupabase();
+  }
 }

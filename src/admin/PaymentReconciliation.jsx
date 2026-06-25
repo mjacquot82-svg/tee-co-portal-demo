@@ -5,6 +5,7 @@ import {
   listPaymentEvents,
   listPaymentRequests,
   listPayments,
+  usePaymentsSnapshot,
 } from "../lib/paymentsStore";
 import {
   buildPaymentExceptionQueue,
@@ -84,10 +85,11 @@ function getRelatedEvents(events, request, relatedPayments) {
 export default function PaymentReconciliation() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedId, setSelectedId] = useState("");
+  const paymentsSnapshot = usePaymentsSnapshot();
   void refreshKey;
-  const paymentRequests = listPaymentRequests();
-  const payments = listPayments();
-  const paymentEvents = listPaymentEvents();
+  const paymentRequests = paymentsSnapshot.paymentRequests.length ? paymentsSnapshot.paymentRequests : listPaymentRequests();
+  const payments = paymentsSnapshot.payments.length ? paymentsSnapshot.payments : listPayments();
+  const paymentEvents = paymentsSnapshot.paymentEvents.length ? paymentsSnapshot.paymentEvents : listPaymentEvents();
   const reviews = listPaymentReconciliationReviews();
   const exceptionQueue = buildPaymentExceptionQueue({
     paymentRequests,

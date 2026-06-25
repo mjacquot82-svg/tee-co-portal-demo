@@ -8,6 +8,7 @@ import {
   listPaymentEvents,
   listPaymentRequests,
   listPayments,
+  usePaymentsSnapshot,
 } from "../lib/paymentsStore";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
 import {
@@ -276,6 +277,7 @@ function OrderTable({ orders }) {
 export default function InvoicesPayments() {
   const orders = useStoredOrders();
   const customers = useStoredCustomers();
+  const paymentsSnapshot = usePaymentsSnapshot();
   const [, setRefreshKey] = useState(0);
   const financialOrders = useMemo(
     () => orders.map((order) => normalizeOrderFinancials(order)).filter(isActiveFinancialWorkflowOrder),
@@ -289,9 +291,9 @@ export default function InvoicesPayments() {
     () => new Map(financialOrders.map((order) => [order.order_number, order])),
     [financialOrders]
   );
-  const paymentRequests = listPaymentRequests();
-  const payments = listPayments();
-  const paymentEvents = listPaymentEvents();
+  const paymentRequests = paymentsSnapshot.paymentRequests.length ? paymentsSnapshot.paymentRequests : listPaymentRequests();
+  const payments = paymentsSnapshot.payments.length ? paymentsSnapshot.payments : listPayments();
+  const paymentEvents = paymentsSnapshot.paymentEvents.length ? paymentsSnapshot.paymentEvents : listPaymentEvents();
   const reconciliationReviews = listPaymentReconciliationReviews();
   const reconciliationRecords = paymentRequests
     .map((request) => {

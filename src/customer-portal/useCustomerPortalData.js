@@ -9,7 +9,7 @@ import {
   getCustomerQuotes,
   getCustomerScopedOrders,
 } from "../lib/customerPortalData";
-import { listPaymentEvents, listPaymentRequests, listPayments } from "../lib/paymentsStore";
+import { usePaymentsSnapshot } from "../lib/paymentsStore";
 import { useStoredCustomers } from "../lib/customersStore";
 import { useStoredOrders } from "../lib/ordersStore";
 import { getCustomerPortalPaymentData } from "./customerPortalPayments";
@@ -41,6 +41,7 @@ export function formatCurrency(value) {
 export function useCustomerPortalData(session) {
   const orders = useStoredOrders();
   const customers = useStoredCustomers();
+  const paymentsSnapshot = usePaymentsSnapshot();
 
   return useMemo(() => {
     if (!session) {
@@ -73,9 +74,9 @@ export function useCustomerPortalData(session) {
     const portalPayments = getCustomerPortalPaymentData({
       orders: scopedOrders,
       customerIds,
-      paymentRequests: listPaymentRequests(),
-      payments: listPayments(),
-      paymentEvents: listPaymentEvents(),
+      paymentRequests: paymentsSnapshot.paymentRequests,
+      payments: paymentsSnapshot.payments,
+      paymentEvents: paymentsSnapshot.paymentEvents,
     });
     console.debug("[portal] useCustomerPortalData render", {
       sessionId: session.id || "",
@@ -111,5 +112,5 @@ export function useCustomerPortalData(session) {
       },
       summary,
     };
-  }, [customers, orders, session]);
+  }, [customers, orders, paymentsSnapshot, session]);
 }

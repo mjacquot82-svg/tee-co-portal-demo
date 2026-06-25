@@ -11,6 +11,7 @@ import {
   listPayments,
   recordPaymentEvent,
   updatePaymentRequest,
+  usePaymentsSnapshot,
 } from "../lib/paymentsStore";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
 import { deriveOwnerPaymentRequestNextAction } from "../orders/ownerWorkflowActions";
@@ -73,6 +74,7 @@ export default function PaymentRequestDetail() {
   const [isSending, setIsSending] = useState(false);
   const orders = useStoredOrders();
   const customers = useStoredCustomers();
+  const paymentsSnapshot = usePaymentsSnapshot();
   void refreshToken;
   const request = getPaymentRequestById(requestId);
 
@@ -91,15 +93,17 @@ export default function PaymentRequestDetail() {
   const financials = relatedOrder ? normalizeOrderFinancials(relatedOrder) : null;
   const relatedCustomer =
     customers.find((customer) => customer.id === request.customer_id) || null;
-  const requestPayments = listPayments().filter((payment) => payment.payment_request_id === request.id);
-  const requestEvents = listPaymentEvents().filter(
+  const allPayments = paymentsSnapshot.payments.length ? paymentsSnapshot.payments : listPayments();
+  const allPaymentEvents = paymentsSnapshot.paymentEvents.length ? paymentsSnapshot.paymentEvents : listPaymentEvents();
+  const requestPayments = allPayments.filter((payment) => payment.payment_request_id === request.id);
+  const requestEvents = allPaymentEvents.filter(
     (event) => event.payment_request_id === request.id || requestPayments.some((payment) => payment.id === event.payment_id)
   );
   const nextAction = deriveOwnerPaymentRequestNextAction(request, financials);
   const reconciliationInsights = buildPaymentReconciliationInsights({
     paymentRequest: request,
-    payments: listPayments(),
-    paymentEvents: listPaymentEvents(),
+    payments: allPayments,
+    paymentEvents: allPaymentEvents,
     reviews: listPaymentReconciliationReviews(),
   });
   const paymentConfidence = getPaymentConfidenceLabel(reconciliationInsights, request);

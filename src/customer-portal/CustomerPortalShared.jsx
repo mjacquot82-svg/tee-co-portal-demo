@@ -18,7 +18,7 @@ import {
   getCustomerArtworkActionState,
   isCustomerArtworkActionRequired,
 } from "../lib/customerArtworkActions";
-import { getPaymentRequestsByOrder, getPaymentsByOrder } from "../lib/paymentsStore";
+import { getPaymentRequestsByOrder, getPaymentsByOrder, usePaymentsSnapshot } from "../lib/paymentsStore";
 import {
   formatPaymentRequestType,
   getCustomerPaymentStatusLabel,
@@ -643,6 +643,7 @@ function PortalOrderPayments({ paymentRequests, payments }) {
 
 export function RecordList({ records = [], type = "orders" }) {
   const safeRecords = Array.isArray(records) ? records : EMPTY_RECORDS;
+  const paymentsSnapshot = usePaymentsSnapshot();
   const viewModels = useMemo(
     () => {
       const nextViewModels = safeRecords.map((record) => {
@@ -699,7 +700,7 @@ export function RecordList({ records = [], type = "orders" }) {
 
       return nextViewModels;
     },
-    [safeRecords, type]
+    [paymentsSnapshot, safeRecords, type]
   );
 
   return (
