@@ -259,6 +259,34 @@ test("processing Square webhook updates customer-visible status without satisfyi
   expect(getCustomerPaymentStatusLabel(getPaymentRequestById(request.id))).toBe("Processing");
 });
 
+test("unmatched Square terminal events do not crash webhook processing", async () => {
+  const result = await processSquareWebhookEvent(
+    squarePaymentEvent({
+      event: { id: "square-event-unmatched-1001", type: "payment.updated" },
+      payment: {
+        id: "square-payment-unmatched-1001",
+        order_id: "square-order-unmatched",
+        metadata: {},
+      },
+    })
+  );
+
+  expect(result).toMatchObject({
+    processed: true,
+    status: "captured",
+    paymentRequest: null,
+  });
+  expect(listPayments()[0]).toMatchObject({
+    provider: "square",
+    provider_payment_id: "square-payment-unmatched-1001",
+    payment_request_id: "",
+  });
+  expect(listPaymentEvents()[0]).toMatchObject({
+    event_type: "square_payment_completed",
+    payment_request_id: "",
+  });
+});
+
 test("Square signature helper accepts valid Square-style HMAC signatures", async () => {
   const body = JSON.stringify(squarePaymentEvent());
   const signature = await buildSquareWebhookSignature({

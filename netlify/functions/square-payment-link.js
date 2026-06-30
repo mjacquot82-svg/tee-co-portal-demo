@@ -27,14 +27,31 @@ function toMoneyAmount(value) {
 }
 
 function squareApiBaseUrl() {
-  return normalizeText(process.env.SQUARE_ENVIRONMENT).toLowerCase() === "production"
-    ? "https://connect.squareup.com"
-    : "https://connect.squareupsandbox.com";
+  return normalizeText(process.env.SQUARE_ENVIRONMENT, "production").toLowerCase() === "sandbox"
+    ? "https://connect.squareupsandbox.com"
+    : "https://connect.squareup.com";
+}
+
+function getRedirectUrl(input = {}) {
+  return (
+    normalizeText(input.redirect_url) ||
+    normalizeText(process.env.SQUARE_CHECKOUT_REDIRECT_URL) ||
+    normalizeText(process.env.URL)
+  );
 }
 
 function buildSquarePayload(input = {}) {
   const currency = normalizeText(input.currency, "CAD").toUpperCase();
   const description = normalizeText(input.description, "Tee & Co payment request");
+  const redirectUrl = getRedirectUrl(input);
+  const metadata = {
+    source: "tee_co_payment_request",
+    payment_request_id: normalizeText(input.payment_request_id),
+    request_number: normalizeText(input.request_number),
+    order_number: normalizeText(input.order_number),
+    customer_id: normalizeText(input.customer_id),
+    request_type: normalizeText(input.request_type),
+  };
 
   return {
     idempotency_key: normalizeText(input.idempotency_key),
@@ -51,16 +68,12 @@ function buildSquarePayload(input = {}) {
           },
         },
       ],
-      metadata: {
-        payment_request_id: normalizeText(input.payment_request_id),
-        request_number: normalizeText(input.request_number),
-        order_number: normalizeText(input.order_number),
-        customer_id: normalizeText(input.customer_id),
-        request_type: normalizeText(input.request_type),
-      },
+      metadata,
     },
     checkout_options: {
       ask_for_shipping_address: false,
+      merchant_support_email: normalizeText(process.env.SQUARE_MERCHANT_SUPPORT_EMAIL) || undefined,
+      redirect_url: redirectUrl || undefined,
     },
   };
 }
@@ -116,7 +129,7 @@ export async function handler(event) {
   }
 
   return json(200, {
-    mode: normalizeText(process.env.SQUARE_ENVIRONMENT, "sandbox"),
+    mode: normalizeText(process.env.SQUARE_ENVIRONMENT, "production"),
     idempotency_key: normalizeText(input.idempotency_key),
     payment_link: data.payment_link,
     related_resources: data.related_resources || {},

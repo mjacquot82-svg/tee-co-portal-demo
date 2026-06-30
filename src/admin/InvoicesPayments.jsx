@@ -419,7 +419,7 @@ export default function InvoicesPayments() {
 
       <SectionCard title="Failed Payments" description="Failed or declined native payment records and payment requests.">
         {!failedPayments.length ? (
-          <EmptyState title="No failed payments." detail="Provider failures will appear here when a later Square phase is introduced." />
+          <EmptyState title="No failed payments." detail="Square provider failures and declined manual records will appear here." />
         ) : (
           <div style={{ display: "grid", gap: "10px" }}>
             {failedPayments.map((entry) => (

@@ -60,6 +60,12 @@ function buildLocalPaymentLink(paymentRequest = {}) {
 
 function normalizeSquarePaymentLinkResponse(response = {}, paymentRequest = {}) {
   const paymentLink = response.payment_link || response.paymentLink || response;
+  const relatedResources = response.related_resources || response.relatedResources || {};
+  const relatedOrder =
+    relatedResources.order ||
+    relatedResources.orders?.[0] ||
+    relatedResources.orders?.[paymentLink.order_id] ||
+    null;
   const now = new Date().toISOString();
   const checkoutUrl =
     normalizeText(paymentLink.url) ||
@@ -67,7 +73,13 @@ function normalizeSquarePaymentLinkResponse(response = {}, paymentRequest = {}) 
     normalizeText(paymentLink.checkoutUrl) ||
     normalizeText(paymentLink.long_url);
   const paymentLinkId = normalizeText(paymentLink.id || paymentLink.payment_link_id || paymentLink.paymentLinkId);
-  const orderId = normalizeText(paymentLink.order_id || paymentLink.orderId || response.order_id || response.orderId);
+  const orderId = normalizeText(
+    paymentLink.order_id ||
+      paymentLink.orderId ||
+      response.order_id ||
+      response.orderId ||
+      relatedOrder?.id
+  );
   const status = normalizeText(paymentLink.status || paymentLink.state || response.status || response.state, "created");
 
   if (!checkoutUrl) {

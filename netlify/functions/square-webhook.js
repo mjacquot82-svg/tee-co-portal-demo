@@ -115,6 +115,126 @@ async function syncSupabasePaymentRequestTotals(supabase, paymentRequestId) {
   return updateResult.data || requestResult.data;
 }
 
+function isSuccessfulPaymentStatus(status) {
+  const normalized = normalizeText(status).toLowerCase();
+  return ["captured", "paid", "succeeded", "success", "settled", "completed"].includes(normalized);
+}
+
+function resolveOrderTotal(order = {}) {
+  return normalizeAmount(
+    order.total_amount ||
+      order.total ||
+      order.order_total ||
+      order.grand_total ||
+      order.quote?.total_amount ||
+      order.quote?.total ||
+      order.quote?.summary?.total ||
+      order.quote?.totals?.total
+  );
+}
+
+function buildSquareOrderActivityEntry(payment = {}, paymentRequest = {}, createdAt) {
+  const amount = normalizeAmount(payment.amount);
+  const requestType = normalizeText(paymentRequest.request_type || payment.payment_type, "payment").replace(/_/g, " ");
+  return {
+    id: `square-payment-${normalizeText(payment.provider_payment_id || payment.id || Date.now())}`,
+    type: requestType === "deposit" ? "deposit_received" : "payment",
+    note: `Square ${requestType} received for $${amount.toFixed(2)}.`,
+    created_at: createdAt,
+    source: "square_webhook",
+    metadata: {
+      payment_id: payment.id,
+      provider_payment_id: payment.provider_payment_id,
+      payment_request_id: payment.payment_request_id,
+      payment_request_number: paymentRequest.request_number,
+      provider_receipt_url: payment.provider_receipt_url,
+    },
+  };
+}
+
+async function syncSupabaseOrderPaymentState(supabase, payment = {}, paymentRequest = null) {
+  const orderNumber = normalizeText(payment.order_number || paymentRequest?.order_number);
+  if (!orderNumber || !isSuccessfulPaymentStatus(payment.status)) return null;
+
+  const orderResult = await supabase
+    .from("orders")
+    .select("*")
+    .eq("order_number", orderNumber)
+    .maybeSingle();
+  if (orderResult.error || !orderResult.data) return null;
+
+  const paymentsResult = await supabase
+    .from("payments")
+    .select("*")
+    .eq("order_number", orderNumber);
+  if (paymentsResult.error) return null;
+
+  const successfulPayments = (paymentsResult.data || []).filter((entry) => isSuccessfulPaymentStatus(entry.status));
+  const totalPaid = successfulPayments.reduce((total, entry) => total + normalizeAmount(entry.amount), 0);
+  const depositAmount = normalizeAmount(orderResult.data.deposit_amount);
+  const depositPaidAmount = successfulPayments
+    .filter((entry) => normalizeText(entry.payment_type).toLowerCase() === "deposit")
+    .reduce((total, entry) => total + normalizeAmount(entry.amount), 0);
+  const appliedDepositAmount = depositAmount > 0 ? Math.min(depositAmount, depositPaidAmount || totalPaid) : 0;
+  const orderTotal = resolveOrderTotal(orderResult.data);
+  const currentBalanceDue = normalizeAmount(orderResult.data.balance_due);
+  const balanceDue =
+    orderTotal > 0
+      ? Math.max(orderTotal - totalPaid, 0)
+      : Math.max(currentBalanceDue - normalizeAmount(payment.amount), 0);
+  const paymentStatus =
+    balanceDue <= 0 && totalPaid > 0
+      ? "Paid"
+      : totalPaid > 0
+        ? "Partial Payment"
+        : orderResult.data.payment_status || "unpaid";
+  const capturedAt = normalizeText(payment.captured_at || payment.updated_at || payment.created_at) || new Date().toISOString();
+  const existingActivity = Array.isArray(orderResult.data.activity_log) ? orderResult.data.activity_log : [];
+  const activityEntry = buildSquareOrderActivityEntry(payment, paymentRequest || {}, capturedAt);
+  const hasActivityEntry = existingActivity.some((entry) => entry?.id === activityEntry.id);
+
+  const updateResult = await supabase
+    .from("orders")
+    .update({
+      balance_due: balanceDue,
+      payment_status: paymentStatus,
+      deposit_paid_amount: Math.max(normalizeAmount(orderResult.data.deposit_paid_amount), appliedDepositAmount),
+      deposit_paid_at:
+        appliedDepositAmount >= depositAmount && depositAmount > 0
+          ? orderResult.data.deposit_paid_at || capturedAt
+          : orderResult.data.deposit_paid_at || null,
+      deposit_status:
+        appliedDepositAmount >= depositAmount && depositAmount > 0
+          ? "paid"
+          : orderResult.data.deposit_status || "not_requested",
+      payment_method: "Square Online",
+      payment_reference: payment.provider_payment_id || payment.payment_number || payment.id || "",
+      activity_log: hasActivityEntry ? existingActivity : [activityEntry, ...existingActivity],
+      updated_at: new Date().toISOString(),
+    })
+    .eq("order_number", orderNumber)
+    .select("*")
+    .maybeSingle();
+
+  if (updateResult.error) return null;
+
+  await supabase
+    .from("activity_logs")
+    .insert({
+      entity_type: "order",
+      entity_id: updateResult.data?.id || orderResult.data.id || null,
+      entity_reference: orderNumber,
+      activity_type: activityEntry.type,
+      operational_status: updateResult.data?.status || orderResult.data.status || "",
+      note: activityEntry.note,
+      metadata: activityEntry.metadata,
+      created_at: capturedAt,
+    })
+    .catch(() => null);
+
+  return updateResult.data;
+}
+
 function buildSupabaseAdapter(supabase) {
   return {
     async listPaymentRequests() {
@@ -171,7 +291,8 @@ function buildSupabaseAdapter(supabase) {
         if (existing.data) return existing.data;
         throw result.error;
       }
-      await syncSupabasePaymentRequestTotals(supabase, input.payment_request_id);
+      const paymentRequest = await syncSupabasePaymentRequestTotals(supabase, input.payment_request_id);
+      await syncSupabaseOrderPaymentState(supabase, result.data, paymentRequest);
       return result.data;
     },
 
@@ -184,7 +305,8 @@ function buildSupabaseAdapter(supabase) {
         .maybeSingle();
       if (result.error) throw result.error;
       if (result.data?.payment_request_id) {
-        await syncSupabasePaymentRequestTotals(supabase, result.data.payment_request_id);
+        const paymentRequest = await syncSupabasePaymentRequestTotals(supabase, result.data.payment_request_id);
+        await syncSupabaseOrderPaymentState(supabase, result.data, paymentRequest);
       }
       return result.data;
     },

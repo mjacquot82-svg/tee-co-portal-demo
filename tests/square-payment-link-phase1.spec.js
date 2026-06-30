@@ -75,6 +75,42 @@ test("Square payment link creation sends an idempotent provider payload", async 
   });
 });
 
+test("Square payment link response can resolve provider order id from related resources", async () => {
+  const request = createPaymentRequest({
+    id: "payment-request-square-related-order",
+    request_number: "PR-SQUARE-RELATED",
+    customer_id: "customer-square-related",
+    order_number: "TC-SQ-RELATED",
+    request_type: "balance",
+    status: "open",
+    amount_requested: 125,
+  });
+
+  const providerLink = await createSquarePaymentLink(request, {
+    endpoint: "/square-test",
+    disableFallback: true,
+    fetcher: async () => ({
+      ok: true,
+      json: async () => ({
+        mode: "production",
+        payment_link: {
+          id: "LNK-SQUARE-RELATED",
+          url: "https://square.link/u/related",
+          status: "created",
+        },
+        related_resources: {
+          orders: [{ id: "ORD-SQUARE-RELATED" }],
+        },
+      }),
+    }),
+  });
+
+  expect(providerLink).toMatchObject({
+    provider_payment_link_id: "LNK-SQUARE-RELATED",
+    provider_order_id: "ORD-SQUARE-RELATED",
+  });
+});
+
 test("Square provider metadata persists on the payment request without satisfying production gating", async () => {
   const order = {
     order_number: "TC-SQ-1002",

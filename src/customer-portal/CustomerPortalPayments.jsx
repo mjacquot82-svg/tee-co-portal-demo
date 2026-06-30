@@ -173,7 +173,7 @@ export default function CustomerPortalPayments() {
     <PortalPage
       eyebrow="Payments"
       title="Payments and balances"
-      description="Track open payment requests, review payment history, and keep tabs on what is still owing before online checkout is connected."
+      description="Track open payment requests, review payment history, and pay outstanding Square checkout requests."
     >
       <div
         style={{

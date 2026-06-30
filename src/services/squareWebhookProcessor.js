@@ -267,7 +267,7 @@ function buildRequestMetadata(request = {}, payment = {}, webhookEvent = {}, sta
 }
 
 function getLastWebhookState(request = {}) {
-  const webhookState = request.metadata?.last_square_webhook || {};
+  const webhookState = request?.metadata?.last_square_webhook || {};
   return {
     eventId: normalizeText(webhookState.event_id),
     eventType: normalizeText(webhookState.event_type),
@@ -279,6 +279,13 @@ function getLastWebhookState(request = {}) {
 }
 
 function shouldApplyWebhookState({ paymentRequest, statusMapping, eventTimestamp, existingSquarePayment }) {
+  if (!paymentRequest) {
+    return {
+      apply: true,
+      reason: "no_payment_request_matched",
+    };
+  }
+
   if (existingSquarePayment && isSuccessfulStatus(existingSquarePayment.status) && !statusMapping.successful) {
     return {
       apply: false,
