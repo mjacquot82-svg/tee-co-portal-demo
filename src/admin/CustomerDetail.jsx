@@ -288,8 +288,8 @@ export default function CustomerDetail() {
     });
   }, [customer, customers, mergeDirection, orders, sales, selectedMergeCustomer]);
 
-  function handleDuplicate(orderNumber) {
-    const duplicated = duplicateStoredOrder(orderNumber);
+  async function handleDuplicate(orderNumber) {
+    const duplicated = await duplicateStoredOrder(orderNumber);
     if (duplicated) {
       navigate(`/admin/orders/${duplicated.order_number}`);
     }

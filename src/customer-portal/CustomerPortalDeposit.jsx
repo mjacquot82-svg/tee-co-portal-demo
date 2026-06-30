@@ -158,7 +158,7 @@ export default function CustomerPortalDeposit() {
   const contactHref = buildDepositContactHref(record, providerConfig);
   const actionStillRequired = isDepositActionRequired(record);
 
-  function handleConfirmPaymentSent() {
+  async function handleConfirmPaymentSent() {
     setSubmitError("");
 
     if (!hasDepositAmount) {
@@ -169,7 +169,7 @@ export default function CustomerPortalDeposit() {
     try {
       const now = new Date().toISOString();
       const note = normalizeText(paymentNote);
-      const updatedOrder = updateStoredOrder(record.order_number, {
+      const updatedOrder = await updateStoredOrder(record.order_number, {
         deposit_customer_confirmation_status: "Sent",
         deposit_customer_confirmed_at: now,
         deposit_customer_confirmation_note: note,

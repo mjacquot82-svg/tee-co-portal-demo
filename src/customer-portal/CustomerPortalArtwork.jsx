@@ -199,7 +199,7 @@ export default function CustomerPortalArtwork() {
         ...artworkFiles,
       ];
       const activityType = revisionRequested ? "artwork_revised" : "artwork_uploaded";
-      const updatedOrder = updateStoredOrder(record.order_number, {
+      const updatedOrder = await updateStoredOrder(record.order_number, {
         artwork_files: nextArtworkFiles,
         artwork_reference_names: nextArtworkFiles.map((file) => getArtworkDisplayName(file)),
         customer_artwork_id: uploadedArtwork.id || record.customer_artwork_id || "",
@@ -228,8 +228,8 @@ export default function CustomerPortalArtwork() {
     }
   }
 
-  function handleUploadLater() {
-    const updatedOrder = updateStoredOrder(record.order_number, {
+  async function handleUploadLater() {
+    const updatedOrder = await updateStoredOrder(record.order_number, {
       artwork_requirement: "Upload Later",
       artwork_status: "Missing",
       artwork_approval_required: true,
@@ -241,7 +241,7 @@ export default function CustomerPortalArtwork() {
     setFeedback("Artwork marked for upload later.");
   }
 
-  function handleHelpRequest(event) {
+  async function handleHelpRequest(event) {
     event.preventDefault();
     setUploadError("");
     setFeedback("");
@@ -252,7 +252,7 @@ export default function CustomerPortalArtwork() {
       return;
     }
 
-    const updatedOrder = updateStoredOrder(record.order_number, {
+    const updatedOrder = await updateStoredOrder(record.order_number, {
       artwork_requirement: "Help Needed",
       artwork_status: "Help Requested",
       artwork_approval_required: true,

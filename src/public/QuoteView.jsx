@@ -1,6 +1,6 @@
 import { useParams } from "react-router-dom";
 import PricingSummary from "../components/PricingSummary";
-import { findStoredOrder, updateStoredOrder } from "../lib/ordersStore";
+import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -13,12 +13,13 @@ function formatPrice(value, isAvailable = true) {
 
 export default function QuoteView() {
   const { orderNumber } = useParams();
+  const orders = useStoredOrders();
 
-  const order = findStoredOrder(orderNumber);
+  const order = orders.find((entry) => entry.order_number === orderNumber);
   const quote = order?.quote;
 
-  function approveQuote() {
-    updateStoredOrder(orderNumber, {
+  async function approveQuote() {
+    await updateStoredOrder(orderNumber, {
       approval_status: "Approved",
       approved_at: new Date().toISOString(),
     });
@@ -26,8 +27,8 @@ export default function QuoteView() {
     alert("Quote approved successfully.");
   }
 
-  function requestChanges() {
-    updateStoredOrder(orderNumber, {
+  async function requestChanges() {
+    await updateStoredOrder(orderNumber, {
       approval_status: "Revision Requested",
       revision_requested_at: new Date().toISOString(),
     });

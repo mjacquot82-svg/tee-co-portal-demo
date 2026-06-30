@@ -488,7 +488,7 @@ export default function Quotes() {
     });
   }
 
-  function handleArchiveQuote(quote) {
+  async function handleArchiveQuote(quote) {
     if (!canViewArchivedQuotes) return;
 
     const confirmed = window.confirm(
@@ -496,7 +496,7 @@ export default function Quotes() {
     );
     if (!confirmed) return;
 
-    updateStoredOrder(quote.order_number, {
+    await updateStoredOrder(quote.order_number, {
       quote_archived: true,
       quote_archived_at: new Date().toISOString(),
       operational_visible: false,

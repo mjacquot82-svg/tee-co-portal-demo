@@ -1028,7 +1028,7 @@ export default function QuickSale() {
     saveSale();
   }
 
-  function handleRecordCounterPayment(event) {
+  async function handleRecordCounterPayment(event) {
     event.preventDefault();
 
     if (!selectedTransactionItems.length || selectedTransactionKind !== "payment") {
@@ -1084,20 +1084,20 @@ export default function QuickSale() {
     const updatedOrders = [];
 
     try {
-      paymentEntries.forEach((entry) => {
+      for (const entry of paymentEntries) {
         let entryRemaining = Number(entry.amount || 0);
-        if (entryRemaining <= 0) return;
+        if (entryRemaining <= 0) continue;
 
-        selectedTransactionItems.forEach((item) => {
-          if (entryRemaining <= 0) return;
+        for (const item of selectedTransactionItems) {
+          if (entryRemaining <= 0) break;
 
           const orderRemaining = Number(orderBalanceRemaining.get(item.orderNumber) || 0);
-          if (orderRemaining <= 0) return;
+          if (orderRemaining <= 0) continue;
 
           const amountForOrder = Math.min(entryRemaining, orderRemaining);
-          if (amountForOrder <= 0) return;
+          if (amountForOrder <= 0) continue;
 
-          const updatedOrder = recordStoredOrderPayment(item.orderNumber, {
+          const updatedOrder = await recordStoredOrderPayment(item.orderNumber, {
             amount: amountForOrder,
             method: entry.method,
             note: entry.note,
@@ -1108,8 +1108,8 @@ export default function QuickSale() {
             entryRemaining -= amountForOrder;
             orderBalanceRemaining.set(item.orderNumber, orderRemaining - amountForOrder);
           }
-        });
-      });
+        }
+      }
     } catch (error) {
       const message =
         error?.code === "OVERPAYMENT"
@@ -1150,19 +1150,19 @@ export default function QuickSale() {
     resetPaymentForm("");
   }
 
-  function handleReleasePickupSelection() {
+  async function handleReleasePickupSelection() {
     if (!selectedTransactionItems.length || selectedTransactionKind !== "pickup") return;
 
     const releasedOrders = [];
 
-    selectedTransactionItems.forEach((item) => {
+    for (const item of selectedTransactionItems) {
       const order = item.order;
-      if (!order) return;
+      if (!order) continue;
 
       const balanceNote =
         Number(order.balance_due || 0) > 0 ? ` Outstanding balance: ${currency(order.balance_due)}.` : "";
 
-      updateStoredOrder(order.order_number, {
+      await updateStoredOrder(order.order_number, {
         pickup_status: "Picked Up",
         picked_up_at: order.picked_up_at || new Date().toISOString(),
         status: order.status === "Ready for Pickup" ? "Picked Up" : order.status,
@@ -1170,7 +1170,7 @@ export default function QuickSale() {
         activity_note: `Order marked as picked up.${balanceNote}`,
       });
       releasedOrders.push(order.order_number);
-    });
+    }
 
     setSelectedTransactionIds([]);
     setTransactionMessage(

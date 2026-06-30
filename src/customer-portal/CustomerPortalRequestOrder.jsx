@@ -260,7 +260,7 @@ export default function CustomerPortalRequestOrder() {
     );
 
     try {
-      const createdOrder = createStoredOrder({
+      const createdOrder = await createStoredOrder({
         customer_id: profile?.id || "",
         customer_name: profile?.name || customerSession.displayName || "Customer Account",
         customer_email: customerSession.email || profile?.email || "",

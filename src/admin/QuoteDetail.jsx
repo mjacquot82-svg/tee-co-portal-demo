@@ -1084,23 +1084,23 @@ export default function QuoteDetail() {
     );
   }
 
-  function handleAdvanceQuote() {
+  async function handleAdvanceQuote() {
     if (archived || canceled) return;
     if (!canAdvanceQuoteStatus(order.quote_status)) return;
 
     const nextQuoteStatus = getNextQuoteStatus(order.quote_status);
-    updateStoredOrder(order.order_number, {
+    await updateStoredOrder(order.order_number, {
       quote_status: nextQuoteStatus,
       activity_type: "quote_status",
       activity_note: `Quote status changed to ${nextQuoteStatus}.`,
     });
   }
 
-  function handleReleaseToProduction() {
+  async function handleReleaseToProduction() {
     if (archived || canceled) return;
     if (!isQuoteReadyForProduction(order.quote_status)) return;
 
-    updateStoredOrder(order.order_number, {
+    await updateStoredOrder(order.order_number, {
       quote_status: "Ready For Production",
       status: "Awaiting Production",
       operational_visible: true,
@@ -1110,9 +1110,9 @@ export default function QuoteDetail() {
     });
   }
 
-  function handleOwnerNextAction(actionKey) {
+  async function handleOwnerNextAction(actionKey) {
     if (actionKey === "release_to_production") {
-      handleReleaseToProduction();
+      await handleReleaseToProduction();
       return;
     }
 
@@ -1132,10 +1132,10 @@ export default function QuoteDetail() {
     }
   }
 
-  function handleArchiveQuote() {
+  async function handleArchiveQuote() {
     if (archived || canceled) return;
 
-    updateStoredOrder(order.order_number, {
+    await updateStoredOrder(order.order_number, {
       quote_archived: true,
       quote_archived_at: new Date().toISOString(),
       operational_visible: false,
@@ -1153,10 +1153,10 @@ export default function QuoteDetail() {
     });
   }
 
-  function handleRestoreQuote() {
+  async function handleRestoreQuote() {
     if (!archived) return;
 
-    updateStoredOrder(order.order_number, {
+    await updateStoredOrder(order.order_number, {
       quote_archived: false,
       quote_archived_at: null,
       activity_type: "quote_restore",
@@ -1172,10 +1172,10 @@ export default function QuoteDetail() {
     });
   }
 
-  function handleCancelQuote() {
+  async function handleCancelQuote() {
     if (archived || canceled) return;
 
-    updateStoredOrder(order.order_number, {
+    await updateStoredOrder(order.order_number, {
       status: "Canceled",
       quote_status: "Canceled",
       operational_visible: false,
@@ -1194,10 +1194,10 @@ export default function QuoteDetail() {
     });
   }
 
-  function handleApproveRequest() {
+  async function handleApproveRequest() {
     if (archived || canceled) return;
 
-    updateStoredOrder(order.order_number, {
+    await updateStoredOrder(order.order_number, {
       request_status: "Approved - Pending Requirements",
       staff_review_status: "Approved",
       approval_status: "Approved",
@@ -1206,10 +1206,10 @@ export default function QuoteDetail() {
     });
   }
 
-  function handleRequestArtwork() {
+  async function handleRequestArtwork() {
     if (archived || canceled) return;
 
-    updateStoredOrder(order.order_number, {
+    await updateStoredOrder(order.order_number, {
       request_status: "Awaiting Artwork",
       artwork_status: "Missing",
       artwork_approval_required: true,
@@ -1220,10 +1220,10 @@ export default function QuoteDetail() {
     });
   }
 
-  function handleRequestChanges() {
+  async function handleRequestChanges() {
     if (archived || canceled) return;
 
-    updateStoredOrder(order.order_number, {
+    await updateStoredOrder(order.order_number, {
       request_status: "Awaiting Customer Response",
       staff_review_status: "Changes Requested",
       approval_status: "Revision Requested",
@@ -1233,7 +1233,7 @@ export default function QuoteDetail() {
     });
   }
 
-  function handleRequireDeposit(requestDetails = {}) {
+  async function handleRequireDeposit(requestDetails = {}) {
     if (archived || canceled) return;
 
     const now = new Date().toISOString();
@@ -1247,7 +1247,7 @@ export default function QuoteDetail() {
 
     if (depositAmount <= 0) return;
 
-    updateStoredOrder(order.order_number, {
+    await updateStoredOrder(order.order_number, {
       request_status: "Awaiting Deposit",
       deposit_required: true,
       deposit_requirement: "required",
@@ -1272,10 +1272,10 @@ export default function QuoteDetail() {
     });
   }
 
-  function handleMarkDepositNotRequired() {
+  async function handleMarkDepositNotRequired() {
     if (archived || canceled) return;
 
-    updateStoredOrder(order.order_number, {
+    await updateStoredOrder(order.order_number, {
       deposit_required: false,
       deposit_requirement: "not_required",
       deposit_requirement_status: "Not Required",
@@ -1285,10 +1285,10 @@ export default function QuoteDetail() {
     });
   }
 
-  function handleRejectRequest() {
+  async function handleRejectRequest() {
     if (archived || canceled) return;
 
-    updateStoredOrder(order.order_number, {
+    await updateStoredOrder(order.order_number, {
       request_status: "Rejected",
       staff_review_status: "Rejected",
       approval_status: "Rejected",

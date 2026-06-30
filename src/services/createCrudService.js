@@ -1,12 +1,35 @@
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
+import {
+  assertSupabasePersistenceAvailable,
+  buildSupabasePersistenceFailure,
+  canUseLocalPersistenceFallback,
+  getPersistenceMode,
+} from "../lib/persistenceMode";
 
-async function runSupabaseOperation(operation, fallbackOperation) {
-  if (!isSupabaseConfigured || !supabase) {
+async function runSupabaseOperation(operation, fallbackOperation, options = {}) {
+  const {
+    table = "",
+    operationName = "operation",
+    supabaseClient = supabase,
+    supabaseConfigured = isSupabaseConfigured,
+    persistenceMode = getPersistenceMode(),
+  } = options;
+  const hasSupabaseClient = Boolean(supabaseClient);
+
+  assertSupabasePersistenceAvailable({
+    mode: persistenceMode,
+    table,
+    operation: operationName,
+    isConfigured: supabaseConfigured,
+    hasClient: hasSupabaseClient,
+  });
+
+  if (!supabaseConfigured || !hasSupabaseClient) {
     return fallbackOperation();
   }
 
   try {
-    const result = await operation();
+    const result = await operation(supabaseClient);
 
     if (result?.error) {
       throw result.error;
@@ -14,7 +37,21 @@ async function runSupabaseOperation(operation, fallbackOperation) {
 
     return result?.data ?? result;
   } catch (error) {
-    console.error("Supabase service fallback triggered", error);
+    if (!canUseLocalPersistenceFallback(persistenceMode)) {
+      throw buildSupabasePersistenceFailure({
+        mode: persistenceMode,
+        table,
+        operation: operationName,
+        cause: error,
+      });
+    }
+
+    console.error("Supabase service fallback triggered", {
+      mode: persistenceMode,
+      table,
+      operation: operationName,
+      error,
+    });
     return fallbackOperation();
   }
 }
@@ -28,12 +65,19 @@ export function createCrudService(config) {
     buildUpdatePayload = (updates) => updates,
     remoteMatchField = "id",
     remoteOrderBy = { column: "created_at", ascending: false },
+    supabaseClient = supabase,
+    supabaseConfigured = isSupabaseConfigured,
+    persistenceMode = getPersistenceMode,
   } = config;
+
+  function resolvePersistenceMode() {
+    return typeof persistenceMode === "function" ? persistenceMode() : persistenceMode;
+  }
 
   return {
     async list() {
-      return runSupabaseOperation(async () => {
-        let query = supabase.from(table).select(select);
+      return runSupabaseOperation(async (client) => {
+        let query = client.from(table).select(select);
 
         if (remoteOrderBy?.column) {
           query = query.order(remoteOrderBy.column, {
@@ -42,45 +86,71 @@ export function createCrudService(config) {
         }
 
         return query;
-      }, local.list);
+      }, local.list, {
+        table,
+        operationName: "list",
+        supabaseClient,
+        supabaseConfigured,
+        persistenceMode: resolvePersistenceMode(),
+      });
     },
 
     async getById(identifier) {
       return runSupabaseOperation(
-        async () =>
-          supabase
+        async (client) =>
+          client
             .from(table)
             .select(select)
             .eq(remoteMatchField, identifier)
             .maybeSingle(),
-        () => local.getById(identifier)
+        () => local.getById(identifier),
+        {
+          table,
+          operationName: "get",
+          supabaseClient,
+          supabaseConfigured,
+          persistenceMode: resolvePersistenceMode(),
+        }
       );
     },
 
     async create(record) {
       return runSupabaseOperation(
-        async () =>
-          supabase
+        async (client) =>
+          client
             .from(table)
             .insert(buildInsertPayload(record))
             .select(select)
             .single(),
-        () => local.create(record)
+        () => local.create(record),
+        {
+          table,
+          operationName: "create",
+          supabaseClient,
+          supabaseConfigured,
+          persistenceMode: resolvePersistenceMode(),
+        }
       );
     },
 
     async update(identifier, updates) {
       return runSupabaseOperation(
-        async () =>
-          supabase
+        async (client) =>
+          client
             .from(table)
             .update(buildUpdatePayload(updates))
             .eq(remoteMatchField, identifier)
             .select(select)
             .single(),
-        () => local.update(identifier, updates)
+        () => local.update(identifier, updates),
+        {
+          table,
+          operationName: "update",
+          supabaseClient,
+          supabaseConfigured,
+          persistenceMode: resolvePersistenceMode(),
+        }
       );
     },
   };
 }
-

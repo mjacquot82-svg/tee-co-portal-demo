@@ -61,7 +61,7 @@ function formatWorkerName(worker) {
 
 function OwnerAssignments({ allOrders, staffUsers }) {
 
-  function handleAssign(order, staffId) {
+  async function handleAssign(order, staffId) {
     const selectedWorker = staffUsers.find((worker) => worker.id === staffId);
     const previousAssignment = order.assigned_to_staff_name || "";
     const nextAssignment = selectedWorker?.name || "";
@@ -75,7 +75,7 @@ function OwnerAssignments({ allOrders, staffUsers }) {
             ? `Assignment confirmed for ${nextAssignment}.`
             : "Assignment cleared.";
 
-    updateStoredOrder(order.order_number, {
+    await updateStoredOrder(order.order_number, {
       assigned_to_staff_id: selectedWorker?.id || "",
       assigned_to_staff_name: selectedWorker?.name || "",
       assigned_to_staff_role: selectedWorker?.role || "",
@@ -113,7 +113,7 @@ export default function Assignments() {
 
   useEffect(() => {
     if (!storedOrders.length) {
-      seedStoredOrders();
+      void seedStoredOrders();
     }
   }, [storedOrders.length]);
 

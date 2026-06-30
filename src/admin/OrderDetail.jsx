@@ -165,8 +165,8 @@ export default function OrderDetail() {
 
   const urgency = buildOrderUrgency(order);
 
-  function saveOrderUpdates(updates) {
-    const updated = updateStoredOrder(orderNumber, {
+  async function saveOrderUpdates(updates) {
+    const updated = await updateStoredOrder(orderNumber, {
       updated_by_staff_name: activeStaffUser?.name || "Unknown Staff",
       updated_by_staff_role: activeStaffUser?.role || "",
       ...updates,
@@ -175,7 +175,7 @@ export default function OrderDetail() {
     return updated;
   }
 
-  function handleAssign(staffId) {
+  async function handleAssign(staffId) {
     if (isCanceledOperationalStatus(order.status)) return;
 
     const worker = staffUsers.find((staff) => staff.id === staffId);
@@ -191,7 +191,7 @@ export default function OrderDetail() {
       activityNote = `Reassigned from ${previousAssignment} to ${nextAssignment}.`;
     }
 
-    saveOrderUpdates({
+    await saveOrderUpdates({
       assigned_to_staff_id: worker?.id || "",
       assigned_to_staff_name: worker?.name || "",
       assigned_to_staff_role: worker?.role || "",
@@ -202,12 +202,12 @@ export default function OrderDetail() {
     });
   }
 
-  function handleSelfAssign() {
+  async function handleSelfAssign() {
     if (!activeStaffUser?.id || isCanceledOperationalStatus(order.status)) return;
     // Staff may only claim unassigned work
     if (order.assigned_to_staff_id || order.assigned_to_staff_name) return;
 
-    saveOrderUpdates({
+    await saveOrderUpdates({
       assigned_to_staff_id: activeStaffUser.id,
       assigned_to_staff_name: activeStaffUser.name || "",
       assigned_to_staff_role: activeStaffUser.role || "",
@@ -218,7 +218,7 @@ export default function OrderDetail() {
     });
   }
 
-  function handleWorkflowAction(action) {
+  async function handleWorkflowAction(action) {
     if (isCanceledOperationalStatus(order.status)) return;
 
     // Enrich resume_from_hold with who resumed
@@ -229,7 +229,7 @@ export default function OrderDetail() {
 
     const gating = buildWorkflowBlockDetails(order, enrichedAction);
     if (gating.blocked) {
-      saveOrderUpdates({
+      await saveOrderUpdates({
         activity_type: "production_blocked",
         activity_note: `${enrichedAction.label} blocked. ${gating.blockingReasons.join(" ")}`,
         last_production_blocked_at: new Date().toISOString(),
@@ -252,10 +252,10 @@ export default function OrderDetail() {
       detail: "",
       nextActionLabel: "",
     });
-    saveOrderUpdates(updates);
+    await saveOrderUpdates(updates);
   }
 
-  function handleArtworkApprovalChange(nextStatus) {
+  async function handleArtworkApprovalChange(nextStatus) {
     if (isCanceledOperationalStatus(order.status)) return;
 
     const normalizedStatus = String(nextStatus || "").trim();
@@ -265,7 +265,7 @@ export default function OrderDetail() {
     const depositStatus = String(order.deposit_workflow_status || "").trim();
     const depositResolved =
       depositStatus === "Deposit Not Required" || depositStatus === "Deposit Received";
-    saveOrderUpdates({
+    await saveOrderUpdates({
       artwork_approval_status: normalizedStatus,
       artwork_status: normalizedStatus,
       staff_review_status: artworkSatisfied
@@ -309,7 +309,7 @@ export default function OrderDetail() {
     setWorkflowFeedback(null);
   }
 
-  function handleDepositWorkflowChange(nextStatus) {
+  async function handleDepositWorkflowChange(nextStatus) {
     if (isCanceledOperationalStatus(order.status)) return;
 
     const normalizedStatus = String(nextStatus || "").trim();
@@ -334,7 +334,7 @@ export default function OrderDetail() {
         normalizedStatus === "Deposit Received" ? order.deposit?.paid_at || now : order.deposit?.paid_at || null,
     };
 
-    saveOrderUpdates({
+    await saveOrderUpdates({
       deposit_workflow_status: normalizedStatus,
       deposit_required: normalizedStatus !== "Deposit Not Required",
       deposit_requirement:
@@ -364,7 +364,7 @@ export default function OrderDetail() {
     setWorkflowFeedback(null);
   }
 
-  function handleGatingOverride(overrideKey) {
+  async function handleGatingOverride(overrideKey) {
     if (!canManageAssignments || isCanceledOperationalStatus(order.status)) return;
 
     const now = new Date().toISOString();
@@ -374,7 +374,7 @@ export default function OrderDetail() {
       artworkApprovalRequirement: "Override Artwork Approval Requirement",
     };
 
-    saveOrderUpdates({
+    await saveOrderUpdates({
       workflow_overrides: {
         ...order.workflow_overrides,
         [overrideKey]: {
@@ -395,8 +395,8 @@ export default function OrderDetail() {
     });
   }
 
-  function handleForceMoveToProduction() {
-    handleGatingOverride("forceProduction");
+  async function handleForceMoveToProduction() {
+    await handleGatingOverride("forceProduction");
 
     const updates = buildWorkflowActionUpdates(order, {
       key: "move_to_production",
@@ -405,7 +405,7 @@ export default function OrderDetail() {
     });
     if (!updates) return;
 
-    saveOrderUpdates({
+    await saveOrderUpdates({
       ...updates,
       activity_note: "Move To Production forced with operational override.",
     });
@@ -427,7 +427,7 @@ export default function OrderDetail() {
     });
   }
 
-  function handleMarkPickedUp() {
+  async function handleMarkPickedUp() {
     if (isCanceledOperationalStatus(order.status)) return;
 
     const now = new Date().toISOString();
@@ -436,7 +436,7 @@ export default function OrderDetail() {
         ? ` Outstanding balance: ${money(normalizedOrder.balance_due)}.`
         : "";
 
-    saveOrderUpdates({
+    await saveOrderUpdates({
       pickup_status: "Picked Up",
       picked_up_at: order.picked_up_at || now,
       status:
@@ -468,7 +468,7 @@ export default function OrderDetail() {
       "";
     const depositRequestContent = buildDepositRequestContent(normalizedOrder, { checkoutUrl });
 
-    saveOrderUpdates({
+    await saveOrderUpdates({
       deposit_workflow_status: "Deposit Requested",
       deposit_required: true,
       deposit_requirement: "required",
@@ -521,10 +521,10 @@ export default function OrderDetail() {
     }
   }
 
-  function handleCancelProductionOrder() {
+  async function handleCancelProductionOrder() {
     if (isCanceledOperationalStatus(order.status)) return;
 
-    updateStoredOrder(orderNumber, {
+    await updateStoredOrder(orderNumber, {
       status: "Canceled",
       quote_status: "Canceled",
       operational_visible: false,

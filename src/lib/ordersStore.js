@@ -34,6 +34,14 @@ import { linkCustomerArtworkToOrder, linkCustomerArtworkToQuote } from "../servi
 import { triggerNotificationEvent } from "./notificationDeliveryService";
 import { NOTIFICATION_TYPES } from "./notificationTemplatesStore";
 import { createStaffNotification, STAFF_NOTIFICATION_TYPES } from "./staffNotificationsStore";
+import {
+  configureOrdersRepositoryForTests,
+  createOrderInSupabase,
+  fetchOrdersFromSupabase,
+  updateOrderInSupabase,
+  upsertOrdersInSupabase,
+} from "./ordersRepository";
+import { canUseLocalPersistenceFallback } from "./persistenceMode";
 
 const STORAGE_KEY = "teeCoStaffOrders";
 const orderListeners = new Set();
@@ -41,6 +49,9 @@ const EMPTY_ORDERS = [];
 
 let cachedOrdersRaw = null;
 let cachedOrdersSnapshot = EMPTY_ORDERS;
+let ordersHydrationStarted = false;
+let ordersHydrationPromise = null;
+let hasHydratedOrdersFromSupabase = false;
 
 function persistArtworkRelationship(promise, context) {
   Promise.resolve(promise).catch((error) => {
@@ -325,6 +336,26 @@ function emitOrdersUpdated() {
   orderListeners.forEach((listener) => listener());
 }
 
+function publishOrdersSnapshot(orders, options = {}) {
+  const { emit = true, writeStorage = true } = options;
+  const normalizedOrders = Array.isArray(orders)
+    ? orders.map((order) => normalizeStoredOrder(order))
+    : [];
+
+  cachedOrdersSnapshot = normalizedOrders;
+  cachedOrdersRaw = JSON.stringify(normalizedOrders);
+
+  if (writeStorage && hasBrowserStorage()) {
+    setRawStorageItem(STORAGE_KEY, cachedOrdersRaw);
+  }
+
+  if (emit) {
+    emitOrdersUpdated();
+  }
+
+  return normalizedOrders;
+}
+
 function buildSeedOrder(order, index = 0) {
   const createdAt = new Date().toISOString();
 
@@ -347,7 +378,7 @@ function buildSeedOrder(order, index = 0) {
 }
 
 function readStoredOrders() {
-  if (!hasBrowserStorage()) return [];
+  if (!hasBrowserStorage()) return cachedOrdersSnapshot;
 
   try {
     const rawOrders = getRawStorageItem(STORAGE_KEY);
@@ -1291,23 +1322,47 @@ function emitOperationalEventsForOrderUpdate(previousOrder, nextOrder, updates =
 }
 
 export function getStoredOrders() {
+  if (!hasHydratedOrdersFromSupabase && !ordersHydrationStarted) {
+    void ensureOrdersHydrated();
+  }
   return readStoredOrders();
 }
 
 export function saveStoredOrders(orders) {
-  if (!hasBrowserStorage()) return false;
+  publishOrdersSnapshot(orders);
+  return true;
+}
 
-  const normalizedOrders = Array.isArray(orders)
-    ? orders.map((order) => normalizeStoredOrder(order))
-    : [];
+export async function ensureOrdersHydrated(options = {}) {
+  const { force = false } = options;
 
-  const saved = setRawStorageItem(STORAGE_KEY, JSON.stringify(normalizedOrders));
-  if (!saved) {
-    return false;
+  if (!force && ordersHydrationStarted) {
+    return ordersHydrationPromise;
   }
 
-  emitOrdersUpdated();
-  return true;
+  ordersHydrationStarted = true;
+  ordersHydrationPromise = fetchOrdersFromSupabase()
+    .then((remoteOrders) => {
+      if (Array.isArray(remoteOrders)) {
+        hasHydratedOrdersFromSupabase = true;
+        return publishOrdersSnapshot(remoteOrders, { emit: true, writeStorage: true });
+      }
+
+      return readStoredOrders();
+    })
+    .catch((error) => {
+      if (!canUseLocalPersistenceFallback()) {
+        throw error;
+      }
+
+      console.error("[ordersStore] Supabase orders hydration failed", error);
+      return readStoredOrders();
+    })
+    .finally(() => {
+      ordersHydrationStarted = false;
+    });
+
+  return ordersHydrationPromise;
 }
 
 export function subscribeToStoredOrders(listener) {
@@ -1316,6 +1371,7 @@ export function subscribeToStoredOrders(listener) {
   }
 
   orderListeners.add(listener);
+  void ensureOrdersHydrated();
 
   if (typeof window === "undefined") {
     return () => {
@@ -1355,7 +1411,7 @@ export function seedStoredOrders(seedOrders = demoOrders) {
   return nextOrders;
 }
 
-export function createStoredOrder(orderInput) {
+export async function createStoredOrder(orderInput) {
   const currentOrders = getStoredOrders();
   const orderNumber = `TC-${Date.now().toString().slice(-6)}`;
   const createdAt = new Date().toISOString();
@@ -1383,54 +1439,56 @@ export function createStoredOrder(orderInput) {
     ],
   };
 
-  const nextOrders = [order, ...currentOrders];
-  if (!saveStoredOrders(nextOrders)) {
-    throw new Error("Unable to save order. Browser storage write failed.");
-  }
+  const persistedOrder = normalizeStoredOrder(await createOrderInSupabase(normalizeStoredOrder(order)));
+  const nextOrders = [
+    persistedOrder,
+    ...currentOrders.filter((entry) => entry.order_number !== persistedOrder.order_number),
+  ];
+  saveStoredOrders(nextOrders);
 
   emitCustomerTimelineEventForOrder(
-    normalizeStoredOrder(order),
+    persistedOrder,
     order.operational_visible === false ? "quote_created" : "order_created",
     `${order.operational_visible === false ? "Quote" : "Order"} ${orderNumber} created.`,
     {
-      quoteStatus: order.quote_status,
-      orderStatus: order.status,
+      quoteStatus: persistedOrder.quote_status,
+      orderStatus: persistedOrder.status,
     },
     createdAt
   );
 
-  triggerOrderNotification(NOTIFICATION_TYPES.newCustomerRequest, normalizeStoredOrder(order));
+  triggerOrderNotification(NOTIFICATION_TYPES.newCustomerRequest, persistedOrder);
 
-  if (order.customer_artwork_id) {
-    if (order.operational_visible === false || order.quote_status !== "Ready For Production") {
+  if (persistedOrder.customer_artwork_id) {
+    if (persistedOrder.operational_visible === false || persistedOrder.quote_status !== "Ready For Production") {
       persistArtworkRelationship(
-        linkCustomerArtworkToQuote(order.customer_artwork_id, order.order_number),
+        linkCustomerArtworkToQuote(persistedOrder.customer_artwork_id, persistedOrder.order_number),
         {
-          artworkId: order.customer_artwork_id,
-          orderNumber: order.order_number,
+          artworkId: persistedOrder.customer_artwork_id,
+          orderNumber: persistedOrder.order_number,
           relationship: "quote",
         }
       );
     } else {
       persistArtworkRelationship(
-        linkCustomerArtworkToOrder(order.customer_artwork_id, order.order_number),
+        linkCustomerArtworkToOrder(persistedOrder.customer_artwork_id, persistedOrder.order_number),
         {
-          artworkId: order.customer_artwork_id,
-          orderNumber: order.order_number,
+          artworkId: persistedOrder.customer_artwork_id,
+          orderNumber: persistedOrder.order_number,
           relationship: "order",
         }
       );
     }
   }
 
-  return order;
+  return persistedOrder;
 }
 
 export function findStoredOrder(orderNumber) {
   return getStoredOrders().find((order) => order.order_number === orderNumber);
 }
 
-export function updateStoredOrder(orderNumber, updates) {
+export async function updateStoredOrder(orderNumber, updates) {
   const currentOrders = getStoredOrders();
   const now = new Date().toISOString();
   let updatedOrder = null;
@@ -1471,9 +1529,17 @@ export function updateStoredOrder(orderNumber, updates) {
     return updatedOrder;
   });
 
-  if (!saveStoredOrders(nextOrders)) {
-    throw new Error("Unable to update order. Browser storage write failed.");
-  }
+  if (!updatedOrder) return null;
+
+  const persistedOrder = normalizeStoredOrder(
+    await updateOrderInSupabase(orderNumber, updatedOrder)
+  );
+  updatedOrder = persistedOrder;
+  saveStoredOrders(
+    nextOrders.map((order) =>
+      order.order_number === persistedOrder.order_number ? persistedOrder : order
+    )
+  );
 
   emitOperationalEventsForOrderUpdate(previousOrder, updatedOrder, updates, now);
 
@@ -1704,7 +1770,7 @@ export function updateStoredOrder(orderNumber, updates) {
   return updatedOrder;
 }
 
-export function recordStoredOrderPayment(orderNumber, paymentInput = {}, options = {}) {
+export async function recordStoredOrderPayment(orderNumber, paymentInput = {}, options = {}) {
   const order = findStoredOrder(orderNumber);
   if (!order) return null;
 
@@ -1789,7 +1855,7 @@ export function recordStoredOrderPayment(orderNumber, paymentInput = {}, options
   });
 }
 
-export function duplicateStoredOrder(orderNumber) {
+export async function duplicateStoredOrder(orderNumber) {
   const original = findStoredOrder(orderNumber);
   if (!original) return null;
 
@@ -1821,4 +1887,36 @@ export function duplicateStoredOrder(orderNumber) {
   delete copiedOrder.activity_log;
 
   return createStoredOrder(copiedOrder);
+}
+
+export async function migrateStoredOrdersToSupabase(options = {}) {
+  const { orders = getStoredOrders(), dryRun = true } = options;
+  const normalizedOrders = (Array.isArray(orders) ? orders : []).map((order) =>
+    normalizeStoredOrder(order)
+  );
+
+  if (dryRun) {
+    return {
+      dryRun: true,
+      orderCount: normalizedOrders.length,
+      orderNumbers: normalizedOrders.map((order) => order.order_number),
+    };
+  }
+
+  const persistedOrders = await upsertOrdersInSupabase(normalizedOrders);
+  saveStoredOrders(persistedOrders);
+  return {
+    dryRun: false,
+    orderCount: persistedOrders.length,
+    orderNumbers: persistedOrders.map((order) => order.order_number),
+  };
+}
+
+export function configureOrdersPersistenceForTests(options = {}) {
+  configureOrdersRepositoryForTests(options);
+  ordersHydrationStarted = false;
+  ordersHydrationPromise = null;
+  hasHydratedOrdersFromSupabase = false;
+  cachedOrdersRaw = null;
+  cachedOrdersSnapshot = EMPTY_ORDERS;
 }

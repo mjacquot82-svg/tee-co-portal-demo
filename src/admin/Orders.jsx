@@ -1105,7 +1105,7 @@ export default function Orders() {
     setSearchParams(nextParams);
   }
 
-  function handleRunAction(order, action) {
+  async function handleRunAction(order, action) {
     // Enrich resume_from_hold with who resumed
     const enrichedAction =
       action.key === "resume_from_hold"
@@ -1114,7 +1114,7 @@ export default function Orders() {
 
     const gating = buildWorkflowBlockDetails(order, enrichedAction);
     if (gating.blocked) {
-      updateStoredOrder(order.order_number, {
+      await updateStoredOrder(order.order_number, {
         activity_type: "production_blocked",
         activity_note: `${enrichedAction.label} blocked. ${gating.blockingReasons.join(" ")}`,
         last_production_blocked_at: new Date().toISOString(),
@@ -1143,14 +1143,14 @@ export default function Orders() {
         nextActionLabel: "",
       },
     }));
-    updateStoredOrder(order.order_number, updates);
+    await updateStoredOrder(order.order_number, updates);
   }
 
   function handleOpenDetail(order) {
     updateFilters({ order: order.order_number });
   }
 
-  function handleAssign(order, staffId) {
+  async function handleAssign(order, staffId) {
     const selectedWorker = staffUsers.find((worker) => worker.id === staffId);
     const previousAssignment = order.assigned_to_staff_name || "";
     const nextAssignment = selectedWorker?.name || "";
@@ -1164,7 +1164,7 @@ export default function Orders() {
       ? `Assignment confirmed for ${nextAssignment}.`
       : "Assignment cleared.";
 
-    updateStoredOrder(order.order_number, {
+    await updateStoredOrder(order.order_number, {
       assigned_to_staff_id: selectedWorker?.id || "",
       assigned_to_staff_name: selectedWorker?.name || "",
       assigned_to_staff_role: selectedWorker?.role || "",
@@ -1175,12 +1175,12 @@ export default function Orders() {
     });
   }
 
-  function handleClaim(order) {
+  async function handleClaim(order) {
     if (!staffUser?.id) return;
     // Staff may only claim unassigned work
     if (order.assigned_to_staff_id || order.assigned_to_staff_name) return;
 
-    updateStoredOrder(order.order_number, {
+    await updateStoredOrder(order.order_number, {
       assigned_to_staff_id: staffUser.id,
       assigned_to_staff_name: staffUser.name || "",
       assigned_to_staff_role: staffUser.role || "",
@@ -1191,7 +1191,7 @@ export default function Orders() {
     });
   }
 
-  function handleEscalate(order) {
+  async function handleEscalate(order) {
     if (!order?.order_number) return;
     // Avoid duplicate escalations within 24 hours
     const lastEscalated = order.last_escalated_at ? new Date(order.last_escalated_at).getTime() : 0;
@@ -1202,7 +1202,7 @@ export default function Orders() {
     const readiness = order.production_readiness || buildProductionReadinessSummary(order);
     const blockDetail = readiness.detail || "Blocked order requires owner attention.";
 
-    updateStoredOrder(order.order_number, {
+    await updateStoredOrder(order.order_number, {
       last_escalated_at: now,
       escalated_by_staff_name: escalatorName,
       activity_type: "order_escalated",

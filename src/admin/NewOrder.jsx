@@ -546,7 +546,7 @@ export default function NewOrder() {
         selectedProduct
       );
 
-      const order = createStoredOrder({
+      const order = await createStoredOrder({
         ...form,
         customer_id: customerId,
         quote_status: "Draft",

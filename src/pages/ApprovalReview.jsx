@@ -1,6 +1,6 @@
 import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { findStoredOrder, updateStoredOrder } from "../lib/ordersStore";
+import { ensureOrdersHydrated, findStoredOrder, updateStoredOrder } from "../lib/ordersStore";
 
 export default function ApprovalReview() {
   const { orderNumber } = useParams();
@@ -8,15 +8,24 @@ export default function ApprovalReview() {
   const [customerNote, setCustomerNote] = useState("");
 
   useEffect(() => {
-    const stored = findStoredOrder(orderNumber);
-    if (stored) {
-      setOrder(stored);
-      setCustomerNote(stored.customer_approval_note || "");
-    }
+    let isMounted = true;
+
+    ensureOrdersHydrated().then(() => {
+      if (!isMounted) return;
+      const stored = findStoredOrder(orderNumber);
+      if (stored) {
+        setOrder(stored);
+        setCustomerNote(stored.customer_approval_note || "");
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, [orderNumber]);
 
-  function approveMockup() {
-    const updated = updateStoredOrder(orderNumber, {
+  async function approveMockup() {
+    const updated = await updateStoredOrder(orderNumber, {
       quote_status: order?.deposit_required ? "Awaiting Deposit" : "Approved",
       approval_status: "Customer Approved",
       artwork_approval_status: "Approved",
@@ -26,8 +35,8 @@ export default function ApprovalReview() {
     if (updated) setOrder(updated);
   }
 
-  function requestChanges() {
-    const updated = updateStoredOrder(orderNumber, {
+  async function requestChanges() {
+    const updated = await updateStoredOrder(orderNumber, {
       quote_status: "Awaiting Artwork Approval",
       approval_status: "Customer Requested Changes",
       artwork_approval_status: "Needs Revision",

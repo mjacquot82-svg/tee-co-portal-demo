@@ -50,7 +50,7 @@ export default function ArchivedQuotes() {
     return () => window.clearTimeout(flashTimer);
   }, [flashMessage]);
 
-  function handleRestoreQuote(quote) {
+  async function handleRestoreQuote(quote) {
     if (!canManageArchive) return;
 
     const confirmed = window.confirm(
@@ -58,7 +58,7 @@ export default function ArchivedQuotes() {
     );
     if (!confirmed) return;
 
-    updateStoredOrder(quote.order_number, {
+    await updateStoredOrder(quote.order_number, {
       quote_archived: false,
       quote_archived_at: null,
       activity_type: "quote_restore",
