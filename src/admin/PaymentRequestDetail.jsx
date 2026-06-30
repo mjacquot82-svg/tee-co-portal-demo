@@ -9,16 +9,13 @@ import {
   getPaymentRequestById,
   listPaymentEvents,
   listPayments,
-  recordPaymentEvent,
-  updatePaymentRequest,
   usePaymentsSnapshot,
 } from "../lib/paymentsStore";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
 import { deriveOwnerPaymentRequestNextAction } from "../orders/ownerWorkflowActions";
 import {
-  buildSquarePaymentRequestUpdates,
-  createSquarePaymentLink,
   hasProviderCheckoutUrl,
+  sendSquarePaymentRequest,
 } from "../services/squareService";
 import {
   buildPaymentReconciliationInsights,
@@ -117,42 +114,16 @@ export default function PaymentRequestDetail() {
 
     setIsSending(true);
     setFeedback("");
-    const sentAt = new Date().toISOString();
-    let linkUpdates = {};
+    let updatedRequest = null;
 
     try {
-      const providerLink = await createSquarePaymentLink(request);
-      linkUpdates = buildSquarePaymentRequestUpdates(request, providerLink);
-
-      recordPaymentEvent({
-        payment_request_id: request.id,
-        order_number: request.order_number,
-        event_type: "square_payment_link_created",
-        event_source: "system",
-        summary: `Square payment link created for ${request.request_number}.`,
-        payload: { providerLink },
-        created_at: sentAt,
-      });
+      const result = await sendSquarePaymentRequest(request);
+      updatedRequest = result.paymentRequest;
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Square payment link creation failed.");
       setIsSending(false);
       return;
     }
-
-    const updatedRequest = updatePaymentRequest(request.id, {
-      ...linkUpdates,
-      status: "sent",
-      sent_at: sentAt,
-    });
-
-    recordPaymentEvent({
-      payment_request_id: request.id,
-      order_number: request.order_number,
-      event_type: "payment_request_sent",
-      event_source: "staff",
-      summary: `Payment request ${request.request_number} marked sent to customer.`,
-      created_at: sentAt,
-    });
 
     setFeedback(
       updatedRequest

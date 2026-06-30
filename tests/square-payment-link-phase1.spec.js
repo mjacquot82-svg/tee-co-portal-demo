@@ -5,6 +5,7 @@ import {
   buildSquarePaymentRequestUpdates,
   createSquarePaymentLink,
   hasProviderCheckoutUrl,
+  sendSquarePaymentRequest,
 } from "../src/services/squareService.js";
 import {
   createPaymentRequest,
@@ -13,6 +14,10 @@ import {
   resetStoredPaymentsForTests,
   updatePaymentRequest,
 } from "../src/lib/paymentsStore.js";
+import {
+  findPaymentRequestForOrder,
+  getCustomerPortalPaymentData,
+} from "../src/customer-portal/customerPortalPayments.js";
 import { isDepositRequirementSatisfied } from "../src/orders/workflowGating.js";
 
 test.beforeEach(() => {
@@ -153,6 +158,80 @@ test("Square provider metadata persists on the payment request without satisfyin
   expect(listPaymentEvents().map((event) => event.event_type)).toEqual(
     expect.arrayContaining(["payment_request_created", "payment_request_updated"])
   );
+});
+
+test("new payment request creation flow can immediately create and send Square checkout", async () => {
+  const request = createPaymentRequest({
+    id: "payment-request-square-created-flow",
+    request_number: "PR-SQUARE-CREATED",
+    customer_id: "customer-square-created",
+    order_number: "TC-SQ-CREATED",
+    request_type: "deposit",
+    status: "open",
+    amount_requested: 1,
+    payment_provider: "manual",
+    metadata: { source: "admin_payments_module" },
+  });
+
+  const result = await sendSquarePaymentRequest(request, {
+    sentAt: "2026-06-24T12:10:00.000Z",
+    squareLinkOptions: {
+      endpoint: "/square-test",
+      disableFallback: true,
+      fetcher: async () => ({
+        ok: true,
+        json: async () => ({
+          mode: "production",
+          idempotency_key: "square-payment-link:payment-request-square-created-flow",
+          payment_link: {
+            id: "LNK-SQUARE-CREATED",
+            url: "https://square.link/u/created-flow",
+            order_id: "ORD-SQUARE-CREATED",
+            status: "created",
+            created_at: "2026-06-24T12:10:00.000Z",
+          },
+        }),
+      }),
+    },
+  });
+
+  expect(result.paymentRequest).toMatchObject({
+    id: request.id,
+    status: "sent",
+    payment_provider: "square",
+    provider_checkout_url: "https://square.link/u/created-flow",
+    provider_payment_link_id: "LNK-SQUARE-CREATED",
+    provider_order_id: "ORD-SQUARE-CREATED",
+    sent_at: "2026-06-24T12:10:00.000Z",
+  });
+  expect(getPaymentRequestById(request.id)).toMatchObject({
+    payment_provider: "square",
+    provider_checkout_url: "https://square.link/u/created-flow",
+  });
+  expect(listPaymentEvents().map((event) => event.event_type)).toEqual(
+    expect.arrayContaining([
+      "payment_request_created",
+      "square_payment_link_created",
+      "payment_request_updated",
+      "payment_request_sent",
+    ])
+  );
+
+  const portalPayments = getCustomerPortalPaymentData({
+    orders: [{ order_number: "TC-SQ-CREATED", customer_id: "customer-square-created" }],
+    customerIds: ["customer-square-created"],
+    paymentRequests: [getPaymentRequestById(request.id)],
+    payments: [],
+    paymentEvents: listPaymentEvents(),
+  });
+  const portalRequest = findPaymentRequestForOrder(portalPayments.paymentRequests, "TC-SQ-CREATED", "deposit");
+
+  expect(portalRequest).toMatchObject({
+    id: request.id,
+    payment_provider: "square",
+    provider_checkout_url: "https://square.link/u/created-flow",
+  });
+  expect(hasProviderCheckoutUrl(portalRequest)).toBe(true);
 });
 
 test("customer portal Pay Now eligibility requires a valid provider checkout URL", () => {

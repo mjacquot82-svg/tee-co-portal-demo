@@ -1,3 +1,8 @@
+import {
+  recordPaymentEvent,
+  updatePaymentRequest,
+} from "../lib/paymentsStore";
+
 const DEFAULT_PAYMENT_LINK_ENDPOINT = "/.netlify/functions/square-payment-link";
 
 function normalizeText(value, fallback = "") {
@@ -212,5 +217,41 @@ export function buildSquarePaymentRequestUpdates(paymentRequest = {}, squareLink
         metadata: squareLink.metadata || {},
       },
     },
+  };
+}
+
+export async function sendSquarePaymentRequest(paymentRequest = {}, options = {}) {
+  const sentAt = options.sentAt || new Date().toISOString();
+  const providerLink = await createSquarePaymentLink(paymentRequest, options.squareLinkOptions || {});
+  const linkUpdates = buildSquarePaymentRequestUpdates(paymentRequest, providerLink);
+
+  recordPaymentEvent({
+    payment_request_id: paymentRequest.id,
+    order_number: paymentRequest.order_number,
+    event_type: "square_payment_link_created",
+    event_source: "system",
+    summary: `Square payment link created for ${paymentRequest.request_number}.`,
+    payload: { providerLink },
+    created_at: sentAt,
+  });
+
+  const updatedRequest = updatePaymentRequest(paymentRequest.id, {
+    ...linkUpdates,
+    status: "sent",
+    sent_at: sentAt,
+  });
+
+  recordPaymentEvent({
+    payment_request_id: paymentRequest.id,
+    order_number: paymentRequest.order_number,
+    event_type: "payment_request_sent",
+    event_source: "staff",
+    summary: `Payment request ${paymentRequest.request_number} marked sent to customer.`,
+    created_at: sentAt,
+  });
+
+  return {
+    paymentRequest: updatedRequest,
+    providerLink,
   };
 }

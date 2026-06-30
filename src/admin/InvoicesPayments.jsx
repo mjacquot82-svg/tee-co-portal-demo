@@ -387,7 +387,7 @@ export default function InvoicesPayments() {
 
       <PaymentRequestForm
         title="Create Payment Request"
-        description="Create a staff-managed payment request from an order. Customer-facing payment pages and provider links are reserved for a later phase."
+        description="Create a customer-facing payment request from an order with an automatic Square checkout link."
         orders={financialOrders}
         onCreated={() => setRefreshKey((value) => value + 1)}
       />

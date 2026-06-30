@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { createPaymentRequest } from "../lib/paymentsStore";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
+import { sendSquarePaymentRequest } from "../services/squareService";
 
 const requestTypes = [
   { value: "deposit", label: "Deposit" },
@@ -50,7 +51,7 @@ function deriveRequestAmount(requestType, financials, customAmount) {
 export default function PaymentRequestForm({
   id,
   title = "Create Payment Request",
-  description = "Create an internal payment request record for staff follow-up. Square links are created when the request is sent.",
+  description = "Create a customer-facing payment request with an automatic Square checkout link.",
   customer = null,
   order = null,
   orders = [],
@@ -78,12 +79,17 @@ export default function PaymentRequestForm({
   const [customAmount, setCustomAmount] = useState("");
   const [message, setMessage] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const amountRequested = deriveRequestAmount(requestType, financials, customAmount);
   const canSubmit = amountRequested > 0;
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
+    setFeedback("");
     const activeStaffUser = getActiveStaffUser();
     const request = createPaymentRequest({
       customer_id: customer?.id || selectedOrder?.customer_id || "",
@@ -105,10 +111,24 @@ export default function PaymentRequestForm({
       },
     });
 
-    setFeedback(`Created ${request.request_number} for $${request.amount_requested.toFixed(2)}.`);
-    setMessage("");
-    if (requestType === "custom_amount") setCustomAmount("");
-    onCreated?.(request);
+    try {
+      const result = await sendSquarePaymentRequest(request);
+      const sentRequest = result.paymentRequest || request;
+
+      setFeedback(`Created ${sentRequest.request_number} with a Square checkout link for $${sentRequest.amount_requested.toFixed(2)}.`);
+      setMessage("");
+      if (requestType === "custom_amount") setCustomAmount("");
+      onCreated?.(sentRequest);
+    } catch (error) {
+      setFeedback(
+        error instanceof Error
+          ? `${request.request_number} was created, but Square checkout link creation failed: ${error.message}`
+          : `${request.request_number} was created, but Square checkout link creation failed.`
+      );
+      onCreated?.(request);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -211,18 +231,18 @@ export default function PaymentRequestForm({
         <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
           <button
             type="submit"
-            disabled={!canSubmit}
+            disabled={!canSubmit || isSubmitting}
             style={{
               border: "none",
               borderRadius: "12px",
-              background: canSubmit ? "#0f172a" : "#cbd5e1",
+              background: canSubmit && !isSubmitting ? "#0f172a" : "#cbd5e1",
               color: "#ffffff",
               padding: "11px 14px",
               fontWeight: 800,
-              cursor: canSubmit ? "pointer" : "not-allowed",
+              cursor: canSubmit && !isSubmitting ? "pointer" : "not-allowed",
             }}
           >
-            Create Request
+            {isSubmitting ? "Creating Checkout..." : "Create Request"}
           </button>
           {feedback ? <span style={{ color: "#166534", fontWeight: 700 }}>{feedback}</span> : null}
         </div>
