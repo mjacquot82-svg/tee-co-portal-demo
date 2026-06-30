@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createPaymentRequest } from "../lib/paymentsStore";
+import { createPaymentRequestPersisted } from "../lib/paymentsStore";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
 import { sendSquarePaymentRequest } from "../services/squareService";
@@ -91,28 +91,29 @@ export default function PaymentRequestForm({
     setIsSubmitting(true);
     setFeedback("");
     const activeStaffUser = getActiveStaffUser();
-    const request = createPaymentRequest({
-      customer_id: customer?.id || selectedOrder?.customer_id || "",
-      order_id: selectedOrder?.id || "",
-      order_number: selectedOrder?.order_number || "",
-      quote_id: selectedOrder?.operational_visible === false ? selectedOrder?.id || selectedOrder?.order_number || "" : "",
-      request_type: requestType,
-      status: "open",
-      amount_requested: amountRequested,
-      amount_paid: 0,
-      currency: "CAD",
-      description: `${requestTypes.find((type) => type.value === requestType)?.label || "Payment"} request`,
-      customer_message: message,
-      payment_provider: "manual",
-      created_by_staff_user_id: activeStaffUser?.id || "",
-      metadata: {
-        source: "admin_payments_module",
-        customer_name: getCustomerName(customer || {}, selectedOrder || {}),
-      },
-    });
+    let request = null;
 
     try {
-      const result = await sendSquarePaymentRequest(request);
+      request = await createPaymentRequestPersisted({
+        customer_id: customer?.id || selectedOrder?.customer_id || "",
+        order_id: selectedOrder?.id || "",
+        order_number: selectedOrder?.order_number || "",
+        quote_id: selectedOrder?.operational_visible === false ? selectedOrder?.id || selectedOrder?.order_number || "" : "",
+        request_type: requestType,
+        status: "open",
+        amount_requested: amountRequested,
+        amount_paid: 0,
+        currency: "CAD",
+        description: `${requestTypes.find((type) => type.value === requestType)?.label || "Payment"} request`,
+        customer_message: message,
+        payment_provider: "manual",
+        created_by_staff_user_id: activeStaffUser?.id || "",
+        metadata: {
+          source: "admin_payments_module",
+          customer_name: getCustomerName(customer || {}, selectedOrder || {}),
+        },
+      });
+      const result = await sendSquarePaymentRequest(request, { awaitPersistence: true });
       const sentRequest = result.paymentRequest || request;
 
       setFeedback(`Created ${sentRequest.request_number} with a Square checkout link for $${sentRequest.amount_requested.toFixed(2)}.`);
@@ -122,10 +123,10 @@ export default function PaymentRequestForm({
     } catch (error) {
       setFeedback(
         error instanceof Error
-          ? `${request.request_number} was created, but Square checkout link creation failed: ${error.message}`
-          : `${request.request_number} was created, but Square checkout link creation failed.`
+          ? `${request?.request_number || "Payment request"} could not be sent with Square checkout: ${error.message}`
+          : `${request?.request_number || "Payment request"} could not be sent with Square checkout.`
       );
-      onCreated?.(request);
+      if (request) onCreated?.(request);
     } finally {
       setIsSubmitting(false);
     }

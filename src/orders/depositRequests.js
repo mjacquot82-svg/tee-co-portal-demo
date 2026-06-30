@@ -1,5 +1,5 @@
 import { formatShortDate } from "../lib/dateFormatting";
-import { createPaymentRequest } from "../lib/paymentsStore";
+import { createPaymentRequestPersisted } from "../lib/paymentsStore";
 import { sendSquarePaymentRequest } from "../services/squareService";
 
 function money(value) {
@@ -87,7 +87,7 @@ export async function createAndSendDepositPaymentRequestForOrder(order = {}, req
     throw new Error("Deposit amount is required before creating a Square checkout request.");
   }
 
-  const paymentRequest = createPaymentRequest({
+  const paymentRequest = await createPaymentRequestPersisted({
     customer_id: order.customer_id || "",
     order_id: order.id || "",
     order_number: order.order_number || "",
@@ -108,5 +108,8 @@ export async function createAndSendDepositPaymentRequestForOrder(order = {}, req
     },
   });
 
-  return sendSquarePaymentRequest(paymentRequest, options.squareSendOptions || {});
+  return sendSquarePaymentRequest(paymentRequest, {
+    ...(options.squareSendOptions || {}),
+    awaitPersistence: true,
+  });
 }

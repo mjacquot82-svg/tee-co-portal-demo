@@ -526,6 +526,32 @@ export function saveStoredPaymentEvents(paymentEvents) {
   saveStoredList(PAYMENT_EVENTS_STORAGE_KEY, "paymentEvents", paymentEvents);
 }
 
+function notifyPaymentRequestCreated(paymentRequest) {
+  if (paymentRequest.metadata?.source === "legacy_order_payment_history") {
+    return;
+  }
+
+  triggerNotificationEvent(NOTIFICATION_TYPES.paymentRequestCreated, {
+    paymentRequest,
+    source: "payments_store",
+    customerName: paymentRequest.metadata?.customer_name || "",
+    orderNumber: paymentRequest.order_number,
+    depositAmount: paymentRequest.amount_requested,
+    paymentLink: paymentRequest.provider_checkout_url,
+  });
+
+  if (String(paymentRequest.request_type || "").trim().toLowerCase() === "deposit") {
+    triggerNotificationEvent(NOTIFICATION_TYPES.depositRequested, {
+      paymentRequest,
+      source: "payments_store",
+      customerName: paymentRequest.metadata?.customer_name || "",
+      orderNumber: paymentRequest.order_number,
+      depositAmount: paymentRequest.amount_requested,
+      paymentLink: paymentRequest.provider_checkout_url,
+    });
+  }
+}
+
 export function createPaymentRequest(input = {}) {
   const paymentRequest = normalizePaymentRequest(input);
   const current = getStoredPaymentRequests();
@@ -551,29 +577,40 @@ export function createPaymentRequest(input = {}) {
     created_at: paymentRequest.created_at,
   });
 
-  if (paymentRequest.metadata?.source !== "legacy_order_payment_history") {
-    triggerNotificationEvent(NOTIFICATION_TYPES.paymentRequestCreated, {
-      paymentRequest,
-      source: "payments_store",
-      customerName: paymentRequest.metadata?.customer_name || "",
-      orderNumber: paymentRequest.order_number,
-      depositAmount: paymentRequest.amount_requested,
-      paymentLink: paymentRequest.provider_checkout_url,
-    });
-
-    if (String(paymentRequest.request_type || "").trim().toLowerCase() === "deposit") {
-      triggerNotificationEvent(NOTIFICATION_TYPES.depositRequested, {
-        paymentRequest,
-        source: "payments_store",
-        customerName: paymentRequest.metadata?.customer_name || "",
-        orderNumber: paymentRequest.order_number,
-        depositAmount: paymentRequest.amount_requested,
-        paymentLink: paymentRequest.provider_checkout_url,
-      });
-    }
-  }
+  notifyPaymentRequestCreated(paymentRequest);
 
   return paymentRequest;
+}
+
+export async function createPaymentRequestPersisted(input = {}) {
+  const paymentRequest = normalizePaymentRequest(input);
+  const current = getStoredPaymentRequests();
+  const existing = paymentRequest.metadata?.legacyPaymentId
+    ? current.find(
+        (request) =>
+          request.order_number === paymentRequest.order_number &&
+          request.metadata?.legacyPaymentId === paymentRequest.metadata.legacyPaymentId
+      )
+    : null;
+
+  if (existing) return existing;
+
+  saveStoredPaymentRequests([paymentRequest, ...current]);
+  if (shouldUseSupabasePersistence()) {
+    await persistSupabasePaymentRequest(paymentRequest);
+  }
+  recordPaymentEvent({
+    payment_request_id: paymentRequest.id,
+    order_number: paymentRequest.order_number,
+    event_type: "payment_request_created",
+    event_source: "system",
+    summary: `Payment request ${paymentRequest.request_number} created.`,
+    payload: { paymentRequest },
+    created_at: paymentRequest.created_at,
+  });
+  notifyPaymentRequestCreated(paymentRequest);
+
+  return getPaymentRequestById(paymentRequest.id) || paymentRequest;
 }
 
 export function getPaymentRequestById(identifier) {
@@ -623,6 +660,44 @@ export function updatePaymentRequest(identifier, updates = {}) {
     staff_user_id: updates.staff_user_id || "",
   });
   return updatedRequest;
+}
+
+export async function updatePaymentRequestPersisted(identifier, updates = {}) {
+  const normalizedIdentifier = normalizeIdentifier(identifier);
+  if (!normalizedIdentifier) return null;
+
+  let updatedRequest = null;
+  const nextRequests = getStoredPaymentRequests().map((request) => {
+    const isMatch =
+      normalizeIdentifier(request.id) === normalizedIdentifier ||
+      normalizeIdentifier(request.request_number) === normalizedIdentifier;
+    if (!isMatch) return request;
+
+    updatedRequest = hydratePaymentRequest({
+      ...request,
+      ...updates,
+      amount_requested: updates.amount_requested ?? updates.amount ?? request.amount_requested,
+      updated_at: updates.updated_at || nowIso(),
+    });
+    return updatedRequest;
+  });
+
+  if (!updatedRequest) return null;
+
+  saveStoredPaymentRequests(nextRequests);
+  if (shouldUseSupabasePersistence()) {
+    await persistSupabasePaymentRequestUpdate(updatedRequest.id, updatedRequest);
+  }
+  recordPaymentEvent({
+    payment_request_id: updatedRequest.id,
+    order_number: updatedRequest.order_number,
+    event_type: "payment_request_updated",
+    event_source: "staff",
+    summary: `Payment request ${updatedRequest.request_number} updated.`,
+    payload: { updates },
+    staff_user_id: updates.staff_user_id || "",
+  });
+  return getPaymentRequestById(updatedRequest.id) || updatedRequest;
 }
 
 export function syncPaymentRequestTotals(identifier) {

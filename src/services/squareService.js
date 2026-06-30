@@ -1,6 +1,7 @@
 import {
   recordPaymentEvent,
   updatePaymentRequest,
+  updatePaymentRequestPersisted,
 } from "../lib/paymentsStore";
 
 const DEFAULT_PAYMENT_LINK_ENDPOINT = "/.netlify/functions/square-payment-link";
@@ -235,7 +236,8 @@ export async function sendSquarePaymentRequest(paymentRequest = {}, options = {}
     created_at: sentAt,
   });
 
-  const updatedRequest = updatePaymentRequest(paymentRequest.id, {
+  const updateRequest = options.awaitPersistence ? updatePaymentRequestPersisted : updatePaymentRequest;
+  const updatedRequest = await updateRequest(paymentRequest.id, {
     ...linkUpdates,
     status: "sent",
     sent_at: sentAt,

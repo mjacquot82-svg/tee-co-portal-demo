@@ -11,7 +11,11 @@ import {
   refreshPaymentsFromSupabase,
   resetStoredPaymentsForTests,
 } from "../src/lib/paymentsStore.js";
-import { getCustomerPortalPaymentData } from "../src/customer-portal/customerPortalPayments.js";
+import {
+  findPaymentRequestForOrder,
+  getCustomerPortalPaymentData,
+} from "../src/customer-portal/customerPortalPayments.js";
+import { createAndSendDepositPaymentRequestForOrder } from "../src/orders/depositRequests.js";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -256,6 +260,74 @@ test("portal can read a Supabase-backed payment request", async () => {
   expect(portalPayments.openPaymentRequests[0]).toMatchObject({
     order_number: "TC-SUPA-1002",
     amount_requested: 225,
+  });
+});
+
+test("customer-facing Square deposit request persists before portal lookup", async () => {
+  const supabase = useFakeSupabase();
+
+  const result = await createAndSendDepositPaymentRequestForOrder(
+    {
+      id: "order-authoritative-square",
+      order_number: "TC-SUPA-SQUARE",
+      customer_id: "customer-supa-square",
+      customer_name: "Supabase Square Customer",
+      deposit_amount: 1,
+      balance_due: 99,
+      operational_visible: true,
+    },
+    {
+      channel: "clipboard",
+      body: "Deposit request with Square checkout.",
+    },
+    {
+      staffUserId: "staff-supa-square",
+      squareSendOptions: {
+        sentAt: "2026-06-24T13:00:00.000Z",
+        squareLinkOptions: {
+          endpoint: "/square-test",
+          disableFallback: true,
+          fetcher: async () => ({
+            ok: true,
+            json: async () => ({
+              mode: "production",
+              payment_link: {
+                id: "LNK-SUPA-SQUARE",
+                url: "https://square.link/u/supa-square",
+                order_id: "ORD-SUPA-SQUARE",
+                status: "created",
+                created_at: "2026-06-24T13:00:00.000Z",
+              },
+            }),
+          }),
+        },
+      },
+    }
+  );
+
+  expect(supabase.rows("payment_requests")).toHaveLength(1);
+  expect(supabase.rows("payment_requests")[0]).toMatchObject({
+    id: result.paymentRequest.id,
+    order_number: "TC-SUPA-SQUARE",
+    request_type: "deposit",
+    status: "sent",
+    payment_provider: "square",
+    provider_checkout_url: "https://square.link/u/supa-square",
+    provider_payment_link_id: "LNK-SUPA-SQUARE",
+  });
+
+  await refreshPaymentsFromSupabase();
+  const portalPayments = getCustomerPortalPaymentData({
+    orders: [{ order_number: "TC-SUPA-SQUARE", customer_id: "customer-supa-square" }],
+    customerIds: ["customer-supa-square"],
+    paymentRequests: listPaymentRequests(),
+    payments: listPayments(),
+    paymentEvents: listPaymentEvents(),
+  });
+
+  expect(findPaymentRequestForOrder(portalPayments.paymentRequests, "TC-SUPA-SQUARE", "deposit")).toMatchObject({
+    id: result.paymentRequest.id,
+    provider_checkout_url: "https://square.link/u/supa-square",
   });
 });
 
