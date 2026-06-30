@@ -18,6 +18,10 @@ import {
   findPaymentRequestForOrder,
   getCustomerPortalPaymentData,
 } from "../src/customer-portal/customerPortalPayments.js";
+import {
+  buildDepositRequestContent,
+  createAndSendDepositPaymentRequestForOrder,
+} from "../src/orders/depositRequests.js";
 import { isDepositRequirementSatisfied } from "../src/orders/workflowGating.js";
 
 test.beforeEach(() => {
@@ -232,6 +236,95 @@ test("new payment request creation flow can immediately create and send Square c
     provider_checkout_url: "https://square.link/u/created-flow",
   });
   expect(hasProviderCheckoutUrl(portalRequest)).toBe(true);
+});
+
+test("order financial summary deposit request creates a Square checkout payment request", async () => {
+  const result = await createAndSendDepositPaymentRequestForOrder(
+    {
+      id: "order-square-summary-id",
+      order_number: "TC-SQ-SUMMARY",
+      customer_id: "customer-square-summary",
+      customer_name: "Square Summary Customer",
+      deposit_amount: 1,
+      balance_due: 99,
+      operational_visible: true,
+    },
+    {
+      channel: "clipboard",
+      body: "Legacy deposit message",
+    },
+    {
+      staffUserId: "staff-square-summary",
+      squareSendOptions: {
+        sentAt: "2026-06-24T12:15:00.000Z",
+        squareLinkOptions: {
+          endpoint: "/square-test",
+          disableFallback: true,
+          fetcher: async () => ({
+            ok: true,
+            json: async () => ({
+              mode: "production",
+              payment_link: {
+                id: "LNK-SQUARE-SUMMARY",
+                url: "https://square.link/u/summary-deposit",
+                order_id: "ORD-SQUARE-SUMMARY",
+                status: "created",
+                created_at: "2026-06-24T12:15:00.000Z",
+              },
+            }),
+          }),
+        },
+      },
+    }
+  );
+
+  expect(result.paymentRequest).toMatchObject({
+    order_number: "TC-SQ-SUMMARY",
+    request_type: "deposit",
+    status: "sent",
+    amount_requested: 1,
+    payment_provider: "square",
+    provider_checkout_url: "https://square.link/u/summary-deposit",
+    provider_payment_link_id: "LNK-SQUARE-SUMMARY",
+    created_by_staff_user_id: "staff-square-summary",
+  });
+  expect(listPaymentEvents().map((event) => event.event_type)).toEqual(
+    expect.arrayContaining([
+      "payment_request_created",
+      "square_payment_link_created",
+      "payment_request_updated",
+      "payment_request_sent",
+    ])
+  );
+
+  const portalPayments = getCustomerPortalPaymentData({
+    orders: [{ order_number: "TC-SQ-SUMMARY", customer_id: "customer-square-summary" }],
+    customerIds: ["customer-square-summary"],
+    paymentRequests: [getPaymentRequestById(result.paymentRequest.id)],
+    payments: [],
+    paymentEvents: listPaymentEvents(),
+  });
+
+  expect(findPaymentRequestForOrder(portalPayments.paymentRequests, "TC-SQ-SUMMARY", "deposit")).toMatchObject({
+    provider_checkout_url: "https://square.link/u/summary-deposit",
+  });
+});
+
+test("legacy deposit message can include the Square checkout link", () => {
+  const content = buildDepositRequestContent(
+    {
+      order_number: "TC-SQ-MESSAGE",
+      customer_name: "Square Message Customer",
+      deposit_amount: 1,
+      balance_due: 99,
+    },
+    {
+      checkoutUrl: "https://square.link/u/message-deposit",
+    }
+  );
+
+  expect(content.body).toContain("Pay online: https://square.link/u/message-deposit");
+  expect(content.fullMessage).toContain("Pay online: https://square.link/u/message-deposit");
 });
 
 test("customer portal Pay Now eligibility requires a valid provider checkout URL", () => {

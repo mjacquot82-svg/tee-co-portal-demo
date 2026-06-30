@@ -188,34 +188,51 @@ export default function FinancialSummaryPanel({
 
   async function handleCopyDepositRequest() {
     try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(depositRequest.fullMessage);
-      } else {
-        throw new Error("Clipboard unavailable");
-      }
-
-      onSendDepositRequest?.({
+      const result = await onSendDepositRequest?.({
         channel: "clipboard",
         subject: depositRequest.subject,
         body: depositRequest.body,
       });
+      const messageWithCheckout = buildDepositRequestContent(order, {
+        checkoutUrl: result?.checkoutUrl,
+      });
+
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(messageWithCheckout.fullMessage);
+      } else {
+        throw new Error("Clipboard unavailable");
+      }
       setDepositRequestStatus("Deposit request copied to clipboard.");
-    } catch {
-      setDepositRequestStatus("Clipboard unavailable. Use the email draft action instead.");
+    } catch (error) {
+      setDepositRequestStatus(
+        error instanceof Error
+          ? error.message
+          : "Clipboard unavailable. Use the email draft action instead."
+      );
     }
   }
 
-  function handleOpenEmailDraft() {
-    if (typeof window !== "undefined") {
-      window.location.href = buildDepositRequestMailto(order);
-    }
+  async function handleOpenEmailDraft() {
+    try {
+      const result = await onSendDepositRequest?.({
+        channel: "mailto",
+        subject: depositRequest.subject,
+        body: depositRequest.body,
+      });
 
-    onSendDepositRequest?.({
-      channel: "mailto",
-      subject: depositRequest.subject,
-      body: depositRequest.body,
-    });
-    setDepositRequestStatus("Email draft opened with the deposit request.");
+      if (typeof window !== "undefined") {
+        window.location.href = buildDepositRequestMailto(order, {
+          checkoutUrl: result?.checkoutUrl,
+        });
+      }
+      setDepositRequestStatus("Email draft opened with the deposit request.");
+    } catch (error) {
+      setDepositRequestStatus(
+        error instanceof Error
+          ? error.message
+          : "Unable to create the Square deposit checkout link."
+      );
+    }
   }
 
   return (
@@ -560,7 +577,7 @@ export default function FinancialSummaryPanel({
           <div>
             <h3 style={{ margin: "0 0 4px", fontSize: "16px" }}>Deposit Request</h3>
             <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>
-              Generate a customer-facing deposit request without payment gateway integration.
+              Generate a customer-facing deposit request with a Square checkout link.
             </p>
           </div>
 

@@ -170,6 +170,14 @@ export function resolvePortalNextActionDetails(order = {}, paymentRequests = [])
   const openPaymentRequest = resolveOpenPaymentRequest(paymentRequests);
   if (openPaymentRequest) {
     if (normalizeLower(openPaymentRequest.request_type) === "deposit") {
+      if (openPaymentRequest.provider_checkout_url) {
+        return {
+          actionType: "payment_request",
+          label: "View Payment Request",
+          to: `/portal/payments/${encodeURIComponent(openPaymentRequest.id || "")}`,
+        };
+      }
+
       return {
         actionType: "payment_sent_confirmation",
         label: "Mark Payment Sent",

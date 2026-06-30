@@ -108,6 +108,21 @@ test("resolvePortalNextActionDetails maps direct customer action routes", () => 
     to: "/portal/orders/TC-DETAIL-2003/deposit",
   });
 
+  expect(
+    resolvePortalNextActionDetails(depositOrder, [
+      {
+        id: "pr-square-deposit",
+        request_type: "deposit",
+        status: "sent",
+        provider_checkout_url: "https://square.link/u/deposit",
+      },
+    ])
+  ).toEqual({
+    actionType: "payment_request",
+    label: "View Payment Request",
+    to: "/portal/payments/pr-square-deposit",
+  });
+
   const balanceOrder = { order_number: "TC-DETAIL-2004", quote_status: "Approved" };
   expect(
     resolvePortalNextActionDetails(balanceOrder, [{ id: "pr-2", request_type: "balance", status: "sent" }])

@@ -36,6 +36,10 @@ import {
   buildWorkflowStatusBadges,
 } from "../orders/workflowPresentation";
 import { deriveOwnerOrderNextAction } from "../orders/ownerWorkflowActions";
+import {
+  buildDepositRequestContent,
+  createAndSendDepositPaymentRequestForOrder,
+} from "../orders/depositRequests";
 import PaymentRequestForm from "./PaymentRequestForm";
 import { usePaymentsSnapshot } from "../lib/paymentsStore";
 
@@ -444,10 +448,25 @@ export default function OrderDetail() {
     });
   }
 
-  function handleSendDepositRequest(requestDetails = {}) {
-    if (isCanceledOperationalStatus(order.status)) return;
+  async function handleSendDepositRequest(requestDetails = {}) {
+    if (isCanceledOperationalStatus(order.status)) return null;
 
     const now = new Date().toISOString();
+    const result = await createAndSendDepositPaymentRequestForOrder(
+      {
+        ...order,
+        ...normalizedOrder,
+      },
+      requestDetails,
+      {
+        staffUserId: activeStaffUser?.id || "",
+      }
+    );
+    const checkoutUrl =
+      result.paymentRequest?.provider_checkout_url ||
+      result.providerLink?.provider_checkout_url ||
+      "";
+    const depositRequestContent = buildDepositRequestContent(normalizedOrder, { checkoutUrl });
 
     saveOrderUpdates({
       deposit_workflow_status: "Deposit Requested",
@@ -461,12 +480,22 @@ export default function OrderDetail() {
         requested_at: now,
         updated_at: now,
         request_channel: requestDetails.channel || "",
-        last_requested_subject: requestDetails.subject || "",
-        last_requested_message: requestDetails.body || "",
+        last_requested_subject: depositRequestContent.subject || requestDetails.subject || "",
+        last_requested_message: depositRequestContent.body || requestDetails.body || "",
+        payment_request_id: result.paymentRequest?.id || "",
+        provider_checkout_url: checkoutUrl,
       },
       activity_type: "deposit_request",
-      activity_note: `Deposit request prepared via ${requestDetails.channel || "manual workflow"}.`,
+      activity_note: checkoutUrl
+        ? `Square deposit request prepared via ${requestDetails.channel || "financial summary"}.`
+        : `Deposit request prepared via ${requestDetails.channel || "manual workflow"}.`,
     });
+
+    return {
+      ...result,
+      checkoutUrl,
+      depositRequestContent,
+    };
   }
 
   function handleOwnerNextAction(actionKey) {

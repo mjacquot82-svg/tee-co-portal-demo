@@ -387,7 +387,7 @@ export default function AssignmentPanel({
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                   <QuickActionButton
                     actionKey="request_deposit"
-                    label="Request Deposit"
+                    label="Set Deposit Requested"
                     tone="warning"
                     disabled={canceled}
                     onClick={() => onDepositWorkflowChange?.("Deposit Requested")}
