@@ -212,6 +212,11 @@ function getAdminSections(staffUser) {
           navKey: "notificationTemplates",
         },
         {
+          to: "/admin/settings/order-export",
+          label: "Order Export",
+          navKey: "orderExport",
+        },
+        {
           to: "/admin/settings/notifications/activity",
           label: "Notification Activity",
           navKey: "notificationActivity",
@@ -269,6 +274,11 @@ function getAdminSections(staffUser) {
           label: "Notification Templates",
           navKey: "notificationTemplates",
         },
+        {
+          to: "/admin/settings/order-export",
+          label: "Order Export",
+          navKey: "orderExport",
+        },
       ],
     },
   ]
@@ -288,6 +298,7 @@ function getActiveSidebarLink(pathname, staffUser) {
   if (pathname.startsWith("/admin/staff-users")) return "staffUsers";
   if (pathname.startsWith("/admin/settings/notifications/activity")) return "notificationActivity";
   if (pathname.startsWith("/admin/settings/notifications")) return "notificationTemplates";
+  if (pathname.startsWith("/admin/settings/order-export")) return "orderExport";
   if (pathname === "/admin/records/canceled") return "canceledOrders";
   if (pathname === "/admin/quotes/archived") return "archivedQuotes";
   if (pathname === "/admin/quotes") return "quotes";

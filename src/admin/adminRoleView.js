@@ -136,6 +136,13 @@ const ADMIN_ROUTE_PERMISSION_RULES = [
   },
   {
     type: "exact",
+    value: "/admin/settings/order-export",
+    permissions: [PERMISSIONS.settingsManage],
+    classification: "protected-management",
+    ownerOnly: true,
+  },
+  {
+    type: "exact",
     value: "/admin/quotes/archived",
     permissions: [PERMISSIONS.quoteArchiveManage],
     classification: "protected-management",
@@ -229,6 +236,10 @@ export function canAccessProtectedManagementRoute(
 ) {
   const routeRule = getAdminRoutePermissionRule(pathname);
   if (!routeRule || routeRule.classification !== "protected-management") {
+    return false;
+  }
+
+  if (routeRule.ownerOnly && !isOwnerView(authenticatedUser)) {
     return false;
   }
 
@@ -342,6 +353,10 @@ export function canAccessOwnerWorkspace(pathname, staffUser = getActiveStaffUser
   if (!hasOperationalSession(staffUser)) return false;
   const routeRule = getAdminRoutePermissionRule(pathname);
   if (!routeRule) return false;
+
+  if (routeRule.ownerOnly && !isOwnerView(staffUser)) {
+    return false;
+  }
 
   return routeRule.permissions.some((permission) =>
     hasPermission(staffUser, permission)
