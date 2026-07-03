@@ -362,6 +362,10 @@ function normalizePaymentMethod(method) {
   return normalized || "manual_other";
 }
 
+function nullableUuidValue(value) {
+  return normalizeText(value) || null;
+}
+
 function normalizePaymentRequest(input = {}) {
   const timestamp = input.created_at || nowIso();
   const amountRequested = normalizeAmount(input.amount_requested ?? input.amount);
@@ -371,10 +375,10 @@ function normalizePaymentRequest(input = {}) {
     id: input.id || generateRecordId("payment-request"),
     request_number: input.request_number || `PR-${numberSuffix()}`,
     customer_id: normalizeCustomerId(input.customer_id),
-    order_id: input.order_id || "",
+    order_id: nullableUuidValue(input.order_id),
     order_number: normalizeText(input.order_number),
-    quote_id: input.quote_id || "",
-    sale_id: input.sale_id || "",
+    quote_id: nullableUuidValue(input.quote_id),
+    sale_id: nullableUuidValue(input.sale_id),
     request_type: normalizeText(input.request_type, "deposit"),
     status: normalizeText(input.status, "draft"),
     amount_requested: amountRequested,
@@ -389,7 +393,7 @@ function normalizePaymentRequest(input = {}) {
     provider_order_id: normalizeText(input.provider_order_id),
     provider_payment_link_id: normalizeText(input.provider_payment_link_id),
     metadata: input.metadata && typeof input.metadata === "object" ? input.metadata : {},
-    created_by_staff_user_id: input.created_by_staff_user_id || "",
+    created_by_staff_user_id: nullableUuidValue(input.created_by_staff_user_id),
     sent_at: input.sent_at || null,
     paid_at: input.paid_at || null,
     canceled_at: input.canceled_at || null,
@@ -406,10 +410,10 @@ function normalizePayment(input = {}) {
     id: input.id || generateRecordId("payment"),
     payment_number: input.payment_number || `PAY-${numberSuffix()}`,
     customer_id: normalizeCustomerId(input.customer_id),
-    order_id: input.order_id || "",
+    order_id: nullableUuidValue(input.order_id),
     order_number: normalizeText(input.order_number),
-    payment_request_id: input.payment_request_id || "",
-    sale_id: input.sale_id || "",
+    payment_request_id: nullableUuidValue(input.payment_request_id),
+    sale_id: nullableUuidValue(input.sale_id),
     payment_type: normalizeText(input.payment_type, "partial"),
     status: normalizeText(input.status, "captured"),
     amount,
@@ -422,7 +426,7 @@ function normalizePayment(input = {}) {
     provider_receipt_url: normalizeText(input.provider_receipt_url),
     provider_status: normalizeText(input.provider_status),
     idempotency_key: normalizeText(input.idempotency_key),
-    recorded_by_staff_user_id: input.recorded_by_staff_user_id || "",
+    recorded_by_staff_user_id: nullableUuidValue(input.recorded_by_staff_user_id),
     customer_confirmed_at: input.customer_confirmed_at || null,
     captured_at: input.captured_at || timestamp,
     settled_at: input.settled_at || null,
@@ -436,15 +440,15 @@ function normalizePayment(input = {}) {
 function normalizePaymentEvent(input = {}) {
   return {
     id: input.id || generateRecordId("payment-event"),
-    payment_id: input.payment_id || "",
-    payment_request_id: input.payment_request_id || "",
-    order_id: input.order_id || "",
+    payment_id: nullableUuidValue(input.payment_id),
+    payment_request_id: nullableUuidValue(input.payment_request_id),
+    order_id: nullableUuidValue(input.order_id),
     order_number: normalizeText(input.order_number),
     event_type: normalizeText(input.event_type, "payment_event"),
     event_source: normalizeText(input.event_source, "system"),
     summary: normalizeText(input.summary),
     payload: input.payload && typeof input.payload === "object" ? input.payload : {},
-    staff_user_id: input.staff_user_id || "",
+    staff_user_id: nullableUuidValue(input.staff_user_id),
     created_at: input.created_at || nowIso(),
   };
 }
