@@ -1049,7 +1049,9 @@ export default function QuoteDetail() {
   const readinessSummary = productionReadiness.ready
     ? "Ready for production"
     : `${productionReadiness.remainingRequirements} requirement${productionReadiness.remainingRequirements === 1 ? "" : "s"} remaining`;
-  const nextStep = archived
+  const nextStep = !order
+    ? "Loading request"
+    : archived
     ? "Archived from active workflow"
     : canceled
     ? "Workflow canceled"
