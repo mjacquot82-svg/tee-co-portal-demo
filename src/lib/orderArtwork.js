@@ -85,22 +85,23 @@ function buildFallbackArtworkFiles(fallbackNames = []) {
 }
 
 export function getOrderArtworkFiles(order = {}) {
-  const storedFiles = Array.isArray(order.artwork_files)
-    ? order.artwork_files.map((file) => normalizeArtworkFile(file)).filter(Boolean)
+  const safeOrder = order && typeof order === "object" ? order : {};
+  const storedFiles = Array.isArray(safeOrder.artwork_files)
+    ? safeOrder.artwork_files.map((file) => normalizeArtworkFile(file)).filter(Boolean)
     : [];
 
   if (storedFiles.length) {
     return storedFiles;
   }
 
-  const placementArtworkNames = Array.isArray(order.placements)
-    ? order.placements
+  const placementArtworkNames = Array.isArray(safeOrder.placements)
+    ? safeOrder.placements
         .map((placement) => placement?.artwork_name || placement?.customer_artwork_name)
         .filter(Boolean)
     : [];
 
   return buildFallbackArtworkFiles([
-    order.customer_artwork_name,
+    safeOrder.customer_artwork_name,
     ...placementArtworkNames,
   ]);
 }
