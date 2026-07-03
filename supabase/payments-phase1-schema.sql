@@ -1,7 +1,7 @@
 create table if not exists public.payment_requests (
   id uuid primary key default gen_random_uuid(),
   request_number text unique,
-  customer_id uuid references public.customers(id) on delete set null,
+  customer_id text references public.customers(id) on delete set null,
   order_id uuid references public.orders(id) on delete set null,
   order_number text default '',
   quote_id uuid,
@@ -31,7 +31,7 @@ create table if not exists public.payment_requests (
 create table if not exists public.payments (
   id uuid primary key default gen_random_uuid(),
   payment_number text unique,
-  customer_id uuid references public.customers(id) on delete set null,
+  customer_id text references public.customers(id) on delete set null,
   order_id uuid references public.orders(id) on delete set null,
   order_number text default '',
   payment_request_id uuid references public.payment_requests(id) on delete set null,
