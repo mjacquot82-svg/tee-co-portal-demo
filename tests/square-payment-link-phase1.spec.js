@@ -23,6 +23,7 @@ import {
   createAndSendDepositPaymentRequestForOrder,
 } from "../src/orders/depositRequests.js";
 import { isDepositRequirementSatisfied } from "../src/orders/workflowGating.js";
+import { requestQuoteDeposit } from "../src/admin/quoteDepositRequestAction.js";
 
 test.beforeEach(() => {
   resetStoredPaymentsForTests();
@@ -308,6 +309,84 @@ test("order financial summary deposit request creates a Square checkout payment 
   expect(findPaymentRequestForOrder(portalPayments.paymentRequests, "TC-SQ-SUMMARY", "deposit")).toMatchObject({
     provider_checkout_url: "https://square.link/u/summary-deposit",
   });
+});
+
+test("Quote Detail request deposit action creates Square checkout request before updating order status", async () => {
+  const updates = [];
+  const calls = [];
+
+  const result = await requestQuoteDeposit({
+    order: {
+      id: "quote-order-square-id",
+      order_number: "TC-SQ-QUOTE",
+      customer_id: "customer-square-quote",
+      customer_name: "Quote Square Customer",
+      balance_due: 99,
+      operational_visible: true,
+    },
+    requestDetails: {
+      amount: 1,
+      type: "fixed",
+      percentage: null,
+      message: "Please pay your deposit.",
+    },
+    activeStaffUser: {
+      id: "staff-square-quote",
+      name: "Owner",
+    },
+    createAndSendPaymentRequest: async (order, requestDetails, options) => {
+      calls.push({ order, requestDetails, options });
+      return {
+        paymentRequest: {
+          id: "payment-request-square-quote",
+          provider_checkout_url: "https://square.link/u/quote-deposit",
+        },
+      };
+    },
+    updateOrder: async (orderNumber, update) => {
+      updates.push({ orderNumber, update });
+      return { order_number: orderNumber, ...update };
+    },
+  });
+
+  expect(calls).toHaveLength(1);
+  expect(calls[0]).toMatchObject({
+    order: {
+      order_number: "TC-SQ-QUOTE",
+      deposit_amount: 1,
+      deposit: {
+        amount: 1,
+        type: "fixed",
+      },
+    },
+    requestDetails: {
+      body: "Please pay your deposit.",
+    },
+    options: {
+      staffUserId: "staff-square-quote",
+    },
+  });
+  expect(updates).toHaveLength(1);
+  expect(updates[0].orderNumber).toBe("TC-SQ-QUOTE");
+  expect(updates[0].update).toMatchObject({
+    request_status: "Awaiting Deposit",
+    deposit_required: true,
+    deposit_requirement: "required",
+    deposit_requirement_status: "Required",
+    deposit_workflow_status: "Deposit Requested",
+    deposit_amount: 1,
+    quote_status: "Awaiting Deposit",
+    activity_type: "deposit_request",
+    deposit: {
+      amount: 1,
+      type: "fixed",
+      status: "pending",
+      payment_request_id: "payment-request-square-quote",
+      provider_checkout_url: "https://square.link/u/quote-deposit",
+    },
+  });
+  expect(updates[0].update.deposit_request_message).toContain("Pay online: https://square.link/u/quote-deposit");
+  expect(result.checkoutUrl).toBe("https://square.link/u/quote-deposit");
 });
 
 test("legacy deposit message can include the Square checkout link", () => {

@@ -32,6 +32,7 @@ import {
   isStaffWorkspaceView,
 } from "./adminRoleView";
 import PaymentRequestForm from "./PaymentRequestForm";
+import { requestQuoteDeposit } from "./quoteDepositRequestAction";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -1240,39 +1241,10 @@ export default function QuoteDetail() {
   async function handleRequireDeposit(requestDetails = {}) {
     if (archived || canceled) return;
 
-    const now = new Date().toISOString();
-    const depositAmount = roundCurrency(requestDetails.amount);
-    const depositType = requestDetails.type === "fixed" ? "fixed" : "percentage";
-    const depositPercentage =
-      depositType === "percentage" ? Number(requestDetails.percentage || 0) : null;
-    const depositMessage =
-      String(requestDetails.message || "").trim() ||
-      `Please send your deposit by e-transfer to orders@teeandco.ca and include your order number ${order.order_number}.`;
-
-    if (depositAmount <= 0) return;
-
-    await updateStoredOrder(order.order_number, {
-      request_status: "Awaiting Deposit",
-      deposit_required: true,
-      deposit_requirement: "required",
-      deposit_requirement_status: "Required",
-      deposit_workflow_status: "Deposit Requested",
-      deposit_amount: depositAmount,
-      deposit_payment_instructions: depositMessage,
-      deposit_request_message: depositMessage,
-      deposit: {
-        ...(order.deposit || {}),
-        amount: depositAmount,
-        type: depositType,
-        percentage: depositPercentage,
-        status: "pending",
-        requested_at: now,
-        updated_at: now,
-        last_requested_message: depositMessage,
-      },
-      quote_status: "Awaiting Deposit",
-      activity_type: "deposit_request",
-      activity_note: `Deposit of ${money(depositAmount)} required by ${activeStaffUser?.name || "staff"}.`,
+    await requestQuoteDeposit({
+      order,
+      requestDetails,
+      activeStaffUser,
     });
   }
 
