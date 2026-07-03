@@ -98,7 +98,9 @@ function StatusPill({ children, tone = "default" }) {
 }
 
 function buildTimelineEvents(order = {}) {
-  return [...(order.activity_log || [])].sort((left, right) =>
+  const safeOrder = order && typeof order === "object" ? order : {};
+
+  return [...(safeOrder.activity_log || [])].sort((left, right) =>
     String(right?.created_at || "").localeCompare(String(left?.created_at || ""))
   );
 }
