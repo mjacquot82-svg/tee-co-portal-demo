@@ -21,6 +21,7 @@ import {
   getPaymentConfidenceLabel,
 } from "../services/paymentReconciliation";
 import { buildDepositWorkflowLabel } from "../orders/depositWorkflowDisplay";
+import { buildDepositRequestConfirmation } from "../admin/workflowCopy";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -203,7 +204,7 @@ export default function FinancialSummaryPanel({
       } else {
         throw new Error("Clipboard unavailable");
       }
-      setDepositRequestStatus("Deposit request copied to clipboard.");
+      setDepositRequestStatus(buildDepositRequestConfirmation(order));
     } catch (error) {
       setDepositRequestStatus(
         error instanceof Error
@@ -226,7 +227,7 @@ export default function FinancialSummaryPanel({
           checkoutUrl: result?.checkoutUrl,
         });
       }
-      setDepositRequestStatus("Email draft opened with the deposit request.");
+      setDepositRequestStatus(buildDepositRequestConfirmation(order));
     } catch (error) {
       setDepositRequestStatus(
         error instanceof Error
@@ -683,7 +684,7 @@ export default function FinancialSummaryPanel({
         </div>
 
         {!order.payment_history?.length ? (
-          <p style={{ margin: 0, color: "#94a3b8" }}>No payments recorded yet.</p>
+          <p style={{ margin: 0, color: "#94a3b8" }}>No payments have been received for this order yet.</p>
         ) : (
           <div style={{ display: "grid", gap: "10px" }}>
             {order.payment_history.map((payment) => (

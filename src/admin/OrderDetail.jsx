@@ -42,6 +42,10 @@ import {
 } from "../orders/depositRequests";
 import PaymentRequestForm from "./PaymentRequestForm";
 import { usePaymentsSnapshot } from "../lib/paymentsStore";
+import {
+  buildDepositRequestConfirmation,
+  buildWorkflowActionConfirmation,
+} from "./workflowCopy";
 
 const cardStyle = {
   background: "#ffffff",
@@ -247,9 +251,8 @@ export default function OrderDetail() {
     const updates = buildWorkflowActionUpdates(order, enrichedAction);
     if (!updates) return;
     setWorkflowFeedback({
-      tone: "info",
-      summary: `${enrichedAction.label} completed.`,
-      detail: "",
+      tone: "success",
+      ...buildWorkflowActionConfirmation(order, enrichedAction),
       nextActionLabel: "",
     });
     await saveOrderUpdates(updates);
@@ -431,9 +434,9 @@ export default function OrderDetail() {
         provider_checkout_url: checkoutUrl,
       },
       activity_type: "deposit_request",
-      activity_note: checkoutUrl
-        ? `Square deposit request prepared via ${requestDetails.channel || "financial summary"}.`
-        : `Deposit request prepared via ${requestDetails.channel || "manual workflow"}.`,
+      activity_note: buildDepositRequestConfirmation(normalizedOrder, {
+        amount: normalizedOrder.deposit_amount,
+      }),
     });
 
     return {

@@ -22,14 +22,15 @@ import {
   getAdminViewer,
   isStaffWorkspaceView,
 } from "./adminRoleView";
+import { buildQuoteEmptyState } from "./workflowCopy";
 
 const EXPANDED_QUOTES_STORAGE_KEY = "teeCoQuotesExpandedState";
 const QUOTE_QUEUE_FILTERS = [
   { key: "all", label: "All Requests" },
-  { key: "awaiting-approval", label: "Awaiting Approval" },
-  { key: "awaiting-artwork", label: "Artwork Follow-Up" },
+  { key: "awaiting-approval", label: "Awaiting Customer" },
+  { key: "awaiting-artwork", label: "Awaiting Artwork" },
   { key: "awaiting-deposit", label: "Awaiting Deposit" },
-  { key: "ready", label: "Ready For Production" },
+  { key: "ready", label: "Ready for Production" },
   { key: "blocked", label: "Blocked" },
 ];
 
@@ -598,7 +599,7 @@ export default function Quotes() {
         }}
       >
         <SummaryCard label="Open Requests" value={quotes.length} />
-        <SummaryCard label="Awaiting Approval" value={statusCounts["Awaiting Approval"] || 0} tone="warning" />
+        <SummaryCard label="Awaiting Customer" value={statusCounts["Awaiting Approval"] || 0} tone="warning" />
         <SummaryCard label="Awaiting Deposit" value={statusCounts["Awaiting Deposit"] || 0} tone="warning" />
         <SummaryCard label="Ready for Production" value={readyQuotes.length} tone="success" />
       </section>
@@ -1223,8 +1224,8 @@ export default function Quotes() {
               }}
             >
               {hasActiveFilters
-                ? "No requests match the current filters."
-                : "No active requests yet. New intake created from this area will stay in review until released for production. Archived requests are removed from this queue."}
+                ? buildQuoteEmptyState(activeQueueFilter)
+                : "No active requests yet. New order requests will appear here for review."}
             </div>
           )}
         </div>

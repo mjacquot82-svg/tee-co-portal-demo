@@ -40,6 +40,10 @@ import {
   createStaffNotification,
   STAFF_NOTIFICATION_TYPES,
 } from "../lib/staffNotificationsStore";
+import {
+  buildProductionEmptyState,
+  buildWorkflowActionConfirmation,
+} from "./workflowCopy";
 
 const ESCALATION_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
@@ -1137,9 +1141,8 @@ export default function Orders() {
     setActionFeedbackByOrder((current) => ({
       ...current,
       [order.order_number]: {
-        tone: "info",
-        summary: `${enrichedAction.label} completed.`,
-        detail: "",
+        tone: "success",
+        ...buildWorkflowActionConfirmation(order, enrichedAction),
         nextActionLabel: "",
       },
     }));
@@ -1257,7 +1260,7 @@ export default function Orders() {
             }}
           >
             <SummaryCard label="Active Work" value={workspaceSummary.activeOrders} />
-            <SummaryCard label="Ready For Production" value={workspaceSummary.readyForProductionOrders} />
+            <SummaryCard label="Ready for Production" value={workspaceSummary.readyForProductionOrders} />
             <SummaryCard label="Blocked" value={workspaceSummary.blockedOrders} tone="danger" />
             <SummaryCard label="Urgent" value={workspaceSummary.urgentOrders} tone="warning" />
             <SummaryCard label="On Hold" value={workspaceSummary.onHoldOrders} tone="danger" />
@@ -1448,7 +1451,7 @@ export default function Orders() {
                   textAlign: "center",
                 }}
               >
-                No production jobs match the current queue filters.
+                {buildProductionEmptyState(activeStatusFilter)}
               </div>
             )}
           </section>

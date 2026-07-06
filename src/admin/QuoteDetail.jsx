@@ -34,6 +34,7 @@ import {
 } from "./adminRoleView";
 import PaymentRequestForm from "./PaymentRequestForm";
 import { requestQuoteDeposit } from "./quoteDepositRequestAction";
+import { buildDepositRequestConfirmation } from "./workflowCopy";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -1090,6 +1091,16 @@ export default function QuoteDetail() {
     );
   }
 
+  function showWorkflowConfirmation(message) {
+    navigate(`/admin/quotes/${order.order_number}`, {
+      replace: true,
+      state: {
+        flashMessage: message,
+        flashTone: "success",
+      },
+    });
+  }
+
   async function handleAdvanceQuote() {
     if (archived || canceled) return;
     if (!canAdvanceQuoteStatus(order.quote_status)) return;
@@ -1100,6 +1111,7 @@ export default function QuoteDetail() {
       activity_type: "quote_status",
       activity_note: `Quote status changed to ${nextQuoteStatus}.`,
     });
+    showWorkflowConfirmation(`Quote Sent for ${order.order_number} · ${order.customer_name || "Customer"}`);
   }
 
   async function handleReleaseToProduction() {
@@ -1114,6 +1126,7 @@ export default function QuoteDetail() {
       activity_type: "release_to_production",
       activity_note: "Quote released into Production Orders.",
     });
+    showWorkflowConfirmation(`Order Moved to Production for ${order.order_number} · ${order.customer_name || "Customer"}`);
   }
 
   async function handleOwnerNextAction(actionKey) {
@@ -1210,6 +1223,7 @@ export default function QuoteDetail() {
       activity_type: "order_request_review",
       activity_note: `Order request approved by ${activeStaffUser?.name || "staff"}.`,
     });
+    showWorkflowConfirmation(`Quote Approved for ${order.order_number} · ${order.customer_name || "Customer"}`);
   }
 
   async function handleRequestArtwork() {
@@ -1224,6 +1238,7 @@ export default function QuoteDetail() {
       activity_type: "artwork_request",
       activity_note: `Artwork requested by ${activeStaffUser?.name || "staff"}.`,
     });
+    showWorkflowConfirmation(`Artwork Requested for ${order.order_number} · ${order.customer_name || "Customer"}`);
   }
 
   async function handleRequestChanges() {
@@ -1237,6 +1252,7 @@ export default function QuoteDetail() {
       activity_type: "order_request_changes",
       activity_note: `Changes requested by ${activeStaffUser?.name || "staff"}.`,
     });
+    showWorkflowConfirmation(`Customer Changes Requested for ${order.order_number} · ${order.customer_name || "Customer"}`);
   }
 
   async function handleRequireDeposit(requestDetails = {}) {
@@ -1247,6 +1263,7 @@ export default function QuoteDetail() {
       requestDetails,
       activeStaffUser,
     });
+    showWorkflowConfirmation(buildDepositRequestConfirmation(order, { amount: financials.deposit_amount }));
   }
 
   async function handleMarkDepositNotRequired() {

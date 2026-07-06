@@ -205,7 +205,7 @@ export default function StaffHomeWorkspace({ orders, staffUser }) {
           <SummaryCard label="In Production" value={summary.inProduction} tone="success" />
           <SummaryCard label="Due Soon" value={summary.dueSoon} tone="warning" />
           <SummaryCard label="Overdue" value={summary.overdue} tone="danger" />
-          <SummaryCard label="Ready For Pickup" value={summary.readyForPickup} />
+          <SummaryCard label="Ready for Pickup" value={summary.readyForPickup} />
         </div>
       </Section>
 
@@ -223,7 +223,7 @@ export default function StaffHomeWorkspace({ orders, staffUser }) {
           emptyMessage="No jobs assigned to you are currently marked in production."
         />
         <StaffAssignmentColumn
-          title="Ready For Pickup"
+          title="Ready for Pickup"
           description="Completed production work waiting for handoff."
           orders={groupedOrders.paused}
           emptyMessage="No jobs assigned to you are waiting for pickup."

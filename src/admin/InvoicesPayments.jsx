@@ -206,7 +206,7 @@ function RequestTable({ requests, customerById, orderByNumber }) {
 
 function OrderTable({ orders }) {
   if (!orders.length) {
-    return <EmptyState title="No matching orders." detail="The existing order financial projections remain the source for deposit and production gating compatibility." />;
+    return <EmptyState title="No orders need payment follow-up." detail="Orders that need deposit collection, balance collection, or payment review will appear here." />;
   }
 
   return (

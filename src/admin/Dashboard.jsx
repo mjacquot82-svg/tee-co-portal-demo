@@ -2,22 +2,17 @@ import { Link } from "react-router-dom";
 import { useStoredOrders } from "../lib/ordersStore";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 import { formatDateTime, formatShortDate } from "../lib/dateFormatting";
-import { buildOperationalMetrics } from "../operations/buildOperationalMetrics";
-import {
-  isActiveQuoteWorkflowOrder,
-  normalizeQuoteStatus,
-} from "../quotes/quoteWorkflow";
 import {
   isCanceledOperationalStatus,
   isCompletedOperationalStatus,
   normalizeOperationalStatus,
 } from "../orders/orderWorkflow";
+import { buildOwnerWorkflowQueues } from "../dashboard/ownerDashboardQueues";
 import {
   getAssignedOrdersForStaff,
   isStaffWorkspaceView,
   resolveOperationalRole,
 } from "./adminRoleView";
-import { buildProductionReadiness } from "../quotes/productionReadiness";
 import StaffHomeWorkspace from "./StaffHomeWorkspace";
 import AdminDiagnosticsPanel from "../components/AdminDiagnosticsPanel";
 import { useOperationalEvents } from "../lib/operationalEventsStore";
@@ -78,69 +73,6 @@ function SummaryCard({ label, value, tone = "default", detail }) {
   );
 }
 
-function buildWorkflowSnapshotCards(orders = []) {
-  const snapshot = {
-    newRequests: 0,
-    awaitingApproval: 0,
-    awaitingDeposit: 0,
-    artworkNeeded: 0,
-    readyForProduction: 0,
-    blockedJobs: 0,
-  };
-
-  orders.forEach((order) => {
-    const quoteStatus = normalizeQuoteStatus(order.quote_status);
-
-    if (isActiveQuoteWorkflowOrder(order)) {
-      const readiness = buildProductionReadiness(order, order);
-      const unmetChecks = readiness.checks.filter((check) => !check.passed);
-
-      if (quoteStatus === "Draft") {
-        snapshot.newRequests += 1;
-      }
-
-      if (quoteStatus === "Awaiting Approval" || unmetChecks.some((check) => check.label === "Staff Review")) {
-        snapshot.awaitingApproval += 1;
-      }
-
-      if (quoteStatus === "Awaiting Deposit" || unmetChecks.some((check) => check.label === "Deposit")) {
-        snapshot.awaitingDeposit += 1;
-      }
-
-      if (quoteStatus === "Awaiting Artwork Approval" || unmetChecks.some((check) => check.label === "Artwork")) {
-        snapshot.artworkNeeded += 1;
-      }
-
-      if (readiness.ready && quoteStatus === "Ready For Production") {
-        snapshot.readyForProduction += 1;
-      }
-
-      return;
-    }
-
-    const operationalStatus = normalizeOperationalStatus(order.status);
-    const isBlockedByAssignment = order.needs_assignment || !order.assigned_to_staff_name;
-    const isBlockedAtIntake = operationalStatus === "New";
-
-    if (
-      !isCompletedOperationalStatus(operationalStatus) &&
-      !isCanceledOperationalStatus(operationalStatus) &&
-      (isBlockedByAssignment || isBlockedAtIntake)
-    ) {
-      snapshot.blockedJobs += 1;
-    }
-  });
-
-  return [
-    { label: "New Requests", value: snapshot.newRequests, tone: "default" },
-    { label: "Awaiting Customer Approval", value: snapshot.awaitingApproval, tone: "warning" },
-    { label: "Awaiting Deposit", value: snapshot.awaitingDeposit, tone: "warning" },
-    { label: "Artwork Needed", value: snapshot.artworkNeeded, tone: "warning" },
-    { label: "Ready for Production", value: snapshot.readyForProduction, tone: "success" },
-    { label: "Needs Assignment", value: snapshot.blockedJobs, tone: "default" },
-  ];
-}
-
 function WorkspaceCountLink({ label, count, description, to, tone = "default" }) {
   const tones = {
     default: { background: "#f8fafc", border: "#e2e8f0", count: "#0f172a", label: "#0f172a" },
@@ -178,71 +110,11 @@ function WorkspaceCountLink({ label, count, description, to, tone = "default" })
         <strong style={{ fontSize: "28px", lineHeight: 1, color: palette.count }}>{count}</strong>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
-        <span style={{ color: "#475569", fontWeight: 700, fontSize: "12px" }}>Open dedicated workspace</span>
+        <span style={{ color: "#475569", fontWeight: 700, fontSize: "12px" }}>Open filtered list</span>
         <span style={{ color: "#64748b", fontWeight: 800, fontSize: "12px", whiteSpace: "nowrap" }}>View</span>
       </div>
     </Link>
   );
-}
-
-function buildOwnerAttentionItems(orders = []) {
-  const snapshot = buildWorkflowSnapshotCards(orders);
-  const lookup = Object.fromEntries(snapshot.map((card) => [card.label, card.value]));
-  const metrics = buildOperationalMetrics(orders);
-  const activeOrders = orders.filter((order) => {
-    const status = normalizeOperationalStatus(order.status);
-    return !isCompletedOperationalStatus(status) && !isCanceledOperationalStatus(status);
-  });
-  const readyForPickup = activeOrders.filter(
-    (order) => normalizeOperationalStatus(order.status) === "Ready For Pickup"
-  ).length;
-
-  return [
-    {
-      label: "Overdue Production",
-      count: metrics.overdue,
-      description: "Jobs past due date need immediate review in Production.",
-      to: "/admin/orders",
-      tone: "danger",
-    },
-    {
-      label: "New Order Requests",
-      count: lookup["New Requests"] || 0,
-      description: "Customer-submitted order requests are waiting for staff review.",
-      to: "/admin/quotes",
-      tone: "default",
-    },
-    {
-      label: "Awaiting Customer Approval",
-      count: lookup["Awaiting Customer Approval"] || 0,
-      description: "Order requests still waiting on customer approval before production can move.",
-      to: "/admin/quotes?queue=awaiting-approval",
-      tone: "warning",
-    },
-    {
-      label: "Awaiting Deposit",
-      count: lookup["Awaiting Deposit"] || 0,
-      description: "Quote work is blocked until deposit collection is complete.",
-      to: "/admin/quotes?queue=awaiting-deposit",
-      tone: "warning",
-    },
-    {
-      label: "Needs Assignment",
-      count: metrics.needsAssignment,
-      description: "Operational work still needs dispatch before the floor can absorb it.",
-      to: "/admin/assignments",
-      tone: "default",
-    },
-    {
-      label: "Ready For Pickup",
-      count: readyForPickup,
-      description: "Completed work is waiting for customer handoff at the counter.",
-      to: "/admin/orders?status=ready-for-pickup",
-      tone: "success",
-    },
-  ]
-    .filter((item) => item.count > 0)
-    .slice(0, 3);
 }
 
 function UpcomingOrderCard({ order }) {
@@ -287,9 +159,9 @@ function EmptyAttentionState() {
         background: "#f8fafc",
       }}
     >
-      <p style={{ margin: 0, fontWeight: 800, color: "#0f172a" }}>No immediate owner escalations.</p>
+      <p style={{ margin: 0, fontWeight: 800, color: "#0f172a" }}>No workflow queues need attention.</p>
       <p style={{ margin: "6px 0 0", color: "#64748b", lineHeight: 1.5, fontSize: "13px" }}>
-        The highest-priority queues are clear right now. Use the workspace links to move into quotes, production, counter, or financial detail only when needed.
+        The core daily workflow queues are clear right now. Use the filtered links when you need to review a specific stage.
       </p>
     </div>
   );
@@ -443,7 +315,8 @@ function buildUpcomingOperationalOrders(orders = []) {
 }
 
 function OwnerDashboard({ orders, operationalEvents }) {
-  const attentionItems = buildOwnerAttentionItems(orders);
+  const workflowQueues = buildOwnerWorkflowQueues(orders);
+  const hasActionableQueues = workflowQueues.some((queue) => queue.count > 0);
   const upcomingOrders = buildUpcomingOperationalOrders(orders);
   const recentOperationalEvents = operationalEvents.slice(0, 6);
 
@@ -455,7 +328,7 @@ function OwnerDashboard({ orders, operationalEvents }) {
       <div className="owner-dashboard-hero" style={{ marginBottom: "14px" }}>
         <p style={{ margin: 0, color: "#78716c", fontSize: "12px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase" }}>Owner Operations</p>
         <h1 style={{ margin: "4px 0 6px", fontSize: "32px", lineHeight: 1.02 }}>Dashboard</h1>
-        <p style={{ margin: 0, color: "#64748b", maxWidth: "680px", lineHeight: 1.45, fontSize: "14px" }}>Urgent owner attention, recent operational activity, and direct paths into the workspace that owns the work.</p>
+        <p style={{ margin: 0, color: "#64748b", maxWidth: "680px", lineHeight: 1.45, fontSize: "14px" }}>Start with the work that can move today, then open the filtered list that owns the next action.</p>
       </div>
 
       <div
@@ -470,25 +343,26 @@ function OwnerDashboard({ orders, operationalEvents }) {
         <div className="owner-dashboard-primary-column" style={{ display: "grid", gap: "14px", alignContent: "start" }}>
           <Section
             className="owner-dashboard-section-primary"
-            title="Owner Attention"
-            description="Only the highest-priority items stay here. Detailed queue management remains in Order Requests, Production, Front Counter, Assign Work, and Payments."
+            title="Today's Workflow"
+            description="The daily queues stay visible here so you can move from request review through pickup without hunting through sections."
           >
-            {attentionItems.length ? (
-              <div className="owner-dashboard-attention-grid" style={{ display: "grid", gap: "12px" }}>
-                {attentionItems.map((queue) => (
-                  <WorkspaceCountLink
-                    key={queue.label}
-                    label={queue.label}
-                    count={queue.count}
-                    description={queue.description}
-                    to={queue.to}
-                    tone={queue.tone}
-                  />
-                ))}
+            <div className="owner-dashboard-attention-grid" style={{ display: "grid", gap: "12px" }}>
+              {workflowQueues.map((queue) => (
+                <WorkspaceCountLink
+                  key={queue.key}
+                  label={queue.label}
+                  count={queue.count}
+                  description={queue.description}
+                  to={queue.to}
+                  tone={queue.tone}
+                />
+              ))}
+            </div>
+            {!hasActionableQueues ? (
+              <div style={{ marginTop: "12px" }}>
+                <EmptyAttentionState />
               </div>
-            ) : (
-              <EmptyAttentionState />
-            )}
+            ) : null}
           </Section>
 
           <Section
