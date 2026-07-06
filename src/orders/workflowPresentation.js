@@ -17,6 +17,10 @@ function buildBadge(label, tone) {
   return { label, tone };
 }
 
+function normalizeLower(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
 function buildBlockerDetail(check = {}) {
   if (check.key === "artworkApproval") {
     if (check.statusLabel === "Needs Revision") {
@@ -264,6 +268,72 @@ export function buildWorkflowStatusBadges(order = {}, options = {}) {
   }
 
   return badges;
+}
+
+export function buildWorkflowProgressStages(order = {}) {
+  const workflowState = deriveOrderWorkflowState(order);
+  const paymentState = workflowState.paymentState || deriveOrderPaymentState(order);
+  const gating = buildProductionGatingState(order, { targetStatus: "Ready For Production" });
+  const status = normalizeOperationalStatus(order.status);
+  const quoteStatus = normalizeLower(order.quote_status || order.approval_status);
+  const depositStatus = normalizeLower(order.deposit_workflow_status || order.deposit?.status);
+  const depositRequestExists =
+    paymentState.paymentRequests?.some((request) => normalizeLower(request.request_type || request.payment_type) === "deposit") ||
+    depositStatus.includes("requested") ||
+    depositStatus.includes("received") ||
+    Boolean(order.deposit?.payment_request_id || order.deposit?.requested_at);
+  const quoteApproved =
+    ["approved", "awaiting deposit", "ready for production"].includes(quoteStatus) ||
+    paymentState.depositSatisfied ||
+    status !== "New";
+  const artworkCheck = gating.checks.find((check) => check.key === "artworkApproval");
+  const productionStarted = workflowState.workflowState === ORDER_WORKFLOW_STATES.IN_PRODUCTION ||
+    workflowState.workflowState === ORDER_WORKFLOW_STATES.READY_FOR_PICKUP ||
+    workflowState.workflowState === ORDER_WORKFLOW_STATES.COMPLETED;
+  const readyForPickup = workflowState.workflowState === ORDER_WORKFLOW_STATES.READY_FOR_PICKUP ||
+    workflowState.workflowState === ORDER_WORKFLOW_STATES.COMPLETED;
+
+  const stages = [
+    {
+      key: "quote-approved",
+      label: "Quote Approved",
+      complete: quoteApproved,
+    },
+    {
+      key: "deposit-requested",
+      label: "Deposit Requested",
+      complete: Boolean(depositRequestExists || paymentState.depositSatisfied || !paymentState.depositRequired),
+    },
+    {
+      key: "deposit-received",
+      label: "Deposit Received",
+      complete: Boolean(paymentState.depositSatisfied),
+    },
+    {
+      key: "artwork-review",
+      label: "Artwork Review",
+      complete: Boolean(artworkCheck?.satisfied),
+    },
+    {
+      key: "production",
+      label: "Production",
+      complete: workflowState.workflowState === ORDER_WORKFLOW_STATES.READY_FOR_PICKUP ||
+        workflowState.workflowState === ORDER_WORKFLOW_STATES.COMPLETED,
+      active: productionStarted && !readyForPickup,
+    },
+    {
+      key: "ready-for-pickup",
+      label: "Ready for Pickup",
+      complete: workflowState.workflowState === ORDER_WORKFLOW_STATES.COMPLETED,
+      active: workflowState.workflowState === ORDER_WORKFLOW_STATES.READY_FOR_PICKUP,
+    },
+  ];
+  const firstOpenIndex = stages.findIndex((stage) => !stage.complete && !stage.active);
+
+  return stages.map((stage, index) => ({
+    ...stage,
+    state: stage.complete ? "complete" : stage.active || index === firstOpenIndex ? "active" : "pending",
+  }));
 }
 
 export function buildWorkflowBlockDetails(order = {}, action = null) {

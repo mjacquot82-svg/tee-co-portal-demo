@@ -11,6 +11,7 @@ import {
   usePaymentsSnapshot,
 } from "../lib/paymentsStore";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
+import { buildDepositWorkflowLabel } from "../orders/depositWorkflowDisplay";
 import {
   deriveOwnerOrderNextAction,
   deriveOwnerPaymentRequestNextAction,
@@ -245,7 +246,7 @@ function OrderTable({ orders }) {
                 </div>
               </td>
               <td style={{ padding: "14px 10px", whiteSpace: "nowrap" }}>
-                {money(order.deposit_applied)} / {money(order.deposit_amount)}
+                {buildDepositWorkflowLabel(order)}
               </td>
               <td style={{ padding: "14px 10px", whiteSpace: "nowrap" }}>{money(order.total_paid)}</td>
               <td style={{ padding: "14px 10px", whiteSpace: "nowrap", color: order.balance_due > 0 ? "#991b1b" : "#166534", fontWeight: 800 }}>

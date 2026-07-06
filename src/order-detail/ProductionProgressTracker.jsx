@@ -4,6 +4,7 @@ import {
   OPERATIONAL_STATUS_PROGRESS_STAGES,
 } from "../orders/orderWorkflow";
 import WorkflowBadge from "../components/WorkflowBadge";
+import WorkflowProgressSteps from "../components/WorkflowProgressSteps";
 import {
   buildProductionReadinessSummary,
   buildWorkflowBlockDetails,
@@ -29,6 +30,10 @@ export default function ProductionProgressTracker({ order }) {
       }}
     >
       <h2 style={{ marginTop: 0 }}>Production Workflow</h2>
+
+      <div style={{ marginBottom: "12px" }}>
+        <WorkflowProgressSteps order={order} />
+      </div>
 
       {workflowBadges.length ? (
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>

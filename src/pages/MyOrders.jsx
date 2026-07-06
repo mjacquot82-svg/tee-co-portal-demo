@@ -15,6 +15,7 @@ import {
   isArtworkImage,
 } from "../lib/orderArtwork";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
+import { buildDepositWorkflowLabel } from "../orders/depositWorkflowDisplay";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -422,7 +423,7 @@ function CustomerOrderCard({ order, expanded, onToggle }) {
               >
                 <DetailTile label="Order total" value={money(order.total_amount)} />
                 <DetailTile label="Paid to date" value={money(order.total_paid)} />
-                <DetailTile label="Deposit requested" value={money(order.deposit_amount)} />
+                <DetailTile label="Deposit" value={buildDepositWorkflowLabel(order)} />
                 <DetailTile
                   label={Number(order.balance_due || 0) > 0 ? "Balance remaining" : "Balance"}
                   value={money(order.balance_due)}

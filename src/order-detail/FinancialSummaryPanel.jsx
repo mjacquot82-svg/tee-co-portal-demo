@@ -20,6 +20,7 @@ import {
   getInsightTone,
   getPaymentConfidenceLabel,
 } from "../services/paymentReconciliation";
+import { buildDepositWorkflowLabel } from "../orders/depositWorkflowDisplay";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -413,7 +414,7 @@ export default function FinancialSummaryPanel({
 
         <div style={{ display: "grid", gap: "4px" }}>
           <span style={rowLabelStyle}>Deposit</span>
-          <span style={rowValueStyle}>{money(order.deposit_amount)}</span>
+          <span style={rowValueStyle}>{buildDepositWorkflowLabel(order)}</span>
         </div>
 
         <div style={{ display: "grid", gap: "4px" }}>

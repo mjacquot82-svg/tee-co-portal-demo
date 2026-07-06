@@ -26,6 +26,7 @@ import {
   buildProductionReadiness,
 } from "../quotes/productionReadiness";
 import { deriveOwnerQuoteNextAction } from "../orders/ownerWorkflowActions";
+import { buildDepositWorkflowLabel } from "../orders/depositWorkflowDisplay";
 import {
   canManageArchivedQuotes,
   getAdminViewer,
@@ -961,7 +962,7 @@ function IntakeReviewScreen({
                   <div>
                     <p style={{ margin: "0 0 8px", color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Full Payment State</p>
                     <div style={{ display: "grid", gap: "10px" }}>
-                      <DetailItem label="Deposit Target" value={money(financials.deposit_amount)} />
+                      <DetailItem label="Deposit" value={buildDepositWorkflowLabel(order)} />
                       <DetailItem label="Paid To Date" value={money(financials.total_paid)} />
                       <DetailItem label="Balance Owing" value={money(financials.balance_due)} />
                       <DetailItem label="Collection State" value={financials.payment_collection_state} />
@@ -2192,7 +2193,7 @@ export default function QuoteDetail() {
             }}
           >
             <DetailItem label="Total" value={money(financials?.total_amount)} />
-            <DetailItem label="Deposit Target" value={money(financials?.deposit_amount)} />
+            <DetailItem label="Deposit" value={buildDepositWorkflowLabel(order)} />
             <DetailItem label="Deposit Applied" value={money(financials?.deposit_applied)} />
             <DetailItem label="Paid To Date" value={money(financials?.total_paid)} />
             <DetailItem label="Balance Owing" value={money(financials?.balance_due)} />

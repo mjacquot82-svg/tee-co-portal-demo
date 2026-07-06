@@ -67,7 +67,6 @@ export default function AssignmentPanel({
   onSelfAssign,
   productionGating = null,
   onArtworkApprovalChange,
-  onDepositWorkflowChange,
   onGatingOverride,
   onForceMoveToProduction,
   workflowFeedback = null,
@@ -382,26 +381,6 @@ export default function AssignmentPanel({
                 </div>
               </div>
 
-              <div style={{ display: "grid", gap: "6px" }}>
-                <strong style={{ fontSize: "13px" }}>Deposit Review</strong>
-                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                  <QuickActionButton
-                    actionKey="request_deposit"
-                    label="Set Deposit Requested"
-                    tone="warning"
-                    disabled={canceled}
-                    onClick={() => onDepositWorkflowChange?.("Deposit Requested")}
-                  />
-                  <QuickActionButton
-                    actionKey="mark_deposit_received"
-                    label="Mark Deposit Received"
-                    tone="success"
-                    disabled={canceled}
-                    onClick={() => onDepositWorkflowChange?.("Deposit Received")}
-                  />
-                </div>
-              </div>
-
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
               <label style={{ display: "grid", gap: "6px", fontSize: "13px", fontWeight: 700 }}>
                 Artwork Approval
@@ -419,21 +398,6 @@ export default function AssignmentPanel({
                 </select>
               </label>
 
-              <label style={{ display: "grid", gap: "6px", fontSize: "13px", fontWeight: 700 }}>
-                Deposit Status
-                <select
-                  data-testid="deposit-workflow-select"
-                  value={order.deposit_workflow_status || "Awaiting Deposit"}
-                  onChange={(event) => onDepositWorkflowChange?.(event.target.value)}
-                  disabled={canceled}
-                  style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "10px" }}
-                >
-                  <option value="Deposit Not Required">Deposit Not Required</option>
-                  <option value="Deposit Requested">Deposit Requested</option>
-                  <option value="Awaiting Deposit">Awaiting Deposit</option>
-                  <option value="Deposit Received">Deposit Received</option>
-                </select>
-              </label>
             </div>
             </div>
 

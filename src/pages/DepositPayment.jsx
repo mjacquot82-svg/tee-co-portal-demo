@@ -41,7 +41,7 @@ export default function DepositPayment() {
           }}
         >
           <p style={{ margin: 0 }}>Order: TC-1002</p>
-          <p style={{ margin: "6px 0 0 0" }}>Deposit Amount: $120</p>
+          <p style={{ margin: "6px 0 0 0" }}>$120.00 Requested</p>
         </div>
 
         <button

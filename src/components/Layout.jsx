@@ -2,7 +2,6 @@ import { Component, useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useStoredOrders } from "../lib/ordersStore";
 import { formatShortDate } from "../lib/dateFormatting";
-import { isActiveOperationalStatus } from "../orders/orderWorkflow";
 import {
   canAccessOperationalWorkspace,
   canAccessProtectedManagementRoute,
@@ -33,6 +32,14 @@ import { buildStaffAssignmentAttentionItems } from "../staff/buildStaffAssignmen
 import { useUnreadStaffNotificationCount, ensureStaffNotificationsHydrated } from "../lib/staffNotificationsStore";
 import { ensureNotificationTemplatesHydrated } from "../lib/notificationTemplatesStore";
 import { ensureNotificationActivityHydrated } from "../lib/notificationDeliveryService";
+import {
+  listPaymentEvents,
+  listPaymentRequests,
+  listPayments,
+  usePaymentsSnapshot,
+} from "../lib/paymentsStore";
+import { listPaymentReconciliationReviews } from "../lib/paymentReconciliationStore";
+import { buildSidebarAttentionCounts } from "../layout/sidebarAttentionCounts";
 import {
   ensureOperationalAuthInitialized,
   getOperationalAuthUser,
@@ -133,27 +140,6 @@ function InstagramIcon() {
   );
 }
 
-function getSidebarCounts({ operationalOrders = [], assignedOrders = [], staffWorkspace = false } = {}) {
-  const activeOperationalOrders = operationalOrders.filter(
-    (order) =>
-      order.operational_visible !== false && isActiveOperationalStatus(order.status)
-  );
-  const activeAssignedOrders = assignedOrders.filter(
-    (order) =>
-      order.operational_visible !== false && isActiveOperationalStatus(order.status)
-  );
-
-  return {
-    productionOrders: activeOperationalOrders.length,
-    assignments: staffWorkspace
-      ? activeAssignedOrders.length
-      : activeOperationalOrders.filter(
-          (order) =>
-            order.needs_assignment || !order.assigned_to_staff_id
-        ).length,
-  };
-}
-
 function getAdminSections(staffUser) {
   if (!isAdminWorkspaceView(staffUser)) {
     return [
@@ -167,7 +153,12 @@ function getAdminSections(staffUser) {
             badgeKey: "assignments",
           },
           { to: "/admin/sales/new", label: "Front Counter", navKey: "frontCounter" },
-          { to: "/admin/quotes", label: "Order Requests", navKey: "quotes" },
+          {
+            to: "/admin/quotes",
+            label: "Order Requests",
+            navKey: "quotes",
+            badgeKey: "orderRequests",
+          },
           {
             to: "/admin/orders",
             label: "Production",
@@ -227,7 +218,12 @@ function getAdminSections(staffUser) {
       title: "Workspaces",
       links: [
         { to: "/admin/sales/new", label: "Front Counter", navKey: "frontCounter" },
-        { to: "/admin/quotes", label: "Order Requests", navKey: "quotes" },
+        {
+          to: "/admin/quotes",
+          label: "Order Requests",
+          navKey: "quotes",
+          badgeKey: "orderRequests",
+        },
         {
           to: "/admin/orders",
           label: "Production",
@@ -244,6 +240,7 @@ function getAdminSections(staffUser) {
           to: "/admin/financial",
           label: "Payments",
           navKey: "financial",
+          badgeKey: "payments",
         },
       ],
     },
@@ -524,6 +521,7 @@ function AdminSidebar({ pathname, staffUser }) {
   const orders = useStoredOrders();
   const assignmentAttentionState = useStaffAssignmentAttention();
   const unreadNotificationCount = useUnreadStaffNotificationCount();
+  const paymentsSnapshot = usePaymentsSnapshot();
   const staffWorkspace = isStaffWorkspaceView(staffUser);
   const operationalOrders = isAdminWorkspaceView(staffUser)
     ? orders
@@ -531,10 +529,23 @@ function AdminSidebar({ pathname, staffUser }) {
   const assignedOrders = isAdminWorkspaceView(staffUser)
     ? orders
     : getAssignedOrdersForStaff(orders, staffUser);
+  const paymentRequests = paymentsSnapshot.paymentRequests.length
+    ? paymentsSnapshot.paymentRequests
+    : listPaymentRequests();
+  const payments = paymentsSnapshot.payments.length
+    ? paymentsSnapshot.payments
+    : listPayments();
+  const paymentEvents = paymentsSnapshot.paymentEvents.length
+    ? paymentsSnapshot.paymentEvents
+    : listPaymentEvents();
   const badgeCounts = {
-    ...getSidebarCounts({
+    ...buildSidebarAttentionCounts({
       operationalOrders,
       assignedOrders,
+      paymentRequests,
+      payments,
+      paymentEvents,
+      reconciliationReviews: listPaymentReconciliationReviews(),
       staffWorkspace,
     }),
     staffNotifications: unreadNotificationCount,

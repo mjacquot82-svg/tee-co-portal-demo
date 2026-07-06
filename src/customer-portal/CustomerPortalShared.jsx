@@ -3,10 +3,12 @@ import { Link } from "react-router-dom";
 import { formatShortDate } from "../lib/dateFormatting";
 import { formatCurrency } from "./useCustomerPortalData";
 import WorkflowBadge from "../components/WorkflowBadge";
+import WorkflowProgressSteps from "../components/WorkflowProgressSteps";
 import {
   buildCustomerWorkflowMessage,
   buildWorkflowStatusBadges,
 } from "../orders/workflowPresentation";
+import { buildDepositWorkflowLabel } from "../orders/depositWorkflowDisplay";
 import {
   buildDepositContactHref,
   buildDepositPaymentRoute,
@@ -412,11 +414,7 @@ function resolveArtworkApprovalLabel(record = {}) {
 }
 
 export function resolveDepositWorkflowLabel(record = {}) {
-  if (isDepositActionRequired(record)) {
-    return "Action Needed: Deposit Required";
-  }
-
-  return record.deposit_workflow_status || (record.deposit_required ? "Awaiting Deposit" : "Deposit Not Required");
+  return buildDepositWorkflowLabel(record);
 }
 
 function PortalRecordActionNeeded({ record }) {
@@ -762,6 +760,8 @@ export function RecordList({ records = [], type = "orders" }) {
                 </p>
               </div>
             </div>
+
+            {type === "orders" ? <WorkflowProgressSteps order={record} compact /> : null}
 
             <div
               style={{

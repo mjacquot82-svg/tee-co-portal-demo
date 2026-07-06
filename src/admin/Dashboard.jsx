@@ -132,12 +132,12 @@ function buildWorkflowSnapshotCards(orders = []) {
   });
 
   return [
-    { label: "Pending Staff Review", value: snapshot.newRequests, tone: "default" },
-    { label: "Awaiting Approval", value: snapshot.awaitingApproval, tone: "warning" },
+    { label: "New Requests", value: snapshot.newRequests, tone: "default" },
+    { label: "Awaiting Customer Approval", value: snapshot.awaitingApproval, tone: "warning" },
     { label: "Awaiting Deposit", value: snapshot.awaitingDeposit, tone: "warning" },
     { label: "Artwork Needed", value: snapshot.artworkNeeded, tone: "warning" },
-    { label: "Ready For Production", value: snapshot.readyForProduction, tone: "success" },
-    { label: "Blocked Jobs", value: snapshot.blockedJobs, tone: "default" },
+    { label: "Ready for Production", value: snapshot.readyForProduction, tone: "success" },
+    { label: "Needs Assignment", value: snapshot.blockedJobs, tone: "default" },
   ];
 }
 
@@ -207,14 +207,14 @@ function buildOwnerAttentionItems(orders = []) {
     },
     {
       label: "New Order Requests",
-      count: lookup["Pending Staff Review"] || 0,
+      count: lookup["New Requests"] || 0,
       description: "Customer-submitted order requests are waiting for staff review.",
       to: "/admin/quotes",
       tone: "default",
     },
     {
-      label: "Awaiting Approval",
-      count: lookup["Awaiting Approval"] || 0,
+      label: "Awaiting Customer Approval",
+      count: lookup["Awaiting Customer Approval"] || 0,
       description: "Order requests still waiting on customer approval before production can move.",
       to: "/admin/quotes?queue=awaiting-approval",
       tone: "warning",

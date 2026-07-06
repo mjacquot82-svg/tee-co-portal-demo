@@ -12,6 +12,7 @@ import { formatShortDate } from "../lib/dateFormatting";
 import { EmptyState, PortalPage, SectionCard, DetailPair } from "./CustomerPortalShared";
 import { findPaymentRequestForOrder } from "./customerPortalPayments";
 import { formatCurrency, useCustomerPortalData } from "./useCustomerPortalData";
+import { buildDepositWorkflowLabel } from "../orders/depositWorkflowDisplay";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -152,6 +153,7 @@ export default function CustomerPortalDeposit() {
   const hasDepositAmount = depositAmount > 0;
   const remainingBalance = resolveRemainingBalanceAfterDeposit(record);
   const depositStatus = resolveDepositStatus(record);
+  const depositDisplay = buildDepositWorkflowLabel(record);
   const depositMessage = resolveDepositMessage(record);
   const confirmationStatus = resolveConfirmationStatus(record);
   const hasCustomerConfirmation = confirmationStatus.toLowerCase() === "sent" || submitted;
@@ -214,8 +216,8 @@ export default function CustomerPortalDeposit() {
         >
           <DetailPair label="Order Number" value={record.order_number} />
           <DetailPair
-            label="Deposit Amount"
-            value={hasDepositAmount ? formatCurrency(depositAmount) : "Deposit amount pending from Tee & Co."}
+            label="Deposit"
+            value={depositDisplay}
           />
           <DetailPair label="Deposit Status" value={depositStatus} />
           <DetailPair

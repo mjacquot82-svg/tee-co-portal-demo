@@ -5,10 +5,7 @@ import {
   getOrderArtworkFiles,
   isArtworkImage,
 } from "../lib/orderArtwork";
-
-function money(value) {
-  return `$${Number(value || 0).toFixed(2)}`;
-}
+import { buildDepositWorkflowLabel } from "../orders/depositWorkflowDisplay";
 
 function formatPlacements(order) {
   if (Array.isArray(order.placements) && order.placements.length) {
@@ -110,10 +107,7 @@ export default function ProductionInstructionsPanel({ order = {} }) {
 
         <div style={{ display: "grid", gap: "2px" }}>
           <span style={rowLabelStyle}>Deposit</span>
-          <span style={rowValueStyle}>
-            {order.deposit_workflow_status || order.deposit?.status || "not set"}
-            {order.deposit_amount ? ` • ${money(order.deposit_amount)}` : order.deposit?.amount ? ` • ${money(order.deposit.amount)}` : ""}
-          </span>
+          <span style={rowValueStyle}>{buildDepositWorkflowLabel(order)}</span>
         </div>
 
         <div style={{ display: "grid", gap: "2px" }}>

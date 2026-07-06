@@ -309,61 +309,6 @@ export default function OrderDetail() {
     setWorkflowFeedback(null);
   }
 
-  async function handleDepositWorkflowChange(nextStatus) {
-    if (isCanceledOperationalStatus(order.status)) return;
-
-    const normalizedStatus = String(nextStatus || "").trim();
-    const now = new Date().toISOString();
-    const nextDeposit = {
-      ...(order.deposit || {}),
-      amount: normalizedOrder.deposit_amount,
-      updated_at: now,
-      status:
-        normalizedStatus === "Deposit Not Required"
-          ? "not_required"
-          : normalizedStatus === "Deposit Requested"
-          ? "pending"
-          : normalizedStatus === "Deposit Received"
-          ? "paid"
-          : "awaiting",
-      requested_at:
-        normalizedStatus === "Deposit Requested"
-          ? order.deposit?.requested_at || now
-          : order.deposit?.requested_at || null,
-      paid_at:
-        normalizedStatus === "Deposit Received" ? order.deposit?.paid_at || now : order.deposit?.paid_at || null,
-    };
-
-    await saveOrderUpdates({
-      deposit_workflow_status: normalizedStatus,
-      deposit_required: normalizedStatus !== "Deposit Not Required",
-      deposit_requirement:
-        normalizedStatus === "Deposit Not Required" ? "not_required" : "required",
-      deposit_requirement_status:
-        normalizedStatus === "Deposit Not Required" ? "Not Required" : "Required",
-      quote_status:
-        order.operational_visible === false
-          ? normalizedStatus === "Deposit Requested" || normalizedStatus === "Awaiting Deposit"
-            ? "Awaiting Deposit"
-            : order.artwork_approval_status === "Approved" ||
-              order.artwork_approval_status === "Not Required"
-            ? "Approved"
-            : order.quote_status
-          : order.quote_status,
-      deposit: nextDeposit,
-      activity_type: "deposit_workflow",
-      activity_note:
-        normalizedStatus === "Deposit Requested"
-          ? "Deposit requested."
-          : normalizedStatus === "Deposit Received"
-          ? "Deposit received."
-          : normalizedStatus === "Deposit Not Required"
-          ? "Deposit requirement cleared."
-          : "Awaiting deposit.",
-    });
-    setWorkflowFeedback(null);
-  }
-
   async function handleGatingOverride(overrideKey) {
     if (!canManageAssignments || isCanceledOperationalStatus(order.status)) return;
 
@@ -913,7 +858,6 @@ export default function OrderDetail() {
           onSelfAssign={handleSelfAssign}
           productionGating={productionGating}
           onArtworkApprovalChange={handleArtworkApprovalChange}
-          onDepositWorkflowChange={handleDepositWorkflowChange}
           onGatingOverride={handleGatingOverride}
           onForceMoveToProduction={handleForceMoveToProduction}
           workflowFeedback={workflowFeedback}
