@@ -279,11 +279,11 @@ test("unmatched Square terminal events do not crash webhook processing", async (
   expect(listPayments()[0]).toMatchObject({
     provider: "square",
     provider_payment_id: "square-payment-unmatched-1001",
-    payment_request_id: "",
+    payment_request_id: null,
   });
   expect(listPaymentEvents()[0]).toMatchObject({
     event_type: "square_payment_completed",
-    payment_request_id: "",
+    payment_request_id: null,
   });
 });
 

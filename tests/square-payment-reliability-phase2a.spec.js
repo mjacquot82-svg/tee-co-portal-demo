@@ -152,6 +152,78 @@ test("later completed webhook upgrades an earlier failed Square payment without 
   });
 });
 
+test("repeated completed webhooks for the same Square payment do not create a false failure", async () => {
+  createSquareRequest();
+
+  await processSquareWebhookEvent(squarePaymentEvent({
+    eventId: "square-event-completed-repeat-1",
+    paymentId: "square-payment-repeat",
+    status: "COMPLETED",
+    updatedAt: "2026-06-24T12:05:00.000Z",
+  }));
+  await processSquareWebhookEvent(squarePaymentEvent({
+    eventId: "square-event-completed-repeat-2",
+    paymentId: "square-payment-repeat",
+    status: "COMPLETED",
+    updatedAt: "2026-06-24T12:06:00.000Z",
+  }));
+
+  const request = getPaymentRequestById("payment-request-2a");
+  const insights = buildPaymentReconciliationInsights({
+    paymentRequest: request,
+    payments: listPayments(),
+    paymentEvents: listPaymentEvents(),
+  });
+
+  expect(listPayments()).toHaveLength(1);
+  expect(insights.some((insight) => insight.code === "overpayment")).toBe(false);
+  expect(deriveOrderPaymentState(createOrder())).toMatchObject({
+    hasFailedPayment: false,
+    depositSatisfied: true,
+    ownerPaymentState: "Balance Due",
+  });
+});
+
+test("stale Square overpayment payload does not fail a fully matched completed payment", async () => {
+  createSquareRequest();
+  await processSquareWebhookEvent(squarePaymentEvent({
+    eventId: "square-event-completed-before-stale-payload",
+    paymentId: "square-payment-stale-payload",
+    status: "COMPLETED",
+  }));
+
+  saveStoredPaymentEvents([
+    {
+      id: "stale-overpayment-event",
+      payment_id: listPayments()[0].id,
+      payment_request_id: "payment-request-2a",
+      order_number: "TC-SQ-2A",
+      event_type: "square_payment_completed",
+      event_source: "square_webhook",
+      summary: "Square payment received for $150.00.",
+      payload: {
+        payment_confidence: "Manual Review Required",
+        reconciliation_issues: [
+          {
+            code: "overpayment",
+            severity: "high",
+            label: "Overpayment",
+            detail: "Recorded successful payments exceed the amount requested.",
+          },
+        ],
+      },
+      created_at: "2026-06-24T12:08:00.000Z",
+    },
+    ...listPaymentEvents(),
+  ]);
+
+  expect(deriveOrderPaymentState(createOrder())).toMatchObject({
+    hasFailedPayment: false,
+    depositSatisfied: true,
+    ownerPaymentState: "Balance Due",
+  });
+});
+
 test("duplicate successful Square attempts create manual review reconciliation and block production", async () => {
   createSquareRequest();
   await processSquareWebhookEvent(squarePaymentEvent({

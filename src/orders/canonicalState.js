@@ -225,16 +225,50 @@ function hasFailedEvent(paymentEvents = []) {
   });
 }
 
-function hasHighSeverityReconciliationIssue(paymentEvents = []) {
+function hasHighSeverityReconciliationIssue(paymentEvents = [], paymentRequests = [], payments = []) {
+  const successfulPayments = payments.filter(isSuccessfulPayment);
+
   return paymentEvents.some((event) => {
-    const confidence = normalizeLower(event.payload?.payment_confidence);
     const issues = Array.isArray(event.payload?.reconciliation_issues)
       ? event.payload.reconciliation_issues
       : [];
-    return (
-      confidence === "manual review required" ||
-      issues.some((issue) => normalizeLower(issue?.severity) === "high")
-    );
+
+    const hasActiveHighIssue = issues.some((issue) => {
+      if (normalizeLower(issue?.severity) !== "high") return false;
+
+      if (normalizeLower(issue?.code) === "overpayment") {
+        const matchingRequests = paymentRequests.filter((request) => {
+          const eventRequestId = normalizeText(event.payment_request_id);
+          const eventOrderNumber = normalizeText(event.order_number);
+          return (
+            (eventRequestId && request.id === eventRequestId) ||
+            (eventOrderNumber && request.order_number === eventOrderNumber)
+          );
+        });
+        const amountRequested = matchingRequests.reduce(
+          (sum, request) => sum + normalizeAmount(request.amount_requested ?? request.amount),
+          0
+        );
+        const relatedSuccessfulPayments = successfulPayments.filter((payment) => {
+          const eventRequestId = normalizeText(event.payment_request_id);
+          const eventOrderNumber = normalizeText(event.order_number);
+          return (
+            (eventRequestId && payment.payment_request_id === eventRequestId) ||
+            (eventOrderNumber && payment.order_number === eventOrderNumber)
+          );
+        });
+        const totalPaid = relatedSuccessfulPayments.reduce(
+          (sum, payment) => sum + normalizeAmount(payment.amount),
+          0
+        );
+
+        return amountRequested > 0 && totalPaid > amountRequested + 0.009;
+      }
+
+      return true;
+    });
+
+    return hasActiveHighIssue;
   });
 }
 
@@ -308,7 +342,7 @@ export function deriveOrderPaymentState(order = {}) {
     payments.some(isFailedPayment) ||
     paymentRequests.some((request) => FAILED_REQUEST_STATUSES.has(getRequestStatus(request))) ||
     hasFailedEvent(paymentEvents) ||
-    hasHighSeverityReconciliationIssue(paymentEvents);
+    hasHighSeverityReconciliationIssue(paymentEvents, paymentRequests, payments);
   const depositPaidByRequest = depositRequests.some((request) => {
     const requested = normalizeAmount(request.amount_requested ?? request.amount);
     return isPaidRequest(request) || (requested > 0 && resolveRequestAmountPaid(request, payments) >= requested);

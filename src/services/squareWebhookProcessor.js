@@ -370,7 +370,11 @@ function buildReconciliationIssues({
     });
   }
 
-  if (statusMapping.successful && requested > 0 && totalPaid + amount > requested + 0.009) {
+  const totalPaidForOverpaymentCheck = existingSameSquarePayment
+    ? totalPaid - normalizeAmount(existingSameSquarePayment.amount)
+    : totalPaid;
+
+  if (statusMapping.successful && requested > 0 && totalPaidForOverpaymentCheck + amount > requested + 0.009) {
     issues.push({
       code: "overpayment",
       severity: "high",
