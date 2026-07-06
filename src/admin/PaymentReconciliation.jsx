@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatDateTime } from "../lib/dateFormatting";
+import { getStoredOrders, updateStoredOrder } from "../lib/ordersStore";
 import {
   listPaymentEvents,
   listPaymentRequests,
@@ -9,6 +10,7 @@ import {
 } from "../lib/paymentsStore";
 import {
   buildPaymentExceptionQueue,
+  buildOrderPaymentReconciliationUpdates,
   buildPaymentReconciliationInsights,
   getInsightTone,
   getPaymentConfidenceLabel,
@@ -114,6 +116,30 @@ export default function PaymentReconciliation() {
   const failureCount = exceptionQueue.filter((item) => item.insight.code === "webhook_processing_failed").length;
   const duplicateCount = exceptionQueue.filter((item) => item.insight.code.includes("duplicate")).length;
   const manualReviewCount = exceptionQueue.filter((item) => item.insight.severity === "high").length;
+
+  useEffect(() => {
+    const orders = getStoredOrders();
+    const staleOrderUpdates = orders
+      .map((order) => ({
+        order,
+        updates: buildOrderPaymentReconciliationUpdates({
+          order,
+          paymentRequests,
+          payments,
+        }),
+      }))
+      .filter((entry) => entry.updates);
+
+    if (!staleOrderUpdates.length) return;
+
+    void Promise.all(
+      staleOrderUpdates.map(({ order, updates }) => updateStoredOrder(order.order_number, updates))
+    ).then(() => {
+      setRefreshKey((value) => value + 1);
+    }).catch((error) => {
+      console.error("[PaymentReconciliation] Failed to repair order payment rollup", error);
+    });
+  }, [paymentRequests, payments]);
 
   function handleReviewAction(action, insight) {
     if (!selectedRequest || !insight) return;

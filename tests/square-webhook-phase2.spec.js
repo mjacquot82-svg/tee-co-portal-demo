@@ -1,7 +1,10 @@
 // @ts-check
 /* global process */
 import { expect, test } from "@playwright/test";
-import { handler as squareWebhookHandler } from "../netlify/functions/square-webhook.js";
+import {
+  handler as squareWebhookHandler,
+  syncSupabaseOrderPaymentState,
+} from "../netlify/functions/square-webhook.js";
 import {
   buildSquareWebhookSignature,
   processSquareWebhookEvent,
@@ -21,6 +24,13 @@ import { NOTIFICATION_TYPES } from "../src/lib/notificationTemplatesStore.js";
 import { deriveOrderPaymentState } from "../src/orders/canonicalState.js";
 import { buildProductionGatingState, isDepositRequirementSatisfied } from "../src/orders/workflowGating.js";
 import { getCustomerPaymentStatusLabel } from "../src/customer-portal/customerPortalPayments.js";
+import { normalizeOrderFinancials } from "../src/orders/orderFinancials.js";
+import { buildDepositStatus } from "../src/quotes/productionReadiness.js";
+import {
+  resolveCustomerOrderStatus,
+  resolveDepositWorkflowLabel,
+} from "../src/customer-portal/CustomerPortalShared.jsx";
+import { isDepositActionRequired } from "../src/lib/depositPaymentProviders.js";
 
 const notificationUrl = "https://teeandco.test/.netlify/functions/square-webhook";
 const signatureKey = "square-webhook-test-key";
@@ -66,6 +76,110 @@ function squarePaymentEvent(overrides = {}) {
     },
     ...overrides.event,
   };
+}
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+class FakeSupabaseQuery {
+  constructor(client, tableName) {
+    this.client = client;
+    this.tableName = tableName;
+    this.operation = "select";
+    this.payload = null;
+    this.filters = [];
+    this.singleMode = null;
+  }
+
+  select() {
+    return this;
+  }
+
+  eq(column, value) {
+    this.filters.push({ column, value });
+    return this;
+  }
+
+  maybeSingle() {
+    this.singleMode = "maybe";
+    return this;
+  }
+
+  insert(payload) {
+    this.operation = "insert";
+    this.payload = Array.isArray(payload) ? payload : [payload];
+    return this;
+  }
+
+  update(payload) {
+    this.operation = "update";
+    this.payload = payload || {};
+    return this;
+  }
+
+  then(resolve, reject) {
+    return Promise.resolve(this.execute()).then(resolve, reject);
+  }
+
+  catch(reject) {
+    return Promise.resolve(this.execute()).catch(reject);
+  }
+
+  tableRows() {
+    return this.client.tables[this.tableName] || [];
+  }
+
+  applyFilters(rows) {
+    return rows.filter((row) =>
+      this.filters.every((filter) => String(row[filter.column] || "") === String(filter.value))
+    );
+  }
+
+  formatResult(rows) {
+    if (this.singleMode === "maybe") {
+      return { data: rows[0] ? clone(rows[0]) : null, error: null };
+    }
+    return { data: clone(rows), error: null };
+  }
+
+  execute() {
+    const rows = this.tableRows();
+    if (this.operation === "insert") {
+      rows.push(...this.payload.map(clone));
+      return this.formatResult(this.payload);
+    }
+    if (this.operation === "update") {
+      const updatedRows = [];
+      rows.forEach((row, index) => {
+        if (!this.applyFilters([row]).length) return;
+        rows[index] = { ...row, ...clone(this.payload) };
+        updatedRows.push(rows[index]);
+      });
+      return this.formatResult(updatedRows);
+    }
+    return this.formatResult(this.applyFilters(rows));
+  }
+}
+
+class FakeSupabaseClient {
+  constructor(seed = {}) {
+    this.tables = {
+      orders: clone(seed.orders || []),
+      payment_requests: clone(seed.payment_requests || []),
+      payments: clone(seed.payments || []),
+      payment_events: clone(seed.payment_events || []),
+      activity_logs: clone(seed.activity_logs || []),
+    };
+  }
+
+  from(tableName) {
+    return new FakeSupabaseQuery(this, tableName);
+  }
+
+  rows(tableName) {
+    return clone(this.tables[tableName] || []);
+  }
 }
 
 test.beforeEach(() => {
@@ -120,6 +234,7 @@ test("valid Square completed webhook synchronizes payment state and production g
     status: "paid",
     amount_paid: 150,
   });
+  expect(listPaymentEvents().some((event) => event.event_type === "square_payment_completed")).toBe(true);
   expect(deriveOrderPaymentState(order)).toMatchObject({
     depositSatisfied: true,
     totalPaid: 150,
@@ -129,6 +244,102 @@ test("valid Square completed webhook synchronizes payment state and production g
   expect(isDepositRequirementSatisfied(order)).toBe(true);
   expect(buildProductionGatingState(order, { targetStatus: "Ready For Production" }).blocked).toBe(false);
   expect(listNotificationActivity().some((record) => record.eventType === NOTIFICATION_TYPES.paymentReceived)).toBe(true);
+});
+
+test("successful Square payment updates stale order financial rollup for admin and portal views", async () => {
+  const supabase = new FakeSupabaseClient({
+    orders: [
+      {
+        id: "order-square-rollup",
+        order_number: "TC-SQ-WH-ROLLUP",
+        status: "New",
+        quote_status: "Awaiting Deposit",
+        payment_status: "Awaiting Deposit",
+        payment_collection_state: "Awaiting Deposit",
+        deposit_status: "not_requested",
+        deposit_workflow_status: "Deposit Requested",
+        deposit_required: true,
+        deposit_requirement: "required",
+        deposit_amount: 150,
+        deposit_paid_amount: 0,
+        deposit_applied: 0,
+        deposit_outstanding: 150,
+        total_paid: 0,
+        amount_paid: 0,
+        paid_to_date: 0,
+        total_amount: 600,
+        balance_due: 600,
+        activity_log: [],
+      },
+    ],
+    payment_requests: [
+      {
+        id: "payment-request-square-rollup",
+        request_number: "PR-SQ-WH-ROLLUP",
+        order_number: "TC-SQ-WH-ROLLUP",
+        request_type: "deposit",
+        status: "paid",
+        amount_requested: 150,
+        amount_paid: 150,
+        paid_at: "2026-06-24T12:01:00.000Z",
+      },
+    ],
+    payments: [
+      {
+        id: "payment-square-rollup",
+        order_number: "TC-SQ-WH-ROLLUP",
+        payment_request_id: "payment-request-square-rollup",
+        payment_type: "deposit",
+        status: "captured",
+        amount: 150,
+        provider: "square",
+        provider_payment_id: "square-payment-rollup",
+        provider_status: "COMPLETED",
+        captured_at: "2026-06-24T12:01:00.000Z",
+      },
+    ],
+  });
+
+  await syncSupabaseOrderPaymentState(
+    supabase,
+    supabase.rows("payments")[0],
+    supabase.rows("payment_requests")[0]
+  );
+
+  expect(supabase.rows("payment_requests")[0]).toMatchObject({
+    status: "paid",
+    amount_paid: 150,
+  });
+  expect(supabase.rows("payments")[0]).toMatchObject({
+    status: "captured",
+    amount: 150,
+  });
+
+  const updatedOrder = supabase.rows("orders")[0];
+  expect(updatedOrder).toMatchObject({
+    total_paid: 150,
+    amount_paid: 150,
+    paid_to_date: 150,
+    deposit_applied: 150,
+    deposit_outstanding: 0,
+    payment_collection_state: "Awaiting Final Payment",
+    quote_status: "Approved",
+    deposit_workflow_status: "Deposit Received",
+    deposit_status: "paid",
+    balance_due: 450,
+  });
+
+  const adminFinancials = normalizeOrderFinancials(updatedOrder);
+  expect(adminFinancials).toMatchObject({
+    total_paid: 150,
+    deposit_applied: 150,
+    deposit_outstanding: 0,
+    payment_collection_state: "Awaiting Final Payment",
+  });
+  expect(buildDepositStatus(updatedOrder, adminFinancials)).toBe("Deposit Received");
+  expect(resolveCustomerOrderStatus(updatedOrder)).not.toMatchObject({ label: "Payment Due" });
+  expect(resolveDepositWorkflowLabel(updatedOrder)).toBe("Deposit Received");
+  expect(isDepositActionRequired(updatedOrder)).toBe(false);
 });
 
 test("Square webhook endpoint rejects invalid signatures before processing", async () => {

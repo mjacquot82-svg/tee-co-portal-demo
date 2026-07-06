@@ -8,6 +8,7 @@ import {
   resetStoredPaymentsForTests,
 } from "../src/lib/paymentsStore.js";
 import {
+  buildOrderPaymentReconciliationUpdates,
   buildPaymentExceptionQueue,
   buildPaymentReconciliationInsights,
   getPaymentConfidenceLabel,
@@ -187,6 +188,62 @@ test("payment mismatch appears in owner exception queue", async () => {
   });
 
   expect(queue.some((item) => item.insight.code === "payment_mismatch")).toBe(true);
+});
+
+test("reconciliation can repair stale order rollup for an already captured Square deposit", () => {
+  const order = {
+    order_number: "TC-SQ-2B",
+    quote_status: "Awaiting Deposit",
+    payment_status: "Awaiting Deposit",
+    payment_collection_state: "Awaiting Deposit",
+    deposit_status: "not_requested",
+    deposit_workflow_status: "Deposit Requested",
+    deposit_required: true,
+    deposit_requirement: "required",
+    deposit_amount: 150,
+    deposit_paid_amount: 0,
+    deposit_applied: 0,
+    deposit_outstanding: 150,
+    total_paid: 0,
+    amount_paid: 0,
+    paid_to_date: 0,
+    total_amount: 600,
+    balance_due: 600,
+  };
+  const request = createRequest({
+    status: "paid",
+    amount_paid: 150,
+    paid_at: "2026-06-24T12:01:00.000Z",
+  });
+
+  recordPayment({
+    customer_id: request.customer_id,
+    order_number: request.order_number,
+    payment_request_id: request.id,
+    payment_type: "deposit",
+    status: "captured",
+    amount: 150,
+    provider: "square",
+    provider_payment_id: "square-payment-reconcile",
+  });
+
+  expect(buildOrderPaymentReconciliationUpdates({
+    order,
+    paymentRequests: [request],
+    payments: listPayments(),
+  })).toMatchObject({
+    total_paid: 150,
+    amount_paid: 150,
+    paid_to_date: 150,
+    deposit_applied: 150,
+    deposit_outstanding: 0,
+    payment_status: "Deposit Applied",
+    payment_collection_state: "Awaiting Final Payment",
+    quote_status: "Approved",
+    deposit_workflow_status: "Deposit Received",
+    deposit_status: "paid",
+    balance_due: 450,
+  });
 });
 
 test("reconciliation review actions create complete audit history", () => {

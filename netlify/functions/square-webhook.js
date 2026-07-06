@@ -1,6 +1,7 @@
 /* global Buffer, process */
 
 import { createClient } from "@supabase/supabase-js";
+import { buildOrderPaymentRollup } from "../../src/services/orderPaymentRollup.js";
 import {
   processSquareWebhookEvent,
   recordSquareWebhookProcessingFailure,
@@ -120,19 +121,6 @@ function isSuccessfulPaymentStatus(status) {
   return ["captured", "paid", "succeeded", "success", "settled", "completed"].includes(normalized);
 }
 
-function resolveOrderTotal(order = {}) {
-  return normalizeAmount(
-    order.total_amount ||
-      order.total ||
-      order.order_total ||
-      order.grand_total ||
-      order.quote?.total_amount ||
-      order.quote?.total ||
-      order.quote?.summary?.total ||
-      order.quote?.totals?.total
-  );
-}
-
 function buildSquareOrderActivityEntry(payment = {}, paymentRequest = {}, createdAt) {
   const amount = normalizeAmount(payment.amount);
   const requestType = normalizeText(paymentRequest.request_type || payment.payment_type, "payment").replace(/_/g, " ");
@@ -152,7 +140,7 @@ function buildSquareOrderActivityEntry(payment = {}, paymentRequest = {}, create
   };
 }
 
-async function syncSupabaseOrderPaymentState(supabase, payment = {}, paymentRequest = null) {
+export async function syncSupabaseOrderPaymentState(supabase, payment = {}, paymentRequest = null) {
   const orderNumber = normalizeText(payment.order_number || paymentRequest?.order_number);
   if (!orderNumber || !isSuccessfulPaymentStatus(payment.status)) return null;
 
@@ -169,25 +157,17 @@ async function syncSupabaseOrderPaymentState(supabase, payment = {}, paymentRequ
     .eq("order_number", orderNumber);
   if (paymentsResult.error) return null;
 
-  const successfulPayments = (paymentsResult.data || []).filter((entry) => isSuccessfulPaymentStatus(entry.status));
-  const totalPaid = successfulPayments.reduce((total, entry) => total + normalizeAmount(entry.amount), 0);
-  const depositAmount = normalizeAmount(orderResult.data.deposit_amount);
-  const depositPaidAmount = successfulPayments
-    .filter((entry) => normalizeText(entry.payment_type).toLowerCase() === "deposit")
-    .reduce((total, entry) => total + normalizeAmount(entry.amount), 0);
-  const appliedDepositAmount = depositAmount > 0 ? Math.min(depositAmount, depositPaidAmount || totalPaid) : 0;
-  const orderTotal = resolveOrderTotal(orderResult.data);
-  const currentBalanceDue = normalizeAmount(orderResult.data.balance_due);
-  const balanceDue =
-    orderTotal > 0
-      ? Math.max(orderTotal - totalPaid, 0)
-      : Math.max(currentBalanceDue - normalizeAmount(payment.amount), 0);
-  const paymentStatus =
-    balanceDue <= 0 && totalPaid > 0
-      ? "Paid"
-      : totalPaid > 0
-        ? "Partial Payment"
-        : orderResult.data.payment_status || "unpaid";
+  const paymentRequestsResult = await supabase
+    .from("payment_requests")
+    .select("*")
+    .eq("order_number", orderNumber);
+  if (paymentRequestsResult.error) return null;
+
+  const rollup = buildOrderPaymentRollup({
+    order: orderResult.data,
+    paymentRequests: paymentRequestsResult.data || [],
+    payments: paymentsResult.data || [],
+  });
   const capturedAt = normalizeText(payment.captured_at || payment.updated_at || payment.created_at) || new Date().toISOString();
   const existingActivity = Array.isArray(orderResult.data.activity_log) ? orderResult.data.activity_log : [];
   const activityEntry = buildSquareOrderActivityEntry(payment, paymentRequest || {}, capturedAt);
@@ -196,17 +176,11 @@ async function syncSupabaseOrderPaymentState(supabase, payment = {}, paymentRequ
   const updateResult = await supabase
     .from("orders")
     .update({
-      balance_due: balanceDue,
-      payment_status: paymentStatus,
-      deposit_paid_amount: Math.max(normalizeAmount(orderResult.data.deposit_paid_amount), appliedDepositAmount),
+      ...rollup,
       deposit_paid_at:
-        appliedDepositAmount >= depositAmount && depositAmount > 0
+        rollup.deposit_workflow_status === "Deposit Received"
           ? orderResult.data.deposit_paid_at || capturedAt
           : orderResult.data.deposit_paid_at || null,
-      deposit_status:
-        appliedDepositAmount >= depositAmount && depositAmount > 0
-          ? "paid"
-          : orderResult.data.deposit_status || "not_requested",
       payment_method: "Square Online",
       payment_reference: payment.provider_payment_id || payment.payment_number || payment.id || "",
       activity_log: hasActivityEntry ? existingActivity : [activityEntry, ...existingActivity],
@@ -274,7 +248,11 @@ function buildSupabaseAdapter(supabase) {
           .eq("idempotency_key", input.idempotency_key)
           .maybeSingle();
         if (existing.error) throw existing.error;
-        if (existing.data) return existing.data;
+        if (existing.data) {
+          const paymentRequest = await syncSupabasePaymentRequestTotals(supabase, existing.data.payment_request_id);
+          await syncSupabaseOrderPaymentState(supabase, existing.data, paymentRequest);
+          return existing.data;
+        }
       }
 
       const result = await supabase.from("payments").insert(input).select("*").single();
@@ -288,7 +266,11 @@ function buildSupabaseAdapter(supabase) {
           .eq("idempotency_key", input.idempotency_key)
           .maybeSingle();
         if (existing.error) throw existing.error;
-        if (existing.data) return existing.data;
+        if (existing.data) {
+          const paymentRequest = await syncSupabasePaymentRequestTotals(supabase, existing.data.payment_request_id);
+          await syncSupabaseOrderPaymentState(supabase, existing.data, paymentRequest);
+          return existing.data;
+        }
         throw result.error;
       }
       const paymentRequest = await syncSupabasePaymentRequestTotals(supabase, input.payment_request_id);

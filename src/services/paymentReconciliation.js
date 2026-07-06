@@ -1,3 +1,5 @@
+import { buildOrderPaymentRollup } from "./orderPaymentRollup";
+
 function normalizeText(value, fallback = "") {
   const trimmed = String(value || "").trim();
   return trimmed || fallback;
@@ -233,4 +235,51 @@ export function buildPaymentExceptionQueue({
       confidence,
     }));
   });
+}
+
+export function buildOrderPaymentReconciliationUpdates({
+  order = {},
+  paymentRequests = [],
+  payments = [],
+} = {}) {
+  const orderNumber = normalizeText(order.order_number);
+  if (!orderNumber) return null;
+
+  const relatedPaymentRequests = paymentRequests.filter((request) => request.order_number === orderNumber);
+  const relatedPayments = payments.filter((payment) => payment.order_number === orderNumber);
+  if (!relatedPaymentRequests.length && !relatedPayments.some(isSuccessfulPayment)) return null;
+
+  const rollup = buildOrderPaymentRollup({
+    order,
+    paymentRequests: relatedPaymentRequests,
+    payments: relatedPayments,
+  });
+  const keys = [
+    "total_paid",
+    "amount_paid",
+    "paid_to_date",
+    "deposit_applied",
+    "deposit_outstanding",
+    "deposit_paid_amount",
+    "balance_due",
+    "payment_status",
+    "payment_collection_state",
+    "quote_status",
+    "deposit_workflow_status",
+    "deposit_status",
+  ];
+  const updates = {};
+
+  keys.forEach((key) => {
+    const nextValue = rollup[key];
+    const currentValue = order[key];
+    const changed =
+      typeof nextValue === "number"
+        ? normalizeAmount(currentValue) !== nextValue
+        : normalizeText(currentValue) !== normalizeText(nextValue);
+
+    if (changed) updates[key] = nextValue;
+  });
+
+  return Object.keys(updates).length ? updates : null;
 }

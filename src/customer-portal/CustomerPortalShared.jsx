@@ -254,7 +254,7 @@ function normalizeOperationalStatusValue(status) {
   return String(status || "").trim();
 }
 
-function resolveCustomerOrderStatus(order = {}) {
+export function resolveCustomerOrderStatus(order = {}) {
   const operationalStatus = normalizeOperationalStatusValue(order.status);
   const quoteStatus = String(order.quote_status || "").trim();
   const pickupStatus = String(order.pickup_status || "").trim();
@@ -335,7 +335,7 @@ function resolveCustomerQuoteStatus(record = {}) {
   return getStableStatusBadge(quoteStatus || "In Review");
 }
 
-function resolveCustomerPaymentStatus(record = {}, options = {}) {
+export function resolveCustomerPaymentStatus(record = {}, options = {}) {
   const invoiceStatus = String(record.invoice_status || "").trim();
   const balanceDue = Number(record.balance_due || 0);
   const totalPaid = Number(record.total_paid || 0);
@@ -411,7 +411,7 @@ function resolveArtworkApprovalLabel(record = {}) {
   return required ? record.artwork_approval_status || "Pending Review" : "Not Required";
 }
 
-function resolveDepositWorkflowLabel(record = {}) {
+export function resolveDepositWorkflowLabel(record = {}) {
   if (isDepositActionRequired(record)) {
     return "Action Needed: Deposit Required";
   }
