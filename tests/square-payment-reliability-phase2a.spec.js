@@ -176,7 +176,10 @@ test("repeated completed webhooks for the same Square payment do not create a fa
   });
 
   expect(listPayments()).toHaveLength(1);
+  expect(insights.some((insight) => insight.code === "duplicate_square_payment")).toBe(false);
+  expect(insights.some((insight) => insight.code === "duplicate_square_payment_id")).toBe(false);
   expect(insights.some((insight) => insight.code === "overpayment")).toBe(false);
+  expect(getPaymentConfidenceLabel(insights, request)).toBe("Payment Verified");
   expect(deriveOrderPaymentState(createOrder())).toMatchObject({
     hasFailedPayment: false,
     depositSatisfied: true,
@@ -214,9 +217,40 @@ test("stale Square overpayment payload does not fail a fully matched completed p
       },
       created_at: "2026-06-24T12:08:00.000Z",
     },
+    {
+      id: "stale-duplicate-payment-event",
+      payment_id: listPayments()[0].id,
+      payment_request_id: "payment-request-2a",
+      order_number: "TC-SQ-2A",
+      event_type: "square_payment_completed",
+      event_source: "square_webhook",
+      summary: "Square payment received for $150.00.",
+      payload: {
+        payment_confidence: "Manual Review Required",
+        reconciliation_issues: [
+          {
+            code: "duplicate_square_payment",
+            severity: "medium",
+            label: "Duplicate Payment Detected",
+            detail: "Square sent another webhook for a payment already recorded on this request.",
+          },
+        ],
+      },
+      created_at: "2026-06-24T12:09:00.000Z",
+    },
     ...listPaymentEvents(),
   ]);
 
+  const request = getPaymentRequestById("payment-request-2a");
+  const insights = buildPaymentReconciliationInsights({
+    paymentRequest: request,
+    payments: listPayments(),
+    paymentEvents: listPaymentEvents(),
+  });
+
+  expect(insights.some((insight) => insight.code === "overpayment")).toBe(false);
+  expect(insights.some((insight) => insight.code === "duplicate_square_payment")).toBe(false);
+  expect(getPaymentConfidenceLabel(insights, request)).toBe("Payment Verified");
   expect(deriveOrderPaymentState(createOrder())).toMatchObject({
     hasFailedPayment: false,
     depositSatisfied: true,

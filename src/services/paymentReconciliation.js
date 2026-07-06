@@ -46,6 +46,15 @@ function getSquareEventIds(events = []) {
   return events.map((event) => normalizeText(event.payload?.square_event_id)).filter(Boolean);
 }
 
+const STALE_PROVIDER_ISSUE_CODES = new Set(["duplicate_square_payment", "overpayment"]);
+
+function isProviderIssueStillActive(issue = {}, activeIssueCodes = new Set()) {
+  const code = normalizeText(issue.code);
+  if (!STALE_PROVIDER_ISSUE_CODES.has(code)) return true;
+  if (code === "duplicate_square_payment") return activeIssueCodes.has("duplicate_square_payment_id");
+  return activeIssueCodes.has(code);
+}
+
 export function buildPaymentReconciliationInsights({
   paymentRequest = {},
   payments = [],
@@ -154,7 +163,9 @@ export function buildPaymentReconciliationInsights({
     });
   }
 
-  explicitIssues.forEach((issue) => {
+  const activeIssueCodes = new Set(insights.map((insight) => insight.code));
+
+  explicitIssues.filter((issue) => isProviderIssueStillActive(issue, activeIssueCodes)).forEach((issue) => {
     insights.push({
       code: normalizeText(issue.code, "square_reconciliation_issue"),
       severity: normalizeText(issue.severity, "medium"),
