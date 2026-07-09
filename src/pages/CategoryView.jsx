@@ -213,13 +213,7 @@ export default function CategoryView() {
         </span>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-          gap: "16px",
-        }}
-      >
+      <div className="storefront-category-product-grid">
         {categoryProducts.map((item, index) => {
           const productImage = resolveStorefrontProductImage(item, { size: "thumb" });
           const renderIdentity = buildCategoryProductRenderIdentity(item, index);
@@ -239,6 +233,7 @@ export default function CategoryView() {
             <Link
               key={renderIdentity.key}
               to={`/garment/${item.id}`}
+              className="storefront-category-product-card"
               style={{
                 textDecoration: "none",
                 background: "#ffffff",
@@ -252,9 +247,8 @@ export default function CategoryView() {
               }}
             >
                 <div
+                  className="storefront-category-product-image-shell"
                   style={{
-                    width: "100%",
-                    aspectRatio: "1 / 1",
                     background: "#fafaf9",
                     borderRadius: "14px",
                     display: "flex",
@@ -289,6 +283,7 @@ export default function CategoryView() {
 
               <div style={{ display: "grid", gap: "5px" }}>
                 <h3
+                  className="storefront-category-product-title"
                   style={{
                     margin: 0,
                     fontSize: "16px",
@@ -300,6 +295,7 @@ export default function CategoryView() {
                 </h3>
 
                 <p
+                  className="storefront-category-product-description"
                   style={{
                     margin: 0,
                     color: "#57534e",
@@ -374,7 +370,10 @@ export default function CategoryView() {
                   >
                     Available Colors
                   </p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  <div
+                    className="storefront-category-product-option-list"
+                    style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}
+                  >
                     {colorPreview.visible.map((color) => (
                       <span
                         key={color}
@@ -427,7 +426,10 @@ export default function CategoryView() {
                   >
                     Sizes
                   </p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  <div
+                    className="storefront-category-product-option-list"
+                    style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}
+                  >
                     {sizePreview.visible.map((size) => (
                       <span
                         key={size}

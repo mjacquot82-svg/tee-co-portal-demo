@@ -653,7 +653,8 @@ aside img:not(.tee-co-logo) {
 }
 
 .storefront-featured-grid-wide {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 260px));
+  justify-content: center;
 }
 
 .storefront-featured-card {
@@ -661,6 +662,10 @@ aside img:not(.tee-co-logo) {
   align-items: center;
   padding: 14px;
   border-radius: 22px;
+  width: 100%;
+  max-width: 260px;
+  min-height: 190px;
+  box-sizing: border-box;
 }
 
 .storefront-featured-card-vertical {
@@ -669,22 +674,27 @@ aside img:not(.tee-co-logo) {
 }
 
 .storefront-featured-image-shell {
-  width: 88px;
-  height: 88px;
+  width: 104px;
+  height: 112px;
+  max-height: 112px;
   border-radius: 16px;
   overflow: hidden;
   background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  padding: 8px;
 }
 
 .storefront-featured-image-shell-large {
   width: 100%;
   height: auto;
-  aspect-ratio: 1 / 1;
+  aspect-ratio: 4 / 5;
   border-radius: 20px;
+  min-height: 0;
+  padding: 12px;
 }
 
 .storefront-featured-image {
   object-fit: contain;
+  display: block;
 }
 
 .storefront-featured-copy {
@@ -695,10 +705,18 @@ aside img:not(.tee-co-logo) {
 .storefront-featured-title {
   font-size: 17px;
   line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .storefront-featured-description {
   font-size: 13px;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .storefront-category-rows {
@@ -728,7 +746,59 @@ aside img:not(.tee-co-logo) {
 }
 
 .storefront-category-row-grid {
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 260px));
+  justify-content: center;
+  align-items: start;
+}
+
+.storefront-category-product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 248px), 268px));
+  justify-content: center;
+  align-items: start;
+  gap: 16px;
+}
+
+.storefront-category-product-card {
+  width: 100%;
+  max-width: 268px;
+  height: 712px;
+  box-sizing: border-box;
+  align-content: start;
+  overflow: hidden;
+}
+
+.storefront-category-product-image-shell {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  min-height: 0;
+  max-height: 335px;
+  box-sizing: border-box;
+}
+
+.storefront-category-product-title,
+.storefront-category-product-description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.storefront-category-product-title {
+  -webkit-line-clamp: 3;
+}
+
+.storefront-category-product-description {
+  -webkit-line-clamp: 4;
+}
+
+.storefront-category-product-option-list {
+  max-height: 58px;
+  overflow: hidden;
+}
+
+.storefront-category-row-grid .storefront-featured-card {
+  height: 345px;
+  overflow: hidden;
 }
 
 .storefront-empty-merch-state {
@@ -892,8 +962,6 @@ aside img:not(.tee-co-logo) {
     padding-right: 18px;
   }
 
-  .storefront-featured-grid-wide,
-  .storefront-category-row-grid,
   .storefront-collection-grid-highlighted {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1100,9 +1168,6 @@ aside img:not(.tee-co-logo) {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .storefront-category-row-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 @media (min-width: 1024px) {
@@ -1121,9 +1186,6 @@ aside img:not(.tee-co-logo) {
     display: none;
   }
 
-  .storefront-featured-grid-wide {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
 }
 
 @media (min-width: 1180px) {
@@ -1140,7 +1202,4 @@ aside img:not(.tee-co-logo) {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .storefront-category-row-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
 }
