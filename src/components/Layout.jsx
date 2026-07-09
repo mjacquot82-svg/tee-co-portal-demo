@@ -187,37 +187,9 @@ function getAdminSections(staffUser) {
 
   return [
     {
-      title: "Overview",
+      title: "Daily Work",
       links: [
         { to: "/admin", label: "Dashboard", navKey: "dashboard" },
-        { to: "/admin/staff-users", label: "Staff", navKey: "staffUsers" },
-        {
-          to: "/admin/notifications",
-          label: "Staff Notifications",
-          navKey: "staffNotifications",
-          badgeKey: "staffNotifications",
-        },
-        {
-          to: "/admin/settings/notifications",
-          label: "Notification Templates",
-          navKey: "notificationTemplates",
-        },
-        {
-          to: "/admin/settings/order-export",
-          label: "Order Export",
-          navKey: "orderExport",
-        },
-        {
-          to: "/admin/settings/notifications/activity",
-          label: "Notification Activity",
-          navKey: "notificationActivity",
-        },
-      ],
-    },
-    {
-      title: "Workspaces",
-      links: [
-        { to: "/admin/sales/new", label: "Front Counter", navKey: "frontCounter" },
         {
           to: "/admin/quotes",
           label: "Order Requests",
@@ -231,23 +203,24 @@ function getAdminSections(staffUser) {
           badgeKey: "productionOrders",
         },
         {
-          to: "/admin/assignments",
-          label: "Assign Work",
-          navKey: "assignments",
-          badgeKey: "assignments",
-        },
-        {
           to: "/admin/financial",
           label: "Payments",
           navKey: "financial",
           badgeKey: "payments",
         },
+        { to: "/admin/customers", label: "Customers", navKey: "customers" },
       ],
     },
     {
-      title: "Records",
+      title: "Business",
       links: [
-        { to: "/admin/customers", label: "Customers", navKey: "customers" },
+        { to: "/admin/sales/new", label: "Front Counter", navKey: "frontCounter" },
+        {
+          to: "/admin/assignments",
+          label: "Assign Work",
+          navKey: "assignments",
+          badgeKey: "assignments",
+        },
         { to: "/admin/sales", label: "Sales History", navKey: "counterSales" },
         { to: "/admin/garments", label: "Garment Library", navKey: "garments" },
         { to: "/admin/products", label: "Customer Storefront", navKey: "products" },
@@ -264,7 +237,21 @@ function getAdminSections(staffUser) {
       ],
     },
     {
+      title: "Administration",
+      defaultCollapsed: true,
+      links: [
+        { to: "/admin/staff-users", label: "Staff", navKey: "staffUsers" },
+        {
+          to: "/admin/notifications",
+          label: "Staff Notifications",
+          navKey: "staffNotifications",
+          badgeKey: "staffNotifications",
+        },
+      ],
+    },
+    {
       title: "Settings",
+      defaultCollapsed: true,
       links: [
         {
           to: "/admin/settings/notifications",
@@ -518,6 +505,10 @@ function SocialLinks({ compact = false }) {
 }
 
 function AdminSidebar({ pathname, staffUser }) {
+  const [collapsedSections, setCollapsedSections] = useState(() => ({
+    Administration: true,
+    Settings: true,
+  }));
   const orders = useStoredOrders();
   const assignmentAttentionState = useStaffAssignmentAttention();
   const unreadNotificationCount = useUnreadStaffNotificationCount();
@@ -649,77 +640,130 @@ function AdminSidebar({ pathname, staffUser }) {
         </div>
       </Link>
 
-      {adminSections.map((section) => (
-        <div key={section.title} style={{ marginBottom: "16px" }}>
-          <p
-            style={{
-              margin: "0 0 7px",
-              fontSize: "11px",
-              fontWeight: 900,
-              color: "#78716c",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-            }}
-          >
-            {section.title}
-          </p>
+      {adminSections.map((section) => {
+        const sectionHasActiveLink = section.links.some(
+          (link) => activeLink === (link.navKey || link.to)
+        );
+        const collapsible = Boolean(section.defaultCollapsed);
+        const collapsed = collapsible && collapsedSections[section.title] && !sectionHasActiveLink;
+        const sectionBadgeCount = section.links.reduce(
+          (sum, link) => sum + (Number(badgeCounts[link.badgeKey]) || 0),
+          0
+        );
+        const sectionHeadingStyle = {
+          margin: "0 0 7px",
+          fontSize: "11px",
+          fontWeight: 900,
+          color: "#78716c",
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+        };
 
-          <div style={{ display: "grid", gap: "4px" }}>
-            {section.links.map((link) => {
-              const active = activeLink === (link.navKey || link.to);
-              const navItemStyle = {
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: active ? "11px 12px" : "10px 11px",
-                borderRadius: "12px",
-                background: active
-                  ? "#eff6ff"
-                  : "#ffffff",
-                textDecoration: "none",
-                border: active
-                  ? "1px solid #bfdbfe"
-                  : "1px solid #e2e8f0",
-                fontWeight: active ? 800 : 700,
-                boxShadow: active
-                  ? "none"
-                  : "none",
-                cursor: active ? "default" : "pointer",
-                pointerEvents: active ? "none" : "auto",
-                color: active ? "#1d4ed8" : "#171717",
-              };
+        return (
+          <div key={section.title} style={{ marginBottom: "16px" }}>
+            {collapsible ? (
+              <button
+                type="button"
+                aria-expanded={!collapsed}
+                onClick={() =>
+                  setCollapsedSections((current) => ({
+                    ...current,
+                    [section.title]: !current[section.title],
+                  }))
+                }
+                style={{
+                  ...sectionHeadingStyle,
+                  width: "100%",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: 0,
+                  border: 0,
+                  background: "transparent",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                <span>{section.title}</span>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    color: "#94a3b8",
+                    fontSize: "12px",
+                    letterSpacing: 0,
+                    textTransform: "none",
+                  }}
+                >
+                  <AttentionBadge count={sectionBadgeCount} />
+                  <span aria-hidden="true">{collapsed ? "+" : "-"}</span>
+                </span>
+              </button>
+            ) : (
+              <p style={sectionHeadingStyle}>{section.title}</p>
+            )}
 
-              const content = (
-                <>
-                  <span>{link.label}</span>
-                  <AttentionBadge
-                    count={badgeCounts[link.badgeKey]}
-                    active={active}
-                  />
-                </>
-              );
+            {!collapsed ? (
+              <div style={{ display: "grid", gap: "4px" }}>
+                {section.links.map((link) => {
+                  const active = activeLink === (link.navKey || link.to);
+                  const navItemStyle = {
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: active ? "11px 12px" : "10px 11px",
+                    borderRadius: "12px",
+                    background: active
+                      ? "#eff6ff"
+                      : "#ffffff",
+                    textDecoration: "none",
+                    border: active
+                      ? "1px solid #bfdbfe"
+                      : "1px solid #e2e8f0",
+                    fontWeight: active ? 800 : 700,
+                    boxShadow: active
+                      ? "none"
+                      : "none",
+                    cursor: active ? "default" : "pointer",
+                    pointerEvents: active ? "none" : "auto",
+                    color: active ? "#1d4ed8" : "#171717",
+                  };
 
-              if (active) {
-                return (
-                  <div
-                    key={link.to}
-                    aria-current="page"
-                    style={navItemStyle}
-                  >
-                    {content}
-                  </div>
-                );
-              }
+                  const content = (
+                    <>
+                      <span>{link.label}</span>
+                      <AttentionBadge
+                        count={badgeCounts[link.badgeKey]}
+                        active={active}
+                      />
+                    </>
+                  );
 
-              return (
-                <Link key={link.to} to={link.to} style={navItemStyle}>
-                  {content}
-                </Link>
-              );
-            })}
+                  if (active) {
+                    return (
+                      <div
+                        key={link.to}
+                        aria-current="page"
+                        style={navItemStyle}
+                      >
+                        {content}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <Link key={link.to} to={link.to} style={navItemStyle}>
+                      {content}
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {staffWorkspace ? <StaffAttentionStrip items={staffAttentionItems} /> : null}
 
