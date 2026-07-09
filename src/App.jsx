@@ -48,10 +48,12 @@ import NotificationActivity from "./admin/NotificationActivity";
 import StaffNotifications from "./admin/StaffNotifications";
 import TemporaryOrderExport from "./admin/TemporaryOrderExport";
 import AppSplash from "./components/AppSplash";
+import ScrollToTop from "./components/ScrollToTop";
 
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <AppSplash>
         <Routes>
           <Route path="/" element={<Layout />}>
