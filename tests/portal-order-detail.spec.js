@@ -4,6 +4,7 @@ import {
   buildPortalOrderTimeline,
   resolvePortalNextAction,
   resolvePortalNextActionDetails,
+  resolvePortalOrderAttention,
 } from "../src/customer-portal/portalOrderDetail.js";
 
 test("buildPortalOrderTimeline maps unified customer milestones", () => {
@@ -137,5 +138,51 @@ test("resolvePortalNextActionDetails maps direct customer action routes", () => 
     actionType: "order_progress",
     label: "View Order Progress",
     to: "/portal/orders/TC-DETAIL-2005#activity-timeline",
+  });
+});
+
+test("resolvePortalOrderAttention returns action-first summary labels", () => {
+  const quoteApprovalOrder = {
+    order_number: "TC-SUMMARY-1001",
+    quote_status: "Awaiting Approval",
+  };
+  expect(resolvePortalOrderAttention(quoteApprovalOrder, [])).toEqual({
+    tone: "warning",
+    label: "Approve Quote",
+    requiresAction: true,
+  });
+
+  const depositOrder = { order_number: "TC-SUMMARY-1002", quote_status: "Approved" };
+  expect(
+    resolvePortalOrderAttention(depositOrder, [
+      {
+        id: "pr-deposit",
+        request_type: "deposit",
+        status: "sent",
+        provider_checkout_url: "https://square.link/u/deposit",
+      },
+    ])
+  ).toEqual({
+    tone: "warning",
+    label: "Pay Deposit",
+    requiresAction: true,
+  });
+
+  const balanceOrder = { order_number: "TC-SUMMARY-1003", quote_status: "Approved" };
+  expect(
+    resolvePortalOrderAttention(balanceOrder, [
+      { id: "pr-balance", request_type: "balance", status: "sent" },
+    ])
+  ).toEqual({
+    tone: "warning",
+    label: "Pay Balance",
+    requiresAction: true,
+  });
+
+  const productionOrder = { order_number: "TC-SUMMARY-1004", status: "Printing" };
+  expect(resolvePortalOrderAttention(productionOrder, [])).toEqual({
+    tone: "info",
+    label: "In Production",
+    requiresAction: false,
   });
 });

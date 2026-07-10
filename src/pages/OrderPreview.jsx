@@ -11,6 +11,10 @@ import { getActiveCustomerSession } from "../lib/customerSessionStore";
 import { savePendingCustomerRequest } from "../lib/pendingCustomerRequestStore";
 import { generateQuoteSnapshot } from "../lib/quoteEngine";
 import { useStoredProducts } from "../lib/productsStore";
+import {
+  PORTAL_REQUEST_ORDER_PATH,
+  PUBLIC_GARMENT_FLOW_SOURCE,
+} from "../customer-portal/customerPortalStartOrderRoute";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -160,13 +164,13 @@ export default function OrderPreview() {
       return;
     }
 
-    const target = "/portal/request-order";
+    const target = PORTAL_REQUEST_ORDER_PATH;
     const activeCustomerSession = getActiveCustomerSession();
 
     if (activeCustomerSession) {
       navigate(target, {
         state: {
-          pendingRequestSource: "public-garment-flow",
+          pendingRequestSource: PUBLIC_GARMENT_FLOW_SOURCE,
         },
       });
       return;
@@ -174,7 +178,7 @@ export default function OrderPreview() {
 
     navigate(`/login?redirectTo=${encodeURIComponent(target)}`, {
       state: {
-        pendingRequestSource: "public-garment-flow",
+        pendingRequestSource: PUBLIC_GARMENT_FLOW_SOURCE,
       },
     });
   }

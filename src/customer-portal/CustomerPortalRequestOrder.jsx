@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useOutletContext } from "react-router-dom";
+import { useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import { useCatalogLookups } from "../lib/catalogLookupsStore";
 import { ensureCustomerProfile } from "../lib/customerProfileStore";
@@ -28,6 +28,10 @@ import {
 } from "../lib/productsStore";
 import { uploadCustomerArtwork } from "../services/customerArtworkService";
 import { PortalPage, SectionCard } from "./CustomerPortalShared";
+import {
+  PUBLIC_STOREFRONT_PATH,
+  shouldRedirectRequestOrderToStorefront,
+} from "./customerPortalStartOrderRoute";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -62,6 +66,7 @@ function labelStyle() {
 }
 
 export default function CustomerPortalRequestOrder() {
+  const location = useLocation();
   const navigate = useNavigate();
   const { customerSession } = useOutletContext();
   const products = useStoredProducts();
@@ -111,6 +116,7 @@ export default function CustomerPortalRequestOrder() {
   const [submitMessage, setSubmitMessage] = useState("");
   const [pendingRequest, setPendingRequest] = useState(() => getPendingCustomerRequest());
   const appliedPendingRequestRef = useRef("");
+  const pendingRequestSource = location.state?.pendingRequestSource || "";
 
   const resolvedColor = availableColors.includes(selectedColor) ? selectedColor : availableColors[0] || "";
   const resolvedSize = availableSizes.includes(selectedSize) ? selectedSize : availableSizes[0] || "";
@@ -120,6 +126,19 @@ export default function CustomerPortalRequestOrder() {
   const estimatedUnitPrice = resolveProductBasePrice(selectedProduct);
   const estimatedTotal =
     Number.isFinite(estimatedUnitPrice) && estimatedUnitPrice > 0 ? estimatedUnitPrice * Number(quantity || 0) : null;
+
+  useEffect(() => {
+    if (!shouldRedirectRequestOrderToStorefront({ pendingRequest, pendingRequestSource })) {
+      return;
+    }
+
+    navigate(PUBLIC_STOREFRONT_PATH, {
+      replace: true,
+      state: {
+        portalOrderStart: true,
+      },
+    });
+  }, [navigate, pendingRequest, pendingRequestSource]);
 
   useEffect(() => {
     if (!pendingRequest || !storefrontProducts.length) return;

@@ -230,8 +230,8 @@ export default function GarmentView() {
         }}
       >
         <h1 style={{ marginTop: 0 }}>Garment not found</h1>
-        <Link to="/" style={{ color: "#171717" }}>
-          Back to Home
+        <Link to="/" className="storefront-back-link">
+          ← Back to Home
         </Link>
       </div>
     );
@@ -269,6 +269,12 @@ export default function GarmentView() {
           'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
+      <div style={{ marginBottom: isMobile ? "12px" : "14px" }}>
+        <Link to={`/category/${categorySlug}`} className="storefront-back-link">
+          ← Back to {detailCategory}
+        </Link>
+      </div>
+
       <div
         style={{
           marginBottom: isMobile ? "10px" : "12px",
@@ -804,17 +810,9 @@ export default function GarmentView() {
 
             <Link
               to="/"
-              style={{
-                border: "1px solid #d6d3d1",
-                color: "#171717",
-                padding: "12px 16px",
-                borderRadius: "12px",
-                textDecoration: "none",
-                background: "#ffffff",
-                fontSize: "14px",
-              }}
+              className="storefront-back-link"
             >
-              Back
+              ← Back
             </Link>
           </div>
         </div>

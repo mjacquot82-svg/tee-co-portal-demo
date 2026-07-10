@@ -25,29 +25,29 @@ function buildStorefrontRenderIdentity(product, index) {
 }
 
 function buildHeroTitle(hasHeroProduct, categoryCount) {
-  if (hasHeroProduct) return "Curated merch, spotlighted intentionally";
-  if (categoryCount > 1) return "Browse collections built for real storefront shopping";
-  return "Browse the storefront by collection";
+  if (hasHeroProduct) return "Featured merch for your next order";
+  if (categoryCount > 1) return "Shop Tee & Co collections";
+  return "Shop the storefront";
 }
 
 function buildHeroCopy(hasHeroProduct, heroCollection) {
   if (hasHeroProduct && heroCollection?.name) {
-    return `Start with hand-picked highlights, then move through ${heroCollection.name.toLowerCase()} and the rest of the storefront collections.`;
+    return `${heroCollection.name} favorites, featured products, and current catalog picks in one place.`;
   }
 
   if (heroCollection?.name) {
-    return `Explore ${heroCollection.name.toLowerCase()}, seasonal drops, and storefront-ready merch organized for easy browsing.`;
+    return `${heroCollection.name} and current catalog picks ready for custom orders.`;
   }
 
-  return "Explore curated storefront favorites, seasonal highlights, and collection-led browsing paths.";
+  return "Current storefront favorites and custom-order products.";
 }
 
 function buildFeaturedSectionNote(featuredCount) {
   if (featuredCount > 0) {
-    return "Manual featured picks for rails, grids, promotions, and curated discovery. Hero spotlighting stays separate.";
+    return "Selected products from the live catalog.";
   }
 
-  return "Featured product slots stay reserved for owner-curated picks. Browse the live collections below in the meantime.";
+  return "Current catalog collections are available below.";
 }
 
 export default function Home() {
@@ -114,14 +114,6 @@ export default function Home() {
     <div className="storefront-home">
       <div className="storefront-shell">
         <aside className="storefront-rail" aria-label="Storefront category navigation">
-          <div className="storefront-rail-card">
-            <p className="storefront-rail-kicker">Browse</p>
-            <h2 className="storefront-rail-title">Collections</h2>
-            <p className="storefront-rail-copy">
-              Start with a category, then move into curated homepage highlights and featured storefront picks.
-            </p>
-          </div>
-
           <nav className="storefront-rail-card storefront-rail-nav">
             <a href="#storefront-featured" className="storefront-rail-link">
               <span>Featured</span>
@@ -139,12 +131,6 @@ export default function Home() {
               </Link>
             ))}
           </nav>
-
-          <div className="storefront-rail-card storefront-rail-promo">
-            <p className="storefront-rail-kicker">Storefront</p>
-            <strong>{storefrontCategories.length || 0} live collections</strong>
-            <span>{featuredProducts.length || 0} featured picks</span>
-          </div>
         </aside>
 
         <main className="storefront-merch">
@@ -160,7 +146,7 @@ export default function Home() {
 
               <div className="storefront-merch-hero-actions">
                 <Link to={heroLink} className="storefront-merch-primary-link">
-                  {heroProduct ? `Shop ${heroProduct.name}` : "Browse collections"}
+                  {heroProduct ? `Shop ${heroProduct.name}` : "Shop collections"}
                 </Link>
 
                 {collectionHighlights.slice(0, 3).map((category) => (
@@ -205,7 +191,7 @@ export default function Home() {
                 <p className="storefront-merch-hero-product-copy">
                   {heroProduct?.notes ||
                     heroCollection?.description ||
-                    "Browse this collection for current highlights and storefront-ready merch."}
+                    "Current highlights and storefront-ready merch."}
                 </p>
                 <div className="storefront-merch-hero-tags">
                   <span>{heroCollection?.productCountLabel || "Curated picks"}</span>
@@ -232,7 +218,7 @@ export default function Home() {
                   id="storefront-mobile-category-nav-title"
                   className="storefront-mobile-category-nav-title"
                 >
-                  Browse every category
+                  Categories
                 </h2>
               </div>
               <span className="storefront-mobile-category-nav-count">
@@ -258,7 +244,7 @@ export default function Home() {
             <div className="storefront-section-header">
               <div>
                 <p className="storefront-section-kicker">Featured Products</p>
-                <h2 className="storefront-section-title">Homepage merchandising picks</h2>
+                <h2 className="storefront-section-title">Featured product</h2>
               </div>
               <p className="storefront-section-note">
                 {buildFeaturedSectionNote(featuredProducts.length)}
@@ -319,7 +305,7 @@ export default function Home() {
             ) : (
               <div className="storefront-empty-merch-state">
                 <strong>Curated product highlights will land here.</strong>
-                <p>For now, shop the collection-led browse below.</p>
+                <p>Shop the current collections below.</p>
               </div>
             )}
           </section>
@@ -327,12 +313,9 @@ export default function Home() {
           <section className="storefront-section">
             <div className="storefront-section-header">
               <div>
-                <p className="storefront-section-kicker">Featured Collections</p>
-                <h2 className="storefront-section-title">Start with a collection</h2>
+                <p className="storefront-section-kicker">Collections</p>
+                <h2 className="storefront-section-title">Shop by collection</h2>
               </div>
-              <p className="storefront-section-note">
-                Category-first entry points keep the storefront easy to browse as the catalog grows.
-              </p>
             </div>
 
             <div className="storefront-collection-grid storefront-collection-grid-highlighted">
@@ -379,12 +362,9 @@ export default function Home() {
           <section className="storefront-section">
             <div className="storefront-section-header">
               <div>
-                <p className="storefront-section-kicker">Shop by Category</p>
-                <h2 className="storefront-section-title">Collection browse rails</h2>
+                <p className="storefront-section-kicker">Products</p>
+                <h2 className="storefront-section-title">Browse products</h2>
               </div>
-              <p className="storefront-section-note">
-                Compact product previews keep browsing visual without falling back to a generic grid.
-              </p>
             </div>
 
             <div className="storefront-category-rows">

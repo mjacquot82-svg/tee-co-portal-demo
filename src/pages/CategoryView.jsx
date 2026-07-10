@@ -136,8 +136,8 @@ export default function CategoryView() {
       >
         <h1 style={{ marginTop: 0 }}>Category not found</h1>
 
-        <Link to="/" style={{ color: "#171717" }}>
-          Back to Home
+        <Link to="/" className="storefront-back-link">
+          ← Back to Home
         </Link>
       </div>
     );
@@ -153,16 +153,8 @@ export default function CategoryView() {
           '"Avenir Next", "Segoe UI", sans-serif',
       }}
     >
-      <div style={{ marginBottom: "14px" }}>
-        <Link
-          to="/"
-          style={{
-            color: "#57534e",
-            textDecoration: "none",
-            fontSize: "13px",
-            fontWeight: 600,
-          }}
-        >
+      <div style={{ marginBottom: "18px" }}>
+        <Link to="/" className="storefront-back-link">
           ← Back to categories
         </Link>
       </div>

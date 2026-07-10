@@ -239,6 +239,18 @@ aside img:not(.tee-co-logo) {
   top: 108px;
 }
 
+@media (max-width: 560px) {
+  .portal-compact-order-summary {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .portal-compact-order-summary > div:last-child {
+    justify-items: start !important;
+    min-width: 0 !important;
+    width: 100%;
+  }
+}
+
 @media (max-width: 900px) {
   .customer-portal-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -252,7 +264,7 @@ aside img:not(.tee-co-logo) {
 .storefront-rail {
   display: none;
   align-content: start;
-  gap: 14px;
+  gap: 12px;
 }
 
 .storefront-rail-card,
@@ -268,13 +280,13 @@ aside img:not(.tee-co-logo) {
 }
 
 .storefront-rail-card {
-  gap: 10px;
-  padding: 18px;
-  border-radius: 24px;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 20px;
 }
 
 .storefront-rail-nav {
-  gap: 6px;
+  gap: 8px;
 }
 
 .storefront-rail-kicker,
@@ -333,9 +345,9 @@ aside img:not(.tee-co-logo) {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 44px;
-  padding: 0 14px;
-  border-radius: 16px;
+  min-height: 48px;
+  padding: 0 12px 0 14px;
+  border-radius: 14px;
   color: #0f172a;
   text-decoration: none;
   background: #f8fafc;
@@ -373,8 +385,32 @@ aside img:not(.tee-co-logo) {
   font-weight: 800;
 }
 
+.storefront-back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid #d6d3d1;
+  background: #ffffff;
+  color: #171717;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+  box-shadow: 0 8px 18px rgba(28, 25, 23, 0.07);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.storefront-back-link:hover {
+  border-color: #a8a29e;
+  box-shadow: 0 12px 24px rgba(28, 25, 23, 0.1);
+  transform: translateY(-1px);
+}
+
 .storefront-merch {
-  gap: 22px;
+  gap: 28px;
 }
 
 .storefront-merch-hero {
@@ -448,6 +484,7 @@ aside img:not(.tee-co-logo) {
   overflow: hidden;
   border-radius: 26px;
   background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  min-height: 300px;
 }
 
 .storefront-merch-hero-image,
@@ -478,7 +515,7 @@ aside img:not(.tee-co-logo) {
 }
 
 .storefront-section {
-  gap: 14px;
+  gap: 18px;
 }
 
 .storefront-section-header,
@@ -587,8 +624,8 @@ aside img:not(.tee-co-logo) {
 }
 
 .storefront-collection-card {
-  grid-template-rows: auto minmax(96px, auto);
-  padding: 16px;
+  grid-template-rows: auto minmax(88px, auto);
+  padding: 14px;
   border-radius: 24px;
 }
 
@@ -609,18 +646,22 @@ aside img:not(.tee-co-logo) {
 }
 
 .storefront-collection-cover {
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 4 / 5;
   border-radius: 20px;
   overflow: hidden;
   background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  min-height: 280px;
+  padding: 10px;
 }
 
 .storefront-collection-cover-highlighted {
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 4 / 5;
+  min-height: 320px;
 }
 
 .storefront-collection-image {
-  object-fit: cover;
+  object-fit: contain;
+  display: block;
 }
 
 .storefront-collection-meta,
@@ -1202,4 +1243,248 @@ aside img:not(.tee-co-logo) {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+}
+
+.owner-workspace-page {
+  --owner-ink: #201a17;
+  --owner-muted: #6f665f;
+  --owner-rule: #ebe5dd;
+  --owner-warm: #fff4df;
+  --owner-warm-strong: #7c3f10;
+}
+
+.owner-attention-grid {
+  grid-template-columns: minmax(0, 1.18fr) minmax(340px, 0.82fr);
+  align-items: stretch;
+}
+
+.owner-attention-card {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  border-radius: 8px;
+  box-sizing: border-box;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.owner-attention-card:hover {
+  transform: translateY(-1px);
+}
+
+.owner-attention-card--primary {
+  min-height: 176px;
+  padding: 26px 30px;
+  background: var(--owner-warm);
+  border: 1px solid #e5b764;
+  box-shadow: 0 16px 34px rgba(78, 52, 20, 0.08);
+}
+
+.owner-attention-card--secondary,
+.owner-attention-card--quiet {
+  min-height: 176px;
+  padding: 22px;
+}
+
+.owner-attention-card--secondary {
+  background: #ffffff;
+  border: 1px solid #eee9df;
+  box-shadow: 0 10px 24px rgba(78, 52, 20, 0.035);
+}
+
+.owner-attention-card--quiet {
+  background: #fffcf7;
+  border: 1px solid #f0e9df;
+  box-shadow: none;
+}
+
+.owner-attention-card__body {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 22px;
+}
+
+.owner-attention-card__kicker {
+  margin: 0 0 8px;
+  color: var(--owner-warm-strong);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.owner-attention-card__title {
+  margin: 0;
+  color: var(--owner-ink);
+  font-size: 21px;
+  line-height: 1.12;
+}
+
+.owner-attention-card--primary .owner-attention-card__title {
+  max-width: 560px;
+  font-size: 32px;
+  line-height: 1.04;
+}
+
+.owner-attention-card__detail {
+  margin: 10px 0 0;
+  color: #675d54;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.owner-attention-card--primary .owner-attention-card__detail {
+  max-width: 620px;
+  margin-top: 10px;
+  font-size: 15px;
+  line-height: 1.42;
+}
+
+.owner-attention-card__count {
+  color: #b7aca2;
+  font-size: 42px;
+  line-height: 0.92;
+}
+
+.owner-attention-card--active .owner-attention-card__count {
+  color: var(--owner-warm-strong);
+}
+
+.owner-attention-card--primary .owner-attention-card__count {
+  font-size: 76px;
+  line-height: 0.86;
+}
+
+.owner-attention-card__action {
+  justify-self: start;
+  align-self: end;
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: #efeae3;
+  color: #6f665f;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.owner-attention-card--active .owner-attention-card__action {
+  background: #1f1d1b;
+  color: #ffffff;
+}
+
+.owner-attention-card--quiet .owner-attention-card__detail,
+.owner-attention-card--quiet .owner-attention-card__title {
+  color: #8a8178;
+}
+
+.owner-activity-timeline {
+  position: relative;
+  display: grid;
+  gap: 0;
+  padding-top: 2px;
+}
+
+.owner-activity-timeline::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 137px;
+  width: 1px;
+  background: #e7dfd5;
+}
+
+.owner-activity-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr);
+  gap: 28px;
+  padding: 13px 0 15px;
+}
+
+.owner-activity-row__time {
+  color: #817568;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.owner-activity-row__content {
+  position: relative;
+  min-width: 0;
+}
+
+.owner-activity-row__dot {
+  position: absolute;
+  top: 4px;
+  left: -34px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #fbfaf7;
+  border-radius: 999px;
+  background: #9b6230;
+  box-shadow: 0 0 0 1px #d9cfc3;
+}
+
+.owner-activity-row__summary {
+  display: block;
+  color: #29231f;
+  font-size: 14px;
+  line-height: 1.42;
+}
+
+.owner-activity-row__meta {
+  display: block;
+  margin-top: 4px;
+  color: #7a7067;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+@media (max-width: 920px) {
+  .owner-attention-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .owner-attention-card--primary {
+    min-height: 176px;
+    padding: 24px;
+  }
+
+  .owner-attention-card--primary .owner-attention-card__title {
+    font-size: 28px;
+  }
+
+  .owner-attention-card--primary .owner-attention-card__count {
+    font-size: 66px;
+  }
+}
+
+@media (max-width: 640px) {
+  .owner-attention-card__body {
+    gap: 14px;
+  }
+
+  .owner-attention-card--primary,
+  .owner-attention-card--secondary,
+  .owner-attention-card--quiet {
+    padding: 18px;
+  }
+
+  .owner-activity-timeline::before {
+    left: 6px;
+  }
+
+  .owner-activity-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+    padding-left: 24px;
+  }
+
+  .owner-activity-row__dot {
+    left: -22px;
+  }
 }

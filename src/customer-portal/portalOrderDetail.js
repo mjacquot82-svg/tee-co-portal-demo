@@ -198,3 +198,80 @@ export function resolvePortalNextActionDetails(order = {}, paymentRequests = [])
     to: `${buildOrderActionRoute(orderNumber)}#activity-timeline`,
   };
 }
+
+export function resolvePortalOrderAttention(order = {}, paymentRequests = []) {
+  const nextAction = resolvePortalNextActionDetails(order, paymentRequests);
+  const actionType = nextAction.actionType;
+
+  if (actionType === "artwork") {
+    return {
+      tone: "warning",
+      label: nextAction.label || "Upload Artwork",
+      requiresAction: true,
+    };
+  }
+
+  if (actionType === "quote_review") {
+    return {
+      tone: "warning",
+      label: "Review Quote",
+      requiresAction: true,
+    };
+  }
+
+  if (actionType === "quote_approval") {
+    return {
+      tone: "warning",
+      label: "Approve Quote",
+      requiresAction: true,
+    };
+  }
+
+  if (actionType === "payment_sent_confirmation") {
+    return {
+      tone: "warning",
+      label: "Pay Deposit",
+      requiresAction: true,
+    };
+  }
+
+  if (actionType === "payment_request") {
+    const openPaymentRequest = resolveOpenPaymentRequest(paymentRequests);
+    const requestType = normalizeLower(openPaymentRequest?.request_type);
+    return {
+      tone: "warning",
+      label: requestType === "deposit" ? "Pay Deposit" : "Pay Balance",
+      requiresAction: true,
+    };
+  }
+
+  if (hasCompleted(order)) {
+    return {
+      tone: "success",
+      label: "Completed",
+      requiresAction: false,
+    };
+  }
+
+  if (hasReadyForPickup(order)) {
+    return {
+      tone: "success",
+      label: "Ready For Pickup",
+      requiresAction: false,
+    };
+  }
+
+  if (hasProductionStarted(order) || normalizeText(order.status) === "Ready For Production") {
+    return {
+      tone: "info",
+      label: "In Production",
+      requiresAction: false,
+    };
+  }
+
+  return {
+    tone: "neutral",
+    label: "No Action Required",
+    requiresAction: false,
+  };
+}

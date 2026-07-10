@@ -13,9 +13,10 @@ import {
   signOutOperationalWorkspace,
   subscribeToOperationalAuth,
 } from "../lib/operationalAuthStore";
+import { PORTAL_REQUEST_ORDER_PATH } from "./customerPortalStartOrderRoute";
 
 const portalLinks = [
-  { to: "/portal/request-order", label: "Start New Order" },
+  { to: PORTAL_REQUEST_ORDER_PATH, label: "Start New Order" },
   { to: "/portal/orders", label: "My Orders" },
   { to: "/portal/payments", label: "Payments" },
   { to: "/portal/quotes", label: "Quotes" },
@@ -175,7 +176,7 @@ export default function CustomerPortalShell() {
 
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             <NavLink
-              to="/portal/request-order"
+              to={PORTAL_REQUEST_ORDER_PATH}
               style={({ isActive }) => ({
                 display: "inline-flex",
                 alignItems: "center",
@@ -271,7 +272,7 @@ export default function CustomerPortalShell() {
             </p>
 
             <NavLink
-              to="/portal/request-order"
+              to={PORTAL_REQUEST_ORDER_PATH}
               style={({ isActive }) => ({
                 textDecoration: "none",
                 borderRadius: "18px",
@@ -302,7 +303,7 @@ export default function CustomerPortalShell() {
             </p>
 
             {portalLinks.map((link) => (
-              link.to === "/portal/request-order" ? null : (
+              link.to === PORTAL_REQUEST_ORDER_PATH ? null : (
               <NavLink
                 key={link.to}
                 to={link.to}
