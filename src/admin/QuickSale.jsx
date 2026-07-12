@@ -112,6 +112,22 @@ const fieldStyle = {
   background: "#ffffff",
 };
 
+const touchFieldStyle = {
+  ...fieldStyle,
+  minHeight: "56px",
+  borderRadius: "16px",
+  padding: "15px 16px",
+  fontSize: "17px",
+};
+
+const keypadReadyFieldStyle = {
+  ...touchFieldStyle,
+  fontSize: "22px",
+  fontWeight: 800,
+  textAlign: "right",
+  fontVariantNumeric: "tabular-nums",
+};
+
 const labelStyle = {
   display: "grid",
   gap: "8px",
@@ -121,19 +137,50 @@ const labelStyle = {
 
 const compactFieldStyle = {
   ...fieldStyle,
-  padding: "8px 10px",
-  borderRadius: "10px",
-  fontSize: "14px",
+  minHeight: "46px",
+  padding: "10px 12px",
+  borderRadius: "12px",
+  fontSize: "16px",
 };
 
 const sectionCardStyle = {
   background: "#ffffff",
-  borderRadius: "20px",
+  borderRadius: "18px",
   border: "1px solid #e2e8f0",
-  padding: "22px",
+  padding: "16px",
   display: "grid",
-  gap: "16px",
+  gap: "12px",
 };
+
+const frontCounterActions = [
+  {
+    id: "payment",
+    title: "Collect Payment",
+    description: "Find a customer, review outstanding balances, and record payment.",
+    steps: ["Search Customer", "Outstanding Balances", "Collect Payment", "Complete"],
+    accent: "#1d4ed8",
+    background: "#eff6ff",
+    border: "#bfdbfe",
+  },
+  {
+    id: "pickup",
+    title: "Customer Pickup",
+    description: "Find ready orders, confirm release, and complete handoff.",
+    steps: ["Search Customer", "Ready Orders", "Confirm Pickup", "Complete"],
+    accent: "#047857",
+    background: "#ecfdf5",
+    border: "#a7f3d0",
+  },
+  {
+    id: "quick-sale",
+    title: "Walk-In Sale",
+    description: "Search products, select variants, build the cart, and finish payment.",
+    steps: ["Search Product", "Select Variant", "Cart", "Payment", "Complete"],
+    accent: "#c2410c",
+    background: "#fff7ed",
+    border: "#fed7aa",
+  },
+];
 
 function currency(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -168,6 +215,108 @@ function getModeButtonStyle(active) {
   };
 }
 
+function getActiveCounterAction(mode) {
+  return frontCounterActions.find((action) => action.id === mode) || frontCounterActions[0];
+}
+
+function FrontCounterActionCard({ action, active, onSelect }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(action.id)}
+      aria-pressed={active}
+      style={{
+        minHeight: "44px",
+        border: active ? `2px solid ${action.accent}` : `1px solid ${action.border}`,
+        background: active ? action.background : "#ffffff",
+        color: "#0f172a",
+        borderRadius: "14px",
+        padding: "8px 10px",
+        textAlign: "left",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        boxShadow: active ? "0 18px 34px rgba(15, 23, 42, 0.10)" : "0 1px 3px rgba(15, 23, 42, 0.06)",
+      }}
+    >
+      <span
+        style={{
+          width: "28px",
+          height: "28px",
+          borderRadius: "10px",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: action.accent,
+          color: "#ffffff",
+            fontSize: "14px",
+          fontWeight: 900,
+        }}
+        aria-hidden="true"
+      >
+        {action.title.charAt(0)}
+      </span>
+      <span style={{ display: "grid", gap: "6px" }}>
+        <strong style={{ fontSize: "15px", lineHeight: 1.1 }}>{action.title}</strong>
+        <span style={{ display: "none", color: "#475569", fontSize: "12px", lineHeight: 1.25 }}>
+          {action.description}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function WorkflowStepStrip({ action }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: "10px",
+        flexWrap: "wrap",
+        alignItems: "center",
+      }}
+      aria-label={`${action.title} workflow`}
+    >
+      {action.steps.map((step, index) => (
+        <span
+          key={step}
+          style={{
+            minHeight: "40px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+            borderRadius: "999px",
+            border: `1px solid ${index === 0 ? action.border : "#e2e8f0"}`,
+            background: index === 0 ? action.background : "#ffffff",
+            color: "#0f172a",
+            padding: "8px 12px",
+            fontSize: "13px",
+            fontWeight: 900,
+          }}
+        >
+          <span
+            style={{
+              width: "22px",
+              height: "22px",
+              borderRadius: "999px",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: index === 0 ? action.accent : "#e2e8f0",
+              color: index === 0 ? "#ffffff" : "#475569",
+              fontSize: "12px",
+            }}
+          >
+            {index + 1}
+          </span>
+          {step}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function getActionToneStyles(tone = "default") {
   if (tone === "danger") {
     return { background: "#fff1f2", border: "1px solid #fecdd3", accent: "#be123c" };
@@ -189,9 +338,11 @@ function getSplitMethodButtonStyle(active) {
     border: active ? "1px solid #0f172a" : "1px solid #cbd5e1",
     background: active ? "#0f172a" : "#ffffff",
     color: active ? "#ffffff" : "#0f172a",
-    borderRadius: "999px",
-    padding: "8px 12px",
-    fontWeight: 700,
+    minHeight: "48px",
+    borderRadius: "16px",
+    padding: "12px 14px",
+    fontSize: "15px",
+    fontWeight: 800,
     cursor: "pointer",
   };
 }
@@ -299,6 +450,33 @@ function cartItemsMatch(existingItem, newItem) {
     normalize(existingItem.size) === normalize(newItem.size) &&
     Number(existingItem.unit_price) === Number(newItem.unit_price)
   );
+}
+
+function getProductCategory(product = {}) {
+  return (
+    product.storefront_category ||
+    product.category ||
+    product.product_type ||
+    "Other"
+  );
+}
+
+function getProductPrice(product = {}) {
+  return product.retail_price || product.unit_price || product.price || product.base_garment_price || "";
+}
+
+function getProductSearchText(product = {}) {
+  return [
+    product.name,
+    product.brand_model,
+    product.sku,
+    product.category,
+    product.storefront_category,
+    product.product_type,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 }
 
 function buildCustomerOrders(selectedCustomer, orders) {
@@ -437,8 +615,8 @@ function OperationalStat({ label, value, emphasis = "default" }) {
     <div
       style={{
         border: "1px solid #e2e8f0",
-        borderRadius: "16px",
-        padding: "14px 16px",
+        borderRadius: "18px",
+        padding: "16px 18px",
         background: "#f8fafc",
         display: "grid",
         gap: "4px",
@@ -458,7 +636,7 @@ function OperationalStat({ label, value, emphasis = "default" }) {
       <span
         style={{
           color: emphasis === "danger" ? "#b91c1c" : emphasis === "success" ? "#166534" : "#0f172a",
-          fontSize: "22px",
+          fontSize: "26px",
           fontWeight: 800,
         }}
       >
@@ -474,11 +652,13 @@ function PaymentWorkflowActionButton({ action, active, onSelect }) {
       type="button"
       onClick={() => onSelect(action.id)}
       style={{
-        borderRadius: "999px",
-        padding: "10px 14px",
+        minHeight: "54px",
+        borderRadius: "18px",
+        padding: "14px 18px",
         border: active ? `1px solid ${action.accent}` : action.border,
         background: active ? action.background : "#ffffff",
         color: active ? action.accent : "#0f172a",
+        fontSize: "16px",
         fontWeight: 800,
         cursor: "pointer",
         boxShadow: active ? `0 0 0 2px ${action.background}` : "none",
@@ -486,6 +666,87 @@ function PaymentWorkflowActionButton({ action, active, onSelect }) {
     >
       {action.title}
     </button>
+  );
+}
+
+function QuantityStepper({
+  label = "Quantity",
+  value,
+  onChange,
+  onCommit,
+  onDecrement,
+  onIncrement,
+  onKeyDown,
+  testId,
+  compact = false,
+}) {
+  const buttonSize = compact ? "46px" : "64px";
+  const controlHeight = compact ? "48px" : "62px";
+  const buttonFontSize = compact ? "22px" : "28px";
+
+  return (
+    <div style={{ display: "grid", gap: "8px" }} data-testid={testId}>
+      <span style={{ color: "#292524", fontWeight: 700 }}>{label}</span>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: `${buttonSize} minmax(64px, 1fr) ${buttonSize}`,
+          gap: compact ? "6px" : "10px",
+          alignItems: "center",
+        }}
+      >
+        <button
+          type="button"
+          aria-label="Decrease quantity"
+          onClick={onDecrement}
+          style={{
+            minHeight: controlHeight,
+            borderRadius: compact ? "12px" : "16px",
+            border: "1px solid #cbd5e1",
+            background: "#ffffff",
+            color: "#0f172a",
+            fontSize: buttonFontSize,
+            fontWeight: 900,
+            cursor: "pointer",
+          }}
+        >
+          -
+        </button>
+        <input
+          aria-label={label}
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={onCommit}
+          onKeyDown={onKeyDown}
+          style={{
+            ...keypadReadyFieldStyle,
+            minHeight: controlHeight,
+            padding: compact ? "8px" : "12px",
+            fontSize: compact ? "18px" : keypadReadyFieldStyle.fontSize,
+            textAlign: "center",
+          }}
+        />
+        <button
+          type="button"
+          aria-label="Increase quantity"
+          onClick={onIncrement}
+          style={{
+            minHeight: controlHeight,
+            borderRadius: compact ? "12px" : "16px",
+            border: "1px solid #0f172a",
+            background: "#0f172a",
+            color: "#ffffff",
+            fontSize: buttonFontSize,
+            fontWeight: 900,
+            cursor: "pointer",
+          }}
+        >
+          +
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -532,9 +793,12 @@ export default function QuickSale() {
   const [linkedCustomerId, setLinkedCustomerId] = useState("");
   const [linkedCustomerName, setLinkedCustomerName] = useState("");
   const [selectedProductId, setSelectedProductId] = useState("");
+  const [productSearchQuery, setProductSearchQuery] = useState("");
+  const [selectedProductCategory, setSelectedProductCategory] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [quickSalePaymentMethod, setQuickSalePaymentMethod] = useState("Cash");
   const [notes, setNotes] = useState("");
+  const [showQuickSaleCheckout, setShowQuickSaleCheckout] = useState(false);
   const [lineItem, setLineItem] = useState({
     name: "",
     color: "",
@@ -553,6 +817,39 @@ export default function QuickSale() {
   const selectedProduct = useMemo(() => {
     return products.find((product) => product.id === selectedProductId);
   }, [products, selectedProductId]);
+  const productCategories = useMemo(() => {
+    return Array.from(new Set(products.map(getProductCategory).filter(Boolean))).sort((left, right) =>
+      left.localeCompare(right)
+    );
+  }, [products]);
+  const visibleProducts = useMemo(() => {
+    const query = productSearchQuery.trim().toLowerCase();
+
+    return products
+      .filter((product) => {
+        if (query) {
+          return getProductSearchText(product).includes(query);
+        }
+
+        if (selectedProductCategory) {
+          return getProductCategory(product) === selectedProductCategory;
+        }
+
+        return false;
+      })
+      .slice(0, 12);
+  }, [products, productCategories, productSearchQuery, selectedProductCategory]);
+  const activeProductCategory = selectedProductCategory || "";
+  const selectedProductColors = selectedProduct?.colors?.length
+    ? selectedProduct.colors
+    : lineItem.name
+    ? [lineItem.color].filter(Boolean)
+    : [];
+  const selectedProductSizes = selectedProduct?.sizes?.length
+    ? selectedProduct.sizes
+    : lineItem.name
+    ? [lineItem.size].filter(Boolean)
+    : [];
 
   const customerOrders = useMemo(() => {
     return buildCustomerOrders(selectedCustomer, storedOrders);
@@ -575,6 +872,7 @@ export default function QuickSale() {
   }, [activeMode, selectableItems]);
   const activeWorkspaceMode =
     transactionWorkspaceModes[activeMode] || transactionWorkspaceModes.payment;
+  const activeCounterAction = getActiveCounterAction(activeMode);
   const canOfferCustomerCreate =
     activeMode !== "quick-sale" &&
     lookupQuery.trim().length >= 2 &&
@@ -627,6 +925,15 @@ export default function QuickSale() {
   const total = subtotal + taxTotal;
   const canAddItem = lineItem.name.trim() && Number(lineItem.qty) > 0;
   const canCompleteSale = cart.length > 0;
+  const needsColorSelection = Boolean(selectedProduct?.colors?.length);
+  const needsSizeSelection = Boolean(selectedProduct?.sizes?.length);
+  const quickSaleStep = !lineItem.name
+    ? "product"
+    : needsColorSelection && !lineItem.color
+    ? "color"
+    : needsSizeSelection && !lineItem.size
+    ? "size"
+    : "quantity";
   const paymentValidation = validatePaymentAmount({
     amount: paymentAmount,
     remainingBalance: transactionSummary.amountDue || 0,
@@ -761,7 +1068,7 @@ export default function QuickSale() {
     setCustomerName(customer.name || "");
     setLinkedCustomerId(customer.source === "saved" ? customer.id : "");
     setLinkedCustomerName(customer.name || "");
-    setActiveMode("payment");
+    setActiveMode((currentMode) => (currentMode === "quick-sale" ? "payment" : currentMode));
     resetPaymentForm("");
   }
 
@@ -890,28 +1197,78 @@ export default function QuickSale() {
     setLinkedCustomerName("");
   }
 
-  function selectProduct(event) {
-    const productId = event.target.value;
-    const product = products.find((item) => item.id === productId);
-    setSelectedProductId(productId);
+  function resetProductSelection() {
+    setSelectedProductId("");
+    setProductSearchQuery("");
+    setLineItem({ name: "", color: "", size: "", qty: "1", unit_price: "" });
+  }
 
-    if (!product) {
-      setLineItem({ name: "", color: "", size: "", qty: "1", unit_price: "" });
-      return;
-    }
+  function selectProduct(product) {
+    setSelectedProductId(product.id);
+    setProductSearchQuery(product.name || "");
 
     setLineItem((current) => ({
       ...current,
       name: product.name || "",
-      color: product.colors?.[0] || "",
-      size: product.sizes?.[0] || "",
-      unit_price: product.retail_price || product.price || "",
+      color: "",
+      size: "",
+      qty: "1",
+      unit_price: getProductPrice(product),
     }));
+  }
+
+  function selectCustomProduct() {
+    const customName = productSearchQuery.trim();
+    if (!customName) return;
+
+    setLineItem((current) => ({
+      ...current,
+      name: customName,
+      color: "",
+      size: "",
+      qty: "1",
+      unit_price: "",
+    }));
+    setSelectedProductId("");
   }
 
   function updateLineItem(event) {
     const { name, value } = event.target;
     setLineItem((current) => ({ ...current, [name]: value }));
+  }
+
+  function updateLineItemQuantity(value) {
+    setLineItem((current) => ({ ...current, qty: value }));
+  }
+
+  function commitLineItemQuantity() {
+    setLineItem((current) => ({
+      ...current,
+      qty: String(Math.max(1, Number(current.qty) || 1)),
+    }));
+  }
+
+  function stepLineItemQuantity(direction) {
+    setLineItem((current) => {
+      const nextQuantity = Math.max(1, (Number(current.qty) || 1) + direction);
+      return { ...current, qty: String(nextQuantity) };
+    });
+  }
+
+  function updateProductSearch(value) {
+    setProductSearchQuery(value);
+    if (selectedProductId || lineItem.name) {
+      setSelectedProductId("");
+      setLineItem({ name: "", color: "", size: "", qty: "1", unit_price: "" });
+    }
+  }
+
+  function selectLineItemColor(color) {
+    setLineItem((current) => ({ ...current, color, size: "" }));
+  }
+
+  function selectLineItemSize(size) {
+    setLineItem((current) => ({ ...current, size }));
   }
 
   function handleLineItemKeyDown(event) {
@@ -963,6 +1320,7 @@ export default function QuickSale() {
     });
 
     setSelectedProductId("");
+    setProductSearchQuery("");
     setLineItem({ name: "", color: "", size: "", qty: "1", unit_price: "" });
     setTimeout(() => productSelectRef.current?.focus(), 0);
   }
@@ -987,8 +1345,29 @@ export default function QuickSale() {
     );
   }
 
+  function stepCartItemQuantity(itemId, direction) {
+    setCart((current) =>
+      current.map((item) => {
+        if (item.id !== itemId) return item;
+
+        const nextQty = Math.max(1, Number(item.qty || 1) + direction);
+        return {
+          ...item,
+          qty: nextQty,
+          line_total: nextQty * item.unit_price,
+        };
+      })
+    );
+  }
+
   function removeCartItem(itemId) {
-    setCart((current) => current.filter((item) => item.id !== itemId));
+    setCart((current) => {
+      const nextCart = current.filter((item) => item.id !== itemId);
+      if (!nextCart.length) {
+        setShowQuickSaleCheckout(false);
+      }
+      return nextCart;
+    });
   }
 
   function saveSale() {
@@ -1265,61 +1644,76 @@ export default function QuickSale() {
       style={{
         maxWidth: "1480px",
         margin: "0 auto",
-        padding: "24px",
+        padding: "14px",
         fontFamily:
           'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
-      <div style={{ display: "grid", gap: "20px" }}>
+      <div style={{ display: "grid", gap: "12px" }}>
         <section
           style={{
-            background: "linear-gradient(135deg, #fff7ed 0%, #ffffff 45%, #eff6ff 100%)",
+            background: "#ffffff",
             border: "1px solid #e2e8f0",
-            borderRadius: "24px",
-            padding: "24px",
+            borderRadius: "18px",
+            padding: "10px",
             display: "grid",
-            gap: "18px",
+            gap: "8px",
+            boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
-            <div style={{ maxWidth: "780px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ maxWidth: "820px" }}>
               <p
                 style={{
                   margin: 0,
-                  color: "#9a3412",
+                  color: "#64748b",
                   fontSize: "12px",
-                  fontWeight: 800,
+                  fontWeight: 900,
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
                 }}
               >
-                Front Counter Workspace
-              </p>
-              <h1 style={{ margin: "8px 0 10px", fontSize: "36px", color: "#0f172a" }}>
                 Front Counter
-              </h1>
-              <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
-                Find the customer, select the payment or pickup action, and complete the transaction.
               </p>
+              <h1 style={{ margin: "2px 0 0", fontSize: "22px", color: "#0f172a", letterSpacing: 0 }}>
+                What would you like to do?
+              </h1>
             </div>
-
+            <div
+              style={{
+                minWidth: "170px",
+                borderRadius: "16px",
+                background: activeCounterAction.background,
+                border: `1px solid ${activeCounterAction.border}`,
+                padding: "8px 10px",
+                display: "grid",
+                gap: "4px",
+              }}
+            >
+              <span style={{ color: activeCounterAction.accent, fontSize: "12px", fontWeight: 900 }}>
+                Active Workflow
+              </span>
+              <strong style={{ color: "#0f172a", fontSize: "16px" }}>{activeCounterAction.title}</strong>
+            </div>
           </div>
 
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-            <button type="button" onClick={() => activateWorkspaceMode("payment")} style={getModeButtonStyle(activeMode === "payment")}>
-              Payment Items
-            </button>
-            <button type="button" onClick={() => activateWorkspaceMode("pickup")} style={getModeButtonStyle(activeMode === "pickup")}>
-              Pickup Items
-            </button>
-            <button type="button" onClick={() => activateWorkspaceMode("quick-sale")} style={getModeButtonStyle(activeMode === "quick-sale")}>
-              Quick Sale
-            </button>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              gap: "10px",
+            }}
+          >
+            {frontCounterActions.map((action) => (
+              <FrontCounterActionCard
+                key={action.id}
+                action={action}
+                active={activeMode === action.id}
+                onSelect={activateWorkspaceMode}
+              />
+            ))}
           </div>
-          <p style={{ margin: 0, color: "#475569", maxWidth: "860px" }}>
-            <strong style={{ color: "#0f172a" }}>{activeWorkspaceMode.title}.</strong>{" "}
-            {activeWorkspaceMode.description}
-          </p>
+
         </section>
 
         {activeMode !== "quick-sale" ? (
@@ -1342,18 +1736,21 @@ export default function QuickSale() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "minmax(280px, 340px) minmax(0, 1fr) minmax(320px, 380px)",
-                gap: "20px",
+                gridTemplateColumns: "minmax(230px, 0.75fr) minmax(300px, 1fr) minmax(280px, 0.9fr)",
+                gap: "12px",
                 alignItems: "start",
+                height: "calc(100vh - 332px)",
+                minHeight: "398px",
+                overflow: "hidden",
               }}
             >
-              <aside style={{ display: "grid", gap: "18px" }}>
-                <section style={sectionCardStyle}>
+              <aside style={{ display: "grid", gap: "12px", minHeight: 0 }}>
+                <section style={{ ...sectionCardStyle, maxHeight: "100%", overflow: "hidden" }}>
                   <div>
-                    <h2 style={{ margin: "0 0 8px", fontSize: "26px", color: "#0f172a" }}>
-                      Customer & Transaction Lookup
+                    <h2 style={{ margin: "0 0 4px", fontSize: "22px", color: "#0f172a" }}>
+                      Search Customer
                     </h2>
-                    <p style={{ margin: 0, color: "#64748b", lineHeight: 1.5 }}>
+                    <p style={{ margin: 0, color: "#64748b", lineHeight: 1.35, fontSize: "14px" }}>
                       Search by customer, phone, email, company, or order number.
                     </p>
                   </div>
@@ -1363,7 +1760,7 @@ export default function QuickSale() {
                       value={lookupQuery}
                       onChange={(event) => handleLookupChange(event.target.value)}
                       placeholder="Search name, phone, email, company, or order #"
-                      style={fieldStyle}
+                      style={touchFieldStyle}
                     />
 
                     {customerMatches.length > 0 ? (
@@ -1474,7 +1871,7 @@ export default function QuickSale() {
                                 value={createCustomerForm.name}
                                 onChange={(event) => updateCreateCustomerForm("name", event.target.value)}
                                 placeholder="Customer name"
-                                style={fieldStyle}
+                                style={touchFieldStyle}
                               />
                             </label>
                             <label style={labelStyle}>
@@ -1483,7 +1880,7 @@ export default function QuickSale() {
                                 value={createCustomerForm.phone}
                                 onChange={(event) => updateCreateCustomerForm("phone", event.target.value)}
                                 placeholder="Phone number"
-                                style={fieldStyle}
+                                style={touchFieldStyle}
                               />
                             </label>
                             <label style={labelStyle}>
@@ -1492,7 +1889,7 @@ export default function QuickSale() {
                                 value={createCustomerForm.email}
                                 onChange={(event) => updateCreateCustomerForm("email", event.target.value)}
                                 placeholder="Email address"
-                                style={fieldStyle}
+                                style={touchFieldStyle}
                               />
                             </label>
                             <label style={labelStyle}>
@@ -1501,7 +1898,7 @@ export default function QuickSale() {
                                 value={createCustomerForm.company}
                                 onChange={(event) => updateCreateCustomerForm("company", event.target.value)}
                                 placeholder="Company (optional)"
-                                style={fieldStyle}
+                                style={touchFieldStyle}
                               />
                             </label>
                           </div>
@@ -1619,12 +2016,12 @@ export default function QuickSale() {
                 </section>
               </aside>
 
-              <section style={{ ...sectionCardStyle, minHeight: "520px" }}>
+              <section style={{ ...sectionCardStyle, minHeight: 0, maxHeight: "100%", overflow: "hidden" }}>
                 <div>
-                  <h2 style={{ margin: "0 0 8px", fontSize: "28px", color: "#0f172a" }}>
-                    {activeWorkspaceMode.selectionHeading}
+                  <h2 style={{ margin: "0 0 4px", fontSize: "22px", color: "#0f172a" }}>
+                    {activeMode === "pickup" ? "Ready Orders" : "Outstanding Balances"}
                   </h2>
-                  <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
+                  <p style={{ margin: 0, color: "#475569", lineHeight: 1.35, fontSize: "14px" }}>
                     {activeWorkspaceMode.selectionDescription}
                   </p>
                 </div>
@@ -1654,7 +2051,7 @@ export default function QuickSale() {
                     {activeWorkspaceMode.emptySelectedCustomerMessage}
                   </div>
                 ) : (
-                  <div style={{ display: "grid", gap: "14px" }}>
+                  <div style={{ display: "grid", gap: "10px", overflowY: "auto", paddingRight: "2px" }}>
                     {visibleSelectableItems.map((item) => {
                       const tones = getActionToneStyles(item.tone);
                       const isSelected = selectedTransactionIds.includes(item.id);
@@ -1773,13 +2170,13 @@ export default function QuickSale() {
                 )}
               </section>
 
-              <aside style={{ display: "grid", gap: "18px" }}>
-                <section style={sectionCardStyle}>
+              <aside style={{ display: "grid", gap: "12px", minHeight: 0 }}>
+                <section style={{ ...sectionCardStyle, maxHeight: "100%", overflow: "hidden" }}>
                   <div>
-                    <h2 style={{ margin: "0 0 8px", fontSize: "24px", color: "#0f172a" }}>
+                    <h2 style={{ margin: "0 0 4px", fontSize: "22px", color: "#0f172a" }}>
                       Transaction Summary
                     </h2>
-                    <p style={{ margin: 0, color: "#64748b" }}>
+                    <p style={{ margin: 0, color: "#64748b", fontSize: "14px", lineHeight: 1.35 }}>
                       Review the active items, total due, and complete the counter action.
                     </p>
                   </div>
@@ -1944,15 +2341,15 @@ export default function QuickSale() {
                                     setPaymentError("");
                                   }}
                                   style={{
-                                    ...fieldStyle,
+                                    ...keypadReadyFieldStyle,
                                     border:
                                       paymentError || !paymentValidation.valid || !splitPaymentValidation.valid
                                         ? "1px solid #dc2626"
-                                        : fieldStyle.border,
+                                        : keypadReadyFieldStyle.border,
                                     background:
                                       paymentError || !paymentValidation.valid || !splitPaymentValidation.valid
                                         ? "#fff1f2"
-                                        : fieldStyle.background,
+                                        : keypadReadyFieldStyle.background,
                                   }}
                                 />
                               </label>
@@ -1971,7 +2368,7 @@ export default function QuickSale() {
                                         setPaymentError("");
                                       }}
                                       placeholder="Enter first payment amount"
-                                      style={fieldStyle}
+                                      style={keypadReadyFieldStyle}
                                     />
                                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                                       {splitPaymentMethods.map((method) => (
@@ -2118,131 +2515,288 @@ export default function QuickSale() {
         ) : null}
 
             {activeMode === "quick-sale" ? (
-              <form onSubmit={completeSale} style={{ display: "grid", gap: "18px" }}>
-                <section id="quick-sale-workflow" style={sectionCardStyle}>
-                  <div>
-                    <p
-                      style={{
-                        margin: 0,
-                        color: "#78716c",
-                        fontSize: "12px",
-                        fontWeight: 800,
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      Walk-In Transaction
-                    </p>
-                    <h2 style={{ margin: "6px 0 8px", fontSize: "30px", color: "#0f172a" }}>
-                      Quick Sale
-                    </h2>
-                    <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
-                      Quick Sale stays available for immediate counter purchases while the rest of
-                      Front Counter now handles customer lookup, payment collection, and pickup
-                      workflow in the same workspace.
-                    </p>
+              <form onSubmit={completeSale} style={{ display: "grid", gap: "12px" }}>
+                <section
+                  id="quick-sale-workflow"
+                  style={{
+                    ...sectionCardStyle,
+                    padding: "16px",
+                    gap: "12px",
+                    height: "calc(100vh - 332px)",
+                    minHeight: "398px",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "center", flexWrap: "wrap" }}>
+                    <div>
+                      <p
+                        style={{
+                          margin: 0,
+                          color: "#78716c",
+                          fontSize: "11px",
+                          fontWeight: 800,
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        Walk-In Transaction
+                      </p>
+                      <h2 style={{ margin: "4px 0 0", fontSize: "24px", color: "#0f172a" }}>
+                        Quick Sale
+                      </h2>
+                    </div>
+                    <strong style={{ color: "#0f172a", fontSize: "24px" }}>{currency(total)}</strong>
                   </div>
 
-                  <section
+                  <div
                     style={{
-                      background: "#f8fafc",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "18px",
-                      padding: "18px",
+                      display: "grid",
+                      gridTemplateColumns: cart.length
+                        ? "minmax(320px, 0.82fr) minmax(420px, 1.18fr)"
+                        : "minmax(0, 1fr)",
+                      gap: "14px",
+                      alignItems: "stretch",
+                      minHeight: 0,
+                      height: "100%",
                     }}
                   >
-                    <h3 style={{ margin: "0 0 12px", fontSize: "20px" }}>Customer & Payment</h3>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
-                      <label style={labelStyle}>
-                        Customer Name <span style={{ color: "#78716c", fontWeight: 500 }}>(optional)</span>
-                        <input
-                          value={customerName}
-                          onChange={(event) => updateCustomerName(event.target.value)}
-                          placeholder="Walk-in Customer"
-                          style={fieldStyle}
-                        />
-                      </label>
-                      <label style={labelStyle}>
-                        Payment Method
-                        <select
-                          value={quickSalePaymentMethod}
-                          onChange={(event) => setQuickSalePaymentMethod(event.target.value)}
-                          style={fieldStyle}
-                        >
-                          {quickSalePaymentMethods.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                    {linkedCustomerId ? (
-                      <p style={{ margin: "12px 0 0", color: "#166534", fontWeight: 700 }}>
-                        Linked to existing customer: {linkedCustomerName}
-                      </p>
-                    ) : (
-                      <p style={{ margin: "12px 0 0", color: "#64748b", fontWeight: 700 }}>
-                        Use the customer lookup mode first if this quick sale should stay tied to a
-                        saved customer profile.
-                      </p>
-                    )}
-                  </section>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.5fr) minmax(280px, 0.8fr)", gap: "18px", alignItems: "start" }}>
                     <section
                       style={{
                         background: "#f8fafc",
                         border: "1px solid #e2e8f0",
-                        borderRadius: "18px",
-                        padding: "18px",
+                        borderRadius: "16px",
+                        padding: "14px",
+                        display: "grid",
+                        gap: "12px",
+                        alignContent: "start",
+                        minHeight: 0,
+                        overflowX: "hidden",
+                        overflowY: "auto",
                       }}
                     >
-                      <h3 style={{ margin: "0 0 12px", fontSize: "20px" }}>Add Item</h3>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "14px" }}>
-                        <label style={labelStyle}>
-                          Product
-                          <select
-                            ref={productSelectRef}
-                            value={selectedProductId}
-                            onChange={selectProduct}
-                            onKeyDown={handleLineItemKeyDown}
-                            style={fieldStyle}
+                      <h3 style={{ margin: 0, fontSize: "20px", color: "#0f172a" }}>
+                        {quickSaleStep === "product" && productSearchQuery.trim()
+                          ? "Product Search"
+                          : quickSaleStep === "product" && selectedProductCategory
+                          ? activeProductCategory
+                          : cart.length
+                          ? "Add Another Item"
+                          : "Search Product"}
+                      </h3>
+
+                      {lineItem.name ? (
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+                            gap: "8px",
+                          }}
+                        >
+                          <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", background: "#ffffff", padding: "10px" }}>
+                            <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 900, textTransform: "uppercase" }}>
+                              Selected Product
+                            </span>
+                            <strong style={{ display: "block", marginTop: "3px", color: "#0f172a", fontSize: "15px" }}>
+                              {lineItem.name}
+                            </strong>
+                          </div>
+                          {lineItem.color ? (
+                            <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", background: "#ffffff", padding: "10px" }}>
+                              <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 900, textTransform: "uppercase" }}>
+                                Selected Colour
+                              </span>
+                              <strong style={{ display: "block", marginTop: "3px", color: "#0f172a", fontSize: "15px" }}>
+                                {lineItem.color}
+                              </strong>
+                            </div>
+                          ) : null}
+                          {lineItem.size ? (
+                            <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", background: "#ffffff", padding: "10px" }}>
+                              <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 900, textTransform: "uppercase" }}>
+                                Selected Size
+                              </span>
+                              <strong style={{ display: "block", marginTop: "3px", color: "#0f172a", fontSize: "15px" }}>
+                                {lineItem.size}
+                              </strong>
+                            </div>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={resetProductSelection}
+                            style={{
+                              minHeight: "52px",
+                              border: "1px solid #cbd5e1",
+                              background: "#ffffff",
+                              borderRadius: "12px",
+                              padding: "10px 12px",
+                              fontWeight: 900,
+                              cursor: "pointer",
+                              alignSelf: "stretch",
+                            }}
                           >
-                            <option value="">Select product or type manually...</option>
-                            {products.map((product) => (
-                              <option key={product.id} value={product.id}>
-                                {product.name}
-                                {product.brand_model ? ` (${product.brand_model})` : ""}
-                              </option>
+                            Change Product
+                          </button>
+                        </div>
+                      ) : null}
+
+                      {quickSaleStep === "product" ? (
+                        <>
+                          <label style={labelStyle}>
+                            Product Search
+                            <input
+                              ref={productSelectRef}
+                              value={productSearchQuery}
+                              onChange={(event) => updateProductSearch(event.target.value)}
+                              placeholder="Search product, SKU, brand, or category"
+                              style={{ ...touchFieldStyle, minHeight: "52px", fontSize: "18px" }}
+                            />
+                          </label>
+
+                          {!productSearchQuery.trim() && productCategories.length ? (
+                            <div style={{ display: "grid", gap: "8px" }}>
+                              <strong style={{ color: "#0f172a", fontSize: "16px" }}>Browse Categories</strong>
+                              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                {productCategories.map((category) => (
+                                  <button
+                                    key={category}
+                                    type="button"
+                                    onClick={() => setSelectedProductCategory(category)}
+                                    style={{
+                                      minHeight: "48px",
+                                      borderRadius: "12px",
+                                      border:
+                                        activeProductCategory === category
+                                          ? "1px solid #0f172a"
+                                          : "1px solid #cbd5e1",
+                                      background: activeProductCategory === category ? "#0f172a" : "#ffffff",
+                                      color: activeProductCategory === category ? "#ffffff" : "#0f172a",
+                                      padding: "11px 14px",
+                                      fontWeight: 900,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    {category}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {visibleProducts.length ? (
+                          <div
+                            data-testid="pos-product-results"
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+                              gap: "10px",
+                              paddingRight: "2px",
+                            }}
+                          >
+                            {visibleProducts.map((product) => (
+                              <button
+                                key={product.id}
+                                type="button"
+                                data-testid="pos-product-result"
+                                onClick={() => selectProduct(product)}
+                                style={{
+                                  minHeight: "92px",
+                                  border: "1px solid #e2e8f0",
+                                  borderRadius: "14px",
+                                  background: "#ffffff",
+                                  color: "#0f172a",
+                                  padding: "12px",
+                                  textAlign: "left",
+                                  cursor: "pointer",
+                                  display: "grid",
+                                  gap: "5px",
+                                }}
+                              >
+                                <strong style={{ fontSize: "17px" }}>{product.name}</strong>
+                                <span style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>
+                                  {[getProductCategory(product), product.brand_model].filter(Boolean).join(" • ")}
+                                </span>
+                                <span style={{ color: "#0f172a", fontSize: "16px", fontWeight: 900 }}>
+                                  {getProductPrice(product) ? currency(getProductPrice(product)) : "Price at counter"}
+                                </span>
+                              </button>
                             ))}
-                          </select>
-                        </label>
-                        <label style={labelStyle}>
-                          Item Name
-                          <input
-                            name="name"
-                            value={lineItem.name}
-                            onChange={updateLineItem}
-                            onKeyDown={handleLineItemKeyDown}
-                            placeholder="T-Shirt"
-                            style={fieldStyle}
-                          />
-                        </label>
-                        <label style={labelStyle}>
-                          Color
-                          {selectedProduct?.colors?.length ? (
-                            <select
-                              name="color"
-                              value={lineItem.color}
-                              onChange={updateLineItem}
-                              onKeyDown={handleLineItemKeyDown}
-                              style={fieldStyle}
+
+                            {productSearchQuery.trim() ? (
+                              <button
+                                type="button"
+                                onClick={selectCustomProduct}
+                                style={{
+                                  minHeight: "92px",
+                                  border: "1px dashed #94a3b8",
+                                  borderRadius: "14px",
+                                  background: "#ffffff",
+                                  color: "#0f172a",
+                                  padding: "12px",
+                                  textAlign: "left",
+                                  cursor: "pointer",
+                                  display: "grid",
+                                  gap: "5px",
+                                }}
+                              >
+                                <strong style={{ fontSize: "17px" }}>Custom item</strong>
+                                <span style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>
+                                  Add "{productSearchQuery.trim()}" manually
+                                </span>
+                              </button>
+                            ) : null}
+                          </div>
+                          ) : productSearchQuery.trim() ? (
+                            <button
+                              type="button"
+                              onClick={selectCustomProduct}
+                              style={{
+                                minHeight: "92px",
+                                border: "1px dashed #94a3b8",
+                                borderRadius: "14px",
+                                background: "#ffffff",
+                                color: "#0f172a",
+                                padding: "12px",
+                                textAlign: "left",
+                                cursor: "pointer",
+                                display: "grid",
+                                gap: "5px",
+                              }}
                             >
+                              <strong style={{ fontSize: "17px" }}>Custom item</strong>
+                              <span style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>
+                                Add "{productSearchQuery.trim()}" manually
+                              </span>
+                            </button>
+                          ) : null}
+                        </>
+                      ) : null}
+
+                      {quickSaleStep === "color" ? (
+                        <div style={{ display: "grid", gap: "10px" }}>
+                          <strong style={{ color: "#0f172a", fontSize: "18px" }}>Choose Colour</strong>
+                          {needsColorSelection ? (
+                            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                               {selectedProduct.colors.map((color) => (
-                                <option key={color}>{color}</option>
+                                <button
+                                  key={color}
+                                  type="button"
+                                  data-testid="pos-color-option"
+                                  onClick={() => selectLineItemColor(color)}
+                                  style={{
+                                    minHeight: "54px",
+                                    border: "1px solid #cbd5e1",
+                                    background: "#ffffff",
+                                    borderRadius: "14px",
+                                    padding: "14px 18px",
+                                    fontSize: "16px",
+                                    fontWeight: 900,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  {color}
+                                </button>
                               ))}
-                            </select>
+                            </div>
                           ) : (
                             <input
                               name="color"
@@ -2250,24 +2804,39 @@ export default function QuickSale() {
                               onChange={updateLineItem}
                               onKeyDown={handleLineItemKeyDown}
                               placeholder="Black"
-                              style={fieldStyle}
+                              style={touchFieldStyle}
                             />
                           )}
-                        </label>
-                        <label style={labelStyle}>
-                          Size
-                          {selectedProduct?.sizes?.length ? (
-                            <select
-                              name="size"
-                              value={lineItem.size}
-                              onChange={updateLineItem}
-                              onKeyDown={handleLineItemKeyDown}
-                              style={fieldStyle}
-                            >
+                        </div>
+                      ) : null}
+
+                      {quickSaleStep === "size" ? (
+                        <div style={{ display: "grid", gap: "10px" }}>
+                          <strong style={{ color: "#0f172a", fontSize: "18px" }}>Choose Size</strong>
+                          {needsSizeSelection ? (
+                            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                               {selectedProduct.sizes.map((size) => (
-                                <option key={size}>{size}</option>
+                                <button
+                                  key={size}
+                                  type="button"
+                                  data-testid="pos-size-option"
+                                  onClick={() => selectLineItemSize(size)}
+                                  style={{
+                                    minWidth: "62px",
+                                    minHeight: "54px",
+                                    border: "1px solid #cbd5e1",
+                                    background: "#ffffff",
+                                    borderRadius: "14px",
+                                    padding: "14px 18px",
+                                    fontSize: "16px",
+                                    fontWeight: 900,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  {size}
+                                </button>
                               ))}
-                            </select>
+                            </div>
                           ) : (
                             <input
                               name="size"
@@ -2275,74 +2844,118 @@ export default function QuickSale() {
                               onChange={updateLineItem}
                               onKeyDown={handleLineItemKeyDown}
                               placeholder="L"
-                              style={fieldStyle}
+                              style={touchFieldStyle}
                             />
                           )}
-                        </label>
-                        <label style={labelStyle}>
-                          Qty
-                          <input
-                            type="number"
-                            min="1"
-                            name="qty"
-                            value={lineItem.qty}
-                            onChange={updateLineItem}
-                            onKeyDown={handleLineItemKeyDown}
-                            style={fieldStyle}
-                          />
-                        </label>
-                        <label style={labelStyle}>
-                          Unit Price
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            name="unit_price"
-                            value={lineItem.unit_price}
-                            onChange={updateLineItem}
-                            onKeyDown={handleLineItemKeyDown}
-                            placeholder="24.99"
-                            style={fieldStyle}
-                          />
-                        </label>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px" }}>
-                        <button
-                          type="button"
-                          onClick={addToCart}
-                          disabled={!canAddItem}
+                        </div>
+                      ) : null}
+
+                      {quickSaleStep === "quantity" ? (
+                        <div
                           style={{
-                            background: canAddItem ? "#171717" : "#a8a29e",
-                            color: "#ffffff",
-                            border: "none",
-                            borderRadius: "12px",
-                            padding: "13px 18px",
-                            cursor: canAddItem ? "pointer" : "not-allowed",
-                            fontWeight: 700,
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                            gap: "12px",
+                            alignItems: "end",
                           }}
                         >
-                          Add to Cart
-                        </button>
-                      </div>
+                          <QuantityStepper
+                            value={lineItem.qty}
+                            onChange={updateLineItemQuantity}
+                            onCommit={commitLineItemQuantity}
+                            onDecrement={() => stepLineItemQuantity(-1)}
+                            onIncrement={() => stepLineItemQuantity(1)}
+                            onKeyDown={handleLineItemKeyDown}
+                            testId="pos-line-quantity-stepper"
+                          />
+                          <label style={labelStyle}>
+                            Unit Price
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              name="unit_price"
+                              value={lineItem.unit_price}
+                              onChange={updateLineItem}
+                              onKeyDown={handleLineItemKeyDown}
+                              placeholder="24.99"
+                              style={{ ...keypadReadyFieldStyle, minHeight: "54px" }}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={addToCart}
+                            disabled={!canAddItem}
+                            style={{
+                              background: canAddItem ? "#171717" : "#a8a29e",
+                              color: "#ffffff",
+                              border: "none",
+                              borderRadius: "14px",
+                              padding: "14px 18px",
+                              minHeight: "58px",
+                              cursor: canAddItem ? "pointer" : "not-allowed",
+                              fontSize: "17px",
+                              fontWeight: 900,
+                            }}
+                          >
+                            Add to Cart
+                          </button>
+                        </div>
+                      ) : null}
                     </section>
 
-                    <aside
-                      style={{
-                        border: "1px solid #e2e8f0",
-                        borderRadius: "18px",
-                        padding: "18px",
-                        background: "#ffffff",
-                        position: "sticky",
-                        top: "18px",
-                      }}
-                    >
-                      <h3 style={{ margin: "0 0 12px", fontSize: "20px" }}>Cart</h3>
-                      {cart.length ? (
-                        <div style={{ display: "grid", gap: "10px" }}>
+                    {cart.length ? (
+                      <aside
+                        style={{
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "16px",
+                          padding: "14px",
+                          background: "#ffffff",
+                          display: "grid",
+                          gap: "10px",
+                          alignContent: "start",
+                          minHeight: 0,
+                          overflowX: "hidden",
+                          overflowY: "auto",
+                          boxShadow: "0 12px 28px rgba(15, 23, 42, 0.08)",
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "end" }}>
+                          <div>
+                            <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                              Current Sale
+                            </span>
+                            <h3 style={{ margin: "3px 0 0", fontSize: "24px" }}>Cart</h3>
+                          </div>
+                          <div style={{ display: "grid", gap: "8px", justifyItems: "end" }}>
+                            <strong style={{ color: "#0f172a", fontSize: "24px" }}>{currency(total)}</strong>
+                            {showQuickSaleCheckout ? (
+                              <button
+                                type="submit"
+                                disabled={!canCompleteSale}
+                                style={{
+                                  background: canCompleteSale ? "#171717" : "#a8a29e",
+                                  color: "#ffffff",
+                                  border: "none",
+                                  borderRadius: "12px",
+                                  padding: "10px 14px",
+                                  minHeight: "42px",
+                                  cursor: canCompleteSale ? "pointer" : "not-allowed",
+                                  fontSize: "14px",
+                                  fontWeight: 900,
+                                }}
+                              >
+                                Complete Sale
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div style={{ display: "grid", gap: "8px", paddingRight: "2px" }}>
                           {cart.map((item) => (
-                            <div key={item.id} style={{ border: "1px solid #e7e5e4", borderRadius: "12px", padding: "10px" }}>
+                            <div key={item.id} style={{ border: "1px solid #e7e5e4", borderRadius: "12px", padding: "9px" }}>
                               <div style={{ display: "flex", justifyContent: "space-between", gap: "10px" }}>
-                                <strong>{item.name}</strong>
+                                <strong style={{ color: "#0f172a" }}>{item.name}</strong>
                                 <button
                                   type="button"
                                   onClick={() => removeCartItem(item.id)}
@@ -2357,102 +2970,153 @@ export default function QuickSale() {
                                   Remove
                                 </button>
                               </div>
-                              <p style={{ margin: "4px 0", color: "#64748b", fontSize: "14px" }}>
-                                {[item.color, item.size].filter(Boolean).join(" • ") || "No variant"}
+                              <p style={{ margin: "3px 0 7px", color: "#64748b", fontSize: "13px" }}>
+                                {[item.color, item.size].filter(Boolean).join(" • ") || "No variant"} • {currency(item.line_total)}
                               </p>
-                              <div style={{ display: "grid", gridTemplateColumns: "72px 1fr", gap: "8px", alignItems: "end" }}>
-                                <label style={{ display: "grid", gap: "5px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
-                                  Qty
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    value={item.qty}
-                                    onChange={(event) => updateCartItem(item.id, "qty", event.target.value)}
-                                    onKeyDown={handleCartEditKeyDown}
-                                    style={compactFieldStyle}
-                                  />
-                                </label>
-                                <label style={{ display: "grid", gap: "5px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
+                              <div style={{ display: "grid", gridTemplateColumns: "minmax(178px, 0.9fr) minmax(140px, 1fr)", gap: "12px", alignItems: "end" }}>
+                                <QuantityStepper
+                                  label="Qty"
+                                  value={item.qty}
+                                  onChange={(value) => updateCartItem(item.id, "qty", value)}
+                                  onCommit={() => updateCartItem(item.id, "qty", item.qty)}
+                                  onDecrement={() => stepCartItemQuantity(item.id, -1)}
+                                  onIncrement={() => stepCartItemQuantity(item.id, 1)}
+                                  onKeyDown={handleCartEditKeyDown}
+                                  testId="pos-cart-quantity-stepper"
+                                  compact
+                                />
+                                <label style={{ display: "grid", gap: "4px", color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
                                   Unit Price
                                   <input
                                     type="number"
                                     min="0"
                                     step="0.01"
                                     value={item.unit_price}
-                                    onChange={(event) =>
-                                      updateCartItem(item.id, "unit_price", event.target.value)
-                                    }
+                                    onChange={(event) => updateCartItem(item.id, "unit_price", event.target.value)}
                                     onKeyDown={handleCartEditKeyDown}
-                                    style={compactFieldStyle}
+                                    style={{ ...compactFieldStyle, minHeight: "40px", fontWeight: 800, textAlign: "right" }}
                                   />
                                 </label>
                               </div>
-                              <p style={{ margin: "8px 0 0", color: "#292524" }}>
-                                Line Total: <strong>{currency(item.line_total)}</strong>
-                              </p>
                             </div>
                           ))}
                         </div>
-                      ) : (
-                        <p style={{ color: "#64748b", marginTop: 0 }}>No items added yet.</p>
-                      )}
-                      <div style={{ borderTop: "1px solid #e2e8f0", marginTop: "16px", paddingTop: "14px", display: "grid", gap: "8px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span>Subtotal</span>
-                          <strong>{currency(subtotal)}</strong>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span>Tax (13%)</span>
-                          <strong>{currency(taxTotal)}</strong>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "20px" }}>
-                          <span>Total</span>
-                          <strong>{currency(total)}</strong>
-                        </div>
-                      </div>
-                    </aside>
-                  </div>
 
-                  <label style={labelStyle}>
-                    Notes
-                    <textarea
-                      value={notes}
-                      onChange={(event) => setNotes(event.target.value)}
-                      placeholder="Optional sale note, counter note, or payment reference."
-                      style={{ ...fieldStyle, minHeight: "86px", resize: "vertical" }}
-                    />
-                  </label>
+                        <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "10px", display: "grid", gap: "6px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span>Subtotal</span>
+                            <strong>{currency(subtotal)}</strong>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span>Tax (13%)</span>
+                            <strong>{currency(taxTotal)}</strong>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "19px" }}>
+                            <span>Total</span>
+                            <strong>{currency(total)}</strong>
+                          </div>
+                        </div>
 
-                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      onClick={() => navigate("/admin")}
-                      style={{
-                        background: "#ffffff",
-                        border: "1px solid #cbd5e1",
-                        borderRadius: "12px",
-                        padding: "13px 18px",
-                        cursor: "pointer",
-                        fontWeight: 600,
-                      }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={!canCompleteSale}
-                      style={{
-                        background: canCompleteSale ? "#171717" : "#a8a29e",
-                        color: "#ffffff",
-                        border: "none",
-                        borderRadius: "12px",
-                        padding: "13px 18px",
-                        cursor: canCompleteSale ? "pointer" : "not-allowed",
-                        fontWeight: 700,
-                      }}
-                    >
-                      Complete Quick Sale
-                    </button>
+                        {!showQuickSaleCheckout ? (
+                          <button
+                            type="button"
+                            data-testid="pos-checkout-button"
+                            onClick={() => setShowQuickSaleCheckout(true)}
+                            style={{
+                              width: "100%",
+                              minHeight: "56px",
+                              border: "none",
+                              borderRadius: "14px",
+                              background: "#171717",
+                              color: "#ffffff",
+                              cursor: "pointer",
+                              fontSize: "17px",
+                              fontWeight: 900,
+                            }}
+                          >
+                            Checkout
+                          </button>
+                        ) : (
+                          <div style={{ display: "grid", gap: "10px", borderTop: "1px solid #e2e8f0", paddingTop: "10px" }}>
+                            <h3 style={{ margin: 0, fontSize: "20px" }}>Payment</h3>
+                            <input
+                              value={customerName}
+                              onChange={(event) => updateCustomerName(event.target.value)}
+                              placeholder="Walk-in Customer"
+                              style={{ ...touchFieldStyle, minHeight: "48px", fontSize: "16px" }}
+                              aria-label="Customer Name"
+                            />
+                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                              {quickSalePaymentMethods.map((option) => {
+                                const active = quickSalePaymentMethod === option;
+                                return (
+                                  <button
+                                    key={option}
+                                    type="button"
+                                    onClick={() => setQuickSalePaymentMethod(option)}
+                                    style={{
+                                      minHeight: "44px",
+                                      border: active ? "2px solid #0f172a" : "1px solid #cbd5e1",
+                                      background: active ? "#0f172a" : "#ffffff",
+                                      color: active ? "#ffffff" : "#0f172a",
+                                      borderRadius: "12px",
+                                      padding: "10px 12px",
+                                      fontSize: "14px",
+                                      fontWeight: 900,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    {option}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <textarea
+                              value={notes}
+                              onChange={(event) => setNotes(event.target.value)}
+                              placeholder="Optional sale note or payment reference."
+                              style={{ ...fieldStyle, minHeight: "54px", resize: "none" }}
+                              aria-label="Notes"
+                            />
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                              <button
+                                type="button"
+                                onClick={() => navigate("/admin")}
+                                style={{
+                                  background: "#ffffff",
+                                  border: "1px solid #cbd5e1",
+                                  borderRadius: "14px",
+                                  padding: "13px 16px",
+                                  minHeight: "52px",
+                                  cursor: "pointer",
+                                  fontSize: "15px",
+                                  fontWeight: 800,
+                                }}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                disabled={!canCompleteSale}
+                                style={{
+                                  background: canCompleteSale ? "#171717" : "#a8a29e",
+                                  color: "#ffffff",
+                                  border: "none",
+                                  borderRadius: "14px",
+                                  padding: "13px 16px",
+                                  minHeight: "52px",
+                                  cursor: canCompleteSale ? "pointer" : "not-allowed",
+                                  fontSize: "15px",
+                                  fontWeight: 900,
+                                }}
+                              >
+                                Complete Sale
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </aside>
+                    ) : null}
                   </div>
                 </section>
               </form>
