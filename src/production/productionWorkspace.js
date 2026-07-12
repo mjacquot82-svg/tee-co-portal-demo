@@ -21,6 +21,7 @@ export const PRODUCTION_STATUS_FILTERS = [
   { key: "blocked", label: "Blocked" },
   { key: "awaiting-deposit", label: "Awaiting Deposit" },
   { key: "ready-for-production", label: "Ready for Production" },
+  { key: "in-production", label: "In Production" },
   { key: "printing", label: "Printing" },
   { key: "embroidery", label: "Embroidery" },
   { key: "qc-finishing", label: "QC / Finishing" },
@@ -239,6 +240,10 @@ export function matchesProductionStatus(order, activeStatus) {
 
   if (activeStatus === "ready-for-production") {
     return readiness.statusKey === "ready-for-production";
+  }
+
+  if (activeStatus === "in-production") {
+    return workflowState === "Printing" || workflowState === "Embroidery";
   }
 
   if (activeStatus === "printing") {
