@@ -10,7 +10,7 @@ import {
   getStorefrontProducts,
   resolveStorefrontProductImage,
 } from "../lib/storefrontCatalog";
-import { areStoredProductsReady, useStoredProducts } from "../lib/productsStore";
+import { areStoredProductsReady, resolveProductBasePrice, useStoredProducts } from "../lib/productsStore";
 
 function buildStorefrontRenderIdentity(product, index) {
   const normalizedId = String(product?.id || "").trim();
@@ -48,6 +48,17 @@ function buildFeaturedSectionNote(featuredCount) {
   }
 
   return "Current catalog collections are available below.";
+}
+
+function formatBasePrice(value) {
+  return Number.isFinite(value) && Number(value) > 0
+    ? `From $${Number(value).toFixed(2)}`
+    : "Price unavailable";
+}
+
+function formatOptionCount(values = [], label) {
+  const count = Array.isArray(values) ? values.filter(Boolean).length : 0;
+  return `${count} ${label}${count === 1 ? "" : "s"}`;
 }
 
 export default function Home() {
@@ -294,9 +305,25 @@ export default function Home() {
                         <h3 className="storefront-featured-title">
                           {product?.name || "Catalog Product"}
                         </h3>
-                        <p className="storefront-featured-description">
-                          {product?.notes || "Available for custom orders."}
-                        </p>
+                        <div className="storefront-product-card-meta">
+                          <span>{formatBasePrice(resolveProductBasePrice(product))}</span>
+                          <span>{formatOptionCount(product?.colors, "color")}</span>
+                          <span>{formatOptionCount(product?.sizes, "size")}</span>
+                        </div>
+                        <details
+                          className="storefront-product-details storefront-product-details-compact"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            if (event.target.closest("summary")) {
+                              event.currentTarget.open = !event.currentTarget.open;
+                            }
+                          }}
+                        >
+                          <summary>Expand Details</summary>
+                          <p className="storefront-featured-description">
+                            {product?.description || product?.notes || "Available for custom orders."}
+                          </p>
+                        </details>
                       </div>
                     </Link>
                   );
@@ -430,9 +457,11 @@ export default function Home() {
                             <h4 className="storefront-featured-title">
                               {product?.name || "Catalog Product"}
                             </h4>
-                            <p className="storefront-featured-description">
-                              {product?.notes || "Available for custom orders."}
-                            </p>
+                            <div className="storefront-product-card-meta">
+                              <span>{formatBasePrice(resolveProductBasePrice(product))}</span>
+                              <span>{formatOptionCount(product?.colors, "color")}</span>
+                              <span>{formatOptionCount(product?.sizes, "size")}</span>
+                            </div>
                           </div>
                         </Link>
                       );

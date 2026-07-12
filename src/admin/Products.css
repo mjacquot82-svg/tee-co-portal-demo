@@ -1208,7 +1208,7 @@
 
 .products-stat-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(108px, 1fr));
+  grid-template-columns: repeat(3, minmax(108px, 1fr));
   gap: 8px;
 }
 
@@ -1350,6 +1350,7 @@
 .products-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto 1fr auto;
   gap: 14px;
   align-items: start;
   border: 1px solid #e2e8f0;
@@ -1382,13 +1383,17 @@
 .products-card-image,
 .products-card-image-placeholder {
   width: 100%;
-  height: 220px;
+  height: 300px;
   border-radius: 18px;
 }
 
 .products-card-image {
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   display: block;
+  box-sizing: border-box;
+  padding: 12px;
+  background: #f8fafc;
 }
 
 .products-card-image-placeholder {
@@ -1457,6 +1462,11 @@
   color: #0f172a;
   font-size: 20px;
   line-height: 1.2;
+  min-height: 48px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .products-card-subtitle {
@@ -1489,6 +1499,29 @@
   color: #475569;
   font-size: 13px;
   line-height: 1.55;
+}
+
+.products-card-details {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 10px;
+}
+
+.products-card-details summary {
+  list-style: none;
+  cursor: pointer;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.products-card-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.products-card-details-body {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
 }
 
 .products-card-price {
@@ -2826,7 +2859,7 @@
   .products-card-image,
   .products-card-image-placeholder {
     width: 100%;
-    height: 180px;
+    height: 260px;
   }
 
   .garment-library-card-media,

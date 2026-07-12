@@ -1777,10 +1777,6 @@ export default function Products() {
                 <strong>{activeCount}</strong>
               </div>
               <div className="products-stat-card">
-                <span>Garments</span>
-                <strong>{libraryItems.length}</strong>
-              </div>
-              <div className="products-stat-card">
                 <span>Categories</span>
                 <strong>{activeStorefrontCategories.length}</strong>
               </div>
@@ -2076,18 +2072,6 @@ export default function Products() {
                           <p className="products-card-subtitle">
                             {variantSummary}
                           </p>
-                          {!product?.garment_library_item_id && characteristicSummary.length ? (
-                            <div className="products-card-characteristics">
-                              {characteristicSummary.map((summary) => (
-                                <span key={summary} className="products-card-characteristic-pill">
-                                  {summary}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null}
-                          {product?.notes ? (
-                            <p className="products-card-description">{product.notes}</p>
-                          ) : null}
                         </div>
 
                         {linkedGarment?.title ? (
@@ -2096,6 +2080,26 @@ export default function Products() {
                               Template: {linkedGarment.title}
                             </span>
                           </div>
+                        ) : null}
+
+                        {product?.notes || (!product?.garment_library_item_id && characteristicSummary.length) ? (
+                          <details className="products-card-details">
+                            <summary>Expand Details</summary>
+                            <div className="products-card-details-body">
+                              {product?.notes ? (
+                                <p className="products-card-description">{product.notes}</p>
+                              ) : null}
+                              {!product?.garment_library_item_id && characteristicSummary.length ? (
+                                <div className="products-card-characteristics">
+                                  {characteristicSummary.map((summary) => (
+                                    <span key={summary} className="products-card-characteristic-pill">
+                                      {summary}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          </details>
                         ) : null}
                       </div>
 

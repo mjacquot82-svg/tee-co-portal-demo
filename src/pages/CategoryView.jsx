@@ -41,6 +41,19 @@ function buildPreviewList(values = [], limit = 4) {
   };
 }
 
+function getProductDetailValue(product = {}, keys = []) {
+  for (const key of keys) {
+    const value = product?.[key];
+    if (Array.isArray(value)) {
+      const normalized = value.filter(Boolean).join(", ");
+      if (normalized) return normalized;
+    } else if (String(value || "").trim()) {
+      return String(value).trim();
+    }
+  }
+  return "";
+}
+
 export default function CategoryView() {
   const { categoryId } = useParams();
   const storedProducts = useStoredProducts();
@@ -209,9 +222,20 @@ export default function CategoryView() {
         {categoryProducts.map((item, index) => {
           const productImage = resolveStorefrontProductImage(item, { size: "thumb" });
           const renderIdentity = buildCategoryProductRenderIdentity(item, index);
-          const colorPreview = buildPreviewList(item?.colors, 4);
-          const sizePreview = buildPreviewList(item?.sizes, 6);
+          const colorPreview = buildPreviewList(item?.colors, 6);
+          const sizePreview = buildPreviewList(item?.sizes, 8);
           const categoryLabel = getStorefrontProductCategoryLabel(item, storefrontCategories);
+          const description = getProductDetailValue(item, ["description", "notes", "summary"]);
+          const material = getProductDetailValue(item, ["material", "fabric", "fabric_content"]);
+          const fabricWeight = getProductDetailValue(item, ["fabric_weight", "weight"]);
+          const template = getProductDetailValue(item, ["template", "template_name", "garment_template"]);
+          const technicalInfo = getProductDetailValue(item, [
+            "technical_information",
+            "technical_info",
+            "specifications",
+            "specs",
+            "care_instructions",
+          ]);
           console.info("[CategoryView] Rendering category product card", {
             index,
             id: item?.id || null,
@@ -285,18 +309,6 @@ export default function CategoryView() {
                 >
                   {item.name}
                 </h3>
-
-                <p
-                  className="storefront-category-product-description"
-                  style={{
-                    margin: 0,
-                    color: "#57534e",
-                    fontSize: "13px",
-                    lineHeight: 1.45,
-                  }}
-                >
-                  {item.notes || `${categoryLabel} ready for custom orders.`}
-                </p>
               </div>
 
               <div>
@@ -348,8 +360,48 @@ export default function CategoryView() {
                 </span>
               </div>
 
-              {colorPreview.totalCount ? (
-                <div style={{ display: "grid", gap: "6px" }}>
+              <details
+                className="storefront-product-details"
+                onClick={(event) => {
+                  event.preventDefault();
+                  if (event.target.closest("summary")) {
+                    event.currentTarget.open = !event.currentTarget.open;
+                  }
+                }}
+              >
+                <summary>Expand Details</summary>
+                <div className="storefront-product-details-body">
+                  {description ? (
+                    <p className="storefront-category-product-description">{description}</p>
+                  ) : null}
+                  <dl className="storefront-product-detail-list">
+                    {material ? (
+                      <>
+                        <dt>Material</dt>
+                        <dd>{material}</dd>
+                      </>
+                    ) : null}
+                    {fabricWeight ? (
+                      <>
+                        <dt>Fabric weight</dt>
+                        <dd>{fabricWeight}</dd>
+                      </>
+                    ) : null}
+                    {template ? (
+                      <>
+                        <dt>Template</dt>
+                        <dd>{template}</dd>
+                      </>
+                    ) : null}
+                    {technicalInfo ? (
+                      <>
+                        <dt>Technical</dt>
+                        <dd>{technicalInfo}</dd>
+                      </>
+                    ) : null}
+                  </dl>
+                  {colorPreview.totalCount ? (
+                    <div style={{ display: "grid", gap: "6px" }}>
                   <p
                     style={{
                       margin: 0,
@@ -360,9 +412,9 @@ export default function CategoryView() {
                       color: "#78716c",
                     }}
                   >
-                    Available Colors
-                  </p>
-                  <div
+                      Available Colors
+                    </p>
+                    <div
                     className="storefront-category-product-option-list"
                     style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}
                   >
@@ -402,10 +454,10 @@ export default function CategoryView() {
                     ) : null}
                   </div>
                 </div>
-              ) : null}
+                  ) : null}
 
-              {sizePreview.totalCount ? (
-                <div style={{ display: "grid", gap: "6px" }}>
+                  {sizePreview.totalCount ? (
+                    <div style={{ display: "grid", gap: "6px" }}>
                   <p
                     style={{
                       margin: 0,
@@ -462,7 +514,9 @@ export default function CategoryView() {
                     ) : null}
                   </div>
                 </div>
-              ) : null}
+                  ) : null}
+                </div>
+              </details>
             </Link>
           );
         })}

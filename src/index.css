@@ -705,7 +705,7 @@ aside img:not(.tee-co-logo) {
   border-radius: 22px;
   width: 100%;
   max-width: 260px;
-  min-height: 190px;
+  min-height: 214px;
   box-sizing: border-box;
 }
 
@@ -716,8 +716,8 @@ aside img:not(.tee-co-logo) {
 
 .storefront-featured-image-shell {
   width: 104px;
-  height: 112px;
-  max-height: 112px;
+  height: 136px;
+  max-height: 136px;
   border-radius: 16px;
   overflow: hidden;
   background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
@@ -746,6 +746,7 @@ aside img:not(.tee-co-logo) {
 .storefront-featured-title {
   font-size: 17px;
   line-height: 1.2;
+  min-height: 61px;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -787,14 +788,14 @@ aside img:not(.tee-co-logo) {
 }
 
 .storefront-category-row-grid {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 260px));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 248px), 272px));
   justify-content: center;
   align-items: start;
 }
 
 .storefront-category-product-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 248px), 268px));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 248px), 276px));
   justify-content: center;
   align-items: start;
   gap: 16px;
@@ -802,18 +803,18 @@ aside img:not(.tee-co-logo) {
 
 .storefront-category-product-card {
   width: 100%;
-  max-width: 268px;
-  height: 712px;
+  max-width: 276px;
+  min-height: 0;
   box-sizing: border-box;
   align-content: start;
-  overflow: hidden;
+  grid-template-rows: auto minmax(60px, auto) auto auto;
 }
 
 .storefront-category-product-image-shell {
   width: 100%;
-  aspect-ratio: 4 / 5;
+  aspect-ratio: 3 / 4;
   min-height: 0;
-  max-height: 335px;
+  max-height: 430px;
   box-sizing: border-box;
 }
 
@@ -826,19 +827,93 @@ aside img:not(.tee-co-logo) {
 
 .storefront-category-product-title {
   -webkit-line-clamp: 3;
+  min-height: 60px;
 }
 
 .storefront-category-product-description {
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 5;
 }
 
 .storefront-category-product-option-list {
-  max-height: 58px;
+  max-height: 92px;
   overflow: hidden;
 }
 
+.storefront-product-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.storefront-product-card-meta span {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.storefront-product-card-meta span:first-child {
+  background: #111827;
+  border-color: #111827;
+  color: #ffffff;
+}
+
+.storefront-product-details {
+  border-top: 1px solid #e7e5e4;
+  padding-top: 10px;
+}
+
+.storefront-product-details summary {
+  list-style: none;
+  cursor: pointer;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.storefront-product-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.storefront-product-details-body {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+}
+
+.storefront-product-detail-list {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.storefront-product-detail-list dt {
+  color: #78716c;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.storefront-product-detail-list dd {
+  margin: 0;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.storefront-product-details-compact {
+  margin-top: 2px;
+}
+
 .storefront-category-row-grid .storefront-featured-card {
-  height: 345px;
+  min-height: 260px;
+  height: auto;
   overflow: hidden;
 }
 
