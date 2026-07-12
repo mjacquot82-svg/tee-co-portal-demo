@@ -563,7 +563,10 @@ function AdminSidebar({ pathname, staffUser }) {
         flexShrink: 0,
         display: "flex",
         flexDirection: "column",
-        overflow: "hidden",
+        overflowX: "hidden",
+        overflowY: "auto",
+        height: "100vh",
+        maxHeight: "100vh",
         minHeight: "100vh",
         background: "#ffffff",
         borderRight: "1px solid #e2e8f0",
@@ -709,6 +712,7 @@ function AdminSidebar({ pathname, staffUser }) {
               <div style={{ display: "grid", gap: "4px" }}>
                 {section.links.map((link) => {
                   const active = activeLink === (link.navKey || link.to);
+                  const isCurrentRoute = pathname === link.to;
                   const navItemStyle = {
                     display: "flex",
                     justifyContent: "space-between",
@@ -726,8 +730,8 @@ function AdminSidebar({ pathname, staffUser }) {
                     boxShadow: active
                       ? "none"
                       : "none",
-                    cursor: active ? "default" : "pointer",
-                    pointerEvents: active ? "none" : "auto",
+                    cursor: active && isCurrentRoute ? "default" : "pointer",
+                    pointerEvents: active && isCurrentRoute ? "none" : "auto",
                     color: active ? "#1d4ed8" : "#171717",
                   };
 
@@ -741,7 +745,7 @@ function AdminSidebar({ pathname, staffUser }) {
                     </>
                   );
 
-                  if (active) {
+                  if (active && isCurrentRoute) {
                     return (
                       <div
                         key={link.to}
@@ -754,7 +758,12 @@ function AdminSidebar({ pathname, staffUser }) {
                   }
 
                   return (
-                    <Link key={link.to} to={link.to} style={navItemStyle}>
+                    <Link
+                      key={link.to}
+                      to={link.to}
+                      aria-current={active ? "page" : undefined}
+                      style={navItemStyle}
+                    >
                       {content}
                     </Link>
                   );

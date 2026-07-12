@@ -11,7 +11,7 @@ import { matchesCustomerRecord } from "../lib/customerRecordMatching";
 import { findPotentialDuplicatesForCustomer } from "../lib/customerDuplicates";
 import { previewCustomerMerge, mergeCustomers } from "../lib/customerMergeService";
 import { getAllCustomerArtwork } from "../lib/customerArtworkStore";
-import { listCustomerTimelineEvents } from "../lib/customerTimelineStore";
+import { listCustomerTimelineEvents, useCustomerTimeline } from "../lib/customerTimelineStore";
 import {
   deriveOperationalWorkflowState,
   getWorkflowStateTone,
@@ -54,17 +54,17 @@ function describeSignal(signal) {
 const sectionCardStyle = {
   background: "#ffffff",
   borderRadius: "20px",
-  padding: "22px",
+  padding: "18px",
   boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
 };
 
 const summaryCardStyle = {
   background: "#f8fafc",
-  borderRadius: "18px",
+  borderRadius: "16px",
   border: "1px solid #e2e8f0",
-  padding: "18px",
+  padding: "14px 16px",
   display: "grid",
-  gap: "6px",
+  gap: "4px",
 };
 
 const fieldStyle = {
@@ -87,10 +87,10 @@ const labelStyle = {
 const compactSectionStyle = {
   border: "1px solid #e2e8f0",
   borderRadius: "18px",
-  padding: "16px",
+  padding: "14px",
   background: "#fcfcfd",
   display: "grid",
-  gap: "12px",
+  gap: "10px",
 };
 
 const compactRowStyle = {
@@ -98,9 +98,16 @@ const compactRowStyle = {
   gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
   gap: "12px",
   alignItems: "center",
-  padding: "12px 0",
+  padding: "10px 0",
   borderTop: "1px solid #e2e8f0",
 };
+
+function formatLatestTimelineActivity(event) {
+  if (!event) return "No operational history recorded yet.";
+
+  const timestamp = formatDateTime(event.timestamp);
+  return `${event.summary || event.eventType || "Activity recorded"}${timestamp ? ` • ${timestamp}` : ""}`;
+}
 
 function buildCustomerForm(customer) {
   return {
@@ -131,6 +138,7 @@ export default function CustomerDetail() {
   const [mergeError, setMergeError] = useState("");
   const [mergeWarnings, setMergeWarnings] = useState([]);
   const [mergeConfirmationText, setMergeConfirmationText] = useState("");
+  const [timelineExpanded, setTimelineExpanded] = useState(false);
   const canManageMerges = canManageCustomerMerges();
 
   const customer = useMemo(
@@ -163,6 +171,9 @@ export default function CustomerDetail() {
         )
       );
   }, [customer, sales]);
+
+  const timelineEvents = useCustomerTimeline(customer?.id || "");
+  const latestTimelineEvent = timelineEvents[0] || null;
 
   const quoteRecords = useMemo(
     () =>
@@ -699,7 +710,7 @@ export default function CustomerDetail() {
               fontWeight: 700,
             }}
           >
-            Back to Customers
+            ← Back to Customers
           </Link>
           <button
             type="button"
@@ -792,7 +803,118 @@ export default function CustomerDetail() {
         </article>
       </section>
 
-      <div style={{ marginBottom: "18px" }}>
+      <section style={{ ...sectionCardStyle, marginBottom: "18px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+            alignItems: "center",
+            marginBottom: "12px",
+          }}
+        >
+          <div>
+            <h2 style={{ margin: 0, fontSize: "20px" }}>Contact Information</h2>
+            <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: "14px" }}>
+              Primary contact details for order follow-up and payment questions.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleArchiveToggle}
+            disabled={saveState === "saving" || archiveState === "saving"}
+            style={{
+              border: customer.archived ? "1px solid #86efac" : "1px solid #fca5a5",
+              background: customer.archived ? "#f0fdf4" : "#fff1f2",
+              color: customer.archived ? "#166534" : "#9f1239",
+              borderRadius: "12px",
+              padding: "10px 12px",
+              fontWeight: 700,
+              cursor:
+                saveState === "saving" || archiveState === "saving" ? "not-allowed" : "pointer",
+              opacity: saveState === "saving" || archiveState === "saving" ? 0.65 : 1,
+            }}
+          >
+            {archiveState === "saving"
+              ? customer.archived
+                ? "Restoring..."
+                : "Archiving..."
+              : customer.archived
+                ? "Restore Customer"
+                : "Archive Customer"}
+          </button>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: "10px",
+          }}
+        >
+          <div style={summaryCardStyle}>
+            <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Company</span>
+            <strong style={{ color: "#171717" }}>{customer.company || "-"}</strong>
+          </div>
+          <div style={summaryCardStyle}>
+            <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Phone</span>
+            <strong style={{ color: "#171717" }}>{customer.phone || "-"}</strong>
+          </div>
+          <div style={summaryCardStyle}>
+            <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Email</span>
+            <strong style={{ color: "#171717", overflowWrap: "anywhere" }}>
+              {customer.email || "-"}
+            </strong>
+          </div>
+          <div style={summaryCardStyle}>
+            <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Status</span>
+            <strong style={{ color: customer.archived ? "#9f1239" : "#166534" }}>
+              {customer.archived ? "Archived" : "Active"}
+            </strong>
+            {customer.archived_at ? (
+              <span style={{ color: "#64748b", fontSize: "12px" }}>
+                {customer.archived ? formatDateTime(customer.archived_at) : ""}
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {customer.notes ? (
+          <div
+            style={{
+              marginTop: "12px",
+              borderRadius: "14px",
+              border: "1px solid #e2e8f0",
+              background: "#f8fafc",
+              padding: "12px 14px",
+              color: "#334155",
+              lineHeight: 1.5,
+            }}
+          >
+            <strong style={{ color: "#0f172a" }}>Notes: </strong>
+            {customer.notes}
+          </div>
+        ) : null}
+
+        {archiveError ? (
+          <div
+            style={{
+              marginTop: "12px",
+              border: "1px solid #fecaca",
+              background: "#fff1f2",
+              color: "#9f1239",
+              borderRadius: "14px",
+              padding: "12px 14px",
+              fontWeight: 600,
+            }}
+          >
+            {archiveError}
+          </div>
+        ) : null}
+      </section>
+
+      <div style={{ display: "grid", gap: "18px" }}>
         <PaymentRequestForm
           title="Create Payment Request"
           description="Create a staff-managed payment request for this customer or one of their linked orders."
@@ -800,9 +922,82 @@ export default function CustomerDetail() {
           orders={customerOrders}
           defaultType={operationalSummary.orderBalanceDue > 0 ? "balance" : "custom_amount"}
         />
-      </div>
 
-      <div style={{ display: "grid", gap: "18px" }}>
+        {renderOperationalSection(
+          "Active Requests",
+          "Open request work, approvals, and deposit checkpoints for this account.",
+          quoteRecords,
+          "No active requests linked to this customer yet.",
+          "quote"
+        )}
+
+        {renderOperationalSection(
+          "Active Orders",
+          "Current production and pickup workflow in operational sequence.",
+          activeOrderRecords,
+          "No active production orders linked to this customer yet.",
+          "order"
+        )}
+
+        <section id="customer-timeline-summary" style={sectionCardStyle}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: "12px",
+              flexWrap: "wrap",
+              alignItems: "flex-start",
+            }}
+          >
+            <div>
+              <h2 style={{ margin: 0, fontSize: "20px" }}>Operational Timeline</h2>
+              <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: "14px" }}>
+                {timelineEvents.length} event{timelineEvents.length === 1 ? "" : "s"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTimelineExpanded((current) => !current)}
+              style={{
+                border: "1px solid #cbd5e1",
+                background: timelineExpanded ? "#0f172a" : "#ffffff",
+                color: timelineExpanded ? "#ffffff" : "#0f172a",
+                borderRadius: "12px",
+                padding: "10px 13px",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              {timelineExpanded ? "Hide Timeline" : "View Timeline"}
+            </button>
+          </div>
+
+          {!timelineExpanded ? (
+            <div
+              style={{
+                marginTop: "12px",
+                borderRadius: "16px",
+                border: "1px solid #e2e8f0",
+                background: "#f8fafc",
+                padding: "14px",
+                display: "grid",
+                gap: "6px",
+              }}
+            >
+              <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 900 }}>
+                Latest Activity
+              </span>
+              <strong style={{ color: "#0f172a", lineHeight: 1.45 }}>
+                {formatLatestTimelineActivity(latestTimelineEvent)}
+              </strong>
+            </div>
+          ) : (
+            <div style={{ marginTop: "14px" }}>
+              <CustomerTimelineSection customerId={customer.id} />
+            </div>
+          )}
+        </section>
+
         {canManageMerges ? (
           <section
             style={{
@@ -1099,30 +1294,12 @@ export default function CustomerDetail() {
         ) : null}
 
         {renderOperationalSection(
-          "Active Requests",
-          "Open request work, approvals, and deposit checkpoints for this account.",
-          quoteRecords,
-          "No active requests linked to this customer yet.",
-          "quote"
-        )}
-
-        {renderOperationalSection(
-          "Active Orders",
-          "Current production and pickup workflow in operational sequence.",
-          activeOrderRecords,
-          "No active production orders linked to this customer yet.",
-          "order"
-        )}
-
-        {renderOperationalSection(
           "Completed Orders",
           "Recent finished work for repeat-order context and handoff history.",
           completedOrderRecords,
           "No completed orders linked to this customer yet.",
           "completed"
         )}
-
-        <CustomerTimelineSection customerId={customer.id} />
 
         {isEditing ? (
           <section style={sectionCardStyle}>
@@ -1317,69 +1494,6 @@ export default function CustomerDetail() {
             </form>
           </section>
         ) : null}
-
-        <section style={sectionCardStyle}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: "12px",
-              flexWrap: "wrap",
-              alignItems: "center",
-            }}
-          >
-            <h2 style={{ marginTop: 0, marginBottom: 0 }}>Contact Information</h2>
-            <button
-              type="button"
-              onClick={handleArchiveToggle}
-              disabled={saveState === "saving" || archiveState === "saving"}
-              style={{
-                border: customer.archived ? "1px solid #86efac" : "1px solid #fca5a5",
-                background: customer.archived ? "#f0fdf4" : "#fff1f2",
-                color: customer.archived ? "#166534" : "#9f1239",
-                borderRadius: "12px",
-                padding: "10px 12px",
-                fontWeight: 700,
-                cursor:
-                  saveState === "saving" || archiveState === "saving" ? "not-allowed" : "pointer",
-                opacity: saveState === "saving" || archiveState === "saving" ? 0.65 : 1,
-              }}
-            >
-              {archiveState === "saving"
-                ? customer.archived
-                  ? "Restoring..."
-                  : "Archiving..."
-                : customer.archived
-                  ? "Restore Customer"
-                  : "Archive Customer"}
-            </button>
-          </div>
-          <p><strong>Company:</strong> {customer.company || "—"}</p>
-          <p><strong>Phone:</strong> {customer.phone || "—"}</p>
-          <p><strong>Email:</strong> {customer.email || "—"}</p>
-          {customer.notes && <p><strong>Notes:</strong> {customer.notes}</p>}
-          {archiveError ? (
-            <div
-              style={{
-                marginTop: "14px",
-                border: "1px solid #fecaca",
-                background: "#fff1f2",
-                color: "#9f1239",
-                borderRadius: "14px",
-                padding: "12px 14px",
-                fontWeight: 600,
-              }}
-            >
-              {archiveError}
-            </div>
-          ) : null}
-          {customer.archived_at ? (
-            <p style={{ color: "#64748b", marginBottom: 0 }}>
-              <strong>Status:</strong> {customer.archived ? "Archived" : "Active"}
-              {customer.archived ? ` on ${formatDateTime(customer.archived_at)}` : ""}
-            </p>
-          ) : null}
-        </section>
 
         <CustomerArtworkSection customerId={customer.id} customerName={customer.name} />
 
