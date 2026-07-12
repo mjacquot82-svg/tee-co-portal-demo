@@ -1343,7 +1343,7 @@
 }
 
 .garment-library-grid {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   align-items: start;
 }
 
@@ -1669,8 +1669,15 @@
 
 .garment-library-card .products-card-image,
 .garment-library-card .products-card-image-placeholder {
-  height: 188px;
+  height: 260px;
   border-radius: 16px;
+}
+
+.garment-library-card .products-card-image {
+  object-fit: contain;
+  background: #f8fafc;
+  padding: 10px;
+  box-sizing: border-box;
 }
 
 .garment-library-card-header,
@@ -1765,6 +1772,8 @@
 .garment-library-card-details {
   border-top: 1px solid #e2e8f0;
   padding-top: 10px;
+  display: grid;
+  gap: 10px;
 }
 
 .garment-library-card-details summary {
@@ -1794,6 +1803,10 @@
   font-weight: 700;
   letter-spacing: 0;
   text-transform: none;
+}
+
+.garment-library-metadata-chip-action {
+  cursor: pointer;
 }
 
 .garment-library-preview-chip,

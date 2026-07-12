@@ -1159,41 +1159,6 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
           <div className="garment-library-card-top-metrics">
             <span className="garment-library-metric-pill">{formatCountLabel(summary.totalColors, "color")}</span>
             <span className="garment-library-metric-pill">{formatCountLabel(summary.totalSizes, "size")}</span>
-            <span className="garment-library-metric-pill">
-              {formatCountLabel(summary.activeVariants, "variant")}
-            </span>
-            {linkedProductCount > 0 ? (
-              <button
-                type="button"
-                className="garment-library-metric-pill garment-library-metric-pill-action"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onViewLinkedProducts();
-                }}
-              >
-                {formatCountLabel(linkedProductCount, "storefront use", "storefront uses")}
-              </button>
-            ) : (
-              <span className="garment-library-metric-pill garment-library-metric-pill-muted">
-                No storefront use
-              </span>
-            )}
-          </div>
-
-          <div className="garment-library-card-preview-grid">
-            <div className="garment-library-card-preview-block">
-              <span className="garment-library-card-preview-label">Colors</span>
-              <div className="garment-library-card-preview-row">
-                {renderPreviewChips(summary.colorPreview, "No colors")}
-              </div>
-            </div>
-
-            <div className="garment-library-card-preview-block">
-              <span className="garment-library-card-preview-label">Sizes</span>
-              <div className="garment-library-card-preview-row">
-                {renderPreviewChips(summary.sizePreview, "No sizes")}
-              </div>
-            </div>
           </div>
 
           <details
@@ -1203,13 +1168,31 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
             }}
           >
             <summary className="garment-library-card-details-summary">
-              <span>More details</span>
+              <span>Expand Details</span>
               <span className="garment-library-card-details-summary-meta">
                 {summary.supplierSkuCount || 0} SKUs
                 {summary.inactiveVariants ? ` • ${summary.inactiveVariants} inactive` : ""}
               </span>
             </summary>
+            <div className="garment-library-card-preview-grid">
+              <div className="garment-library-card-preview-block">
+                <span className="garment-library-card-preview-label">Colors</span>
+                <div className="garment-library-card-preview-row">
+                  {renderPreviewChips(summary.colorPreview, "No colors")}
+                </div>
+              </div>
+
+              <div className="garment-library-card-preview-block">
+                <span className="garment-library-card-preview-label">Sizes</span>
+                <div className="garment-library-card-preview-row">
+                  {renderPreviewChips(summary.sizePreview, "No sizes")}
+                </div>
+              </div>
+            </div>
             <div className="garment-library-card-metadata">
+              <span className="garment-library-metadata-chip">
+                {formatCountLabel(summary.activeVariants, "active variant")}
+              </span>
               <span className="garment-library-metadata-chip">
                 {formatCountLabel(variantCount, "supplier variant")}
               </span>
@@ -1220,6 +1203,20 @@ const GarmentLibraryCard = memo(function GarmentLibraryCard({
               <span className="garment-library-metadata-chip">
                 Placements: {summary.defaultPlacements.length ? summary.defaultPlacements.join(", ") : "None"}
               </span>
+              {linkedProductCount > 0 ? (
+                <button
+                  type="button"
+                  className="garment-library-metadata-chip garment-library-metadata-chip-action"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onViewLinkedProducts();
+                  }}
+                >
+                  {formatCountLabel(linkedProductCount, "storefront use", "storefront uses")}
+                </button>
+              ) : (
+                <span className="garment-library-metadata-chip">No storefront use</span>
+              )}
               {subtitle ? <span className="garment-library-metadata-chip">{subtitle}</span> : null}
             </div>
           </details>
