@@ -519,6 +519,23 @@ export default function OrderDetail() {
   const updatedAt = formatDateTimeParts(order.updated_at);
   const sizeBreakdownEntries = buildSizeBreakdownEntries(order.size_breakdown);
   const printOrder = normalizedOrder || order;
+  const assignmentPanel = (
+    <AssignmentPanel
+      order={order}
+      staffUsers={staffUsers}
+      onAssign={handleAssign}
+      workflowActions={workflowActions}
+      onRunWorkflowAction={handleWorkflowAction}
+      canManageAssignments={canManageAssignments}
+      canSelfAssign={selfAssignAllowed}
+      onSelfAssign={handleSelfAssign}
+      productionGating={productionGating}
+      onArtworkApprovalChange={handleArtworkApprovalChange}
+      onGatingOverride={handleGatingOverride}
+      onForceMoveToProduction={handleForceMoveToProduction}
+      workflowFeedback={workflowFeedback}
+    />
+  );
   return (
     <div
       className="order-detail-page"
@@ -527,6 +544,27 @@ export default function OrderDetail() {
       data-workflow-state={order.status || ""}
       style={{ maxWidth: "1280px", margin: "0 auto", padding: "24px" }}
     >
+      {processProjection ? (
+        <>
+          <div style={{ marginBottom: "18px" }}>
+            <ProductionProgressTracker order={order} processProjection={processProjection} />
+          </div>
+          <div className="production-workspace-controls" style={{ marginBottom: "28px" }}>
+            <p style={{ ...sectionLabelStyle, marginBottom: "10px" }}>Production Controls & Assignment</p>
+            {assignmentPanel}
+          </div>
+          <div
+            data-testid="supporting-order-information"
+            style={{ borderTop: "1px solid #cbd5e1", paddingTop: "24px", marginBottom: "18px" }}
+          >
+            <p style={{ ...sectionLabelStyle, color: "#475569" }}>Supporting Order Information</p>
+            <p style={{ margin: "6px 0 0", color: "#64748b" }}>
+              Customer, artwork, financial, order, and activity context for the production process.
+            </p>
+          </div>
+        </>
+      ) : null}
+
       <div
         style={{
           display: "flex",
@@ -693,9 +731,11 @@ export default function OrderDetail() {
         </div>
       </div>
 
-      <div style={{ marginBottom: "18px" }}>
-        <ProductionProgressTracker order={order} processProjection={processProjection} />
-      </div>
+      {processProjection ? null : (
+        <div style={{ marginBottom: "18px" }}>
+          <ProductionProgressTracker order={order} />
+        </div>
+      )}
 
       <div className="order-detail-main-grid">
         <div style={{ display: "grid", gap: "18px" }}>
@@ -881,22 +921,8 @@ export default function OrderDetail() {
         </aside>
       </div>
 
-      <div className="order-detail-operational-grid">
-        <AssignmentPanel
-          order={order}
-          staffUsers={staffUsers}
-          onAssign={handleAssign}
-          workflowActions={workflowActions}
-          onRunWorkflowAction={handleWorkflowAction}
-          canManageAssignments={canManageAssignments}
-          canSelfAssign={selfAssignAllowed}
-          onSelfAssign={handleSelfAssign}
-          productionGating={productionGating}
-          onArtworkApprovalChange={handleArtworkApprovalChange}
-          onGatingOverride={handleGatingOverride}
-          onForceMoveToProduction={handleForceMoveToProduction}
-          workflowFeedback={workflowFeedback}
-        />
+      <div className={processProjection ? "order-detail-activity-section" : "order-detail-operational-grid"}>
+        {processProjection ? null : assignmentPanel}
 
         <ActivityTimeline
           events={normalizedOrder?.connected_timeline || order.activity_log || []}

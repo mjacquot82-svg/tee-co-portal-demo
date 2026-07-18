@@ -28,7 +28,12 @@ test("TC-115332 receives the expected read-only Slice 1 process projection", () 
     processName: "DTF Production",
     templateVersion: 1,
     processState: "Active",
-    primaryCurrentTask: { name: "Order Transfers", state: "Available" },
+    primaryCurrentTask: {
+      name: "Order Transfers",
+      state: "Available",
+      reason: "This task is available because it has no incomplete prerequisites.",
+    },
+    progress: { completed: 0, total: 7 },
   });
   expect(projection.availableTasks.map((task) => task.name)).toEqual(["Order Transfers"]);
   expect(projection.blockedTasks.map((task) => task.name)).toEqual([
@@ -39,6 +44,10 @@ test("TC-115332 receives the expected read-only Slice 1 process projection", () 
     "Package Order",
     "Release for Pickup",
   ]);
+  expect(projection.upcomingTasks).toMatchObject([
+    { name: "Receive Transfers", reason: "Waiting for Order Transfers." },
+  ]);
+  expect(projection.completedTasks).toEqual([]);
   expect(projection.historySummary.map((event) => event.label)).toEqual([
     "Process Created",
     "Order Transfers Available",
@@ -52,16 +61,25 @@ test("the existing production section presents projected engine information with
 
   [
     "Process",
+    "What should I do right now?",
     "Template Version",
     "Process State",
     "Current Task",
+    "Task Status",
+    "Primary Action",
     "Available Tasks",
+    "What comes next?",
     "Blocked Tasks",
-    "History",
+    "Completed Tasks",
+    "Progress",
+    "Process History",
   ].forEach((label) => expect(source).toContain(label));
 
   expect(source).not.toContain("tee-co-dtf-production");
   expect(source).not.toContain("order-transfers");
+  expect(source).not.toContain("onClick");
+  expect(source).toContain("disabled");
+  expect(source).toContain('currentTask?.state === "In Progress" ? "Complete" : "Start"');
 });
 
 test("Order Detail passes the process projection only into the existing production tracker", async () => {
@@ -73,4 +91,19 @@ test("Order Detail passes the process projection only into the existing producti
   expect(source).toContain(
     "<ProductionProgressTracker order={order} processProjection={processProjection} />"
   );
+  expect(source).toContain('data-testid="supporting-order-information"');
+
+  const processWorkspaceIndex = source.indexOf(
+    "<ProductionProgressTracker order={order} processProjection={processProjection} />"
+  );
+  const productionControlsIndex = source.indexOf("Production Controls & Assignment");
+  const supportingInformationIndex = source.indexOf('data-testid="supporting-order-information"');
+  const customerInformationIndex = source.indexOf("Customer & Order Items");
+  const activityTimelineIndex = source.lastIndexOf("<ActivityTimeline");
+
+  expect(processWorkspaceIndex).toBeGreaterThan(-1);
+  expect(productionControlsIndex).toBeGreaterThan(processWorkspaceIndex);
+  expect(supportingInformationIndex).toBeGreaterThan(productionControlsIndex);
+  expect(customerInformationIndex).toBeGreaterThan(supportingInformationIndex);
+  expect(activityTimelineIndex).toBeGreaterThan(customerInformationIndex);
 });

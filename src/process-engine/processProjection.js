@@ -20,6 +20,34 @@ function buildTaskProjection(taskInstance, taskDefinitions) {
   };
 }
 
+function getTaskDependencies(processInstance = {}) {
+  return Array.isArray(processInstance.templateSnapshot?.dependencies)
+    ? processInstance.templateSnapshot.dependencies
+    : [];
+}
+
+function buildAvailabilityReason(task, dependencies, taskDefinitions, taskInstances) {
+  const prerequisites = dependencies.filter(
+    (dependency) => dependency.dependentTaskKey === task.key
+  );
+  if (!prerequisites.length) {
+    return "This task is available because it has no incomplete prerequisites.";
+  }
+
+  const incompleteNames = prerequisites
+    .filter((dependency) => {
+      const prerequisite = taskInstances.find(
+        (instance) => instance.taskDefinitionKey === dependency.prerequisiteTaskKey
+      );
+      return prerequisite?.state !== "Completed";
+    })
+    .map((dependency) => getTaskName(dependency.prerequisiteTaskKey, taskDefinitions));
+
+  return incompleteNames.length
+    ? `Waiting for ${incompleteNames.join(", ")}.`
+    : "All prerequisites are complete.";
+}
+
 function buildHistoryLabel(event, taskInstances, taskDefinitions) {
   if (event.eventType === "process_created") return "Process Created";
 
@@ -41,16 +69,29 @@ export function buildProcessInstanceProjection(processInstance) {
   const projectedTasks = taskInstances.map((task) =>
     buildTaskProjection(task, taskDefinitions)
   );
-  const inProgressTask = projectedTasks.find((task) => task.state === "In Progress");
-  const firstAvailableTask = projectedTasks.find((task) => task.state === "Available");
+  const dependencies = getTaskDependencies(processInstance);
+  const tasksWithReasons = projectedTasks.map((task) => ({
+    ...task,
+    reason: buildAvailabilityReason(task, dependencies, taskDefinitions, taskInstances),
+  }));
+  const inProgressTask = tasksWithReasons.find((task) => task.state === "In Progress");
+  const firstAvailableTask = tasksWithReasons.find((task) => task.state === "Available");
+  const completedTasks = tasksWithReasons.filter((task) => task.state === "Completed");
+  const blockedTasks = tasksWithReasons.filter((task) => task.state === "Blocked");
 
   return {
     processName: processInstance.templateSnapshot?.name || "Process",
     templateVersion: processInstance.templateVersion,
     processState: processInstance.state,
     primaryCurrentTask: inProgressTask || firstAvailableTask || null,
-    availableTasks: projectedTasks.filter((task) => task.state === "Available"),
-    blockedTasks: projectedTasks.filter((task) => task.state === "Blocked"),
+    availableTasks: tasksWithReasons.filter((task) => task.state === "Available"),
+    upcomingTasks: blockedTasks.slice(0, 1),
+    blockedTasks,
+    completedTasks,
+    progress: {
+      completed: completedTasks.length,
+      total: tasksWithReasons.length,
+    },
     historySummary: (Array.isArray(processInstance.history) ? processInstance.history : []).map(
       (event) => ({
         id: event.id,

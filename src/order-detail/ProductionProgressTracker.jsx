@@ -30,9 +30,15 @@ export default function ProductionProgressTracker({ order, processProjection = n
         padding: "18px",
       }}
     >
-      <h2 style={{ marginTop: 0 }}>Production Workflow</h2>
+      <h2 style={{ marginTop: 0 }}>{processProjection ? "Production Workspace" : "Production Workflow"}</h2>
 
       <ProcessInstanceSummary projection={processProjection} />
+
+      {processProjection ? (
+        <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: "12px", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+          Existing Order Workflow Status
+        </p>
+      ) : null}
 
       <div style={{ marginBottom: "12px" }}>
         <WorkflowProgressSteps order={order} />

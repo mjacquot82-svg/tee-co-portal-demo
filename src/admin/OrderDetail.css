@@ -13,6 +13,10 @@
   margin-top: 18px;
 }
 
+.order-detail-activity-section {
+  margin-top: 18px;
+}
+
 @media (max-width: 1120px) {
   .order-detail-main-grid {
     grid-template-columns: minmax(0, 1fr);
