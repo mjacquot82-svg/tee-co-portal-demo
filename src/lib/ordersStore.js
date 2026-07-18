@@ -42,6 +42,7 @@ import {
   upsertOrdersInSupabase,
 } from "./ordersRepository";
 import { canUseLocalPersistenceFallback } from "./persistenceMode";
+import { ensureTeeCoProductionProcess } from "../integrations/teeCoProductionProcess";
 
 const STORAGE_KEY = "teeCoStaffOrders";
 const orderListeners = new Set();
@@ -1445,6 +1446,7 @@ export async function createStoredOrder(orderInput) {
     ...currentOrders.filter((entry) => entry.order_number !== persistedOrder.order_number),
   ];
   saveStoredOrders(nextOrders);
+  await ensureTeeCoProductionProcess(persistedOrder);
 
   emitCustomerTimelineEventForOrder(
     persistedOrder,
@@ -1540,6 +1542,7 @@ export async function updateStoredOrder(orderNumber, updates) {
       order.order_number === persistedOrder.order_number ? persistedOrder : order
     )
   );
+  await ensureTeeCoProductionProcess(updatedOrder);
 
   emitOperationalEventsForOrderUpdate(previousOrder, updatedOrder, updates, now);
 
