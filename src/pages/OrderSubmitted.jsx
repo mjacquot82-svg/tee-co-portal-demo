@@ -420,7 +420,7 @@ export default function OrderSubmitted() {
           }}
         >
           <Link
-            to="/my-orders"
+            to={`/portal/orders/${encodeURIComponent(requestIdentifier)}`}
             style={{
               background: "#171717",
               color: "#ffffff",
@@ -432,7 +432,7 @@ export default function OrderSubmitted() {
               fontSize: "14px",
             }}
           >
-            View My Orders
+            View Submitted Order
           </Link>
 
           <Link

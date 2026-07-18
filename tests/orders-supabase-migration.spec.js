@@ -197,6 +197,7 @@ test("creates orders by writing Supabase first and then publishing the local cac
   const client = configureFakeOrders();
 
   const created = await createStoredOrder({
+    customer_id: "customer-1784339622477",
     customer_name: "Created Customer",
     customer_email: "created@example.com",
     garment: "Hoodie",
@@ -207,11 +208,18 @@ test("creates orders by writing Supabase first and then publishing the local cac
 
   expect(client.operations[0].action).toBe("insert");
   expect(client.operations[0].payload.order_number).toBe(created.order_number);
+  expect(client.operations[0].payload.customer_id).toBe("customer-1784339622477");
   expect(getStoredOrders()[0]).toMatchObject({
     order_number: created.order_number,
     customer_name: "Created Customer",
     quote_status: "Draft",
+    customer_id: "customer-1784339622477",
   });
+
+  const customerOrders = getPortalVisibleOrdersForSession(getStoredOrders(), {
+    id: "customer-1784339622477",
+  });
+  expect(customerOrders.map((order) => order.order_number)).toEqual([created.order_number]);
 });
 
 test("updates orders through awaited Supabase writes", async () => {
@@ -384,6 +392,17 @@ test("Phase 2B payload writes quote, deposit, payment, portal, and production fi
     order_number: "TC-P2B-WRITE",
     quote_status: "Awaiting Deposit",
   });
+});
+
+test("customer portal orders preserve production text customer IDs", () => {
+  const payload = buildSupabaseOrderPayload({
+    order_number: "TC-CUSTOMER-LINK",
+    customer_id: "customer-1784339622477",
+    customer_name: "JDS Studio",
+    source: "Customer Portal",
+  });
+
+  expect(payload.customer_id).toBe("customer-1784339622477");
 });
 
 test("Phase 2B row mapping prefers first-class columns over compatibility snapshot", () => {

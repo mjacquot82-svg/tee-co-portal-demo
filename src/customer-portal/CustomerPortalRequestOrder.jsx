@@ -211,7 +211,15 @@ export default function CustomerPortalRequestOrder() {
     setSubmitState("submitting");
     setSubmitMessage("");
 
-    const profile = await ensureCustomerProfile(customerSession);
+    let profile;
+    try {
+      profile = await ensureCustomerProfile(customerSession);
+    } catch (error) {
+      console.error("Unable to prepare customer profile for order request", error);
+      setSubmitState("error");
+      setSubmitMessage("Your customer account could not be linked. Please try again.");
+      return;
+    }
     const decorationType = getDefaultDecorationType(selectedProduct);
     const artworkReferenceName = normalizeText(pendingRequest?.artworkName);
     let uploadedArtwork = null;
@@ -333,7 +341,11 @@ export default function CustomerPortalRequestOrder() {
       });
 
       if (profile?.id) {
-        await linkOrderToCustomer(profile.id, createdOrder.order_number);
+        try {
+          await linkOrderToCustomer(profile.id, createdOrder.order_number);
+        } catch (linkError) {
+          console.error("Order was created but the customer summary could not be updated", linkError);
+        }
       }
 
       if (pendingRequest) {
@@ -341,11 +353,18 @@ export default function CustomerPortalRequestOrder() {
         setPendingRequest(null);
       }
 
-      navigate("/portal/quotes", {
+      navigate("/order-submitted", {
         replace: true,
         state: {
           createdOrderNumber: createdOrder.order_number,
-          flashMessage: `Your order request for ${selectedProduct.name} is awaiting Tee & Co staff review.`,
+          garmentName: selectedProduct.name,
+          category: getStorefrontProductCategoryLabel(selectedProduct, storefrontCategoryLookups),
+          selectedColor: resolvedColor,
+          selectedSize: resolvedSize,
+          quantity: normalizedQuantity,
+          artworkName: artworkDisplayName,
+          notes: normalizeText(notes),
+          quote,
         },
       });
     } catch (error) {

@@ -122,7 +122,7 @@ export function buildSupabaseOrderPayload(order = {}) {
   return {
     legacy_order_number: order.legacy_order_number || order.order_number || null,
     order_number: String(order.order_number || "").trim(),
-    customer_id: toUuidOrNull(order.customer_id),
+    customer_id: toText(order.customer_id) || null,
     customer_name: String(order.customer_name || "").trim(),
     status: String(order.status || "New").trim() || "New",
     approval_status: String(order.approval_status || "Not Sent").trim() || "Not Sent",
