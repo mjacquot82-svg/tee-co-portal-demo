@@ -35,6 +35,7 @@ import {
 import PaymentRequestForm from "./PaymentRequestForm";
 import { requestQuoteDeposit } from "./quoteDepositRequestAction";
 import { buildDepositRequestConfirmation } from "./workflowCopy";
+import { getCompletedIntakeActions } from "./intakeActionPresentation";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -632,6 +633,14 @@ function IntakeReviewScreen({
   const submittedAt = formatDateTime(order.created_at, " • ");
   const artworkFiles = getOrderArtworkFiles(order);
   const attentionItems = buildIntakeAttentionItems(order, productionReadiness);
+  const completedActions = getCompletedIntakeActions(order);
+  const completedActionLabels = [
+    completedActions.approveRequest ? "Request Approved" : null,
+    completedActions.requestArtwork ? "Artwork Requested" : null,
+    completedActions.requestChanges ? "Changes Requested" : null,
+    completedActions.requireDeposit ? "Deposit Required" : null,
+    completedActions.markDepositNotRequired ? "Deposit Not Required" : null,
+  ].filter(Boolean);
   const sizeSummary =
     formatSizeBreakdown(order.size_breakdown) ||
     formatList([order.selected_size, order.size].filter(Boolean));
@@ -728,15 +737,37 @@ function IntakeReviewScreen({
       </section>
 
       <section data-testid="intake-primary-actions" style={cardStyle("#ffffff")}>
+        {completedActionLabels.length ? (
+          <div data-testid="intake-completed-actions" style={{ marginBottom: "16px" }}>
+            <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: "12px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              Completed
+            </p>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              {completedActionLabels.map((label) => (
+                <StatusPill key={label} tone="success">{label}</StatusPill>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <p style={{ margin: "0 0 12px", color: "#64748b", fontSize: "12px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-          Primary Actions
+          Available Actions
         </p>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <PrimaryActionButton onClick={onApproveRequest} tone="success">Approve Request</PrimaryActionButton>
-          <PrimaryActionButton onClick={onRequestArtwork} tone="warning">Request Artwork</PrimaryActionButton>
-          <PrimaryActionButton onClick={onRequestChanges} tone="neutral">Request Changes</PrimaryActionButton>
-          <PrimaryActionButton onClick={handleOpenDepositModal} tone="warning">Require Deposit</PrimaryActionButton>
-          <PrimaryActionButton onClick={onMarkDepositNotRequired} tone="neutral">Mark Deposit Not Required</PrimaryActionButton>
+          {!completedActions.approveRequest ? (
+            <PrimaryActionButton onClick={onApproveRequest} tone="success">Approve Request</PrimaryActionButton>
+          ) : null}
+          {!completedActions.requestArtwork ? (
+            <PrimaryActionButton onClick={onRequestArtwork} tone="warning">Request Artwork</PrimaryActionButton>
+          ) : null}
+          {!completedActions.requestChanges ? (
+            <PrimaryActionButton onClick={onRequestChanges} tone="neutral">Request Changes</PrimaryActionButton>
+          ) : null}
+          {!completedActions.requireDeposit ? (
+            <PrimaryActionButton onClick={handleOpenDepositModal} tone="warning">Require Deposit</PrimaryActionButton>
+          ) : null}
+          {!completedActions.markDepositNotRequired ? (
+            <PrimaryActionButton onClick={onMarkDepositNotRequired} tone="neutral">Mark Deposit Not Required</PrimaryActionButton>
+          ) : null}
           <PrimaryActionButton onClick={onRejectRequest} tone="danger">Reject Request</PrimaryActionButton>
         </div>
       </section>
