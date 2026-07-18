@@ -61,15 +61,14 @@ test("the existing production section presents projected engine information with
 
   [
     "Process",
-    "What should I do right now?",
-    "Template Version",
-    "Process State",
+    "What should Teresa do next?",
+    "Process Status",
     "Current Task",
-    "Task Status",
-    "Primary Action",
-    "Available Tasks",
-    "What comes next?",
-    "Blocked Tasks",
+    "Task State",
+    "Why this task is available",
+    "Blocked Reason",
+    "Upcoming Tasks",
+    "Remaining Tasks",
     "Completed Tasks",
     "Progress",
     "Process History",
@@ -77,9 +76,9 @@ test("the existing production section presents projected engine information with
 
   expect(source).not.toContain("tee-co-dtf-production");
   expect(source).not.toContain("order-transfers");
-  expect(source).not.toContain("onClick");
-  expect(source).toContain("disabled");
-  expect(source).toContain('currentTask?.state === "In Progress" ? "Complete" : "Start"');
+  expect(source).not.toContain("Template Version");
+  expect(source).not.toContain("Primary Action");
+  expect(source).not.toContain("<button");
 });
 
 test("Order Detail passes the process projection only into the existing production tracker", async () => {
@@ -91,6 +90,7 @@ test("Order Detail passes the process projection only into the existing producti
   expect(source).toContain(
     "<ProductionProgressTracker order={order} processProjection={processProjection} />"
   );
+  expect(source).toContain("workflowActions={processProjection ? [] : workflowActions}");
   expect(source).toContain('data-testid="supporting-order-information"');
 
   const processWorkspaceIndex = source.indexOf(

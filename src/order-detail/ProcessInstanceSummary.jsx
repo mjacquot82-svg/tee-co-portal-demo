@@ -29,11 +29,16 @@ function HistoryList({ items }) {
   );
 }
 
-export default function ProcessInstanceSummary({ projection }) {
+export default function ProcessInstanceSummary({ projection, availabilityReasons = [] }) {
   if (!projection) return null;
 
   const currentTask = projection.primaryCurrentTask;
-  const primaryActionVerb = currentTask?.state === "In Progress" ? "Complete" : "Start";
+  const upcomingTasks = projection.blockedTasks || [];
+  const remainingTasks = [
+    ...(currentTask ? [currentTask] : []),
+    ...(projection.availableTasks || []),
+    ...upcomingTasks,
+  ].filter((task, index, tasks) => tasks.findIndex((candidate) => candidate.id === task.id) === index);
   const completed = projection.progress?.completed || 0;
   const total = projection.progress?.total || 0;
   const progressPercentage = total ? Math.round((completed / total) * 100) : 0;
@@ -67,69 +72,53 @@ export default function ProcessInstanceSummary({ projection }) {
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start", flexWrap: "wrap" }}>
         <div>
-          <p style={labelStyle}>JDS Process Engine</p>
+          <p style={labelStyle}>Process Engine</p>
           <h2 style={{ margin: "5px 0 0", color: "#0f172a" }}>{projection.processName}</h2>
         </div>
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          <span style={{ borderRadius: "999px", padding: "7px 11px", background: "#dbeafe", color: "#1d4ed8", fontWeight: 800 }}>
-            Template Version {projection.templateVersion}
-          </span>
-          <span style={{ borderRadius: "999px", padding: "7px 11px", background: "#ecfdf5", color: "#166534", fontWeight: 800 }}>
-            Process State: {projection.processState}
-          </span>
-        </div>
+        <span style={{ borderRadius: "999px", padding: "7px 11px", background: "#ecfdf5", color: "#166534", fontWeight: 800 }}>
+          Process Status: {projection.processState}
+        </span>
       </div>
 
       <section data-testid="process-current-task" style={{ ...cardStyle, border: "2px solid #2563eb", boxShadow: "0 8px 24px rgba(37, 99, 235, 0.10)" }}>
-        <p style={{ ...labelStyle, color: "#1d4ed8" }}>What should I do right now?</p>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "18px", alignItems: "center", marginTop: "10px" }}>
-          <div style={{ flex: "1 1 320px" }}>
+        <p style={{ ...labelStyle, color: "#1d4ed8" }}>What should Teresa do next?</p>
+        <div style={{ marginTop: "10px" }}>
+          <div>
             <p style={{ ...labelStyle, marginBottom: "6px" }}>Current Task</p>
             <h3 style={{ margin: 0, color: "#0f172a", fontSize: "28px" }}>
               {currentTask?.name || "No current task"}
             </h3>
             <p style={{ margin: "8px 0 0", color: "#475569", fontWeight: 700 }}>
-              Task Status: {currentTask?.state || "Unavailable"}
+              Task State: {currentTask?.state || "Unavailable"}
             </p>
-            <p style={{ margin: "8px 0 0", color: "#334155", lineHeight: 1.5 }}>
-              {currentTask?.reason || "No production task is currently available."}
-            </p>
-          </div>
-          <div style={{ display: "grid", gap: "6px", minWidth: "180px", flex: "0 1 240px" }}>
-            <p style={labelStyle}>Primary Action</p>
-            <button
-              type="button"
-              disabled
-              title="Task execution is not enabled in this read-only workspace."
-              style={{
-                border: "1px solid #94a3b8",
-                borderRadius: "12px",
-                padding: "12px 16px",
-                background: "#e2e8f0",
-                color: "#475569",
-                fontWeight: 900,
-                cursor: "not-allowed",
-              }}
-            >
-              {currentTask ? `${primaryActionVerb} ${currentTask.name}` : "No action available"}
-            </button>
-            <span style={{ color: "#64748b", fontSize: "12px" }}>Read-only process validation</span>
+            <div style={{ marginTop: "14px" }}>
+              <p style={{ ...labelStyle, marginBottom: "6px" }}>Why this task is available</p>
+              {availabilityReasons.length ? (
+                <ul style={{ margin: 0, paddingLeft: "20px", color: "#334155", lineHeight: 1.6 }}>
+                  {availabilityReasons.map((reason) => <li key={reason}>{reason}</li>)}
+                </ul>
+              ) : (
+                <p style={{ margin: 0, color: "#334155" }}>{currentTask?.reason || "No production task is currently available."}</p>
+              )}
+            </div>
+            {currentTask?.state === "Blocked" ? (
+              <div style={{ marginTop: "14px" }}>
+                <p style={{ ...labelStyle, marginBottom: "6px" }}>Blocked Reason</p>
+                <p style={{ margin: 0, color: "#991b1b", fontWeight: 700 }}>{currentTask.reason}</p>
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: "12px" }}>
         <section style={cardStyle}>
-          <p style={{ ...labelStyle, marginBottom: "9px" }}>Available Tasks</p>
-          <TaskList items={projection.availableTasks} emptyLabel="No tasks available" />
+          <p style={{ ...labelStyle, marginBottom: "9px" }}>Upcoming Tasks</p>
+          <TaskList items={upcomingTasks} emptyLabel="No upcoming tasks" />
         </section>
         <section style={cardStyle}>
-          <p style={{ ...labelStyle, marginBottom: "9px" }}>What comes next?</p>
-          <TaskList items={projection.upcomingTasks || []} emptyLabel="No upcoming task" showReason />
-        </section>
-        <section style={cardStyle}>
-          <p style={{ ...labelStyle, marginBottom: "9px" }}>Blocked Tasks</p>
-          <TaskList items={projection.blockedTasks} emptyLabel="No blocked tasks" showReason />
+          <p style={{ ...labelStyle, marginBottom: "9px" }}>Remaining Tasks</p>
+          <TaskList items={remainingTasks} emptyLabel="No remaining tasks" />
         </section>
       </div>
 

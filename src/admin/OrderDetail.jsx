@@ -524,7 +524,7 @@ export default function OrderDetail() {
       order={order}
       staffUsers={staffUsers}
       onAssign={handleAssign}
-      workflowActions={workflowActions}
+      workflowActions={processProjection ? [] : workflowActions}
       onRunWorkflowAction={handleWorkflowAction}
       canManageAssignments={canManageAssignments}
       canSelfAssign={selfAssignAllowed}

@@ -10,6 +10,7 @@ import {
   buildWorkflowBlockDetails,
   buildWorkflowStatusBadges,
 } from "../orders/workflowPresentation";
+import { buildProductionGatingState } from "../orders/workflowGating";
 import ProcessInstanceSummary from "./ProcessInstanceSummary";
 
 export default function ProductionProgressTracker({ order, processProjection = null }) {
@@ -18,6 +19,20 @@ export default function ProductionProgressTracker({ order, processProjection = n
   const gating = buildWorkflowBlockDetails(order, { targetStatus: "Ready For Production" });
   const workflowBadges = buildWorkflowStatusBadges(order);
   const readiness = buildProductionReadinessSummary(order);
+  const engineEntryChecks = processProjection
+    ? buildProductionGatingState(order, { targetStatus: "Ready For Production" }).checks
+    : [];
+  const availabilityReasons = engineEntryChecks
+    .filter((check) => check.satisfied)
+    .map((check) => {
+      if (check.key === "artworkApproval") {
+        return check.required ? "Artwork approved" : "Artwork approval not required";
+      }
+      if (check.key === "depositRequirement") {
+        return check.required ? "Deposit received" : "Deposit not required";
+      }
+      return `${check.label} complete`;
+    });
 
   return (
     <section
@@ -32,7 +47,7 @@ export default function ProductionProgressTracker({ order, processProjection = n
     >
       <h2 style={{ marginTop: 0 }}>{processProjection ? "Production Workspace" : "Production Workflow"}</h2>
 
-      <ProcessInstanceSummary projection={processProjection} />
+      <ProcessInstanceSummary projection={processProjection} availabilityReasons={availabilityReasons} />
 
       {processProjection ? (
         <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: "12px", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.07em" }}>
