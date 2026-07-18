@@ -70,6 +70,7 @@ export default function AssignmentPanel({
   onGatingOverride,
   onForceMoveToProduction,
   workflowFeedback = null,
+  compactWorkflowContext = false,
 }) {
   const [pendingHoldAction, setPendingHoldAction] = useState(null);
   const [holdReasonInput, setHoldReasonInput] = useState("");
@@ -117,10 +118,10 @@ export default function AssignmentPanel({
         padding: "20px",
       }}
     >
-      <h2 style={{ marginTop: 0 }}>Assign Work</h2>
+      <h2 style={{ marginTop: 0 }}>{compactWorkflowContext ? "Production Assignment" : "Assign Work"}</h2>
 
       <div style={{ display: "grid", gap: "12px" }}>
-        {workflowBadges.length ? (
+        {!compactWorkflowContext && workflowBadges.length ? (
           <div data-testid="workflow-badges" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             {workflowBadges.map((badge) => (
               <span
@@ -135,14 +136,14 @@ export default function AssignmentPanel({
           </div>
         ) : null}
 
-        <div style={{ display: "grid", gap: "6px" }}>
+        {compactWorkflowContext ? null : <div style={{ display: "grid", gap: "6px" }}>
           <strong>Customer Status Message</strong>
           <span data-testid="customer-workflow-message" style={{ color: "#475569", fontWeight: 700 }}>
             {customerWorkflowMessage}
           </span>
-        </div>
+        </div>}
 
-        <div
+        {compactWorkflowContext ? null : <div
           data-testid="production-readiness-summary"
           data-production-readiness={readiness.statusKey || ""}
           style={{
@@ -163,7 +164,7 @@ export default function AssignmentPanel({
           <span style={{ fontSize: "13px", fontWeight: 700 }}>
             Responsible: {readiness.responsibleParty}
           </span>
-        </div>
+        </div>}
 
         <div>
           <strong>Assigned Staff</strong>
@@ -188,12 +189,12 @@ export default function AssignmentPanel({
           </div>
         </div>
 
-        <div>
+        {compactWorkflowContext ? null : <div>
           <strong>Assigned At</strong>
           <div style={{ marginTop: "6px" }}>
             {formatAssignedAt(order.assigned_at)}
           </div>
-        </div>
+        </div>}
 
         <div>
           <strong>Production Owner</strong>

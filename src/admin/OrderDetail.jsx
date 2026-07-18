@@ -534,6 +534,7 @@ export default function OrderDetail() {
       onGatingOverride={handleGatingOverride}
       onForceMoveToProduction={handleForceMoveToProduction}
       workflowFeedback={workflowFeedback}
+      compactWorkflowContext={Boolean(processProjection)}
     />
   );
   return (
@@ -544,28 +545,8 @@ export default function OrderDetail() {
       data-workflow-state={order.status || ""}
       style={{ maxWidth: "1280px", margin: "0 auto", padding: "24px" }}
     >
-      {processProjection ? (
-        <>
-          <div style={{ marginBottom: "18px" }}>
-            <ProductionProgressTracker order={order} processProjection={processProjection} />
-          </div>
-          <div className="production-workspace-controls" style={{ marginBottom: "28px" }}>
-            <p style={{ ...sectionLabelStyle, marginBottom: "10px" }}>Production Controls & Assignment</p>
-            {assignmentPanel}
-          </div>
-          <div
-            data-testid="supporting-order-information"
-            style={{ borderTop: "1px solid #cbd5e1", paddingTop: "24px", marginBottom: "18px" }}
-          >
-            <p style={{ ...sectionLabelStyle, color: "#475569" }}>Supporting Order Information</p>
-            <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-              Customer, artwork, financial, order, and activity context for the production process.
-            </p>
-          </div>
-        </>
-      ) : null}
-
       <div
+        data-testid="production-job-identity"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -594,33 +575,46 @@ export default function OrderDetail() {
           </h1>
 
           <div
-            data-testid="order-detail-status-summary"
             style={{
-              display: "flex",
-              gap: "10px",
-              alignItems: "center",
-              flexWrap: "wrap",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+              gap: "14px",
+              marginTop: "16px",
+              padding: "16px",
+              borderRadius: "16px",
+              border: "1px solid #dbeafe",
+              background: "#f8fafc",
+              maxWidth: "820px",
             }}
           >
+            <div data-testid="job-identity-customer">
+              <p style={sectionLabelStyle}>Customer</p>
+              <p style={sectionValueStyle}>{order.customer_name || "Walk-in Customer"}</p>
+            </div>
+            <div data-testid="job-identity-garment" style={{ gridColumn: "span 2" }}>
+              <p style={sectionLabelStyle}>Garment</p>
+              <p style={{ ...sectionValueStyle, fontSize: "18px" }}>{order.garment || order.item || "Custom garment"}</p>
+            </div>
+            <div data-testid="job-identity-decoration-method">
+              <p style={sectionLabelStyle}>Decoration Method</p>
+              <p style={sectionValueStyle}>{order.decoration_type || order.production_type || "Not specified"}</p>
+            </div>
+            <div data-testid="job-identity-quantity">
+              <p style={sectionLabelStyle}>Quantity</p>
+              <p style={{ ...sectionValueStyle, fontSize: "20px" }}>{order.qty || 0}</p>
+            </div>
+          </div>
+
+          <div data-testid="order-detail-status-summary" style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", marginTop: "12px" }}>
             <span data-testid="order-detail-current-status" data-workflow-state={order.status || ""}>
               <StatusBadge status={order.status} />
             </span>
-
-            <span
-              style={{
-                color: urgency.color,
-                fontWeight: 800,
-              }}
-            >
-              {urgency.label}
-            </span>
+            <span style={{ color: urgency.color, fontWeight: 800 }}>{urgency.label}</span>
           </div>
 
-          {workflowBadges.length ? (
+          {!processProjection && workflowBadges.length ? (
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
-              {workflowBadges.map((badge) => (
-                <WorkflowBadge key={badge.label} label={badge.label} tone={badge.tone} />
-              ))}
+              {workflowBadges.map((badge) => <WorkflowBadge key={badge.label} label={badge.label} tone={badge.tone} />)}
             </div>
           ) : null}
 
@@ -643,36 +637,9 @@ export default function OrderDetail() {
             </div>
           ) : null}
 
-          <div
-            style={{
-              display: "grid",
-              gap: "8px",
-              marginTop: "14px",
-              padding: "14px 16px",
-              borderRadius: "16px",
-              background: "#f8fafc",
-              border: "1px solid #e2e8f0",
-              maxWidth: "420px",
-            }}
-          >
-            <div>
-              <p style={{ margin: 0, color: "#64748b", fontSize: "12px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Placed
-              </p>
-              <p style={{ margin: "4px 0 0", color: "#171717", fontWeight: 700 }}>
-                {placedAt.date} — {placedAt.time}
-              </p>
-            </div>
-
-            <div>
-              <p style={{ margin: 0, color: "#64748b", fontSize: "12px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Last Updated
-              </p>
-              <p style={{ margin: "4px 0 0", color: "#171717", fontWeight: 700 }}>
-                {updatedAt.date} — {updatedAt.time}
-              </p>
-            </div>
-          </div>
+          <p style={{ margin: "12px 0 0", color: "#64748b", fontSize: "13px" }}>
+            Placed {placedAt.date} at {placedAt.time} · Updated {updatedAt.date} at {updatedAt.time}
+          </p>
         </div>
 
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
@@ -731,6 +698,21 @@ export default function OrderDetail() {
         </div>
       </div>
 
+      {processProjection ? (
+        <>
+          <div style={{ marginBottom: "18px" }}>
+            <ProductionProgressTracker order={order} processProjection={processProjection} />
+          </div>
+          <div className="production-workspace-controls" style={{ marginBottom: "28px" }}>
+            {assignmentPanel}
+          </div>
+          <div data-testid="supporting-order-information" style={{ borderTop: "1px solid #cbd5e1", paddingTop: "24px", marginBottom: "18px" }}>
+            <p style={{ ...sectionLabelStyle, color: "#475569" }}>Supporting Information</p>
+            <p style={{ margin: "6px 0 0", color: "#64748b" }}>Reference details for production, payment, and investigation.</p>
+          </div>
+        </>
+      ) : null}
+
       {processProjection ? null : (
         <div style={{ marginBottom: "18px" }}>
           <ProductionProgressTracker order={order} />
@@ -751,25 +733,10 @@ export default function OrderDetail() {
               }}
             >
               <div>
-                <h2 style={{ margin: "0 0 4px" }}>Customer & Order Items</h2>
+                <h2 style={{ margin: "0 0 4px" }}>Production Reference</h2>
                 <p style={{ margin: 0, color: "#64748b" }}>
-                  Core intake details for production and fulfillment.
+                  Placement and size details needed while producing this job.
                 </p>
-              </div>
-
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  borderRadius: "999px",
-                  padding: "8px 12px",
-                  background: "#f1f5f9",
-                  color: "#0f172a",
-                  fontWeight: 800,
-                  fontSize: "13px",
-                }}
-              >
-                Qty {order.qty || 0}
               </div>
             </div>
 
@@ -782,16 +749,6 @@ export default function OrderDetail() {
               }}
             >
               <div>
-                <p style={sectionLabelStyle}>Customer</p>
-                <p style={sectionValueStyle}>{order.customer_name || "Walk-in Customer"}</p>
-              </div>
-
-              <div>
-                <p style={sectionLabelStyle}>Garment</p>
-                <p style={sectionValueStyle}>{order.garment || order.item || "Custom garment"}</p>
-              </div>
-
-              <div>
                 <p style={sectionLabelStyle}>Placements</p>
                 <p style={sectionValueStyle}>
                   {Array.isArray(order.placements) && order.placements.length
@@ -803,10 +760,6 @@ export default function OrderDetail() {
                 </p>
               </div>
 
-              <div>
-                <p style={sectionLabelStyle}>Assigned</p>
-                <p style={sectionValueStyle}>{order.assigned_to_staff_name || "Unassigned"}</p>
-              </div>
             </div>
 
             <div
@@ -859,7 +812,7 @@ export default function OrderDetail() {
         </div>
 
         <aside style={{ display: "grid", gap: "18px" }}>
-          {isStaffWorkspace || !orderNextAction ? null : (
+          {processProjection || isStaffWorkspace || !orderNextAction ? null : (
             <OwnerNextActionCard action={orderNextAction} onAction={handleOwnerNextAction} />
           )}
 
@@ -872,7 +825,7 @@ export default function OrderDetail() {
             />
           )}
 
-          {isStaffWorkspace || !normalizedOrder ? null : (
+          {isStaffWorkspace || !normalizedOrder || normalizedOrder.balance_due <= 0 || isCanceledOperationalStatus(order.status) ? null : (
             <PaymentRequestForm
               id="owner-payment-request-form"
               title="Create Payment Request"
@@ -886,38 +839,22 @@ export default function OrderDetail() {
             />
           )}
 
-          <section style={cardStyle}>
-            <h2 style={{ marginTop: 0 }}>
-              {isStaffWorkspace ? "Production Snapshot" : "Quote Snapshot"}
-            </h2>
-
-            {quoteSnapshot && !isStaffWorkspace ? (
-              <PricingSummary
-                quote={quoteSnapshot}
-                quantity={quoteSnapshot.quantity || order.qty || 0}
-                compact
-              />
-            ) : isStaffWorkspace ? (
-              <div style={{ display: "grid", gap: "14px" }}>
-                <div>
-                  <p style={sectionLabelStyle}>Production Type</p>
-                  <p style={sectionValueStyle}>{order.decoration_type || "Production"}</p>
+          {!isStaffWorkspace ? (
+            <section style={cardStyle}>
+              <details data-testid="quote-snapshot-disclosure">
+                <summary style={{ cursor: "pointer", fontWeight: 800, fontSize: "18px", color: "#0f172a" }}>
+                  Quote Snapshot
+                </summary>
+                <div style={{ marginTop: "16px" }}>
+                  {quoteSnapshot ? (
+                    <PricingSummary quote={quoteSnapshot} quantity={quoteSnapshot.quantity || order.qty || 0} compact />
+                  ) : (
+                    <p style={{ color: "#94a3b8" }}>Quote snapshot unavailable.</p>
+                  )}
                 </div>
-                <div>
-                  <p style={sectionLabelStyle}>Due Date</p>
-                  <p style={sectionValueStyle}>{order.due_date || "Not set"}</p>
-                </div>
-                <div>
-                  <p style={sectionLabelStyle}>Source</p>
-                  <p style={sectionValueStyle}>{order.source || "Operational intake"}</p>
-                </div>
-              </div>
-            ) : (
-              <p style={{ color: "#94a3b8" }}>
-                Quote snapshot unavailable.
-              </p>
-            )}
-          </section>
+              </details>
+            </section>
+          ) : null}
         </aside>
       </div>
 
@@ -927,6 +864,7 @@ export default function OrderDetail() {
         <ActivityTimeline
           events={normalizedOrder?.connected_timeline || order.activity_log || []}
           compact
+          collapsedByDefault
         />
       </div>
     </div>

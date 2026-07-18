@@ -18,13 +18,20 @@ async function seedEligibleDtfOrder(page) {
       id: orderNumber,
       order_number: orderNumber,
       customer_name: "Details Navigation Test",
+      garment: "Gildan 18000 Crewneck Sweatshirt",
+      qty: 12,
       status: "Ready For Production",
       workflow_state: "Ready For Production",
       staff_review_status: "Approved",
       approval_status: "Approved",
       artwork_approval_status: "Approved",
       deposit_required: false,
-      deposit_workflow_status: "Deposit Not Required",
+      deposit_workflow_status: "Deposit Received",
+      deposit_applied: 25,
+      total_paid: 25,
+      total_amount: 100,
+      balance_due: 75,
+      payment_collection_state: "Awaiting Final Payment",
       production_type: "DTF",
       decoration_type: "DTF",
       created_at: now,
@@ -40,6 +47,7 @@ test("Production Queue Details opens the correct full order workspace", async ({
   await page.goto("/login?redirectTo=/admin/orders");
   await loginThroughOperationalPin(page, config, "/admin/orders");
 
+  await page.route("**/rest/v1/orders*", (route) => route.abort());
   const orderNumber = await seedEligibleDtfOrder(page);
   await page.reload();
   await page.getByTestId("production-queue-search").fill(orderNumber);
@@ -63,6 +71,19 @@ test("Production Queue Details opens the correct full order workspace", async ({
     orderNumber
   );
   await expect(page.getByTestId("process-instance-summary")).toBeVisible();
+  await expect(page.getByTestId("job-identity-customer")).toContainText("Details Navigation Test");
+  await expect(page.getByTestId("job-identity-garment")).toContainText("Gildan 18000 Crewneck Sweatshirt");
+  await expect(page.getByTestId("job-identity-decoration-method")).toContainText("DTF");
+  await expect(page.getByTestId("job-identity-quantity")).toContainText("12");
+  await expect(page.getByTestId("process-current-task")).toContainText("What should Teresa do next?");
+  await expect(page.getByRole("button", { name: "Send Deposit Request" })).toHaveCount(0);
+  await expect(page.getByTestId("payment-details-disclosure")).not.toHaveAttribute("open", "");
+  await expect(page.getByTestId("quote-snapshot-disclosure")).not.toHaveAttribute("open", "");
+  await expect(page.getByTestId("activity-timeline-disclosure")).not.toHaveAttribute("open", "");
+
+  const identityBox = await page.getByTestId("production-job-identity").boundingBox();
+  const currentWorkBox = await page.getByTestId("production-progress-tracker").boundingBox();
+  expect(identityBox?.y).toBeLessThan(currentWorkBox?.y || Number.POSITIVE_INFINITY);
 
   await page.goBack();
   await expect(page.getByTestId("production-queue-page")).toBeVisible();

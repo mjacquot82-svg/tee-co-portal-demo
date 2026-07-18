@@ -17,28 +17,11 @@ function TaskList({ items, emptyLabel, showReason = false }) {
   );
 }
 
-function HistoryList({ items }) {
-  if (!items.length) {
-    return <p style={{ margin: 0, color: "#64748b" }}>No process history</p>;
-  }
-
-  return (
-    <ul style={{ margin: 0, paddingLeft: "20px", color: "#334155", lineHeight: 1.7 }}>
-      {items.map((item) => <li key={item.id || item.label}>{item.label}</li>)}
-    </ul>
-  );
-}
-
 export default function ProcessInstanceSummary({ projection, availabilityReasons = [] }) {
   if (!projection) return null;
 
   const currentTask = projection.primaryCurrentTask;
   const upcomingTasks = projection.blockedTasks || [];
-  const remainingTasks = [
-    ...(currentTask ? [currentTask] : []),
-    ...(projection.availableTasks || []),
-    ...upcomingTasks,
-  ].filter((task, index, tasks) => tasks.findIndex((candidate) => candidate.id === task.id) === index);
   const completed = projection.progress?.completed || 0;
   const total = projection.progress?.total || 0;
   const progressPercentage = total ? Math.round((completed / total) * 100) : 0;
@@ -114,29 +97,20 @@ export default function ProcessInstanceSummary({ projection, availabilityReasons
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: "12px" }}>
         <section style={cardStyle}>
           <p style={{ ...labelStyle, marginBottom: "9px" }}>Upcoming Tasks</p>
-          <TaskList items={upcomingTasks} emptyLabel="No upcoming tasks" />
+          <TaskList items={upcomingTasks} emptyLabel="No upcoming tasks" showReason />
         </section>
-        <section style={cardStyle}>
-          <p style={{ ...labelStyle, marginBottom: "9px" }}>Remaining Tasks</p>
-          <TaskList items={remainingTasks} emptyLabel="No remaining tasks" />
-        </section>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: "12px" }}>
         <section style={cardStyle}>
           <p style={{ ...labelStyle, marginBottom: "9px" }}>Progress</p>
           <strong style={{ display: "block", color: "#0f172a", marginBottom: "8px" }}>{completed} of {total} tasks complete</strong>
           <div style={{ height: "9px", borderRadius: "999px", background: "#e2e8f0", overflow: "hidden" }}>
             <div style={{ width: `${progressPercentage}%`, height: "100%", background: "#2563eb" }} />
           </div>
-          <div style={{ marginTop: "12px" }}>
-            <p style={{ ...labelStyle, marginBottom: "9px" }}>Completed Tasks</p>
+          <details data-testid="completed-tasks-disclosure" style={{ marginTop: "14px" }}>
+            <summary style={{ ...labelStyle, cursor: "pointer" }}>Completed Tasks ({completed})</summary>
+            <div style={{ marginTop: "10px" }}>
             <TaskList items={projection.completedTasks || []} emptyLabel="No tasks completed yet" />
-          </div>
-        </section>
-        <section style={cardStyle}>
-          <p style={{ ...labelStyle, marginBottom: "9px" }}>Process History</p>
-          <HistoryList items={projection.historySummary} />
+            </div>
+          </details>
         </section>
       </div>
     </div>

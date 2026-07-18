@@ -49,25 +49,21 @@ export default function ProductionProgressTracker({ order, processProjection = n
 
       <ProcessInstanceSummary projection={processProjection} availabilityReasons={availabilityReasons} />
 
-      {processProjection ? (
-        <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: "12px", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.07em" }}>
-          Existing Order Workflow Status
-        </p>
-      ) : null}
+      {processProjection ? null : (
+        <>
+          <div style={{ marginBottom: "12px" }}>
+            <WorkflowProgressSteps order={order} />
+          </div>
 
-      <div style={{ marginBottom: "12px" }}>
-        <WorkflowProgressSteps order={order} />
-      </div>
+          {workflowBadges.length ? (
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>
+              {workflowBadges.map((badge) => (
+                <WorkflowBadge key={badge.label} label={badge.label} tone={badge.tone} />
+              ))}
+            </div>
+          ) : null}
 
-      {workflowBadges.length ? (
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>
-          {workflowBadges.map((badge) => (
-            <WorkflowBadge key={badge.label} label={badge.label} tone={badge.tone} />
-          ))}
-        </div>
-      ) : null}
-
-      <div
+          <div
         data-testid="production-readiness-indicator"
         data-production-readiness={readiness.statusKey || ""}
         style={{
@@ -87,9 +83,9 @@ export default function ProductionProgressTracker({ order, processProjection = n
         <span style={{ fontSize: "13px", fontWeight: 700 }}>
           Next recommended action: {readiness.nextRecommendedAction}
         </span>
-      </div>
+          </div>
 
-      <div
+          <div
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
@@ -136,9 +132,9 @@ export default function ProductionProgressTracker({ order, processProjection = n
             </div>
           );
         })}
-      </div>
+          </div>
 
-      {isOnHold ? (
+          {isOnHold ? (
         <div
           data-testid="production-hold-indicator"
           style={{
@@ -161,9 +157,9 @@ export default function ProductionProgressTracker({ order, processProjection = n
             </span>
           ) : null}
         </div>
-      ) : null}
+          ) : null}
 
-      {gating.blocked ? (
+          {gating.blocked ? (
         <div
           style={{
             marginTop: "12px",
@@ -184,7 +180,9 @@ export default function ProductionProgressTracker({ order, processProjection = n
             </span>
           ))}
         </div>
-      ) : null}
+          ) : null}
+        </>
+      )}
     </section>
   );
 }

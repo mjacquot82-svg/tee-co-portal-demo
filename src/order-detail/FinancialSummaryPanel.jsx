@@ -100,8 +100,12 @@ export default function FinancialSummaryPanel({
     remainingBalance: order.balance_due,
   });
   const paymentError = error || (!paymentValidation.valid ? paymentValidation.message : "");
+  const depositSatisfied =
+    Number(order.deposit_applied || 0) > 0 ||
+    ["Awaiting Final Payment", "Partial Payment", "Paid"].includes(order.payment_collection_state);
   const canSendDepositRequest =
-    !canceled && (Number(order.deposit_amount || 0) > 0 || Number(order.balance_due || 0) > 0);
+    !canceled && !depositSatisfied && Number(order.balance_due || 0) > 0;
+  const canRecordPayment = !canceled && Number(order.balance_due || 0) > 0;
   const paymentRequests = getPaymentRequestsByOrder(order.order_number);
   const orderPayments = getPaymentsByOrder(order.order_number);
   const paymentEvents = getPaymentEventsByOrder(order.order_number);
@@ -263,53 +267,54 @@ export default function FinancialSummaryPanel({
         </div>
 
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={handleTogglePaymentForm}
-            style={{
-              border: "1px solid #cbd5e1",
-              background: "#ffffff",
-              borderRadius: "12px",
-              padding: "11px 14px",
-              fontWeight: 700,
-            }}
-          >
-            Record Payment
-          </button>
+          {canRecordPayment ? (
+            <button
+              type="button"
+              onClick={handleTogglePaymentForm}
+              style={{
+                border: "1px solid #cbd5e1",
+                background: "#ffffff",
+                borderRadius: "12px",
+                padding: "11px 14px",
+                fontWeight: 700,
+              }}
+            >
+              Record Payment
+            </button>
+          ) : null}
 
-          <button
-            type="button"
-            disabled={!canSendDepositRequest}
-            onClick={handleToggleDepositRequest}
-            style={{
-              border: "1px solid #cbd5e1",
-              background: "#ffffff",
-              borderRadius: "12px",
-              padding: "11px 14px",
-              fontWeight: 700,
-              cursor: canSendDepositRequest ? "pointer" : "not-allowed",
-              opacity: canSendDepositRequest ? 1 : 0.6,
-            }}
-          >
-            Send Deposit Request
-          </button>
+          {canSendDepositRequest ? (
+            <button
+              type="button"
+              onClick={handleToggleDepositRequest}
+              style={{
+                border: "1px solid #cbd5e1",
+                background: "#ffffff",
+                borderRadius: "12px",
+                padding: "11px 14px",
+                fontWeight: 700,
+              }}
+            >
+              Send Deposit Request
+            </button>
+          ) : null}
 
-          <button
-            type="button"
-            disabled={!canMarkPickedUp}
-            onClick={onMarkPickedUp}
-            style={{
-              background: canMarkPickedUp ? "#171717" : "#cbd5e1",
-              color: "#ffffff",
-              border: "none",
-              borderRadius: "12px",
-              padding: "11px 14px",
-              fontWeight: 700,
-              cursor: canMarkPickedUp ? "pointer" : "not-allowed",
-            }}
-          >
-            Mark Picked Up
-          </button>
+          {canMarkPickedUp ? (
+            <button
+              type="button"
+              onClick={onMarkPickedUp}
+              style={{
+                background: "#171717",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "12px",
+                padding: "11px 14px",
+                fontWeight: 700,
+              }}
+            >
+              Mark Picked Up
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -330,14 +335,33 @@ export default function FinancialSummaryPanel({
         </div>
       ) : null}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-          gap: "14px",
-          marginBottom: "18px",
-        }}
-      >
+      <div style={{ display: "flex", gap: "18px", flexWrap: "wrap", marginBottom: "16px" }}>
+        <div style={{ display: "grid", gap: "6px" }}>
+          <span style={rowLabelStyle}>Payment Status</span>
+          <PaymentStatusBadge status={order.canonical_payment_state || order.payment_status} />
+        </div>
+        <div style={{ display: "grid", gap: "4px" }}>
+          <span style={rowLabelStyle}>Deposit</span>
+          <span style={{ color: "#0f172a", fontWeight: 800 }}>{buildDepositWorkflowLabel(order)}</span>
+        </div>
+        <div style={{ display: "grid", gap: "4px" }}>
+          <span style={rowLabelStyle}>Remaining Balance</span>
+          <span style={{ ...rowValueStyle, color: order.balance_due > 0 ? "#991b1b" : "#166534" }}>
+            {money(order.balance_due)}
+          </span>
+        </div>
+      </div>
+
+      <details data-testid="payment-details-disclosure" style={{ marginBottom: "18px" }}>
+        <summary style={{ cursor: "pointer", color: "#475569", fontWeight: 800 }}>Payment details</summary>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+            gap: "14px",
+            marginTop: "14px",
+          }}
+        >
         <div
           style={{
             gridColumn: "1 / -1",
@@ -441,7 +465,8 @@ export default function FinancialSummaryPanel({
             {money(order.amount_due_now)}
           </span>
         </div>
-      </div>
+        </div>
+      </details>
 
       <div
         style={{

@@ -68,11 +68,12 @@ test("the existing production section presents projected engine information with
     "Why this task is available",
     "Blocked Reason",
     "Upcoming Tasks",
-    "Remaining Tasks",
     "Completed Tasks",
     "Progress",
-    "Process History",
   ].forEach((label) => expect(source).toContain(label));
+
+  expect(source).not.toContain("Remaining Tasks");
+  expect(source).not.toContain("Process History");
 
   expect(source).not.toContain("tee-co-dtf-production");
   expect(source).not.toContain("order-transfers");
@@ -91,21 +92,27 @@ test("Order Detail passes the process projection only into the existing producti
     "<ProductionProgressTracker order={order} processProjection={processProjection} />"
   );
   expect(source).toContain("workflowActions={processProjection ? [] : workflowActions}");
+  expect(source).toContain('data-testid="production-job-identity"');
   expect(source).toContain('data-testid="supporting-order-information"');
 
+  const jobIdentityIndex = source.indexOf('data-testid="production-job-identity"');
   const processWorkspaceIndex = source.indexOf(
     "<ProductionProgressTracker order={order} processProjection={processProjection} />"
   );
-  const productionControlsIndex = source.indexOf("Production Controls & Assignment");
+  const productionControlsIndex = source.indexOf('className="production-workspace-controls"');
   const supportingInformationIndex = source.indexOf('data-testid="supporting-order-information"');
-  const customerInformationIndex = source.indexOf("Customer & Order Items");
+  const productionReferenceIndex = source.indexOf("Production Reference");
   const activityTimelineIndex = source.lastIndexOf("<ActivityTimeline");
 
-  expect(processWorkspaceIndex).toBeGreaterThan(-1);
+  expect(jobIdentityIndex).toBeGreaterThan(-1);
+  expect(processWorkspaceIndex).toBeGreaterThan(jobIdentityIndex);
   expect(productionControlsIndex).toBeGreaterThan(processWorkspaceIndex);
   expect(supportingInformationIndex).toBeGreaterThan(productionControlsIndex);
-  expect(customerInformationIndex).toBeGreaterThan(supportingInformationIndex);
-  expect(activityTimelineIndex).toBeGreaterThan(customerInformationIndex);
+  expect(productionReferenceIndex).toBeGreaterThan(supportingInformationIndex);
+  expect(activityTimelineIndex).toBeGreaterThan(productionReferenceIndex);
+
+  expect(source).toContain('data-testid="quote-snapshot-disclosure"');
+  expect(source).toContain("collapsedByDefault");
 });
 
 test("Production Queue detail controls navigate to the full order details route", async () => {
