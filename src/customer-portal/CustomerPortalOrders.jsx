@@ -9,7 +9,10 @@ import {
 } from "./CustomerPortalShared";
 import { useCustomerPortalData } from "./useCustomerPortalData";
 import { getPaymentRequestsByOrder, usePaymentsSnapshot } from "../lib/paymentsStore";
-import { resolvePortalOrderAttention } from "./portalOrderDetail";
+import {
+  buildPortalOrderCardSummary,
+  resolvePortalOrderAttention,
+} from "./portalOrderDetail";
 import { PORTAL_REQUEST_ORDER_PATH } from "./customerPortalStartOrderRoute";
 
 function formatOrderBalance(value) {
@@ -61,8 +64,8 @@ function CompactOrderCard({ order, expanded, onToggle }) {
   const orderNumber = order.order_number || order.id || "Portal order";
   const paymentRequests = getPaymentRequestsByOrder(order.order_number);
   const status = resolveCustomerOrderStatus(order);
-  const attention = resolvePortalOrderAttention(order, paymentRequests);
-  const attentionStyle = getAttentionStyle(attention.tone);
+  const summary = buildPortalOrderCardSummary(order, paymentRequests);
+  const ownershipStyle = getAttentionStyle(summary.ownership.tone);
   const balance = formatOrderBalance(order.balance_due);
   const itemName = getPrimaryItemName(order);
 
@@ -71,9 +74,9 @@ function CompactOrderCard({ order, expanded, onToggle }) {
       data-testid="portal-compact-order-card"
       style={{
         borderRadius: "22px",
-        border: attention.requiresAction ? "1px solid #fde68a" : "1px solid #dbe4ee",
+        border: summary.customerActionRequired ? "1px solid #fde68a" : "1px solid #dbe4ee",
         background: "#ffffff",
-        boxShadow: attention.requiresAction
+        boxShadow: summary.customerActionRequired
           ? "0 18px 34px rgba(245, 158, 11, 0.12)"
           : "0 12px 28px rgba(15, 23, 42, 0.05)",
         overflow: "hidden",
@@ -115,9 +118,9 @@ function CompactOrderCard({ order, expanded, onToggle }) {
                 gap: "7px",
                 borderRadius: "999px",
                 padding: "8px 11px",
-                background: attentionStyle.background,
-                border: `1px solid ${attentionStyle.border}`,
-                color: attentionStyle.color,
+                background: ownershipStyle.background,
+                border: `1px solid ${ownershipStyle.border}`,
+                color: ownershipStyle.color,
                 fontSize: "13px",
                 fontWeight: 900,
                 lineHeight: 1,
@@ -129,10 +132,10 @@ function CompactOrderCard({ order, expanded, onToggle }) {
                   width: "8px",
                   height: "8px",
                   borderRadius: "999px",
-                  background: attentionStyle.dot,
+                  background: ownershipStyle.dot,
                 }}
               />
-              {attention.requiresAction ? `Action Required: ${attention.label}` : attention.label}
+              {summary.ownership.label}
             </span>
 
             <span
@@ -149,9 +152,40 @@ function CompactOrderCard({ order, expanded, onToggle }) {
                 lineHeight: 1,
               }}
             >
-              {status.label}
+              Stage: {status.label}
             </span>
           </div>
+
+          {summary.indicators.length ? (
+            <div
+              data-testid="portal-order-summary-indicators"
+              style={{ display: "flex", flexWrap: "wrap", gap: "7px", alignItems: "center" }}
+            >
+              {summary.indicators.map((indicator) => {
+                const indicatorStyle = getAttentionStyle(indicator.tone);
+                return (
+                  <span
+                    key={indicator.key}
+                    data-summary-indicator={indicator.key}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      borderRadius: "999px",
+                      padding: "6px 9px",
+                      background: indicatorStyle.background,
+                      border: `1px solid ${indicatorStyle.border}`,
+                      color: indicatorStyle.color,
+                      fontSize: "12px",
+                      fontWeight: 800,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {indicator.label}
+                  </span>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
 
         <div

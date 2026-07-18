@@ -275,3 +275,63 @@ export function resolvePortalOrderAttention(order = {}, paymentRequests = []) {
     requiresAction: false,
   };
 }
+
+export function buildPortalOrderCardSummary(order = {}, paymentRequests = []) {
+  const attention = resolvePortalOrderAttention(order, paymentRequests);
+  const artworkAction = getCustomerArtworkActionState(order);
+  const readyForPickup = hasReadyForPickup(order) && !hasCompleted(order);
+  const completed = hasCompleted(order);
+  const canceled = [order.status, order.quote_status].some(
+    (value) => normalizeLower(value) === "canceled"
+  );
+  const openPaymentRequest = resolveOpenPaymentRequest(paymentRequests);
+  const invoiceStatus = normalizeLower(order.invoice_status);
+  const paymentOutstanding = Boolean(openPaymentRequest) || [
+    "awaiting deposit",
+    "awaiting payment",
+    "awaiting final payment",
+    "sent",
+    "overdue",
+  ].includes(invoiceStatus) || normalizeLower(order.quote_status) === "awaiting deposit";
+  const customerActionRequired = attention.requiresAction || readyForPickup;
+
+  let ownership = {
+    tone: attention.tone,
+    label: attention.requiresAction ? `Your action: ${attention.label}` : "Tee & Co is working on your order",
+    requiresAction: attention.requiresAction,
+  };
+
+  if (readyForPickup) {
+    ownership = {
+      tone: "success",
+      label: "Your action: Pick up your order",
+      requiresAction: true,
+    };
+  } else if (completed) {
+    ownership = { tone: "success", label: "Order complete", requiresAction: false };
+  } else if (canceled) {
+    ownership = { tone: "neutral", label: "No action required", requiresAction: false };
+  }
+
+  const indicators = [];
+  if (paymentOutstanding) {
+    indicators.push({ key: "payment", label: "Payment outstanding", tone: "warning" });
+  }
+  if (artworkAction.required) {
+    indicators.push({ key: "artwork", label: "Artwork required", tone: "warning" });
+  }
+  if (readyForPickup) {
+    indicators.push({ key: "pickup", label: "Ready for pickup", tone: "success" });
+  }
+
+  return {
+    attention,
+    ownership,
+    customerActionRequired,
+    teeAndCoWorking: !customerActionRequired && !completed && !canceled,
+    paymentOutstanding,
+    artworkRequired: artworkAction.required,
+    readyForPickup,
+    indicators,
+  };
+}

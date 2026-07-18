@@ -1,11 +1,54 @@
 // @ts-check
 import { test, expect } from "@playwright/test";
 import {
+  buildPortalOrderCardSummary,
   buildPortalOrderTimeline,
   resolvePortalNextAction,
   resolvePortalNextActionDetails,
   resolvePortalOrderAttention,
 } from "../src/customer-portal/portalOrderDetail.js";
+
+test("collapsed order summaries expose ownership and concurrent customer needs", () => {
+  const summary = buildPortalOrderCardSummary(
+    {
+      order_number: "TC-SUMMARY-2001",
+      quote_status: "Awaiting Deposit",
+      artwork_requirement: "upload_later",
+      artwork_status: "Missing",
+    },
+    [{ id: "payment-summary-1", request_type: "deposit", status: "sent" }]
+  );
+
+  expect(summary.customerActionRequired).toBe(true);
+  expect(summary.ownership.label).toContain("Your action:");
+  expect(summary.paymentOutstanding).toBe(true);
+  expect(summary.artworkRequired).toBe(true);
+  expect(summary.indicators.map((indicator) => indicator.label)).toEqual([
+    "Payment outstanding",
+    "Artwork required",
+  ]);
+});
+
+test("collapsed order summaries identify Tee & Co work and pickup readiness", () => {
+  const inProduction = buildPortalOrderCardSummary({ status: "Printing" }, []);
+  expect(inProduction).toMatchObject({
+    customerActionRequired: false,
+    teeAndCoWorking: true,
+    ownership: { label: "Tee & Co is working on your order" },
+  });
+
+  const ready = buildPortalOrderCardSummary({ status: "Ready For Pickup" }, []);
+  expect(ready).toMatchObject({
+    customerActionRequired: true,
+    readyForPickup: true,
+    ownership: { label: "Your action: Pick up your order" },
+  });
+  expect(ready.indicators).toContainEqual({
+    key: "pickup",
+    label: "Ready for pickup",
+    tone: "success",
+  });
+});
 
 test("buildPortalOrderTimeline maps unified customer milestones", () => {
   const order = {
