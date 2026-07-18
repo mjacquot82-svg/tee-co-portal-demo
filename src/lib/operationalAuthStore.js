@@ -1,6 +1,7 @@
 import { pushAuthDiagnostic } from "./authDiagnostics";
 import { normalizeOperationalRole as normalizePermissionRole } from "./permissions";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
+import { buildCanonicalUrl } from "./siteUrl";
 
 const OPERATIONAL_AUTH_UPDATED_EVENT = "tee-co-operational-auth-updated";
 
@@ -268,11 +269,13 @@ export async function signUpCustomerAccount({
     .filter(Boolean)
     .join(" ")
     .trim();
+  const emailRedirectTo = buildCanonicalUrl("/login?emailConfirmed=1");
 
   const { data, error } = await supabase.auth.signUp({
     email: normalizedEmail,
     password: String(password || ""),
     options: {
+      emailRedirectTo,
       data: {
         first_name: normalizedFirstName,
         last_name: normalizedLastName,
@@ -311,6 +314,31 @@ export async function signUpCustomerAccount({
     customerSession,
     requiresEmailConfirmation: Boolean(resolvedUser) && !data?.session,
   };
+}
+
+export async function requestCustomerPasswordReset(email) {
+  if (!isSupabaseConfigured || !supabase) {
+    return { ok: false, message: "Supabase authentication is not configured for this workspace." };
+  }
+
+  const { error } = await supabase.auth.resetPasswordForEmail(String(email || "").trim(), {
+    redirectTo: buildCanonicalUrl("/login?passwordRecovery=1"),
+  });
+
+  return error
+    ? { ok: false, message: error.message || "Unable to send the password reset email." }
+    : { ok: true };
+}
+
+export async function updateCustomerPassword(password) {
+  if (!isSupabaseConfigured || !supabase) {
+    return { ok: false, message: "Supabase authentication is not configured for this workspace." };
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: String(password || "") });
+  return error
+    ? { ok: false, message: error.message || "Unable to update your password." }
+    : { ok: true };
 }
 
 export async function signOutOperationalWorkspace() {

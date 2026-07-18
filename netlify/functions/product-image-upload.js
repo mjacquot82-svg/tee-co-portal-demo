@@ -15,7 +15,7 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/webp",
 ]);
 const DEFAULT_ALLOWED_ORIGINS = new Set([
-  "https://teeandco.netlify.app",
+  "https://teeandco.jdsstudio.ca",
 ]);
 const CORS_BASE_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type",

@@ -12,8 +12,10 @@ import {
   ensureOperationalAuthInitialized,
   getOperationalAuthUser,
   isOperationalAuthLoading,
+  requestCustomerPasswordReset,
   signInToOperationalWorkspace,
   subscribeToOperationalAuth,
+  updateCustomerPassword,
 } from "../lib/operationalAuthStore";
 import {
   attemptStaffLogin,
@@ -77,6 +79,9 @@ export default function Login() {
   const [workspacePassword, setWorkspacePassword] = useState("");
   const [workspaceError, setWorkspaceError] = useState("");
   const [workspaceSubmitting, setWorkspaceSubmitting] = useState(false);
+  const [resetRequested, setResetRequested] = useState(false);
+  const [recoveryPassword, setRecoveryPassword] = useState("");
+  const [recoveryPasswordConfirmation, setRecoveryPasswordConfirmation] = useState("");
   const [activeStaffUser, setActiveStaffUser] = useState(() => getActiveStaffUser());
   const [activeOperationalUser, setActiveOperationalUser] = useState(() =>
     getOperationalAuthUser()
@@ -90,6 +95,9 @@ export default function Login() {
 
   const searchParams = new URLSearchParams(location.search);
   const redirectTo = searchParams.get("redirectTo");
+  const registrationStatus = searchParams.get("registration");
+  const emailConfirmed = searchParams.get("emailConfirmed") === "1";
+  const passwordRecovery = searchParams.get("passwordRecovery") === "1";
   const resolvedRedirectTarget =
     redirectTo === "/my-orders" ||
     (redirectTo && redirectTo.startsWith("/portal")) ||
@@ -165,6 +173,7 @@ export default function Login() {
 
   useEffect(() => {
     if (operationalAuthLoading) return;
+    if (passwordRecovery) return;
 
     if (targetNeedsManagement) {
       if (canAccessProtectedManagementRoute(resolvedRedirectTarget, routeAccessUser)) {
@@ -210,6 +219,7 @@ export default function Login() {
     activeStaffUser,
     navigate,
     operationalAuthLoading,
+    passwordRecovery,
     resolvedRedirectTarget,
     routeAccessUser,
     targetIsAdminRoute,
@@ -311,6 +321,46 @@ export default function Login() {
       target: nextTarget,
     });
     navigate(nextTarget, { replace: true });
+  }
+
+  async function handlePasswordResetRequest() {
+    const normalizedEmail = workspaceEmail.trim();
+    if (!normalizedEmail) {
+      setWorkspaceError("Enter your email, then request a password reset.");
+      return;
+    }
+
+    setWorkspaceSubmitting(true);
+    setWorkspaceError("");
+    const result = await requestCustomerPasswordReset(normalizedEmail);
+    setWorkspaceSubmitting(false);
+    if (!result.ok) {
+      setWorkspaceError(result.message);
+      return;
+    }
+    setResetRequested(true);
+  }
+
+  async function handlePasswordUpdate(event) {
+    event.preventDefault();
+    if (recoveryPassword.length < 8) {
+      setWorkspaceError("Use at least 8 characters for your password.");
+      return;
+    }
+    if (recoveryPassword !== recoveryPasswordConfirmation) {
+      setWorkspaceError("Passwords do not match.");
+      return;
+    }
+
+    setWorkspaceSubmitting(true);
+    setWorkspaceError("");
+    const result = await updateCustomerPassword(recoveryPassword);
+    setWorkspaceSubmitting(false);
+    if (!result.ok) {
+      setWorkspaceError(result.message);
+      return;
+    }
+    navigate("/portal/orders", { replace: true });
   }
 
   return (
@@ -425,36 +475,89 @@ export default function Login() {
               </p>
             </div>
 
-            <form onSubmit={handleWorkspaceLogin} style={{ display: "grid", gap: "14px" }}>
-              <div>
-                <label style={labelStyle}>Email</label>
-                <input
-                  type="email"
-                  value={workspaceEmail}
-                  onChange={(event) => {
-                    setWorkspaceError("");
-                    setWorkspaceEmail(event.target.value);
+            <form
+              onSubmit={passwordRecovery ? handlePasswordUpdate : handleWorkspaceLogin}
+              style={{ display: "grid", gap: "14px" }}
+            >
+              {registrationStatus || emailConfirmed ? (
+                <p
+                  role="status"
+                  style={{
+                    margin: 0,
+                    padding: "12px 14px",
+                    borderRadius: "12px",
+                    background: "#ecfdf5",
+                    color: "#166534",
+                    fontWeight: 700,
+                    lineHeight: 1.5,
                   }}
-                  placeholder="you@example.com"
-                  style={inputStyle}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                />
-              </div>
+                >
+                  {emailConfirmed
+                    ? "Your email is confirmed. Sign in to open your portal."
+                    : registrationStatus === "confirmation-required"
+                      ? "Your account was created. Check your email to confirm it, then sign in."
+                      : "Your account was created. Sign in to open your portal."}
+                </p>
+              ) : null}
 
-              <div>
-                <label style={labelStyle}>Password</label>
-                <input
-                  type="password"
-                  value={workspacePassword}
-                  onChange={(event) => {
-                    setWorkspaceError("");
-                    setWorkspacePassword(event.target.value);
-                  }}
-                  placeholder="Enter password"
-                  style={inputStyle}
-                />
-              </div>
+              {passwordRecovery ? (
+                <>
+                  <p role="status" style={{ margin: 0, color: "#166534", fontWeight: 700 }}>
+                    Choose a new password for your account.
+                  </p>
+                  <div>
+                    <label style={labelStyle}>New Password</label>
+                    <input
+                      type="password"
+                      value={recoveryPassword}
+                      onChange={(event) => setRecoveryPassword(event.target.value)}
+                      placeholder="At least 8 characters"
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Confirm New Password</label>
+                    <input
+                      type="password"
+                      value={recoveryPasswordConfirmation}
+                      onChange={(event) => setRecoveryPasswordConfirmation(event.target.value)}
+                      placeholder="Re-enter new password"
+                      style={inputStyle}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label style={labelStyle}>Email</label>
+                    <input
+                      type="email"
+                      value={workspaceEmail}
+                      onChange={(event) => {
+                        setWorkspaceError("");
+                        setWorkspaceEmail(event.target.value);
+                      }}
+                      placeholder="you@example.com"
+                      style={inputStyle}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Password</label>
+                    <input
+                      type="password"
+                      value={workspacePassword}
+                      onChange={(event) => {
+                        setWorkspaceError("");
+                        setWorkspacePassword(event.target.value);
+                      }}
+                      placeholder="Enter password"
+                      style={inputStyle}
+                    />
+                  </div>
+                </>
+              )}
 
               {workspaceError ? (
                 <p style={{ margin: 0, color: "#b91c1c", fontWeight: 700 }}>{workspaceError}</p>
@@ -470,10 +573,27 @@ export default function Login() {
                   cursor: workspaceSubmitting ? "wait" : "pointer",
                 }}
               >
-                {workspaceSubmitting ? "Signing In..." : "Open Portal"}
+                {workspaceSubmitting
+                  ? passwordRecovery
+                    ? "Updating Password..."
+                    : "Signing In..."
+                  : passwordRecovery
+                    ? "Update Password"
+                    : "Open Portal"}
               </button>
 
-              <p style={{ margin: 0, color: "#64748b", fontSize: "13px", lineHeight: 1.6 }}>
+              {!passwordRecovery ? (
+                <button
+                  type="button"
+                  onClick={handlePasswordResetRequest}
+                  disabled={workspaceSubmitting || resetRequested}
+                  style={{ border: 0, background: "transparent", color: "#0f766e", fontWeight: 800, cursor: "pointer" }}
+                >
+                  {resetRequested ? "Password reset email sent" : "Forgot password?"}
+                </button>
+              ) : null}
+
+              {!passwordRecovery ? <p style={{ margin: 0, color: "#64748b", fontSize: "13px", lineHeight: 1.6 }}>
                 New customer?{" "}
                 <Link
                   to={`/signup?redirectTo=${encodeURIComponent(
@@ -487,7 +607,7 @@ export default function Login() {
                 >
                   Create your account
                 </Link>
-              </p>
+              </p> : null}
             </form>
           </div>
 

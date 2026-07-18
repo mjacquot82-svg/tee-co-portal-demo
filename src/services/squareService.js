@@ -3,6 +3,7 @@ import {
   updatePaymentRequest,
   updatePaymentRequestPersisted,
 } from "../lib/paymentsStore";
+import { buildCanonicalUrl } from "../lib/siteUrl";
 
 const DEFAULT_PAYMENT_LINK_ENDPOINT = "/.netlify/functions/square-payment-link";
 
@@ -130,6 +131,7 @@ export function buildSquarePaymentLinkPayload(paymentRequest = {}) {
       normalizeText(paymentRequest.description) ||
       `Tee & Co payment request ${paymentRequest.request_number || ""}`.trim(),
     customer_message: normalizeText(paymentRequest.customer_message),
+    redirect_url: buildCanonicalUrl("/portal/payments"),
     metadata: {
       source: "tee_co_payment_request",
       payment_request_id: paymentRequest.id,

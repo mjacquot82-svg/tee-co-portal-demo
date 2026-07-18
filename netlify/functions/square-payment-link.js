@@ -1,6 +1,7 @@
 /* global process */
 
 const SQUARE_VERSION = "2024-06-04";
+const DEFAULT_CHECKOUT_REDIRECT_URL = "https://teeandco.jdsstudio.ca/portal/payments";
 
 function json(statusCode, body) {
   return {
@@ -36,7 +37,7 @@ function getRedirectUrl(input = {}) {
   return (
     normalizeText(input.redirect_url) ||
     normalizeText(process.env.SQUARE_CHECKOUT_REDIRECT_URL) ||
-    normalizeText(process.env.URL)
+    DEFAULT_CHECKOUT_REDIRECT_URL
   );
 }
 

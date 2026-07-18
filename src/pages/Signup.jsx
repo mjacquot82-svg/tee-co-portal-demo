@@ -81,6 +81,8 @@ export default function Signup() {
   async function handleSubmit(event) {
     event.preventDefault();
 
+    if (submitting) return;
+
     const normalizedEmail = form.email.trim();
     if (!form.firstName.trim() || !form.lastName.trim() || !normalizedEmail || !form.password) {
       setErrorMessage("Complete all required fields.");
@@ -127,11 +129,13 @@ export default function Signup() {
       return;
     }
 
-    setSuccessMessage(
-      signupResult.requiresEmailConfirmation
-        ? "Your account was created. Check your email to confirm access, then sign in."
-        : "Your account was created. Sign in to open your portal."
-    );
+    const loginParams = new URLSearchParams({
+      redirectTo: resolvedRedirectTarget,
+      registration: signupResult.requiresEmailConfirmation
+        ? "confirmation-required"
+        : "complete",
+    });
+    navigate(`/login?${loginParams.toString()}`, { replace: true });
   }
 
   return (
