@@ -49,6 +49,12 @@ export function buildIntakeActionConfirmation(actionKey) {
       "The customer has been notified through the Customer Portal and can now upload artwork.",
       "Next step: Review the artwork after the customer uploads it.",
     ],
+    approve_artwork: [
+      "✓ Artwork approved.",
+      "Workflow state: Artwork approved.",
+      "The artwork requirement is complete.",
+      "Next step: Complete any remaining requirements before production.",
+    ],
     request_changes: [
       "✓ Changes requested.",
       "Workflow state: Awaiting customer response.",

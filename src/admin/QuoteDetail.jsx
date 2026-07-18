@@ -35,7 +35,10 @@ import {
 import PaymentRequestForm from "./PaymentRequestForm";
 import { requestQuoteDeposit } from "./quoteDepositRequestAction";
 import { buildIntakeActionConfirmation } from "./workflowCopy";
-import { getCompletedIntakeActions } from "./intakeActionPresentation";
+import {
+  getAvailableIntakeActions,
+  getCompletedIntakeActions,
+} from "./intakeActionPresentation";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -621,6 +624,7 @@ function IntakeReviewScreen({
   historyEvents,
   canManageArchive,
   onApproveRequest,
+  onApproveArtwork,
   onRequestArtwork,
   onRequestChanges,
   onRequireDeposit,
@@ -637,12 +641,14 @@ function IntakeReviewScreen({
   const artworkReferenceNames = getOrderArtworkReferenceNames(order);
   const attentionItems = buildIntakeAttentionItems(order, productionReadiness);
   const completedActions = getCompletedIntakeActions(order);
+  const availableActions = getAvailableIntakeActions(order);
   const completedActionLabels = [
     completedActions.approveRequest ? "Request Approved" : null,
     completedActions.requestArtwork ? "Artwork Requested" : null,
     completedActions.requestChanges ? "Changes Requested" : null,
     completedActions.requireDeposit ? "Deposit Required" : null,
     completedActions.markDepositNotRequired ? "Deposit Not Required" : null,
+    completedActions.approveArtwork ? "Artwork Approved" : null,
   ].filter(Boolean);
   const sizeSummary =
     formatSizeBreakdown(order.size_breakdown) ||
@@ -775,19 +781,22 @@ function IntakeReviewScreen({
           Available Actions
         </p>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          {!completedActions.approveRequest ? (
+          {availableActions.approveRequest ? (
             <PrimaryActionButton onClick={onApproveRequest} tone="success">Approve Request</PrimaryActionButton>
           ) : null}
-          {!completedActions.requestArtwork ? (
+          {availableActions.approveArtwork ? (
+            <PrimaryActionButton onClick={onApproveArtwork} tone="success">Approve Artwork</PrimaryActionButton>
+          ) : null}
+          {availableActions.requestArtwork ? (
             <PrimaryActionButton onClick={onRequestArtwork} tone="warning">Request Artwork</PrimaryActionButton>
           ) : null}
-          {!completedActions.requestChanges ? (
+          {availableActions.requestChanges ? (
             <PrimaryActionButton onClick={onRequestChanges} tone="neutral">Request Changes</PrimaryActionButton>
           ) : null}
-          {!completedActions.requireDeposit ? (
+          {availableActions.requireDeposit ? (
             <PrimaryActionButton onClick={handleOpenDepositModal} tone="warning">Require Deposit</PrimaryActionButton>
           ) : null}
-          {!completedActions.markDepositNotRequired ? (
+          {availableActions.markDepositNotRequired ? (
             <PrimaryActionButton onClick={onMarkDepositNotRequired} tone="neutral">Mark Deposit Not Required</PrimaryActionButton>
           ) : null}
           <PrimaryActionButton onClick={onRejectRequest} tone="danger">Reject Request</PrimaryActionButton>
@@ -1307,6 +1316,40 @@ export default function QuoteDetail() {
     showWorkflowConfirmation(buildIntakeActionConfirmation("request_artwork"));
   }
 
+  async function handleApproveArtwork() {
+    if (archived || canceled) return;
+
+    const nextOrder = {
+      ...order,
+      artwork_approval_status: "Approved",
+      artwork_status: "Approved",
+    };
+    const nextReadiness = buildProductionReadiness(nextOrder, financials);
+    await updateStoredOrder(order.order_number, {
+      artwork_approval_status: "Approved",
+      artwork_status: "Approved",
+      ...(nextReadiness.ready
+        ? {
+            status: "Ready For Production",
+            quote_status: "Ready For Production",
+            production_ready: true,
+          }
+        : {}),
+      activity_type: "artwork_approval",
+      activity_note: `Artwork approved by ${activeStaffUser?.name || "staff"}.`,
+    });
+    showWorkflowConfirmation(
+      nextReadiness.ready
+        ? [
+            "✓ Artwork approved.",
+            "Workflow state: Ready for production.",
+            "All intake requirements are complete.",
+            "Next step: Begin production when scheduled.",
+          ].join("\n")
+        : buildIntakeActionConfirmation("approve_artwork")
+    );
+  }
+
   async function handleRequestChanges() {
     if (archived || canceled) return;
 
@@ -1382,6 +1425,7 @@ export default function QuoteDetail() {
         historyEvents={historyEvents}
         canManageArchive={canManageArchive}
         onApproveRequest={handleApproveRequest}
+        onApproveArtwork={handleApproveArtwork}
         onRequestArtwork={handleRequestArtwork}
         onRequestChanges={handleRequestChanges}
         onRequireDeposit={handleRequireDeposit}

@@ -1,6 +1,9 @@
 // @ts-check
 import { expect, test } from "@playwright/test";
-import { getCompletedIntakeActions } from "../src/admin/intakeActionPresentation.js";
+import {
+  getAvailableIntakeActions,
+  getCompletedIntakeActions,
+} from "../src/admin/intakeActionPresentation.js";
 
 test("a new request keeps every non-terminal intake action available", () => {
   expect(getCompletedIntakeActions({
@@ -14,6 +17,7 @@ test("a new request keeps every non-terminal intake action available", () => {
     requestChanges: false,
     requireDeposit: false,
     markDepositNotRequired: false,
+    approveArtwork: false,
   });
 });
 
@@ -51,6 +55,44 @@ test("a waived deposit hides only the completed waiver action", () => {
   });
 });
 
+test("a received deposit no longer offers the contradictory deposit waiver", () => {
+  expect(getAvailableIntakeActions({
+    deposit_required: true,
+    deposit_requirement: "required",
+    deposit_workflow_status: "Deposit Received",
+  })).toMatchObject({
+    requireDeposit: false,
+    markDepositNotRequired: false,
+  });
+});
+
+test("uploaded artwork awaiting review offers approval as the next action", () => {
+  const order = {
+    artwork_status: "Pending Review",
+    artwork_approval_status: "Pending Review",
+    artwork_files: [{ id: "asset-1", file_name: "logo.png", asset_url: "https://example.com/logo.png" }],
+  };
+
+  expect(getAvailableIntakeActions(order)).toMatchObject({
+    approveArtwork: true,
+    requestArtwork: false,
+  });
+});
+
+test("approved artwork is completed and no longer offers artwork actions", () => {
+  const order = {
+    artwork_status: "Approved",
+    artwork_approval_status: "Approved",
+    artwork_files: [{ id: "asset-1", file_name: "logo.png", asset_url: "https://example.com/logo.png" }],
+  };
+
+  expect(getCompletedIntakeActions(order).approveArtwork).toBe(true);
+  expect(getAvailableIntakeActions(order)).toMatchObject({
+    approveArtwork: false,
+    requestArtwork: false,
+  });
+});
+
 test("the intake UI renders completion indicators and conditionally omits completed buttons", async () => {
   const source = await import("node:fs/promises").then((fs) =>
     fs.readFile(new URL("../src/admin/QuoteDetail.jsx", import.meta.url), "utf8")
@@ -59,9 +101,12 @@ test("the intake UI renders completion indicators and conditionally omits comple
   expect(source).toContain('data-testid="intake-completed-actions"');
   expect(source).toContain("Completed");
   expect(source).toContain("Available Actions");
-  expect(source).toContain("!completedActions.approveRequest");
-  expect(source).toContain("!completedActions.requestArtwork");
-  expect(source).toContain("!completedActions.requestChanges");
-  expect(source).toContain("!completedActions.requireDeposit");
-  expect(source).toContain("!completedActions.markDepositNotRequired");
+  expect(source).toContain("availableActions.approveRequest");
+  expect(source).toContain("availableActions.approveArtwork");
+  expect(source).toContain("availableActions.requestArtwork");
+  expect(source).toContain("availableActions.requestChanges");
+  expect(source).toContain("availableActions.requireDeposit");
+  expect(source).toContain("availableActions.markDepositNotRequired");
+  expect(source).toContain('artwork_approval_status: "Approved"');
+  expect(source).toContain('status: "Ready For Production"');
 });

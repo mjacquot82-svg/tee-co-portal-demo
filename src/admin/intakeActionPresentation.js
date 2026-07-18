@@ -1,3 +1,5 @@
+import { getUploadedOrderArtworkFiles } from "../lib/orderArtwork";
+
 function normalized(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -15,6 +17,10 @@ export function getCompletedIntakeActions(order = {}) {
   const depositRequirement = normalized(order.deposit_requirement);
   const depositRequirementStatus = normalized(order.deposit_requirement_status);
   const depositWorkflowStatus = normalized(order.deposit_workflow_status);
+  const artworkStatuses = [
+    normalized(order.artwork_approval_status),
+    normalized(order.artwork_status),
+  ];
 
   return {
     approveRequest:
@@ -38,5 +44,28 @@ export function getCompletedIntakeActions(order = {}) {
       depositRequirement === "not_required" ||
       depositRequirementStatus === "not required" ||
       depositWorkflowStatus === "deposit not required",
+    approveArtwork: artworkStatuses.includes("approved"),
+  };
+}
+
+export function getAvailableIntakeActions(order = {}) {
+  const completed = getCompletedIntakeActions(order);
+  const artworkStatuses = [
+    normalized(order.artwork_approval_status),
+    normalized(order.artwork_status),
+  ];
+  const artworkApproved = artworkStatuses.includes("approved");
+  const depositWorkflowStatus = normalized(order.deposit_workflow_status);
+  const hasUploadedArtwork = getUploadedOrderArtworkFiles(order).length > 0;
+
+  return {
+    approveRequest: !completed.approveRequest,
+    requestArtwork: !completed.requestArtwork && !artworkApproved && !hasUploadedArtwork,
+    requestChanges: !completed.requestChanges,
+    requireDeposit: !completed.requireDeposit,
+    markDepositNotRequired:
+      !completed.markDepositNotRequired && depositWorkflowStatus !== "deposit received",
+    approveArtwork:
+      !artworkApproved && artworkStatuses.includes("pending review") && hasUploadedArtwork,
   };
 }

@@ -5,6 +5,7 @@ import { buildIntakeActionConfirmation } from "../src/admin/workflowCopy.js";
 const expectedConfirmations = [
   ["approve_request", "✓ Request approved.", "Approved — pending remaining requirements", "customer", "Next step:"],
   ["request_artwork", "✓ Artwork requested.", "Awaiting artwork", "Customer Portal", "Next step:"],
+  ["approve_artwork", "✓ Artwork approved.", "Artwork approved", "requirement", "Next step:"],
   ["request_changes", "✓ Changes requested.", "Awaiting customer response", "Customer Portal", "Next step:"],
   ["require_deposit", "✓ Deposit request created.", "Awaiting deposit", "Customer Portal", "Next step:"],
   ["deposit_not_required", "✓ Deposit marked not required.", "No deposit is required", "customer", "Next step:"],
