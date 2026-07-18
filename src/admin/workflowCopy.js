@@ -35,6 +35,49 @@ export function buildDepositRequestConfirmation(order = {}, result = {}) {
   return `Deposit Request Sent for ${orderContext(order)} · ${money(amount)}`;
 }
 
+export function buildIntakeActionConfirmation(actionKey) {
+  const confirmations = {
+    approve_request: [
+      "✓ Request approved.",
+      "Workflow state: Approved — pending remaining requirements.",
+      "The customer can now complete any remaining requirements before production.",
+      "Next step: Review the artwork and deposit requirements.",
+    ],
+    request_artwork: [
+      "✓ Artwork requested.",
+      "Workflow state: Awaiting artwork.",
+      "The customer has been notified through the Customer Portal and can now upload artwork.",
+      "Next step: Review the artwork after the customer uploads it.",
+    ],
+    request_changes: [
+      "✓ Changes requested.",
+      "Workflow state: Awaiting customer response.",
+      "The customer can now review the request and respond through the Customer Portal.",
+      "Next step: Continue review after the customer responds.",
+    ],
+    require_deposit: [
+      "✓ Deposit request created.",
+      "Workflow state: Awaiting deposit.",
+      "The customer can now pay the deposit from the Customer Portal.",
+      "Next step: Monitor for payment and complete any remaining requirements.",
+    ],
+    deposit_not_required: [
+      "✓ Deposit marked not required.",
+      "Workflow state: No deposit is required for this request.",
+      "The customer does not need to make a deposit payment.",
+      "Next step: Complete any remaining approval or artwork requirements.",
+    ],
+    reject_request: [
+      "✓ Request rejected.",
+      "Workflow state: Request canceled.",
+      "The request is closed and will not advance to production.",
+      "Next step: No further workflow action is required.",
+    ],
+  };
+
+  return (confirmations[actionKey] || ["✓ Workflow action completed."]).join("\n");
+}
+
 export function buildProductionEmptyState(statusFilter = "active") {
   const messages = {
     "ready-for-production": "No orders are waiting for production.",

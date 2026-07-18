@@ -34,7 +34,7 @@ import {
 } from "./adminRoleView";
 import PaymentRequestForm from "./PaymentRequestForm";
 import { requestQuoteDeposit } from "./quoteDepositRequestAction";
-import { buildDepositRequestConfirmation } from "./workflowCopy";
+import { buildIntakeActionConfirmation } from "./workflowCopy";
 import { getCompletedIntakeActions } from "./intakeActionPresentation";
 
 function money(value) {
@@ -627,6 +627,8 @@ function IntakeReviewScreen({
   onMarkDepositNotRequired,
   onRejectRequest,
   onArchiveRequest,
+  flashMessage,
+  flashTone,
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [depositModalOpen, setDepositModalOpen] = useState(false);
@@ -665,6 +667,25 @@ function IntakeReviewScreen({
       data-testid="intake-review-screen"
       style={{ maxWidth: "1180px", margin: "0 auto", padding: "24px", display: "grid", gap: "18px" }}
     >
+      {flashMessage ? (
+        <section
+          aria-live="polite"
+          data-testid="intake-workflow-confirmation"
+          style={{
+            borderRadius: "16px",
+            padding: "16px 18px",
+            border: flashTone === "success" ? "1px solid #bbf7d0" : "1px solid #cbd5e1",
+            background: flashTone === "success" ? "#ecfdf5" : "#f8fafc",
+            color: flashTone === "success" ? "#166534" : "#334155",
+            fontWeight: 700,
+            lineHeight: 1.6,
+            whiteSpace: "pre-line",
+          }}
+        >
+          {flashMessage}
+        </section>
+      ) : null}
+
       <header
         style={{
           display: "flex",
@@ -1254,7 +1275,7 @@ export default function QuoteDetail() {
       activity_type: "order_request_review",
       activity_note: `Order request approved by ${activeStaffUser?.name || "staff"}.`,
     });
-    showWorkflowConfirmation(`Quote Approved for ${order.order_number} · ${order.customer_name || "Customer"}`);
+    showWorkflowConfirmation(buildIntakeActionConfirmation("approve_request"));
   }
 
   async function handleRequestArtwork() {
@@ -1269,7 +1290,7 @@ export default function QuoteDetail() {
       activity_type: "artwork_request",
       activity_note: `Artwork requested by ${activeStaffUser?.name || "staff"}.`,
     });
-    showWorkflowConfirmation(`Artwork Requested for ${order.order_number} · ${order.customer_name || "Customer"}`);
+    showWorkflowConfirmation(buildIntakeActionConfirmation("request_artwork"));
   }
 
   async function handleRequestChanges() {
@@ -1283,7 +1304,7 @@ export default function QuoteDetail() {
       activity_type: "order_request_changes",
       activity_note: `Changes requested by ${activeStaffUser?.name || "staff"}.`,
     });
-    showWorkflowConfirmation(`Customer Changes Requested for ${order.order_number} · ${order.customer_name || "Customer"}`);
+    showWorkflowConfirmation(buildIntakeActionConfirmation("request_changes"));
   }
 
   async function handleRequireDeposit(requestDetails = {}) {
@@ -1294,7 +1315,7 @@ export default function QuoteDetail() {
       requestDetails,
       activeStaffUser,
     });
-    showWorkflowConfirmation(buildDepositRequestConfirmation(order, { amount: financials.deposit_amount }));
+    showWorkflowConfirmation(buildIntakeActionConfirmation("require_deposit"));
   }
 
   async function handleMarkDepositNotRequired() {
@@ -1308,6 +1329,7 @@ export default function QuoteDetail() {
       activity_type: "deposit_workflow",
       activity_note: `Deposit marked not required by ${activeStaffUser?.name || "staff"}.`,
     });
+    showWorkflowConfirmation(buildIntakeActionConfirmation("deposit_not_required"));
   }
 
   async function handleRejectRequest() {
@@ -1325,6 +1347,7 @@ export default function QuoteDetail() {
       activity_type: "order_request_rejected",
       activity_note: `Order request rejected by ${activeStaffUser?.name || "staff"}.`,
     });
+    showWorkflowConfirmation(buildIntakeActionConfirmation("reject_request"));
   }
 
   function handleToggleArchivedSection(sectionKey) {
@@ -1351,6 +1374,8 @@ export default function QuoteDetail() {
         onMarkDepositNotRequired={handleMarkDepositNotRequired}
         onRejectRequest={handleRejectRequest}
         onArchiveRequest={handleArchiveQuote}
+        flashMessage={flashMessage}
+        flashTone={flashTone}
       />
     );
   }
@@ -1368,6 +1393,8 @@ export default function QuoteDetail() {
             background: flashTone === "success" ? "#ecfdf5" : "#f8fafc",
             color: flashTone === "success" ? "#166534" : "#334155",
             fontWeight: 700,
+            lineHeight: 1.6,
+            whiteSpace: "pre-line",
           }}
         >
           {flashMessage}
