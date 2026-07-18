@@ -115,7 +115,7 @@ export default function CustomerPortalRequestOrder() {
   const [contactPhone, setContactPhone] = useState(customerSession.phone || "");
   const [submitState, setSubmitState] = useState("idle");
   const [submitMessage, setSubmitMessage] = useState("");
-  const [pendingRequest, setPendingRequest] = useState(() => getPendingCustomerRequest());
+  const [pendingRequest] = useState(() => getPendingCustomerRequest());
   const appliedPendingRequestRef = useRef("");
   const pendingRequestSource = location.state?.pendingRequestSource || "";
 
@@ -351,7 +351,6 @@ export default function CustomerPortalRequestOrder() {
 
       if (pendingRequest) {
         clearPendingCustomerRequest();
-        setPendingRequest(null);
       }
 
       navigate(PORTAL_ORDER_SUBMITTED_PATH, {
