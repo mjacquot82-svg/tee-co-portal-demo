@@ -10,11 +10,13 @@ import {
   clearPendingCustomerRequest,
   getPendingCustomerRequest,
 } from "../lib/pendingCustomerRequestStore";
+import {
+  clearPendingCustomerArtwork,
+  getPendingCustomerArtwork,
+} from "../lib/pendingCustomerArtworkStore";
 import { generateQuoteSnapshot } from "../lib/quoteEngine";
 import {
   buildStorefrontCategories,
-  buildStorefrontCategorySelectionValue,
-  getStorefrontCategoryById,
   getStorefrontProductCategoryLabel,
   getStorefrontProductImage,
   getStorefrontProducts,
@@ -66,6 +68,15 @@ function labelStyle() {
   };
 }
 
+function ReviewItem({ label, value }) {
+  return (
+    <div style={{ display: "grid", gap: "5px" }}>
+      <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 800 }}>{label}</span>
+      <strong style={{ color: "#0f172a", fontSize: "15px", lineHeight: 1.4 }}>{value || "—"}</strong>
+    </div>
+  );
+}
+
 export default function CustomerPortalRequestOrder() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -84,10 +95,6 @@ export default function CustomerPortalRequestOrder() {
   );
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const activeCategoryId = selectedCategoryId || storefrontCategories[0]?.id || "";
-  const activeCategory = useMemo(
-    () => getStorefrontCategoryById(products, activeCategoryId, storefrontCategoryLookups),
-    [activeCategoryId, products, storefrontCategoryLookups]
-  );
   const categoryProducts = useMemo(
     () => storefrontCategories.find((category) => category.id === activeCategoryId)?.products || storefrontProducts,
     [activeCategoryId, storefrontCategories, storefrontProducts]
@@ -109,6 +116,7 @@ export default function CustomerPortalRequestOrder() {
   const [selectedPlacement, setSelectedPlacement] = useState("");
   const [needByDate, setNeedByDate] = useState("");
   const [notes, setNotes] = useState("");
+  const [additionalInstructions, setAdditionalInstructions] = useState("");
   const [artworkOption, setArtworkOption] = useState("upload_later");
   const [artworkFile, setArtworkFile] = useState(null);
   const [contactName, setContactName] = useState(customerSession.displayName || "");
@@ -171,23 +179,22 @@ export default function CustomerPortalRequestOrder() {
         : "";
       setNotes([pendingRequest.notes, artworkNote].filter(Boolean).join("\n\n"));
     }
-    if (pendingRequest.artworkName) {
-      setArtworkOption("upload_later");
-    }
-
     appliedPendingRequestRef.current = pendingKey;
   }, [pendingRequest, storefrontCategories, storefrontProducts]);
 
-  function handleSelectCategory(categoryId) {
-    setSelectedCategoryId(categoryId);
-    const firstProductId =
-      storefrontCategories.find((category) => category.id === categoryId)?.products?.[0]?.id || "";
-    setSelectedProductId(firstProductId);
-  }
+  useEffect(() => {
+    let active = true;
 
-  function handleSelectProduct(productId) {
-    setSelectedProductId(productId);
-  }
+    void getPendingCustomerArtwork().then((file) => {
+      if (!active || !file) return;
+      setArtworkFile(file);
+      setArtworkOption("upload_now");
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -253,6 +260,9 @@ export default function CustomerPortalRequestOrder() {
         : normalizedArtworkOption === "need_help"
         ? "Help Needed"
         : "Upload Later";
+    const finalNotes = [normalizeText(notes), normalizeText(additionalInstructions)]
+      .filter(Boolean)
+      .join("\n\n");
     const artworkFiles = uploadedArtwork
       ? [
           {
@@ -325,9 +335,9 @@ export default function CustomerPortalRequestOrder() {
         artwork_approval_status: "Pending Review",
         approval_status: "Pending Review",
         due_date: needByDate || "",
-        notes: normalizeText(notes),
-        customer_notes: normalizeText(notes),
-        request_details: normalizeText(notes),
+        notes: finalNotes,
+        customer_notes: finalNotes,
+        request_details: finalNotes,
         payment_history: [],
         total_paid: 0,
         amount_paid: 0,
@@ -352,6 +362,7 @@ export default function CustomerPortalRequestOrder() {
       if (pendingRequest) {
         clearPendingCustomerRequest();
       }
+      await clearPendingCustomerArtwork();
 
       navigate(PORTAL_ORDER_SUBMITTED_PATH, {
         replace: true,
@@ -363,7 +374,7 @@ export default function CustomerPortalRequestOrder() {
           selectedSize: resolvedSize,
           quantity: normalizedQuantity,
           artworkName: artworkDisplayName,
-          notes: normalizeText(notes),
+          notes: finalNotes,
           quote,
         },
       });
@@ -380,98 +391,16 @@ export default function CustomerPortalRequestOrder() {
 
   return (
     <PortalPage
-      eyebrow="Start New Order"
-      title="Submit an order request"
-      description="Browse the live storefront catalog, choose the product you want, and send an order request with quantity, artwork, and customization notes. Tee & Co will review it before production."
+      eyebrow="Final Review"
+      title="Review and Submit Your Request"
+      description="Your garment selection has been carried forward. Confirm the details below, provide the remaining information, and submit the request to Tee & Co."
     >
-      <SectionCard
-        title="How this works"
-        subtitle="This stays intentionally lightweight. You are not checking out, building a cart, or locking production details yet."
-      >
-        {pendingRequest ? (
-          <div
-            style={{
-              borderRadius: "18px",
-              border: "1px solid #a7f3d0",
-              background: "#ecfdf5",
-              padding: "16px",
-              color: "#115e59",
-              marginBottom: "14px",
-            }}
-          >
-            <strong style={{ display: "block" }}>Selection ready for final review</strong>
-            <p style={{ margin: "6px 0 0", lineHeight: 1.6 }}>
-              Your storefront choices are filled in below. Review the contact and request details,
-              then use Submit Order Request to send them to Tee & Co.
-            </p>
-          </div>
-        ) : null}
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: "12px",
-          }}
-        >
-          {[
-            "Browse a category and choose a product.",
-            "Set quantity and share the basics we should know.",
-            "Tee & Co reviews the request and turns it into a quote or active order workflow.",
-          ].map((step, index) => (
-            <div
-              key={step}
-              style={{
-                borderRadius: "18px",
-                border: "1px solid #dbe4ee",
-                background: "#f8fafc",
-                padding: "16px",
-              }}
-            >
-              <p style={{ margin: "0 0 8px", color: "#0f766e", fontSize: "12px", fontWeight: 900 }}>
-                Step {index + 1}
-              </p>
-              <p style={{ margin: 0, color: "#334155", lineHeight: 1.6 }}>{step}</p>
-            </div>
-          ))}
-        </div>
-      </SectionCard>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1.3fr) minmax(320px, 0.9fr)",
-          gap: "24px",
-          alignItems: "start",
-        }}
-      >
         <SectionCard
-          title="Browse the catalog"
-          subtitle="This request flow uses the same storefront catalog and category-first browse already driving the public catalog."
+          title="Your Request"
+          subtitle="Review the selection you already made. Use Edit Selection only if the product configuration needs to change."
         >
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
-            {storefrontCategories.map((category) => (
-              <button
-                key={buildStorefrontCategorySelectionValue(category)}
-                type="button"
-                onClick={() => handleSelectCategory(category.id)}
-                style={{
-                  borderRadius: "999px",
-                  border: activeCategoryId === category.id ? "1px solid #99f6e4" : "1px solid #dbe4ee",
-                  background: activeCategoryId === category.id ? "#ccfbf1" : "#ffffff",
-                  color: activeCategoryId === category.id ? "#115e59" : "#0f172a",
-                  padding: "10px 14px",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                }}
-              >
-                {category.name} ({category.productCount})
-              </button>
-            ))}
-          </div>
-
           {!productsReady ? (
-            <p style={{ margin: 0, color: "#64748b" }}>Loading catalog…</p>
+            <p style={{ margin: 0, color: "#64748b" }}>Loading your selection…</p>
           ) : null}
 
           {productsReady && !storefrontProducts.length ? (
@@ -484,170 +413,57 @@ export default function CustomerPortalRequestOrder() {
                 color: "#475569",
               }}
             >
-              No storefront products are available yet.
+              Your selected product is not currently available. Return to the storefront to update the selection.
             </div>
           ) : null}
 
-          {productsReady && categoryProducts.length ? (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                gap: "14px",
-              }}
-            >
-              {categoryProducts.map((product) => {
-                const productImage = resolveStorefrontProductImage(product, { size: "thumb" });
-                const isSelected = selectedProduct?.id === product.id;
-
-                return (
-                  <button
-                    key={product.id}
-                    type="button"
-                    onClick={() => handleSelectProduct(product.id)}
-                    style={{
-                      textAlign: "left",
-                      borderRadius: "20px",
-                      border: isSelected ? "1px solid #99f6e4" : "1px solid #dbe4ee",
-                      background: isSelected ? "#f0fdfa" : "#ffffff",
-                      padding: "14px",
-                      boxShadow: isSelected
-                        ? "0 16px 32px rgba(20, 184, 166, 0.12)"
-                        : "0 10px 24px rgba(15, 23, 42, 0.05)",
-                      cursor: "pointer",
-                      display: "grid",
-                      gap: "12px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "100%",
-                        aspectRatio: "1 / 1",
-                        borderRadius: "16px",
-                        background: "#f8fafc",
-                        border: "1px solid #e2e8f0",
-                        overflow: "hidden",
-                        display: "grid",
-                        placeItems: "center",
-                      }}
-                    >
-                      {productImage.src ? (
-                        <img
-                          src={productImage.src}
-                          alt={productImage.alt}
-                          width="320"
-                          height="320"
-                          loading="lazy"
-                          decoding="async"
-                          style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                        />
-                      ) : (
-                        <NoImagePlaceholder
-                          style={{ borderRadius: "16px", width: "100%", height: "100%" }}
-                          titleStyle={{ fontSize: "13px" }}
-                          subtitleStyle={{ fontSize: "11px" }}
-                        />
-                      )}
-                    </div>
-
-                    <div style={{ display: "grid", gap: "6px" }}>
-                      <strong style={{ color: "#0f172a", fontSize: "16px" }}>{product.name}</strong>
-                      <p style={{ margin: 0, color: "#475569", lineHeight: 1.5, fontSize: "13px" }}>
-                        {product.notes || "Available for custom order requests."}
-                      </p>
-                      <span style={{ color: "#0f766e", fontWeight: 800, fontSize: "13px" }}>
-                        {resolveProductBasePrice(product) > 0
-                          ? `From ${formatMoney(resolveProductBasePrice(product))} each`
-                          : "Pricing confirmed during review"}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
+          {selectedProduct ? (
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 240px) minmax(0, 1fr)", gap: "20px", alignItems: "start" }}>
+              <div style={{ width: "100%", aspectRatio: "1 / 1", borderRadius: "18px", background: "#f8fafc", border: "1px solid #e2e8f0", overflow: "hidden", display: "grid", placeItems: "center" }}>
+                {resolveStorefrontProductImage(selectedProduct, { size: "thumb" }).src ? (
+                  <img
+                    src={resolveStorefrontProductImage(selectedProduct, { size: "thumb" }).src}
+                    alt={resolveStorefrontProductImage(selectedProduct, { size: "thumb" }).alt}
+                    width="320"
+                    height="320"
+                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                  />
+                ) : (
+                  <NoImagePlaceholder style={{ width: "100%", height: "100%", borderRadius: "18px" }} />
+                )}
+              </div>
+              <div style={{ display: "grid", gap: "18px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "16px" }}>
+                  <ReviewItem label="Garment" value={selectedProduct.name} />
+                  <ReviewItem label="Quantity" value={Math.max(1, Number(quantity || 1))} />
+                  <ReviewItem label="Color" value={resolvedColor === "Open" ? "Open / flexible" : resolvedColor} />
+                  <ReviewItem label="Size" value={resolvedSize === "Open" ? "Open / mixed sizing" : resolvedSize} />
+                  <ReviewItem label="Placement" value={resolvedPlacement || "Confirm later"} />
+                  <ReviewItem label="Decoration" value={getDefaultDecorationType(selectedProduct)} />
+                </div>
+                <div style={{ borderRadius: "16px", background: "#f8fafc", border: "1px solid #e2e8f0", padding: "14px 16px" }}>
+                  <ReviewItem label="Estimated Pricing" value={estimatedTotal !== null ? `${formatMoney(estimatedTotal)} estimated total` : "Pricing confirmed after review"} />
+                  <p style={{ margin: "8px 0 0", color: "#64748b", fontSize: "13px", lineHeight: 1.5 }}>
+                    Pricing is an estimate. Tee & Co will review and confirm it before production.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate(PUBLIC_STOREFRONT_PATH, { state: { portalOrderStart: true } })}
+                  style={{ justifySelf: "start", borderRadius: "999px", border: "1px solid #cbd5e1", background: "#ffffff", color: "#0f172a", padding: "10px 15px", fontWeight: 800, cursor: "pointer" }}
+                >
+                  Edit Selection
+                </button>
+              </div>
             </div>
           ) : null}
         </SectionCard>
 
         <form onSubmit={handleSubmit} noValidate>
           <SectionCard
-            title="Request details"
-            subtitle="Keep it simple. Share the product, quantity, and the basics Tee & Co needs to start the quote."
+            title="Additional Information Needed"
+            subtitle="Add the remaining contact, timing, and artwork information before final submission."
           >
-            {selectedProduct ? (
-              <div
-                style={{
-                  borderRadius: "18px",
-                  border: "1px solid #dbe4ee",
-                  background: "#f8fafc",
-                  padding: "16px",
-                  display: "grid",
-                  gap: "8px",
-                }}
-              >
-                <p style={{ margin: 0, color: "#0f766e", fontSize: "12px", fontWeight: 900 }}>
-                  Selected Product
-                </p>
-                <strong style={{ color: "#0f172a", fontSize: "18px" }}>{selectedProduct.name}</strong>
-                <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
-                  {activeCategory?.name || getStorefrontProductCategoryLabel(selectedProduct, storefrontCategoryLookups)}
-                </p>
-                <p style={{ margin: 0, color: "#334155", fontSize: "14px" }}>
-                  {estimatedTotal !== null
-                    ? `Starting estimate: ${formatMoney(estimatedTotal)} for ${Math.max(1, Number(quantity || 1))} units before final review.`
-                    : "Pricing will be confirmed after review."}
-                </p>
-              </div>
-            ) : null}
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-                gap: "14px",
-              }}
-            >
-              <label style={labelStyle()}>
-                Quantity
-                <input
-                  type="number"
-                  min="1"
-                  value={quantity}
-                  onChange={(event) => setQuantity(event.target.value)}
-                  style={fieldStyle()}
-                />
-              </label>
-
-              <label style={labelStyle()}>
-                Color
-                <select
-                  value={resolvedColor}
-                  onChange={(event) => setSelectedColor(event.target.value)}
-                  style={fieldStyle()}
-                >
-                  {availableColors.map((color) => (
-                    <option key={color} value={color}>
-                      {color === "Open" ? "Open / flexible" : color}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label style={labelStyle()}>
-                Size
-                <select
-                  value={resolvedSize}
-                  onChange={(event) => setSelectedSize(event.target.value)}
-                  style={fieldStyle()}
-                >
-                  {availableSizes.map((size) => (
-                    <option key={size} value={size}>
-                      {size === "Open" ? "Open / mixed sizing" : size}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
             <div
               style={{
                 display: "grid",
@@ -655,22 +471,6 @@ export default function CustomerPortalRequestOrder() {
                 gap: "14px",
               }}
             >
-              <label style={labelStyle()}>
-                Placement preference
-                <select
-                  value={resolvedPlacement}
-                  onChange={(event) => setSelectedPlacement(event.target.value)}
-                  style={fieldStyle()}
-                >
-                  <option value="">Confirm with me later</option>
-                  {placements.map((placement) => (
-                    <option key={placement.id || placement.label} value={placement.label}>
-                      {placement.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
               <label style={labelStyle()}>
                 Needed by
                 <input
@@ -692,8 +492,20 @@ export default function CustomerPortalRequestOrder() {
               }}
             >
               <legend style={{ padding: "0 6px", color: "#0f172a", fontWeight: 800 }}>
-                Artwork
+                Artwork Decision
               </legend>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", borderRadius: "14px", background: "#f8fafc", padding: "12px 14px" }}>
+                <ReviewItem label="Customer Selected" value={pendingRequest?.artworkName || "No filename provided"} />
+                <ReviewItem label="Artwork Uploaded" value={artworkFile?.name || "None"} />
+              </div>
+              {pendingRequest?.artworkName && !artworkFile ? (
+                <p style={{ margin: 0, color: "#92400e", lineHeight: 1.5, fontSize: "13px", fontWeight: 700 }}>
+                  {pendingRequest.artworkName} is a filename reference only. Choose Upload Artwork Now and select the actual file to attach it to this request.
+                </p>
+              ) : null}
+              <p style={{ margin: 0, color: "#475569", lineHeight: 1.5 }}>
+                Confirm how you want to provide the artwork for this request.
+              </p>
               <div
                 style={{
                   display: "grid",
@@ -740,17 +552,30 @@ export default function CustomerPortalRequestOrder() {
                     onChange={(event) => setArtworkFile(event.target.files?.[0] || null)}
                     style={fieldStyle()}
                   />
+                  {artworkFile ? (
+                    <span style={{ color: "#166534", fontSize: "13px" }}>
+                      Artwork carried forward. It will be securely attached when you submit: {artworkFile.name}
+                    </span>
+                  ) : null}
                 </label>
               ) : null}
             </fieldset>
 
+            <div style={{ display: "grid", gap: "8px", borderRadius: "16px", border: "1px solid #e2e8f0", background: "#f8fafc", padding: "14px 16px" }}>
+              <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Notes Already Provided</span>
+              <p style={{ margin: 0, color: "#0f172a", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                {notes || "No notes provided."}
+              </p>
+              <span style={{ color: "#64748b", fontSize: "13px" }}>These notes will be included with your request.</span>
+            </div>
+
             <label style={labelStyle()}>
-              Customization notes
+              Additional instructions
               <textarea
-                rows="6"
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                placeholder="Share artwork direction, imprint ideas, team breakdown, or anything else Tee & Co should know."
+                rows="4"
+                value={additionalInstructions}
+                onChange={(event) => setAdditionalInstructions(event.target.value)}
+                placeholder="Add any final scheduling, artwork, or customization details."
                 style={{ ...fieldStyle(), resize: "vertical" }}
               />
             </label>
@@ -778,7 +603,7 @@ export default function CustomerPortalRequestOrder() {
                   type="text"
                   value={contactPhone}
                   onChange={(event) => setContactPhone(event.target.value)}
-                  placeholder="Optional"
+                  placeholder="Best number for questions about this request"
                   style={fieldStyle()}
                 />
               </label>
@@ -798,6 +623,16 @@ export default function CustomerPortalRequestOrder() {
               </div>
             ) : null}
 
+            <div style={{ borderRadius: "18px", border: "1px solid #a7f3d0", background: "#ecfdf5", padding: "16px", color: "#115e59" }}>
+              <strong style={{ display: "block", fontSize: "16px" }}>Ready for final submission</strong>
+              <p style={{ margin: "6px 0 0", lineHeight: 1.6 }}>
+                Submitting sends this request to Tee & Co for review. It does not authorize production or payment.
+              </p>
+              <p style={{ margin: "8px 0 0", lineHeight: 1.6 }}>
+                Next, Tee & Co will review the garment, artwork, pricing, and production requirements. You can track updates in My Orders.
+              </p>
+            </div>
+
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
               <button
                 type="submit"
@@ -812,7 +647,7 @@ export default function CustomerPortalRequestOrder() {
                   cursor: submitState === "submitting" || !selectedProduct ? "not-allowed" : "pointer",
                 }}
               >
-                {submitState === "submitting" ? "Sending Request..." : "Submit Order Request"}
+                {submitState === "submitting" ? "Submitting Request..." : "Submit Order Request"}
               </button>
 
               <button
@@ -833,7 +668,6 @@ export default function CustomerPortalRequestOrder() {
             </div>
           </SectionCard>
         </form>
-      </div>
     </PortalPage>
   );
 }

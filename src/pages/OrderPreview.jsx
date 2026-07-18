@@ -9,6 +9,10 @@ import {
 } from "../lib/orderConfiguration";
 import { getActiveCustomerSession } from "../lib/customerSessionStore";
 import { savePendingCustomerRequest } from "../lib/pendingCustomerRequestStore";
+import {
+  clearPendingCustomerArtwork,
+  savePendingCustomerArtwork,
+} from "../lib/pendingCustomerArtworkStore";
 import { generateQuoteSnapshot } from "../lib/quoteEngine";
 import { useStoredProducts } from "../lib/productsStore";
 import {
@@ -140,7 +144,7 @@ export default function OrderPreview() {
     });
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     const pendingRequest = {
       garmentId: passedState.garmentId || "",
       productId: selectedProduct?.id || passedState.productId || "",
@@ -161,6 +165,14 @@ export default function OrderPreview() {
 
     if (!savePendingCustomerRequest(pendingRequest)) {
       setSubmitError("We could not hold this request for sign-in. Please try again.");
+      return;
+    }
+
+    const artworkSaved = artwork?.file
+      ? await savePendingCustomerArtwork(artwork.file)
+      : await clearPendingCustomerArtwork();
+    if (!artworkSaved) {
+      setSubmitError("We could not carry your artwork into the secure request form. Please try again.");
       return;
     }
 
