@@ -177,6 +177,7 @@ export default function CustomerPortalShell() {
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             <NavLink
               to={PORTAL_REQUEST_ORDER_PATH}
+              state={{ draftRecoveryRequested: true }}
               style={({ isActive }) => ({
                 display: "inline-flex",
                 alignItems: "center",
@@ -273,6 +274,7 @@ export default function CustomerPortalShell() {
 
             <NavLink
               to={PORTAL_REQUEST_ORDER_PATH}
+              state={{ draftRecoveryRequested: true }}
               style={({ isActive }) => ({
                 textDecoration: "none",
                 borderRadius: "18px",

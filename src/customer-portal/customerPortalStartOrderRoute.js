@@ -13,3 +13,10 @@ export function shouldRedirectRequestOrderToStorefront({
 } = {}) {
   return !pendingRequest && !isPublicGarmentFlowHandoff(pendingRequestSource);
 }
+
+export function shouldOfferPendingDraftRecovery({
+  pendingRequest = null,
+  pendingRequestSource = "",
+} = {}) {
+  return Boolean(pendingRequest) && !isPublicGarmentFlowHandoff(pendingRequestSource);
+}

@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   PORTAL_ORDER_SUBMITTED_PATH,
   PUBLIC_GARMENT_FLOW_SOURCE,
+  shouldOfferPendingDraftRecovery,
   shouldRedirectRequestOrderToStorefront,
 } from "../src/customer-portal/customerPortalStartOrderRoute.js";
 
@@ -52,4 +53,34 @@ test("portal request route preserves order preview handoff", () => {
       pendingRequestSource: "",
     })
   ).toBe(false);
+});
+
+test("stored drafts require a customer decision except during the immediate preview handoff", () => {
+  const pendingRequest = {
+    productId: "product-1",
+    garmentName: "Logo Hoodie",
+  };
+
+  expect(shouldOfferPendingDraftRecovery({ pendingRequest })).toBe(true);
+  expect(
+    shouldOfferPendingDraftRecovery({
+      pendingRequest,
+      pendingRequestSource: PUBLIC_GARMENT_FLOW_SOURCE,
+    })
+  ).toBe(false);
+  expect(shouldOfferPendingDraftRecovery()).toBe(false);
+});
+
+test("draft recovery presents explicit resume, discard, and fresh-start actions", () => {
+  const source = fs.readFileSync(
+    path.resolve(process.cwd(), "src/customer-portal/CustomerPortalRequestOrder.jsx"),
+    "utf8"
+  );
+
+  expect(source).toContain("You have an unfinished order");
+  expect(source).toContain("Resume Draft");
+  expect(source).toContain("Discard Draft");
+  expect(source).toContain("Start New Order");
+  expect(source).toContain("await clearPendingCustomerArtwork()");
+  expect(source).toContain("clearPendingCustomerRequest()");
 });

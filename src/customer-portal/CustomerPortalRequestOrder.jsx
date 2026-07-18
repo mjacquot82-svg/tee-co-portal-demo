@@ -33,6 +33,7 @@ import { PortalPage, SectionCard } from "./CustomerPortalShared";
 import {
   PORTAL_ORDER_SUBMITTED_PATH,
   PUBLIC_STOREFRONT_PATH,
+  shouldOfferPendingDraftRecovery,
   shouldRedirectRequestOrderToStorefront,
 } from "./customerPortalStartOrderRoute";
 
@@ -42,6 +43,16 @@ function normalizeText(value) {
 
 function formatMoney(value) {
   return `$${Number(value || 0).toFixed(2)}`;
+}
+
+function formatDraftStarted(value) {
+  if (!value) return "Start time unavailable";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Start time unavailable";
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }
 
 function fieldStyle() {
@@ -125,9 +136,16 @@ export default function CustomerPortalRequestOrder() {
   const [contactPhone, setContactPhone] = useState(customerSession.phone || "");
   const [submitState, setSubmitState] = useState("idle");
   const [submitMessage, setSubmitMessage] = useState("");
-  const [pendingRequest] = useState(() => getPendingCustomerRequest());
-  const appliedPendingRequestRef = useRef("");
   const pendingRequestSource = location.state?.pendingRequestSource || "";
+  const [pendingRequest, setPendingRequest] = useState(() => getPendingCustomerRequest());
+  const [draftRecoveryState, setDraftRecoveryState] = useState(() =>
+    shouldOfferPendingDraftRecovery({ pendingRequest, pendingRequestSource })
+      ? "choose"
+      : "resume"
+  );
+  const [draftRecoveryError, setDraftRecoveryError] = useState("");
+  const [draftRecoveryBusy, setDraftRecoveryBusy] = useState(false);
+  const appliedPendingRequestRef = useRef("");
 
   const resolvedColor = availableColors.includes(selectedColor) ? selectedColor : availableColors[0] || "";
   const resolvedSize = availableSizes.includes(selectedSize) ? selectedSize : availableSizes[0] || "";
@@ -137,6 +155,10 @@ export default function CustomerPortalRequestOrder() {
   const estimatedUnitPrice = resolveProductBasePrice(selectedProduct);
   const estimatedTotal =
     Number.isFinite(estimatedUnitPrice) && estimatedUnitPrice > 0 ? estimatedUnitPrice * Number(quantity || 0) : null;
+  const draftRecoveryRequired = Boolean(
+    pendingRequest &&
+      (draftRecoveryState === "choose" || location.state?.draftRecoveryRequested)
+  );
 
   useEffect(() => {
     if (!shouldRedirectRequestOrderToStorefront({ pendingRequest, pendingRequestSource })) {
@@ -153,6 +175,7 @@ export default function CustomerPortalRequestOrder() {
 
   useEffect(() => {
     if (!pendingRequest || !storefrontProducts.length) return;
+    if (draftRecoveryRequired) return;
 
     const pendingKey = `${pendingRequest.created_at || ""}:${pendingRequest.productId || ""}`;
     if (appliedPendingRequestRef.current === pendingKey) return;
@@ -182,9 +205,10 @@ export default function CustomerPortalRequestOrder() {
       setNotes([pendingRequest.notes, artworkNote].filter(Boolean).join("\n\n"));
     }
     appliedPendingRequestRef.current = pendingKey;
-  }, [pendingRequest, storefrontCategories, storefrontProducts]);
+  }, [draftRecoveryRequired, pendingRequest, storefrontCategories, storefrontProducts]);
 
   useEffect(() => {
+    if (draftRecoveryRequired) return undefined;
     let active = true;
 
     void getPendingCustomerArtwork().then((file) => {
@@ -197,7 +221,51 @@ export default function CustomerPortalRequestOrder() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [draftRecoveryRequired]);
+
+  function handleResumeDraft() {
+    setDraftRecoveryState("resume");
+    navigate(location.pathname, { replace: true, state: null });
+  }
+
+  async function clearPendingDraft() {
+    const requestCleared = clearPendingCustomerRequest();
+    const artworkCleared = await clearPendingCustomerArtwork();
+    return requestCleared && artworkCleared;
+  }
+
+  async function handleDiscardDraft() {
+    setDraftRecoveryBusy(true);
+    setDraftRecoveryError("");
+    const cleared = await clearPendingDraft();
+
+    if (!cleared) {
+      setDraftRecoveryBusy(false);
+      setDraftRecoveryError("We could not safely discard this draft. Please try again.");
+      return;
+    }
+
+    setPendingRequest(null);
+    navigate("/portal/orders", { replace: true });
+  }
+
+  async function handleStartFreshOrder() {
+    setDraftRecoveryBusy(true);
+    setDraftRecoveryError("");
+    const cleared = await clearPendingDraft();
+
+    if (!cleared) {
+      setDraftRecoveryBusy(false);
+      setDraftRecoveryError("We could not safely discard this draft. Please try again.");
+      return;
+    }
+
+    setPendingRequest(null);
+    navigate(PUBLIC_STOREFRONT_PATH, {
+      replace: true,
+      state: { portalOrderStart: true },
+    });
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -390,6 +458,66 @@ export default function CustomerPortalRequestOrder() {
           : "The request could not be sent. Try again."
       );
     }
+  }
+
+  if (draftRecoveryRequired && pendingRequest) {
+    return (
+      <PortalPage
+        eyebrow="Unfinished Order"
+        title="You have an unfinished order"
+        description="Your previous selection is still saved. Choose whether to continue it or start over—nothing will be discarded without your decision."
+      >
+        <SectionCard
+          title="Saved Draft"
+          subtitle="Review the saved request before choosing what to do next."
+        >
+          <div style={{ display: "grid", gap: "20px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", borderRadius: "16px", border: "1px solid #dbe4ee", background: "#f8fafc", padding: "16px" }}>
+              <ReviewItem label="Garment" value={pendingRequest.garmentName || "Selected garment"} />
+              <ReviewItem label="Started" value={formatDraftStarted(pendingRequest.created_at)} />
+              <ReviewItem label="Color" value={pendingRequest.selectedColor || "Not selected"} />
+              <ReviewItem label="Quantity" value={pendingRequest.quantity || 1} />
+            </div>
+
+            {draftRecoveryError ? (
+              <div role="alert" style={{ borderRadius: "14px", border: "1px solid #fecaca", background: "#fef2f2", color: "#991b1b", padding: "12px 14px", fontWeight: 700 }}>
+                {draftRecoveryError}
+              </div>
+            ) : null}
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+              <button
+                type="button"
+                disabled={draftRecoveryBusy}
+                onClick={handleResumeDraft}
+                style={{ textAlign: "left", borderRadius: "16px", border: "1px solid #0f766e", background: "#0f766e", color: "#ffffff", padding: "16px", cursor: draftRecoveryBusy ? "not-allowed" : "pointer" }}
+              >
+                <strong style={{ display: "block", fontSize: "16px" }}>Resume Draft</strong>
+                <span style={{ display: "block", marginTop: "5px", lineHeight: 1.45 }}>Continue where you left off.</span>
+              </button>
+              <button
+                type="button"
+                disabled={draftRecoveryBusy}
+                onClick={handleDiscardDraft}
+                style={{ textAlign: "left", borderRadius: "16px", border: "1px solid #cbd5e1", background: "#ffffff", color: "#0f172a", padding: "16px", cursor: draftRecoveryBusy ? "not-allowed" : "pointer" }}
+              >
+                <strong style={{ display: "block", fontSize: "16px" }}>Discard Draft</strong>
+                <span style={{ display: "block", marginTop: "5px", color: "#475569", lineHeight: 1.45 }}>Delete this unfinished request and return to My Orders.</span>
+              </button>
+              <button
+                type="button"
+                disabled={draftRecoveryBusy}
+                onClick={handleStartFreshOrder}
+                style={{ textAlign: "left", borderRadius: "16px", border: "1px solid #0f766e", background: "#ffffff", color: "#0f766e", padding: "16px", cursor: draftRecoveryBusy ? "not-allowed" : "pointer" }}
+              >
+                <strong style={{ display: "block", fontSize: "16px" }}>Start New Order</strong>
+                <span style={{ display: "block", marginTop: "5px", color: "#475569", lineHeight: 1.45 }}>Discard this draft and begin a brand-new order.</span>
+              </button>
+            </div>
+          </div>
+        </SectionCard>
+      </PortalPage>
+    );
   }
 
   return (
