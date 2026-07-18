@@ -33,7 +33,13 @@ test("selection review persists the file and authenticated review restores it", 
   expect(previewSource).toContain("savePendingCustomerArtwork(artwork.file)");
   expect(requestSource).toContain("getPendingCustomerArtwork()");
   expect(requestSource).toContain('setArtworkOption("upload_now")');
+  expect(requestSource).toContain("setArtworkCarriedForward(true)");
   expect(requestSource).toContain('value={artworkFile?.name || "None"}');
-  expect(requestSource).toContain("Artwork carried forward.");
+  expect(requestSource).toContain("artworkCarriedForward && artworkFile && !isReplacingArtwork");
+  expect(requestSource).toContain("Current uploaded artwork: {artworkFile.name}");
+  expect(requestSource).toContain("It will be securely attached when you submit.");
+  expect(requestSource).toContain("Replace Artwork");
+  expect(requestSource).toContain("setIsReplacingArtwork(true)");
+  expect(requestSource).toContain('artworkOption === "upload_now" && (!artworkCarriedForward || isReplacingArtwork)');
   expect(requestSource).toContain("await clearPendingCustomerArtwork()");
 });

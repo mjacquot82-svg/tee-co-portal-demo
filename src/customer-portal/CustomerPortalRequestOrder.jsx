@@ -119,6 +119,8 @@ export default function CustomerPortalRequestOrder() {
   const [additionalInstructions, setAdditionalInstructions] = useState("");
   const [artworkOption, setArtworkOption] = useState("upload_later");
   const [artworkFile, setArtworkFile] = useState(null);
+  const [artworkCarriedForward, setArtworkCarriedForward] = useState(false);
+  const [isReplacingArtwork, setIsReplacingArtwork] = useState(false);
   const [contactName, setContactName] = useState(customerSession.displayName || "");
   const [contactPhone, setContactPhone] = useState(customerSession.phone || "");
   const [submitState, setSubmitState] = useState("idle");
@@ -189,6 +191,7 @@ export default function CustomerPortalRequestOrder() {
       if (!active || !file) return;
       setArtworkFile(file);
       setArtworkOption("upload_now");
+      setArtworkCarriedForward(true);
     });
 
     return () => {
@@ -503,60 +506,88 @@ export default function CustomerPortalRequestOrder() {
                   {pendingRequest.artworkName} is a filename reference only. Choose Upload Artwork Now and select the actual file to attach it to this request.
                 </p>
               ) : null}
-              <p style={{ margin: 0, color: "#475569", lineHeight: 1.5 }}>
-                Confirm how you want to provide the artwork for this request.
-              </p>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                  gap: "10px",
-                }}
-              >
-                {[
-                  ["upload_now", "Upload Artwork Now"],
-                  ["upload_later", "Upload Artwork Later"],
-                  ["need_help", "Need Artwork Help"],
-                ].map(([value, label]) => (
-                  <label
-                    key={value}
+              {artworkCarriedForward && artworkFile && !isReplacingArtwork ? (
+                <div style={{ display: "grid", gap: "10px", borderRadius: "14px", border: "1px solid #86efac", background: "#f0fdf4", padding: "14px" }}>
+                  <div>
+                    <strong style={{ display: "block", color: "#166534" }}>Current uploaded artwork: {artworkFile.name}</strong>
+                    <span style={{ display: "block", marginTop: "4px", color: "#166534", fontSize: "13px", lineHeight: 1.5 }}>
+                      Artwork carried forward. It will be securely attached when you submit.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsReplacingArtwork(true)}
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "9px",
-                      border: artworkOption === value ? "1px solid #0f766e" : "1px solid #dbe4ee",
-                      background: artworkOption === value ? "#ecfdf5" : "#ffffff",
-                      color: "#0f172a",
-                      borderRadius: "14px",
-                      padding: "11px 12px",
+                      justifySelf: "start",
+                      borderRadius: "999px",
+                      border: "1px solid #0f766e",
+                      background: "#ffffff",
+                      color: "#0f766e",
+                      padding: "9px 14px",
                       fontWeight: 800,
+                      cursor: "pointer",
                     }}
                   >
-                    <input
-                      type="radio"
-                      name="artwork_option"
-                      value={value}
-                      checked={artworkOption === value}
-                      onChange={(event) => setArtworkOption(event.target.value)}
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-              {artworkOption === "upload_now" ? (
+                    Replace Artwork
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p style={{ margin: 0, color: "#475569", lineHeight: 1.5 }}>
+                    Confirm how you want to provide the artwork for this request.
+                  </p>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                      gap: "10px",
+                    }}
+                  >
+                    {[
+                      ["upload_now", "Upload Artwork Now"],
+                      ["upload_later", "Upload Artwork Later"],
+                      ["need_help", "Need Artwork Help"],
+                    ].map(([value, label]) => (
+                      <label
+                        key={value}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "9px",
+                          border: artworkOption === value ? "1px solid #0f766e" : "1px solid #dbe4ee",
+                          background: artworkOption === value ? "#ecfdf5" : "#ffffff",
+                          color: "#0f172a",
+                          borderRadius: "14px",
+                          padding: "11px 12px",
+                          fontWeight: 800,
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="artwork_option"
+                          value={value}
+                          checked={artworkOption === value}
+                          onChange={(event) => setArtworkOption(event.target.value)}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+              {artworkOption === "upload_now" && (!artworkCarriedForward || isReplacingArtwork) ? (
                 <label style={labelStyle()}>
                   Artwork file
                   <input
                     type="file"
                     accept=".png,.jpg,.jpeg,.pdf,.svg,.ai"
-                    onChange={(event) => setArtworkFile(event.target.files?.[0] || null)}
+                    onChange={(event) => {
+                      const nextFile = event.target.files?.[0] || null;
+                      setArtworkFile(nextFile);
+                      if (nextFile) setArtworkCarriedForward(false);
+                    }}
                     style={fieldStyle()}
                   />
-                  {artworkFile ? (
-                    <span style={{ color: "#166534", fontSize: "13px" }}>
-                      Artwork carried forward. It will be securely attached when you submit: {artworkFile.name}
-                    </span>
-                  ) : null}
                 </label>
               ) : null}
             </fieldset>
