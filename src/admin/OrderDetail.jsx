@@ -46,6 +46,8 @@ import {
   buildDepositRequestConfirmation,
   buildWorkflowActionConfirmation,
 } from "./workflowCopy";
+import { ensureTeeCoProductionProcess } from "../integrations/teeCoProductionProcess";
+import { buildProcessInstanceProjection } from "../process-engine/processProjection";
 
 const cardStyle = {
   background: "#ffffff",
@@ -87,6 +89,7 @@ export default function OrderDetail() {
     getOperationalStaffUsers().filter((staffUser) => staffUser.status !== "Inactive")
   );
   const [workflowFeedback, setWorkflowFeedback] = useState(null);
+  const [processProjection, setProcessProjection] = useState(null);
   const order = useMemo(
     () => storedOrders.find((entry) => entry.order_number === orderNumber) || null,
     [orderNumber, storedOrders]
@@ -157,6 +160,35 @@ export default function OrderDetail() {
     isStaffWorkspace,
     order,
   ]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadProcessProjection() {
+      if (!order) {
+        setProcessProjection(null);
+        return;
+      }
+
+      try {
+        const result = await ensureTeeCoProductionProcess(order);
+        if (active) {
+          setProcessProjection(buildProcessInstanceProjection(result.processInstance));
+        }
+      } catch (error) {
+        console.error("Unable to load production process instance", {
+          orderNumber: order.order_number,
+          error,
+        });
+        if (active) setProcessProjection(null);
+      }
+    }
+
+    void loadProcessProjection();
+    return () => {
+      active = false;
+    };
+  }, [order]);
 
   if (!order) {
     return (
@@ -662,7 +694,7 @@ export default function OrderDetail() {
       </div>
 
       <div style={{ marginBottom: "18px" }}>
-        <ProductionProgressTracker order={order} />
+        <ProductionProgressTracker order={order} processProjection={processProjection} />
       </div>
 
       <div className="order-detail-main-grid">

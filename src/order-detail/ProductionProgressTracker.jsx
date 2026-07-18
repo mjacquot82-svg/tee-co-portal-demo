@@ -10,8 +10,9 @@ import {
   buildWorkflowBlockDetails,
   buildWorkflowStatusBadges,
 } from "../orders/workflowPresentation";
+import ProcessInstanceSummary from "./ProcessInstanceSummary";
 
-export default function ProductionProgressTracker({ order }) {
+export default function ProductionProgressTracker({ order, processProjection = null }) {
   const currentStage = Math.max(0, getOperationalProgressStageIndex(order.status));
   const isOnHold = isOnHoldOperationalStatus(order.status);
   const gating = buildWorkflowBlockDetails(order, { targetStatus: "Ready For Production" });
@@ -30,6 +31,8 @@ export default function ProductionProgressTracker({ order }) {
       }}
     >
       <h2 style={{ marginTop: 0 }}>Production Workflow</h2>
+
+      <ProcessInstanceSummary projection={processProjection} />
 
       <div style={{ marginBottom: "12px" }}>
         <WorkflowProgressSteps order={order} />
