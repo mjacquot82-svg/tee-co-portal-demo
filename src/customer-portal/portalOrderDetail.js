@@ -4,7 +4,7 @@ import { getCustomerPaymentStatusLabel } from "./customerPortalPayments";
 const TIMELINE_STEPS = Object.freeze([
   "Request Submitted",
   "Artwork Uploaded",
-  "Quote Created",
+  "Pricing Review Started",
   "Quote Approved",
   "Payment Requested",
   "Payment Received",
@@ -75,7 +75,7 @@ export function buildPortalOrderTimeline(order = {}, paymentRequests = [], payme
     "Artwork Uploaded":
       (Array.isArray(order.artwork_files) && order.artwork_files.length > 0) ||
       Boolean(order.customer_artwork_id),
-    "Quote Created": hasQuote(order),
+    "Pricing Review Started": hasQuote(order),
     "Quote Approved": hasQuoteApproval(order),
     "Payment Requested": paymentRequests.length > 0,
     "Payment Received": hasSuccessfulPayment(payments, paymentEvents),
@@ -88,6 +88,29 @@ export function buildPortalOrderTimeline(order = {}, paymentRequests = [], payme
     label,
     complete: Boolean(milestones[label]),
   }));
+}
+
+export function resolveCustomerQuoteStatus(order = {}) {
+  const quoteStatus = normalizeLower(order.quote_status);
+
+  if (!quoteStatus || quoteStatus === "draft") return "Tee & Co is preparing your quote";
+  if (quoteStatus === "sent") return "Ready for your review";
+  if (["awaiting approval", "awaiting artwork approval"].includes(quoteStatus)) {
+    return "Waiting for your approval";
+  }
+  if (["approved", "ready for production"].includes(quoteStatus)) return "Approved";
+  return normalizeText(order.quote_status);
+}
+
+export function resolveCustomerQuoteApprovalStatus(order = {}) {
+  if (hasQuoteApproval(order)) return "Approved";
+
+  const quoteStatus = normalizeLower(order.quote_status);
+  if (["sent", "awaiting approval", "awaiting artwork approval"].includes(quoteStatus)) {
+    return "Your approval is needed";
+  }
+
+  return "Not ready for approval";
 }
 
 export function resolvePortalNextAction(order = {}, paymentRequests = []) {

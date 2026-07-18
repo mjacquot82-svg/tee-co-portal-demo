@@ -1,8 +1,12 @@
 // @ts-check
+import fs from "node:fs";
+import path from "node:path";
 import { test, expect } from "@playwright/test";
 import {
   buildPortalOrderCardSummary,
   buildPortalOrderTimeline,
+  resolveCustomerQuoteApprovalStatus,
+  resolveCustomerQuoteStatus,
   resolvePortalNextAction,
   resolvePortalNextActionDetails,
   resolvePortalOrderAttention,
@@ -68,7 +72,7 @@ test("buildPortalOrderTimeline maps unified customer milestones", () => {
   expect(timeline.map((step) => step.label)).toEqual([
     "Request Submitted",
     "Artwork Uploaded",
-    "Quote Created",
+    "Pricing Review Started",
     "Quote Approved",
     "Payment Requested",
     "Payment Received",
@@ -81,13 +85,43 @@ test("buildPortalOrderTimeline maps unified customer milestones", () => {
   ).toEqual([
     "Request Submitted",
     "Artwork Uploaded",
-    "Quote Created",
+    "Pricing Review Started",
     "Quote Approved",
     "Payment Requested",
     "Payment Received",
     "Production Started",
     "Ready For Pickup",
   ]);
+});
+
+test("customer quote presentation distinguishes preparation from completed milestones", () => {
+  const draftOrder = { quote_status: "Draft" };
+
+  expect(resolveCustomerQuoteStatus(draftOrder)).toBe("Tee & Co is preparing your quote");
+  expect(resolveCustomerQuoteApprovalStatus(draftOrder)).toBe("Not ready for approval");
+  expect(buildPortalOrderTimeline(draftOrder)[2]).toEqual({
+    label: "Pricing Review Started",
+    complete: true,
+  });
+
+  expect(resolveCustomerQuoteStatus({ quote_status: "Awaiting Approval" })).toBe(
+    "Waiting for your approval"
+  );
+  expect(resolveCustomerQuoteApprovalStatus({ quote_status: "Awaiting Approval" })).toBe(
+    "Your approval is needed"
+  );
+});
+
+test("order detail explains when no payment has been requested", () => {
+  const source = fs.readFileSync(
+    path.resolve(process.cwd(), "src/customer-portal/CustomerPortalOrderDetail.jsx"),
+    "utf8"
+  );
+
+  expect(source).toContain("No payment is required right now.");
+  expect(source).toContain("Tee & Co has not requested payment.");
+  expect(source).toContain("Tee & Co is confirming your schedule");
+  expect(source).not.toContain("Scheduling in progress");
 });
 
 test("resolvePortalNextAction prioritizes existing customer workflows", () => {

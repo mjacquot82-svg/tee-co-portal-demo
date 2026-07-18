@@ -18,6 +18,8 @@ import {
 } from "../lib/orderArtwork";
 import {
   buildPortalOrderTimeline,
+  resolveCustomerQuoteApprovalStatus,
+  resolveCustomerQuoteStatus,
   resolvePortalNextActionDetails,
 } from "./portalOrderDetail";
 
@@ -194,17 +196,20 @@ export default function CustomerPortalOrderDetail() {
           <DetailPair label="Item" value={order.garment || "Custom order"} />
           <DetailPair label="Quantity" value={order.qty || 0} />
           <DetailPair label="Requested" value={order.created_at ? formatShortDate(order.created_at) : "Recently"} />
-          <DetailPair label="Due Date" value={order.due_date ? formatShortDate(order.due_date) : "Scheduling in progress"} />
+          <DetailPair
+            label={order.due_date ? "Due Date" : "Timing"}
+            value={order.due_date ? formatShortDate(order.due_date) : "Tee & Co is confirming your schedule"}
+          />
           <DetailPair label="Total" value={formatCurrency(order.total_amount || order.total || 0)} />
         </div>
       </SectionCard>
 
       <SectionCard title="Quote, Artwork, and Approval" subtitle="Current quote and artwork approval workflow status.">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" }}>
-          <DetailPair label="Quote Information" value={order.quote_status || "In Review"} />
+          <DetailPair label="Quote Status" value={resolveCustomerQuoteStatus(order)} />
           <DetailPair label="Artwork Choice" value={order.artwork_requirement || "Not selected"} />
           <DetailPair label="Artwork Status" value={order.artwork_status || order.artwork_approval_status || "Pending Review"} />
-          <DetailPair label="Approval Status" value={order.quote_status || "Pending"} />
+          <DetailPair label="Your Approval" value={resolveCustomerQuoteApprovalStatus(order)} />
           <DetailPair label="Customer Selected" value={artworkReferenceNames.join(", ") || "No filename provided"} />
           <DetailPair label="Artwork Uploaded" value={uploadedArtworkFiles.map((file) => getArtworkDisplayName(file)).join(", ") || "None"} />
         </div>
@@ -217,15 +222,20 @@ export default function CustomerPortalOrderDetail() {
 
       <SectionCard title="Payment and Production" subtitle="Payment status from payment requests and current production state.">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" }}>
-          <DetailPair
-            label="Payment Status"
-            value={latestPaymentRequest ? getCustomerPaymentStatusLabel(latestPaymentRequest) : "No requests yet"}
-          />
-          <DetailPair
-            label="Latest Request"
-            value={latestPaymentRequest ? formatPaymentRequestType(latestPaymentRequest.request_type) : "Not requested"}
-          />
-          <DetailPair label="Balance Remaining" value={formatCurrency(order.balance_due || 0)} />
+          {latestPaymentRequest ? (
+            <>
+              <DetailPair label="Payment Status" value={getCustomerPaymentStatusLabel(latestPaymentRequest)} />
+              <DetailPair label="Payment Type" value={formatPaymentRequestType(latestPaymentRequest.request_type)} />
+              <DetailPair label="Amount Remaining" value={formatCurrency(order.balance_due || 0)} />
+            </>
+          ) : (
+            <div style={{ gridColumn: "1 / -1", borderRadius: "14px", border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1e3a8a", padding: "14px 16px" }}>
+              <strong style={{ display: "block" }}>No payment is required right now.</strong>
+              <span style={{ display: "block", marginTop: "5px", lineHeight: 1.55 }}>
+                Tee & Co has not requested payment. If payment is needed after review, it will become available here.
+              </span>
+            </div>
+          )}
           <DetailPair label="Production Status" value={order.status || "In Progress"} />
           <DetailPair label="Pickup Status" value={order.pickup_status || "Not Ready"} />
           <DetailPair label="Payments Recorded" value={payments.length} />
