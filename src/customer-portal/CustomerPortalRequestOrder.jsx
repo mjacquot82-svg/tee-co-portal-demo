@@ -399,9 +399,10 @@ export default function CustomerPortalRequestOrder() {
               marginBottom: "14px",
             }}
           >
-            <strong style={{ display: "block" }}>Garment selection restored</strong>
+            <strong style={{ display: "block" }}>Selection ready for final review</strong>
             <p style={{ margin: "6px 0 0", lineHeight: 1.6 }}>
-              Review the details below, then submit an order request for Tee & Co staff review.
+              Your storefront choices are filled in below. Review the contact and request details,
+              then use Submit Order Request to send them to Tee & Co.
             </p>
           </div>
         ) : null}

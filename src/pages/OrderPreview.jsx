@@ -56,7 +56,7 @@ export default function OrderPreview() {
   const description =
     passedState.description ||
     selectedProduct?.notes ||
-    "Review your garment details, artwork, and decoration preferences before submitting.";
+    "Review your garment details, artwork, and decoration preferences before continuing to the secure request form.";
   const imageSrc = passedState.imageSrc || selectedProduct?.image || "";
   const selectedColor = passedState.selectedColor || "Black";
   const selectedSize = passedState.selectedSize || "M";
@@ -215,7 +215,7 @@ export default function OrderPreview() {
           Home
         </Link>
         <span>/</span>
-        <span style={{ color: "#171717", fontWeight: 700 }}>Order Preview</span>
+        <span style={{ color: "#171717", fontWeight: 700 }}>Selection Review</span>
       </div>
 
       <div
@@ -290,7 +290,7 @@ export default function OrderPreview() {
                 color: "#171717",
               }}
             >
-              Order Summary
+              Selection Summary
             </p>
 
             <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
@@ -326,12 +326,12 @@ export default function OrderPreview() {
               gap: "8px",
             }}
           >
-            <p style={{ margin: 0, fontSize: "13px", opacity: 0.76 }}>Order Total</p>
+            <p style={{ margin: 0, fontSize: "13px", opacity: 0.76 }}>Estimated Total</p>
             <p style={{ margin: 0, fontWeight: 800, fontSize: isMobile ? "30px" : "36px" }}>
               {formatPrice(customerTotal, liveQuote.garment_pricing_available)}
             </p>
             <p style={{ margin: 0, fontSize: "13px", opacity: 0.76 }}>
-              Final decorated catalog pricing
+              Estimated decorated pricing
             </p>
           </div>
 
@@ -620,6 +620,19 @@ export default function OrderPreview() {
               </p>
             ) : null}
 
+            <p
+              style={{
+                flexBasis: "100%",
+                margin: 0,
+                color: "#57534e",
+                fontSize: "13px",
+                lineHeight: 1.5,
+              }}
+            >
+              Your request is not submitted yet. We’ll carry this selection into the secure
+              request form for final review and submission.
+            </p>
+
             <button
               type="button"
               onClick={handleSubmit}
@@ -635,7 +648,7 @@ export default function OrderPreview() {
                 fontSize: "14px",
               }}
             >
-              Submit Order Request
+              Continue to Secure Request Form
             </button>
 
             <button
