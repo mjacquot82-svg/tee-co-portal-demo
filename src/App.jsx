@@ -126,6 +126,7 @@ export default function App() {
           <Route path="/portal" element={<CustomerPortalShell />}>
             <Route index element={<Navigate to="orders" replace />} />
             <Route path="request-order" element={<CustomerPortalRequestOrder />} />
+            <Route path="order-submitted" element={<OrderSubmitted />} />
             <Route path="orders" element={<CustomerPortalOrders />} />
             <Route path="orders/:orderNumber" element={<CustomerPortalOrderDetail />} />
             <Route path="orders/:orderNumber/deposit" element={<CustomerPortalDeposit />} />

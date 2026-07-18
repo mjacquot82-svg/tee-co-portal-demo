@@ -29,6 +29,7 @@ import {
 import { uploadCustomerArtwork } from "../services/customerArtworkService";
 import { PortalPage, SectionCard } from "./CustomerPortalShared";
 import {
+  PORTAL_ORDER_SUBMITTED_PATH,
   PUBLIC_STOREFRONT_PATH,
   shouldRedirectRequestOrderToStorefront,
 } from "./customerPortalStartOrderRoute";
@@ -353,7 +354,7 @@ export default function CustomerPortalRequestOrder() {
         setPendingRequest(null);
       }
 
-      navigate("/order-submitted", {
+      navigate(PORTAL_ORDER_SUBMITTED_PATH, {
         replace: true,
         state: {
           createdOrderNumber: createdOrder.order_number,
