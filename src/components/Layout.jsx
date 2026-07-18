@@ -28,6 +28,7 @@ import { clearAllAuthSessions } from "../lib/authSessionStore";
 import { getUserInitials } from "../utils/getUserInitials";
 import AdminDiagnosticsPanel from "./AdminDiagnosticsPanel";
 import { useStaffAssignmentAttention } from "../lib/staffAssignmentAttentionStore";
+import { usePaymentReconciliationRefresh } from "../lib/usePaymentReconciliationRefresh";
 import { buildStaffAssignmentAttentionItems } from "../staff/buildStaffAssignmentAttentionItems";
 import { useUnreadStaffNotificationCount, ensureStaffNotificationsHydrated } from "../lib/staffNotificationsStore";
 import { ensureNotificationTemplatesHydrated } from "../lib/notificationTemplatesStore";
@@ -1261,6 +1262,7 @@ export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const isAdmin = location.pathname.startsWith("/admin");
+  usePaymentReconciliationRefresh(isAdmin);
   const requiresManagementAccess = requiresProtectedManagementAccess(location.pathname);
   const requiresCustomerSession = location.pathname === "/my-orders";
   const [authenticatedOperationalUser, setAuthenticatedOperationalUser] = useState(() =>

@@ -14,6 +14,7 @@ import {
   subscribeToOperationalAuth,
 } from "../lib/operationalAuthStore";
 import { PORTAL_REQUEST_ORDER_PATH } from "./customerPortalStartOrderRoute";
+import { usePaymentReconciliationRefresh } from "../lib/usePaymentReconciliationRefresh";
 
 const portalLinks = [
   { to: PORTAL_REQUEST_ORDER_PATH, label: "Start New Order" },
@@ -75,6 +76,7 @@ export default function CustomerPortalShell() {
     getActiveCustomerSession()
   );
   const [authLoading, setAuthLoading] = useState(() => isOperationalAuthLoading());
+  usePaymentReconciliationRefresh(Boolean(customerSession));
 
   useEffect(() => {
     void ensureOperationalAuthInitialized().then((snapshot) => {

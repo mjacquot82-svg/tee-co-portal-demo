@@ -2,6 +2,7 @@
 /* global process */
 import { expect, test } from "@playwright/test";
 import {
+  buildPersistedOrderPaymentRollup,
   handler as squareWebhookHandler,
   syncSupabaseOrderPaymentState,
 } from "../netlify/functions/square-webhook.js";
@@ -340,6 +341,24 @@ test("successful Square payment updates stale order financial rollup for admin a
   expect(resolveCustomerOrderStatus(updatedOrder)).not.toMatchObject({ label: "Payment Due" });
   expect(resolveDepositWorkflowLabel(updatedOrder)).toBe("Deposit Received");
   expect(isDepositActionRequired(updatedOrder)).toBe(false);
+});
+
+test("Square order reconciliation writes only production order columns", () => {
+  const persistedRollup = buildPersistedOrderPaymentRollup({
+    total_paid: 1,
+    amount_paid: 1,
+    paid_to_date: 1,
+    balance_due: 99,
+    deposit_workflow_status: "Deposit Received",
+  });
+
+  expect(persistedRollup).toEqual({
+    total_paid: 1,
+    balance_due: 99,
+    deposit_workflow_status: "Deposit Received",
+  });
+  expect(persistedRollup).not.toHaveProperty("amount_paid");
+  expect(persistedRollup).not.toHaveProperty("paid_to_date");
 });
 
 test("Square webhook endpoint rejects invalid signatures before processing", async () => {

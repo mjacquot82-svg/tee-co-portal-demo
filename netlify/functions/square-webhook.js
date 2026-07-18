@@ -140,6 +140,27 @@ function buildSquareOrderActivityEntry(payment = {}, paymentRequest = {}, create
   };
 }
 
+export function buildPersistedOrderPaymentRollup(rollup = {}) {
+  const persistedColumns = [
+    "total_paid",
+    "deposit_applied",
+    "deposit_outstanding",
+    "deposit_paid_amount",
+    "balance_due",
+    "payment_status",
+    "payment_collection_state",
+    "quote_status",
+    "deposit_workflow_status",
+    "deposit_status",
+  ];
+
+  return Object.fromEntries(
+    persistedColumns
+      .filter((column) => Object.hasOwn(rollup, column))
+      .map((column) => [column, rollup[column]])
+  );
+}
+
 export async function syncSupabaseOrderPaymentState(supabase, payment = {}, paymentRequest = null) {
   const orderNumber = normalizeText(payment.order_number || paymentRequest?.order_number);
   if (!orderNumber || !isSuccessfulPaymentStatus(payment.status)) return null;
@@ -149,25 +170,27 @@ export async function syncSupabaseOrderPaymentState(supabase, payment = {}, paym
     .select("*")
     .eq("order_number", orderNumber)
     .maybeSingle();
-  if (orderResult.error || !orderResult.data) return null;
+  if (orderResult.error) throw orderResult.error;
+  if (!orderResult.data) return null;
 
   const paymentsResult = await supabase
     .from("payments")
     .select("*")
     .eq("order_number", orderNumber);
-  if (paymentsResult.error) return null;
+  if (paymentsResult.error) throw paymentsResult.error;
 
   const paymentRequestsResult = await supabase
     .from("payment_requests")
     .select("*")
     .eq("order_number", orderNumber);
-  if (paymentRequestsResult.error) return null;
+  if (paymentRequestsResult.error) throw paymentRequestsResult.error;
 
   const rollup = buildOrderPaymentRollup({
     order: orderResult.data,
     paymentRequests: paymentRequestsResult.data || [],
     payments: paymentsResult.data || [],
   });
+  const persistedRollup = buildPersistedOrderPaymentRollup(rollup);
   const capturedAt = normalizeText(payment.captured_at || payment.updated_at || payment.created_at) || new Date().toISOString();
   const existingActivity = Array.isArray(orderResult.data.activity_log) ? orderResult.data.activity_log : [];
   const activityEntry = buildSquareOrderActivityEntry(payment, paymentRequest || {}, capturedAt);
@@ -176,7 +199,7 @@ export async function syncSupabaseOrderPaymentState(supabase, payment = {}, paym
   const updateResult = await supabase
     .from("orders")
     .update({
-      ...rollup,
+      ...persistedRollup,
       deposit_paid_at:
         rollup.deposit_workflow_status === "Deposit Received"
           ? orderResult.data.deposit_paid_at || capturedAt
@@ -190,7 +213,7 @@ export async function syncSupabaseOrderPaymentState(supabase, payment = {}, paym
     .select("*")
     .maybeSingle();
 
-  if (updateResult.error) return null;
+  if (updateResult.error) throw updateResult.error;
 
   await supabase
     .from("activity_logs")
