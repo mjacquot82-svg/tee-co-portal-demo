@@ -12,6 +12,11 @@ import {
 } from "./customerPortalPayments";
 import { formatCurrency, useCustomerPortalData } from "./useCustomerPortalData";
 import {
+  getArtworkDisplayName,
+  getOrderArtworkReferenceNames,
+  getUploadedOrderArtworkFiles,
+} from "../lib/orderArtwork";
+import {
   buildPortalOrderTimeline,
   resolvePortalNextActionDetails,
 } from "./portalOrderDetail";
@@ -69,6 +74,8 @@ export default function CustomerPortalOrderDetail() {
   const paymentRequests = portalData.paymentRequests.filter(
     (request) => request.order_number === order.order_number
   );
+  const uploadedArtworkFiles = getUploadedOrderArtworkFiles(order);
+  const artworkReferenceNames = getOrderArtworkReferenceNames(order);
   const payments = portalData.payments.filter(
     (payment) => payment.order_number === order.order_number
   );
@@ -195,10 +202,17 @@ export default function CustomerPortalOrderDetail() {
       <SectionCard title="Quote, Artwork, and Approval" subtitle="Current quote and artwork approval workflow status.">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" }}>
           <DetailPair label="Quote Information" value={order.quote_status || "In Review"} />
-          <DetailPair label="Artwork Status" value={order.artwork_approval_status || "Pending Review"} />
+          <DetailPair label="Artwork Choice" value={order.artwork_requirement || "Not selected"} />
+          <DetailPair label="Artwork Status" value={order.artwork_status || order.artwork_approval_status || "Pending Review"} />
           <DetailPair label="Approval Status" value={order.quote_status || "Pending"} />
-          <DetailPair label="Artwork Files" value={Array.isArray(order.artwork_files) ? order.artwork_files.length : 0} />
+          <DetailPair label="Customer Selected" value={artworkReferenceNames.join(", ") || "No filename provided"} />
+          <DetailPair label="Artwork Uploaded" value={uploadedArtworkFiles.map((file) => getArtworkDisplayName(file)).join(", ") || "None"} />
         </div>
+        {!uploadedArtworkFiles.length && artworkReferenceNames.length ? (
+          <p style={{ margin: 0, color: "#92400e", lineHeight: 1.6, fontWeight: 700 }}>
+            The selected filename is a reference only. Tee & Co is still waiting for the actual artwork file.
+          </p>
+        ) : null}
       </SectionCard>
 
       <SectionCard title="Payment and Production" subtitle="Payment status from payment requests and current production state.">

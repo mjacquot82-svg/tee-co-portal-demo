@@ -110,6 +110,42 @@ export function getOrderArtworkNames(order = {}) {
   return getOrderArtworkFiles(order).map((file) => getArtworkDisplayName(file));
 }
 
+export function isArtworkFilenameReference(file = {}) {
+  const safeFile = normalizeArtworkRecord(file);
+  if (!safeFile) return false;
+
+  return (
+    normalizeText(safeFile.source).toLowerCase() === "order-metadata" ||
+    normalizeText(safeFile.id).startsWith("artwork-reference-")
+  );
+}
+
+export function getUploadedOrderArtworkFiles(order = {}) {
+  return getOrderArtworkFiles(order).filter((file) => !isArtworkFilenameReference(file));
+}
+
+export function getOrderArtworkReferenceNames(order = {}) {
+  const safeOrder = order && typeof order === "object" ? order : {};
+  const explicitReferences = Array.isArray(safeOrder.artwork_reference_names)
+    ? safeOrder.artwork_reference_names
+    : [];
+  const placementReferences = Array.isArray(safeOrder.placements)
+    ? safeOrder.placements.map(
+        (placement) => placement?.artwork_name || placement?.customer_artwork_name
+      )
+    : [];
+  const metadataReferences = getOrderArtworkFiles(safeOrder)
+    .filter((file) => isArtworkFilenameReference(file))
+    .map((file) => getArtworkDisplayName(file));
+
+  return uniqueValues([
+    ...explicitReferences,
+    safeOrder.customer_artwork_name,
+    ...placementReferences,
+    ...metadataReferences,
+  ].map((value) => normalizeText(value)));
+}
+
 export function getArtworkAssetUrl(file = {}) {
   const safeFile = normalizeArtworkRecord(file);
   if (!safeFile) return "";

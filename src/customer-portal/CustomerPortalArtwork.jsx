@@ -1,6 +1,13 @@
 import { useMemo, useState } from "react";
 import { Link, useOutletContext, useParams, useSearchParams } from "react-router-dom";
-import { getArtworkAssetUrl, getArtworkDisplayName, getOrderArtworkFiles, isArtworkImage } from "../lib/orderArtwork";
+import {
+  getArtworkAssetUrl,
+  getArtworkDisplayName,
+  getOrderArtworkFiles,
+  getOrderArtworkReferenceNames,
+  getUploadedOrderArtworkFiles,
+  isArtworkImage,
+} from "../lib/orderArtwork";
 import { updateStoredOrder } from "../lib/ordersStore";
 import { uploadCustomerArtwork } from "../services/customerArtworkService";
 import { getCustomerArtworkActionState } from "../lib/customerArtworkActions";
@@ -158,6 +165,8 @@ export default function CustomerPortalArtwork() {
   }
 
   const artworkFiles = getOrderArtworkFiles(record);
+  const uploadedArtworkFiles = getUploadedOrderArtworkFiles(record);
+  const artworkReferenceNames = getOrderArtworkReferenceNames(record);
   const artworkAction = getCustomerArtworkActionState(record);
   const revisionRequested = artworkAction.revisionRequested;
   const staffMessage = resolveStaffMessage(record);
@@ -279,7 +288,15 @@ export default function CustomerPortalArtwork() {
           <DetailPair label="Garment" value={record.garment || record.item || "Custom order"} />
           <DetailPair label="Artwork Status" value={resolveArtworkStatus(record)} />
           <DetailPair label="Artwork Choice" value={record.artwork_requirement || "Upload Artwork"} />
+          <DetailPair label="Customer Selected" value={artworkReferenceNames.join(", ") || "No filename provided"} />
+          <DetailPair label="Artwork Uploaded" value={uploadedArtworkFiles.map((file) => getArtworkDisplayName(file)).join(", ") || "None"} />
         </div>
+
+        {!uploadedArtworkFiles.length && artworkReferenceNames.length ? (
+          <p style={{ margin: 0, color: "#92400e", lineHeight: 1.6, fontWeight: 700 }}>
+            The selected filename is a reference only. Tee & Co is still waiting for the actual artwork file.
+          </p>
+        ) : null}
 
         {staffMessage ? (
           <div
@@ -299,7 +316,7 @@ export default function CustomerPortalArtwork() {
       </SectionCard>
 
       <SectionCard title="Existing Uploaded Files" subtitle="Files currently attached to this order.">
-        <ExistingArtworkList files={artworkFiles} />
+        <ExistingArtworkList files={uploadedArtworkFiles} />
       </SectionCard>
 
       {mode === "help" ? (

@@ -6,8 +6,8 @@ import { formatDateTime } from "../lib/dateFormatting";
 import {
   getArtworkAssetUrl,
   getArtworkDisplayName,
-  getOrderArtworkFiles,
-  getOrderArtworkNames,
+  getOrderArtworkReferenceNames,
+  getUploadedOrderArtworkFiles,
   isArtworkImage,
 } from "../lib/orderArtwork";
 import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
@@ -633,7 +633,8 @@ function IntakeReviewScreen({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [depositModalOpen, setDepositModalOpen] = useState(false);
   const submittedAt = formatDateTime(order.created_at, " • ");
-  const artworkFiles = getOrderArtworkFiles(order);
+  const artworkFiles = getUploadedOrderArtworkFiles(order);
+  const artworkReferenceNames = getOrderArtworkReferenceNames(order);
   const attentionItems = buildIntakeAttentionItems(order, productionReadiness);
   const completedActions = getCompletedIntakeActions(order);
   const completedActionLabels = [
@@ -850,6 +851,8 @@ function IntakeReviewScreen({
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "14px", marginBottom: "14px" }}>
               <DetailItem label="Artwork Choice" value={resolveArtworkChoice(order)} />
               <DetailItem label="Artwork Status" value={order.artwork_status || order.artwork_approval_status || "Pending Review"} />
+              <DetailItem label="Customer Selected" value={formatList(artworkReferenceNames, "No filename provided")} />
+              <DetailItem label="Artwork Uploaded" value={formatList(artworkFiles.map((file) => getArtworkDisplayName(file)), "None")} />
             </div>
 
             {artworkFiles.length ? (
@@ -892,7 +895,14 @@ function IntakeReviewScreen({
                 })}
               </div>
             ) : (
-              <p style={{ margin: 0, color: "#64748b", fontWeight: 700 }}>No artwork uploaded yet.</p>
+              <div style={{ borderRadius: "14px", border: "1px solid #fed7aa", background: "#fff7ed", padding: "12px 14px" }}>
+                <strong style={{ color: "#9a3412" }}>No artwork uploaded yet.</strong>
+                {artworkReferenceNames.length ? (
+                  <p style={{ margin: "6px 0 0", color: "#9a3412", lineHeight: 1.5 }}>
+                    {formatList(artworkReferenceNames)} is a customer-provided filename reference only. Staff are still waiting for the actual file.
+                  </p>
+                ) : null}
+              </div>
             )}
 
             {order.artwork_help_message || order.customer_artwork_notes ? (
@@ -1080,7 +1090,11 @@ export default function QuoteDetail() {
   const quoteNextAction = ownerNextAction?.actionKey
     ? { ...ownerNextAction, href: "" }
     : ownerNextAction;
-  const artworkNames = useMemo(() => getOrderArtworkNames(order), [order]);
+  const artworkNames = useMemo(
+    () => getUploadedOrderArtworkFiles(order).map((file) => getArtworkDisplayName(file)),
+    [order]
+  );
+  const artworkReferenceNames = useMemo(() => getOrderArtworkReferenceNames(order), [order]);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [archivedSections, setArchivedSections] = useState({
     quoteDetails: false,
@@ -1738,6 +1752,10 @@ export default function QuoteDetail() {
                     value={formatList(artworkNames, "No artwork uploaded")}
                   />
                   <DetailItem
+                    label="Customer Filename References"
+                    value={formatList(artworkReferenceNames, "No filename provided")}
+                  />
+                  <DetailItem
                     label="Artwork Readiness"
                     value={
                       productionReadiness.checks.find((check) => check.label === "Artwork")?.detail ||
@@ -2227,6 +2245,10 @@ export default function QuoteDetail() {
             <DetailItem
               label="Artwork files"
               value={formatList(artworkNames, "No artwork uploaded")}
+            />
+            <DetailItem
+              label="Customer filename references"
+              value={formatList(artworkReferenceNames, "No filename provided")}
             />
             <DetailItem label="Artwork approval" value={approvalStatus} />
             <DetailItem
