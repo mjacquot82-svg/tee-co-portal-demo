@@ -107,3 +107,19 @@ test("Order Detail passes the process projection only into the existing producti
   expect(customerInformationIndex).toBeGreaterThan(supportingInformationIndex);
   expect(activityTimelineIndex).toBeGreaterThan(customerInformationIndex);
 });
+
+test("Production Queue detail controls navigate to the full order details route", async () => {
+  const source = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/admin/Orders.jsx", import.meta.url), "utf8")
+  );
+
+  expect(source).toContain("useNavigate");
+  expect(source).toContain("navigate(`/admin/orders/${encodeURIComponent(order.order_number)}`)");
+  expect(source).toContain('data-testid="production-queue-open-detail"');
+  expect(source).toContain('data-testid="production-queue-row-details"');
+  expect(source.match(/onClick=\{\(\) => onOpenDetail\(order\)\}/g)).toHaveLength(2);
+
+  expect(source).toContain("onRunAction={handleRunAction}");
+  expect(source).toContain("onEscalate={handleEscalate}");
+  expect(source).toContain("onClaim={handleClaim}");
+});

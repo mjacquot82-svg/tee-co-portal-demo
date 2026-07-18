@@ -61,12 +61,7 @@ async function findEligibleProductionOrder(page, config) {
 async function openOrderDetailFromQueue(page, row, orderNumber) {
   // Open through the production queue first so the regression follows the real operational entry path.
   await row.getByTestId("production-queue-open-detail").click();
-
-  const detailDrawer = page.getByTestId("production-queue-detail-drawer");
-  await expect(detailDrawer).toBeVisible();
-  await expect(detailDrawer).toHaveAttribute("data-order-number", orderNumber);
-
-  await detailDrawer.getByTestId("production-queue-detail-open-full-order").click();
+  await expect(page).toHaveURL(new RegExp(`/admin/orders/${orderNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
   await expect(page.getByTestId("order-detail-page")).toBeVisible();
   await expect(page.getByTestId("order-detail-page")).toHaveAttribute("data-order-number", orderNumber);
 }

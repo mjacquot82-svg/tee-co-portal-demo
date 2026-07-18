@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import StatusBadge from "../components/StatusBadge";
 import WorkflowBadge from "../components/WorkflowBadge";
 import { formatShortDate } from "../lib/dateFormatting";
@@ -1051,6 +1051,7 @@ function ProductionDetailDrawer({
 }
 
 export default function Orders() {
+  const navigate = useNavigate();
   const storedOrders = useStoredOrders();
   const staffUser = getActiveStaffUser();
   const [actionFeedbackByOrder, setActionFeedbackByOrder] = useState({});
@@ -1207,8 +1208,8 @@ export default function Orders() {
   }
 
   function handleOpenDetail(order) {
-    setSelectedOrderSnapshot(order);
-    updateFilters({ order: order.order_number });
+    if (!order?.order_number) return;
+    navigate(`/admin/orders/${encodeURIComponent(order.order_number)}`);
   }
 
   async function handleAssign(order, staffId) {
