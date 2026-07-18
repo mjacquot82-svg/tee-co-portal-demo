@@ -1,4 +1,6 @@
 // @ts-check
+import fs from "node:fs";
+import path from "node:path";
 import { expect, test } from "@playwright/test";
 import {
   findPaymentRequestForOrder,
@@ -139,4 +141,20 @@ test("customer portal payment summary uses a neutral status when there is no pay
   expect(summary.amountOwing).toBe(0);
   expect(summary.totalPaid).toBe(0);
   expect(summary.paymentStatus).toBe("No Balance Due");
+});
+
+test("completed payment requests never offer Pay Now even when the checkout URL remains stored", () => {
+  const paymentListSource = fs.readFileSync(
+    path.resolve(process.cwd(), "src/customer-portal/CustomerPortalPayments.jsx"),
+    "utf8"
+  );
+  const paymentDetailSource = fs.readFileSync(
+    path.resolve(process.cwd(), "src/customer-portal/CustomerPortalPaymentRequestDetail.jsx"),
+    "utf8"
+  );
+
+  [paymentListSource, paymentDetailSource].forEach((source) => {
+    expect(source).toContain("isOpenCustomerPaymentRequest(paymentRequest)");
+    expect(source).toContain("hasProviderCheckoutUrl(paymentRequest)");
+  });
 });

@@ -7,6 +7,7 @@ import {
   formatPaymentRequestType,
   getCustomerPaymentStatusLabel,
   getRemainingPaymentAmount,
+  isOpenCustomerPaymentRequest,
 } from "./customerPortalPayments";
 import { EmptyState, PortalPage, SectionCard, DetailPair } from "./CustomerPortalShared";
 import { formatCurrency, useCustomerPortalData } from "./useCustomerPortalData";
@@ -124,7 +125,8 @@ export default function CustomerPortalPaymentRequestDetail() {
     portalData.paymentRequests,
     paymentRequest.order_number
   );
-  const canPayNow = hasProviderCheckoutUrl(paymentRequest);
+  const canPayNow =
+    isOpenCustomerPaymentRequest(paymentRequest) && hasProviderCheckoutUrl(paymentRequest);
   const providerName = paymentRequest.payment_provider
     ? paymentRequest.payment_provider.replace(/_/g, " ").replace(/\b\w/g, (character) => character.toUpperCase())
     : "Manual";

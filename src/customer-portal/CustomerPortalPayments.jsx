@@ -7,6 +7,7 @@ import {
   getCustomerPaymentDueLabel,
   getCustomerPaymentStatusLabel,
   getRemainingPaymentAmount,
+  isOpenCustomerPaymentRequest,
 } from "./customerPortalPayments";
 import { hasProviderCheckoutUrl } from "../services/squareService";
 import {
@@ -21,7 +22,8 @@ import { formatCurrency, useCustomerPortalData } from "./useCustomerPortalData";
 function PaymentRequestCard({ paymentRequest }) {
   const statusLabel = getCustomerPaymentStatusLabel(paymentRequest);
   const remainingAmount = getRemainingPaymentAmount(paymentRequest);
-  const canPayNow = hasProviderCheckoutUrl(paymentRequest);
+  const canPayNow =
+    isOpenCustomerPaymentRequest(paymentRequest) && hasProviderCheckoutUrl(paymentRequest);
 
   return (
     <article
