@@ -8,7 +8,11 @@ import {
 } from "./CustomerPortalShared";
 import {
   formatPaymentRequestType,
+  getCustomerPaymentDueLabel,
   getCustomerPaymentStatusLabel,
+  getEstimatedBalanceAfterPayment,
+  getRemainingPaymentAmount,
+  isOpenCustomerPaymentRequest,
 } from "./customerPortalPayments";
 import { formatCurrency, useCustomerPortalData } from "./useCustomerPortalData";
 import {
@@ -98,6 +102,7 @@ export default function CustomerPortalOrderDetail() {
   const nextAction = nextActionDetails.label;
   const timeline = buildPortalOrderTimeline(order, paymentRequests, payments, paymentEvents);
   const latestPaymentRequest = sortedPaymentRequests[0] || null;
+  const activePaymentRequest = sortedPaymentRequests.find(isOpenCustomerPaymentRequest) || null;
 
   return (
     <PortalPage
@@ -222,11 +227,21 @@ export default function CustomerPortalOrderDetail() {
 
       <SectionCard title="Payment and Production" subtitle="Payment status from payment requests and current production state.">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" }}>
-          {latestPaymentRequest ? (
+          {activePaymentRequest ? (
             <>
-              <DetailPair label="Payment Status" value={getCustomerPaymentStatusLabel(latestPaymentRequest)} />
-              <DetailPair label="Payment Type" value={formatPaymentRequestType(latestPaymentRequest.request_type)} />
-              <DetailPair label="Amount Remaining" value={formatCurrency(order.balance_due || 0)} />
+              <DetailPair
+                label={getCustomerPaymentDueLabel(activePaymentRequest)}
+                value={formatCurrency(getRemainingPaymentAmount(activePaymentRequest))}
+              />
+              <DetailPair label="Payment Status" value={getCustomerPaymentStatusLabel(activePaymentRequest)} />
+              <DetailPair label="Payment Type" value={formatPaymentRequestType(activePaymentRequest.request_type)} />
+              <DetailPair
+                label="Estimated Balance After Payment"
+                value={formatCurrency(getEstimatedBalanceAfterPayment(order.balance_due, activePaymentRequest))}
+              />
+              <div style={{ gridColumn: "1 / -1", color: "#475569", fontSize: "13px", lineHeight: 1.55 }}>
+                Additional payment may be requested later if an order balance remains.
+              </div>
             </>
           ) : (
             <div style={{ gridColumn: "1 / -1", borderRadius: "14px", border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1e3a8a", padding: "14px 16px" }}>

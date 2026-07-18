@@ -3,6 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
 import {
+  getCustomerPaymentDueLabel,
+  getEstimatedBalanceAfterPayment,
+} from "../src/customer-portal/customerPortalPayments.js";
+import {
   buildPortalOrderCardSummary,
   buildPortalOrderTimeline,
   resolveCustomerQuoteApprovalStatus,
@@ -122,6 +126,18 @@ test("order detail explains when no payment has been requested", () => {
   expect(source).toContain("Tee & Co has not requested payment.");
   expect(source).toContain("Tee & Co is confirming your schedule");
   expect(source).not.toContain("Scheduling in progress");
+});
+
+test("customer payment presentation prioritizes the active amount due", () => {
+  const depositRequest = {
+    request_type: "deposit",
+    amount_requested: 1,
+    amount_paid: 0,
+  };
+
+  expect(getCustomerPaymentDueLabel(depositRequest)).toBe("Deposit Due");
+  expect(getEstimatedBalanceAfterPayment(100, depositRequest)).toBe(99);
+  expect(getCustomerPaymentDueLabel({ request_type: "balance" })).toBe("Amount Due Today");
 });
 
 test("resolvePortalNextAction prioritizes existing customer workflows", () => {

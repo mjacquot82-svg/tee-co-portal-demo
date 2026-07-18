@@ -44,6 +44,16 @@ export function getRemainingPaymentAmount(paymentRequest = {}) {
   );
 }
 
+export function getCustomerPaymentDueLabel(paymentRequest = {}) {
+  return normalizeText(paymentRequest.request_type).toLowerCase() === "deposit"
+    ? "Deposit Due"
+    : "Amount Due Today";
+}
+
+export function getEstimatedBalanceAfterPayment(orderBalance, paymentRequest = {}) {
+  return Math.max(0, normalizeAmount(orderBalance) - getRemainingPaymentAmount(paymentRequest));
+}
+
 export function getCustomerPaymentStatusLabel(record = {}) {
   const rawStatus = normalizeText(record.status).toLowerCase();
   const amountRequested = normalizeAmount(record.amount_requested);

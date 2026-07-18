@@ -4,6 +4,7 @@ import { formatShortDate } from "../lib/dateFormatting";
 import {
   formatPaymentMethod,
   formatPaymentRequestType,
+  getCustomerPaymentDueLabel,
   getCustomerPaymentStatusLabel,
   getRemainingPaymentAmount,
 } from "./customerPortalPayments";
@@ -99,7 +100,8 @@ function PaymentRequestCard({ paymentRequest }) {
         }}
       >
         <DetailPair label="Request Type" value={formatPaymentRequestType(paymentRequest.request_type)} />
-        <DetailPair label="Amount Requested" value={formatCurrency(paymentRequest.amount_requested)} />
+        <DetailPair label={getCustomerPaymentDueLabel(paymentRequest)} value={formatCurrency(remainingAmount)} />
+        <DetailPair label="Original Amount Requested" value={formatCurrency(paymentRequest.amount_requested)} />
         <DetailPair label="Amount Paid" value={formatCurrency(paymentRequest.amount_paid)} />
         <DetailPair label="Remaining Amount" value={formatCurrency(remainingAmount)} />
         <DetailPair label="Date Created" value={formatShortDate(paymentRequest.created_at)} />

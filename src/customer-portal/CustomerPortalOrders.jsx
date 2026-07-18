@@ -14,6 +14,12 @@ import {
   resolvePortalOrderAttention,
 } from "./portalOrderDetail";
 import { PORTAL_REQUEST_ORDER_PATH } from "./customerPortalStartOrderRoute";
+import {
+  getCustomerPaymentDueLabel,
+  getEstimatedBalanceAfterPayment,
+  getRemainingPaymentAmount,
+  isOpenCustomerPaymentRequest,
+} from "./customerPortalPayments";
 
 function formatOrderBalance(value) {
   const amount = Number(value || 0);
@@ -67,6 +73,13 @@ function CompactOrderCard({ order, expanded, onToggle }) {
   const summary = buildPortalOrderCardSummary(order, paymentRequests);
   const ownershipStyle = getAttentionStyle(summary.ownership.tone);
   const balance = formatOrderBalance(order.balance_due);
+  const activePaymentRequest = paymentRequests.find(isOpenCustomerPaymentRequest) || null;
+  const amountDueNow = activePaymentRequest
+    ? formatOrderBalance(getRemainingPaymentAmount(activePaymentRequest)) || "$0.00"
+    : "";
+  const balanceAfterPayment = activePaymentRequest
+    ? formatOrderBalance(getEstimatedBalanceAfterPayment(order.balance_due, activePaymentRequest)) || "$0.00"
+    : "";
   const itemName = getPrimaryItemName(order);
 
   return (
@@ -196,7 +209,19 @@ function CompactOrderCard({ order, expanded, onToggle }) {
             minWidth: "136px",
           }}
         >
-          {balance ? (
+          {activePaymentRequest ? (
+            <div style={{ textAlign: "right" }}>
+              <p style={{ margin: 0, color: "#92400e", fontSize: "11px", textTransform: "uppercase", fontWeight: 900 }}>
+                {getCustomerPaymentDueLabel(activePaymentRequest)}
+              </p>
+              <p style={{ margin: "3px 0 0", color: "#92400e", fontSize: "22px", fontWeight: 900 }}>
+                {amountDueNow}
+              </p>
+              <p style={{ margin: "5px 0 0", color: "#64748b", fontSize: "12px", lineHeight: 1.4 }}>
+                Estimated balance after payment: {balanceAfterPayment}
+              </p>
+            </div>
+          ) : balance ? (
             <div style={{ textAlign: "right" }}>
               <p
                 style={{

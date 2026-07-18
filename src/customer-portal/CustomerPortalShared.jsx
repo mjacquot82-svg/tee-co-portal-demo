@@ -23,8 +23,12 @@ import {
 import { getPaymentRequestsByOrder, getPaymentsByOrder, usePaymentsSnapshot } from "../lib/paymentsStore";
 import {
   formatPaymentRequestType,
+  getCustomerPaymentDueLabel,
   getCustomerPaymentStatusLabel,
   getCustomerPaymentStatusTone,
+  getEstimatedBalanceAfterPayment,
+  getRemainingPaymentAmount,
+  isOpenCustomerPaymentRequest,
 } from "./customerPortalPayments";
 
 const EMPTY_RECORDS = Object.freeze([]);
@@ -656,6 +660,7 @@ export function RecordList({ records = [], type = "orders" }) {
           type === "orders" || type === "invoices"
             ? getPaymentsByOrder(record.order_number)
             : [];
+        const activePaymentRequest = relatedPaymentRequests.find(isOpenCustomerPaymentRequest) || null;
         const primaryStatus =
           type === "quotes"
             ? resolveCustomerQuoteStatus(record)
@@ -678,6 +683,7 @@ export function RecordList({ records = [], type = "orders" }) {
           relatedPayments,
           primaryStatus,
           paymentStatus,
+          activePaymentRequest,
           timelineNote: resolveTimelineNote(record),
         };
       });
@@ -703,7 +709,7 @@ export function RecordList({ records = [], type = "orders" }) {
 
   return (
     <div style={{ display: "grid", gap: "14px" }}>
-      {viewModels.map(({ record, total, balance, dueDate, relatedPaymentRequests, relatedPayments, primaryStatus, paymentStatus, timelineNote }) => {
+      {viewModels.map(({ record, total, balance, dueDate, relatedPaymentRequests, relatedPayments, primaryStatus, paymentStatus, activePaymentRequest, timelineNote }) => {
         const workflowBadges =
           type === "orders" ? buildWorkflowStatusBadges(record, { surface: "customer" }) : [];
         const depositActionRequired = isDepositActionRequired(record);
@@ -784,7 +790,20 @@ export function RecordList({ records = [], type = "orders" }) {
               />
               <DetailPair label="Artwork" value={resolveArtworkApprovalLabel(record)} />
               <DetailPair label="Deposit" value={resolveDepositWorkflowLabel(record)} />
-              <DetailPair label="Balance" value={balance} />
+              {activePaymentRequest ? (
+                <>
+                  <DetailPair
+                    label={getCustomerPaymentDueLabel(activePaymentRequest)}
+                    value={formatCurrency(getRemainingPaymentAmount(activePaymentRequest))}
+                  />
+                  <DetailPair
+                    label="Balance After Payment"
+                    value={formatCurrency(getEstimatedBalanceAfterPayment(record.balance_due, activePaymentRequest))}
+                  />
+                </>
+              ) : (
+                <DetailPair label="Balance" value={balance} />
+              )}
             </div>
 
             {artworkActionRequired ? <PortalArtworkActionNeeded record={record} /> : null}
