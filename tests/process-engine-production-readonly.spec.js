@@ -102,10 +102,9 @@ test("engine-backed production presentation does not derive execution state from
   expect(detailSource).toContain('data-testid="production-authority-loading"');
   expect(trackerSource).toContain("<ProcessInstanceSummary projection={processProjection} />");
   expect(trackerSource).not.toContain("buildProductionGatingState");
-  expect(assignmentSource).toContain("if (compactWorkflowContext)");
-  expect(assignmentSource.indexOf("if (compactWorkflowContext)")).toBeLessThan(
-    assignmentSource.indexOf("Force Move To Production")
-  );
+  expect(detailSource).toContain("hasProcessAuthority ? (");
+  expect(detailSource).toContain("<AssignmentOnlyPanel");
+  expect(assignmentSource).not.toContain("compactWorkflowContext");
   expect(instructionsSource).not.toContain("buildDepositWorkflowLabel");
   expect(instructionsSource).not.toContain("Approval Status");
   expect(financialSource).not.toContain("canonical_workflow_state");
@@ -120,7 +119,7 @@ test("Order Detail passes the process projection only into the existing producti
   expect(source).toContain(
     "<ProductionProgressTracker order={order} processProjection={processProjection} />"
   );
-  expect(source).toContain("workflowActions={processProjection ? [] : workflowActions}");
+  expect(source).toContain("workflowActions={workflowActions}");
   expect(source).toContain('data-testid="production-job-identity"');
   expect(source).toContain('data-testid="order-workspace-tabs"');
   expect(source).toContain('data-testid="order-workspace-production"');

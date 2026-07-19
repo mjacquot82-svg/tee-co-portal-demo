@@ -14,6 +14,7 @@ import PricingSummary from "../components/PricingSummary";
 import StatusBadge from "../components/StatusBadge";
 import ProductionProgressTracker from "../order-detail/ProductionProgressTracker";
 import AssignmentPanel from "../order-detail/AssignmentPanel";
+import AssignmentOnlyPanel from "../order-detail/AssignmentOnlyPanel";
 import ActivityTimeline from "../order-detail/ActivityTimeline";
 import ProductionInstructionsPanel from "../order-detail/ProductionInstructionsPanel";
 import FinancialSummaryPanel from "../order-detail/FinancialSummaryPanel";
@@ -535,12 +536,22 @@ export default function OrderDetail() {
   const updatedAt = formatDateTimeParts(order.updated_at);
   const sizeBreakdownEntries = buildSizeBreakdownEntries(order.size_breakdown);
   const printOrder = normalizedOrder || order;
-  const assignmentPanel = (
+  const assignmentPanel = hasProcessAuthority ? (
+    <AssignmentOnlyPanel
+      order={order}
+      staffUsers={staffUsers}
+      onAssign={handleAssign}
+      canManageAssignments={canManageAssignments}
+      canSelfAssign={selfAssignAllowed}
+      onSelfAssign={handleSelfAssign}
+      canceled={isCanceledOperationalStatus(order.status)}
+    />
+  ) : (
     <AssignmentPanel
       order={order}
       staffUsers={staffUsers}
       onAssign={handleAssign}
-      workflowActions={processProjection ? [] : workflowActions}
+      workflowActions={workflowActions}
       onRunWorkflowAction={handleWorkflowAction}
       canManageAssignments={canManageAssignments}
       canSelfAssign={selfAssignAllowed}
@@ -550,7 +561,6 @@ export default function OrderDetail() {
       onGatingOverride={handleGatingOverride}
       onForceMoveToProduction={handleForceMoveToProduction}
       workflowFeedback={workflowFeedback}
-      compactWorkflowContext={Boolean(processProjection)}
     />
   );
 

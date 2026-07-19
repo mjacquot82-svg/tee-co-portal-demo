@@ -84,8 +84,22 @@ test("Production Queue Details opens the correct full order workspace", async ({
   );
   await expect(page.getByTestId("process-next-task")).toContainText("Receive Transfers");
   await expect(page.getByTestId("process-next-task")).toContainText("Waiting for Order Transfers.");
-  await expect(page.getByTestId("order-assignment-panel")).toContainText("Assigned Operator");
-  await expect(page.getByTestId("order-assignment-panel")).toContainText("Reassign");
+  await expect(page.getByTestId("order-assignment-panel")).toContainText("Assigned Staff");
+  await expect(page.getByTestId("order-assignment-panel")).toContainText("Production Owner");
+  await expect(page.getByTestId("order-assignment-panel")).toContainText("Assign, Reassign, or Clear");
+  await expect(page.getByTestId("execution-prerequisite-summary")).toHaveCount(0);
+  await expect(page.getByTestId("workflow-gate")).toHaveCount(0);
+  const assignmentText = await page.getByTestId("order-assignment-panel").innerText();
+  [
+    "Artwork Approved",
+    "Deposit Received",
+    "Production Ready",
+    "Ready For Production",
+    "Customer Status Message",
+    "Production Readiness",
+    "Current Status",
+    "Next recommended action",
+  ].forEach((duplicateWorkflowFact) => expect(assignmentText).not.toContain(duplicateWorkflowFact));
 
   const visibleWorkstationText = await page.locator("body").innerText();
   [
