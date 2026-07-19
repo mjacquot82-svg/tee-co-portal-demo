@@ -384,12 +384,6 @@ export default function FinancialSummaryPanel({
               <PaymentStatusBadge status={order.canonical_payment_state || order.payment_status} />
             </div>
 
-            <div style={{ display: "grid", gap: "6px" }}>
-              <span style={rowLabelStyle}>Workflow State</span>
-              <span style={{ color: "#334155", fontWeight: 700 }}>
-                {order.canonical_workflow_state || order.payment_collection_state}
-              </span>
-            </div>
           </div>
 
           <div>

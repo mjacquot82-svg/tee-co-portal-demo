@@ -71,11 +71,34 @@ test("Production Queue Details opens the correct full order workspace", async ({
     orderNumber
   );
   await expect(page.getByTestId("process-instance-summary")).toBeVisible();
+  await expect(page.getByTestId("order-detail-page")).toHaveAttribute("data-workflow-state", "");
   await expect(page.getByTestId("job-identity-customer")).toContainText("Details Navigation Test");
   await expect(page.getByTestId("job-identity-garment")).toContainText("Gildan 18000 Crewneck Sweatshirt");
   await expect(page.getByTestId("job-identity-decoration-method")).toContainText("DTF");
   await expect(page.getByTestId("job-identity-quantity")).toContainText("12");
   await expect(page.getByTestId("process-current-task")).toContainText("What should Teresa do next?");
+  await expect(page.getByTestId("process-current-task")).toContainText("Order Transfers");
+  await expect(page.getByTestId("process-current-task")).toContainText("Task State: Available");
+  await expect(page.getByTestId("process-current-task")).toContainText(
+    "This task is available because it has no incomplete prerequisites."
+  );
+  await expect(page.getByTestId("process-next-task")).toContainText("Receive Transfers");
+  await expect(page.getByTestId("process-next-task")).toContainText("Waiting for Order Transfers.");
+  await expect(page.getByTestId("order-assignment-panel")).toContainText("Assigned Operator");
+  await expect(page.getByTestId("order-assignment-panel")).toContainText("Reassign");
+
+  const visibleWorkstationText = await page.locator("body").innerText();
+  [
+    "Ready For Production",
+    "Current Status",
+    "Final status reached",
+    "Move To Production",
+    "Force Move To Production",
+    "Release to production",
+    "Production Readiness",
+    "Next recommended action",
+  ].forEach((legacyConcept) => expect(visibleWorkstationText).not.toContain(legacyConcept));
+
   await expect(page.getByRole("button", { name: "Send Deposit Request" })).toHaveCount(0);
   await expect(page.getByTestId("payment-details-disclosure")).not.toHaveAttribute("open", "");
   await expect(page.getByTestId("quote-snapshot-disclosure")).not.toHaveAttribute("open", "");

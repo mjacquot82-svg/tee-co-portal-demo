@@ -67,19 +67,48 @@ test("the existing production section presents projected engine information with
     "Task State",
     "Why this task is available",
     "Blocked Reason",
-    "Upcoming Tasks",
+    "Next Task",
     "Completed Tasks",
     "Progress",
   ].forEach((label) => expect(source).toContain(label));
 
   expect(source).not.toContain("Remaining Tasks");
   expect(source).not.toContain("Process History");
+  expect(source).not.toContain("availabilityReasons");
 
   expect(source).not.toContain("tee-co-dtf-production");
   expect(source).not.toContain("order-transfers");
   expect(source).not.toContain("Template Version");
   expect(source).not.toContain("Primary Action");
   expect(source).not.toContain("<button");
+});
+
+test("engine-backed production presentation does not derive execution state from legacy workflows", async () => {
+  const [detailSource, trackerSource, assignmentSource, instructionsSource, financialSource] =
+    await Promise.all(
+      [
+        "../src/admin/OrderDetail.jsx",
+        "../src/order-detail/ProductionProgressTracker.jsx",
+        "../src/order-detail/AssignmentPanel.jsx",
+        "../src/order-detail/ProductionInstructionsPanel.jsx",
+        "../src/order-detail/FinancialSummaryPanel.jsx",
+      ].map((path) =>
+        import("node:fs/promises").then((fs) => fs.readFile(new URL(path, import.meta.url), "utf8"))
+      )
+    );
+
+  expect(detailSource).toContain('data-workflow-state={showLegacyProduction ? order.status || "" : ""}');
+  expect(detailSource).toContain("const showLegacyProduction = processProjectionResolved && !hasProcessAuthority");
+  expect(detailSource).toContain('data-testid="production-authority-loading"');
+  expect(trackerSource).toContain("<ProcessInstanceSummary projection={processProjection} />");
+  expect(trackerSource).not.toContain("buildProductionGatingState");
+  expect(assignmentSource).toContain("if (compactWorkflowContext)");
+  expect(assignmentSource.indexOf("if (compactWorkflowContext)")).toBeLessThan(
+    assignmentSource.indexOf("Force Move To Production")
+  );
+  expect(instructionsSource).not.toContain("buildDepositWorkflowLabel");
+  expect(instructionsSource).not.toContain("Approval Status");
+  expect(financialSource).not.toContain("canonical_workflow_state");
 });
 
 test("Order Detail passes the process projection only into the existing production tracker", async () => {

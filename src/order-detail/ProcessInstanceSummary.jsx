@@ -17,11 +17,11 @@ function TaskList({ items, emptyLabel, showReason = false }) {
   );
 }
 
-export default function ProcessInstanceSummary({ projection, availabilityReasons = [] }) {
+export default function ProcessInstanceSummary({ projection }) {
   if (!projection) return null;
 
   const currentTask = projection.primaryCurrentTask;
-  const upcomingTasks = projection.blockedTasks || [];
+  const nextTasks = projection.upcomingTasks || [];
   const completed = projection.progress?.completed || 0;
   const total = projection.progress?.total || 0;
   const progressPercentage = total ? Math.round((completed / total) * 100) : 0;
@@ -76,13 +76,9 @@ export default function ProcessInstanceSummary({ projection, availabilityReasons
             </p>
             <div style={{ marginTop: "14px" }}>
               <p style={{ ...labelStyle, marginBottom: "6px" }}>Why this task is available</p>
-              {availabilityReasons.length ? (
-                <ul style={{ margin: 0, paddingLeft: "20px", color: "#334155", lineHeight: 1.6 }}>
-                  {availabilityReasons.map((reason) => <li key={reason}>{reason}</li>)}
-                </ul>
-              ) : (
-                <p style={{ margin: 0, color: "#334155" }}>{currentTask?.reason || "No production task is currently available."}</p>
-              )}
+              <p style={{ margin: 0, color: "#334155" }}>
+                {currentTask?.reason || "No production task is currently available."}
+              </p>
             </div>
             {currentTask?.state === "Blocked" ? (
               <div style={{ marginTop: "14px" }}>
@@ -95,9 +91,9 @@ export default function ProcessInstanceSummary({ projection, availabilityReasons
       </section>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: "12px" }}>
-        <section style={cardStyle}>
-          <p style={{ ...labelStyle, marginBottom: "9px" }}>Upcoming Tasks</p>
-          <TaskList items={upcomingTasks} emptyLabel="No upcoming tasks" showReason />
+        <section data-testid="process-next-task" style={cardStyle}>
+          <p style={{ ...labelStyle, marginBottom: "9px" }}>Next Task</p>
+          <TaskList items={nextTasks} emptyLabel="No next task" showReason />
         </section>
         <section style={cardStyle}>
           <p style={{ ...labelStyle, marginBottom: "9px" }}>Progress</p>

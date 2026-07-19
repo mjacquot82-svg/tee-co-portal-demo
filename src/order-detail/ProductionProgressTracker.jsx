@@ -10,7 +10,6 @@ import {
   buildWorkflowBlockDetails,
   buildWorkflowStatusBadges,
 } from "../orders/workflowPresentation";
-import { buildProductionGatingState } from "../orders/workflowGating";
 import ProcessInstanceSummary from "./ProcessInstanceSummary";
 
 export default function ProductionProgressTracker({ order, processProjection = null }) {
@@ -19,25 +18,11 @@ export default function ProductionProgressTracker({ order, processProjection = n
   const gating = buildWorkflowBlockDetails(order, { targetStatus: "Ready For Production" });
   const workflowBadges = buildWorkflowStatusBadges(order);
   const readiness = buildProductionReadinessSummary(order);
-  const engineEntryChecks = processProjection
-    ? buildProductionGatingState(order, { targetStatus: "Ready For Production" }).checks
-    : [];
-  const availabilityReasons = engineEntryChecks
-    .filter((check) => check.satisfied)
-    .map((check) => {
-      if (check.key === "artworkApproval") {
-        return check.required ? "Artwork approved" : "Artwork approval not required";
-      }
-      if (check.key === "depositRequirement") {
-        return check.required ? "Deposit received" : "Deposit not required";
-      }
-      return `${check.label} complete`;
-    });
 
   return (
     <section
       data-testid="production-progress-tracker"
-      data-workflow-state={order.status || ""}
+      data-workflow-state={processProjection ? "" : order.status || ""}
       style={{
         background: "#ffffff",
         border: "1px solid #e2e8f0",
@@ -47,7 +32,7 @@ export default function ProductionProgressTracker({ order, processProjection = n
     >
       <h2 style={{ marginTop: 0 }}>{processProjection ? "Production Workspace" : "Production Workflow"}</h2>
 
-      <ProcessInstanceSummary projection={processProjection} availabilityReasons={availabilityReasons} />
+      <ProcessInstanceSummary projection={processProjection} />
 
       {processProjection ? null : (
         <>

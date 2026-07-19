@@ -90,6 +90,7 @@ export default function OrderDetail() {
   );
   const [workflowFeedback, setWorkflowFeedback] = useState(null);
   const [processProjection, setProcessProjection] = useState(null);
+  const [processProjectionResolved, setProcessProjectionResolved] = useState(false);
   const order = useMemo(
     () => storedOrders.find((entry) => entry.order_number === orderNumber) || null,
     [orderNumber, storedOrders]
@@ -98,6 +99,8 @@ export default function OrderDetail() {
   const isStaffWorkspace = isStaffWorkspaceView(activeStaffUser);
   const canManageAssignments = isAdminWorkspaceView(activeStaffUser);
   const selfAssignAllowed = order ? canSelfAssignOrder(order, activeStaffUser) : false;
+  const hasProcessAuthority = Boolean(processProjection);
+  const showLegacyProduction = processProjectionResolved && !hasProcessAuthority;
 
   const selectedProduct = useMemo(() => {
     if (!order) return null;
@@ -123,17 +126,20 @@ export default function OrderDetail() {
     });
   }, [order, paymentsSnapshot, quoteSnapshot]);
   const workflowActions = useMemo(
-    () => (order ? getAvailableProductionActions(order) : []),
-    [order]
+    () => (order && showLegacyProduction ? getAvailableProductionActions(order) : []),
+    [order, showLegacyProduction]
   );
   const productionGating = useMemo(
-    () => (order ? buildProductionGatingState(order, { targetStatus: "Ready For Production" }) : null),
-    [order]
+    () => (order && showLegacyProduction ? buildProductionGatingState(order, { targetStatus: "Ready For Production" }) : null),
+    [order, showLegacyProduction]
   );
-  const workflowBadges = useMemo(() => (order ? buildWorkflowStatusBadges(order) : []), [order]);
+  const workflowBadges = useMemo(
+    () => (order && showLegacyProduction ? buildWorkflowStatusBadges(order) : []),
+    [order, showLegacyProduction]
+  );
   const ownerNextAction = useMemo(
-    () => (normalizedOrder ? deriveOwnerOrderNextAction(normalizedOrder) : null),
-    [normalizedOrder]
+    () => (normalizedOrder && showLegacyProduction ? deriveOwnerOrderNextAction(normalizedOrder) : null),
+    [normalizedOrder, showLegacyProduction]
   );
   const orderNextAction = ownerNextAction?.actionKey
     ? { ...ownerNextAction, href: "" }
@@ -165,8 +171,11 @@ export default function OrderDetail() {
     let active = true;
 
     async function loadProcessProjection() {
+      setProcessProjectionResolved(false);
+      setProcessProjection(null);
+
       if (!order) {
-        setProcessProjection(null);
+        setProcessProjectionResolved(true);
         return;
       }
 
@@ -181,6 +190,8 @@ export default function OrderDetail() {
           error,
         });
         if (active) setProcessProjection(null);
+      } finally {
+        if (active) setProcessProjectionResolved(true);
       }
     }
 
@@ -542,7 +553,7 @@ export default function OrderDetail() {
       className="order-detail-page"
       data-testid="order-detail-page"
       data-order-number={order.order_number || orderNumber}
-      data-workflow-state={order.status || ""}
+      data-workflow-state={showLegacyProduction ? order.status || "" : ""}
       style={{ maxWidth: "1280px", margin: "0 auto", padding: "24px" }}
     >
       <div
@@ -606,13 +617,15 @@ export default function OrderDetail() {
           </div>
 
           <div data-testid="order-detail-status-summary" style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", marginTop: "12px" }}>
-            <span data-testid="order-detail-current-status" data-workflow-state={order.status || ""}>
-              <StatusBadge status={order.status} />
-            </span>
+            {showLegacyProduction ? (
+              <span data-testid="order-detail-current-status" data-workflow-state={order.status || ""}>
+                <StatusBadge status={order.status} />
+              </span>
+            ) : null}
             <span style={{ color: urgency.color, fontWeight: 800 }}>{urgency.label}</span>
           </div>
 
-          {!processProjection && workflowBadges.length ? (
+          {showLegacyProduction && workflowBadges.length ? (
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
               {workflowBadges.map((badge) => <WorkflowBadge key={badge.label} label={badge.label} tone={badge.tone} />)}
             </div>
@@ -698,7 +711,7 @@ export default function OrderDetail() {
         </div>
       </div>
 
-      {processProjection ? (
+      {hasProcessAuthority ? (
         <>
           <div style={{ marginBottom: "18px" }}>
             <ProductionProgressTracker order={order} processProjection={processProjection} />
@@ -713,11 +726,18 @@ export default function OrderDetail() {
         </>
       ) : null}
 
-      {processProjection ? null : (
+      {showLegacyProduction ? (
         <div style={{ marginBottom: "18px" }}>
           <ProductionProgressTracker order={order} />
         </div>
-      )}
+      ) : !processProjectionResolved ? (
+        <section
+          data-testid="production-authority-loading"
+          style={{ marginBottom: "18px", border: "1px solid #e2e8f0", borderRadius: "20px", padding: "18px", color: "#64748b", fontWeight: 700 }}
+        >
+          Resolving production authority…
+        </section>
+      ) : null}
 
       <div className="order-detail-main-grid">
         <div style={{ display: "grid", gap: "18px" }}>
@@ -812,7 +832,7 @@ export default function OrderDetail() {
         </div>
 
         <aside style={{ display: "grid", gap: "18px" }}>
-          {processProjection || isStaffWorkspace || !orderNextAction ? null : (
+          {!showLegacyProduction || isStaffWorkspace || !orderNextAction ? null : (
             <OwnerNextActionCard action={orderNextAction} onAction={handleOwnerNextAction} />
           )}
 
@@ -858,8 +878,8 @@ export default function OrderDetail() {
         </aside>
       </div>
 
-      <div className={processProjection ? "order-detail-activity-section" : "order-detail-operational-grid"}>
-        {processProjection ? null : assignmentPanel}
+      <div className={hasProcessAuthority ? "order-detail-activity-section" : "order-detail-operational-grid"}>
+        {showLegacyProduction ? assignmentPanel : null}
 
         <ActivityTimeline
           events={normalizedOrder?.connected_timeline || order.activity_log || []}

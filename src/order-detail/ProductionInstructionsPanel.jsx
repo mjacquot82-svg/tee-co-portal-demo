@@ -5,7 +5,6 @@ import {
   getOrderArtworkFiles,
   isArtworkImage,
 } from "../lib/orderArtwork";
-import { buildDepositWorkflowLabel } from "../orders/depositWorkflowDisplay";
 
 function formatPlacements(order) {
   if (Array.isArray(order.placements) && order.placements.length) {
@@ -103,16 +102,6 @@ export default function ProductionInstructionsPanel({ order = {} }) {
             <span style={rowLabelStyle}>Due Date</span>
             <span style={rowValueStyle}>{order.due_date || "—"}</span>
           </div>
-        </div>
-
-        <div style={{ display: "grid", gap: "2px" }}>
-          <span style={rowLabelStyle}>Deposit</span>
-          <span style={rowValueStyle}>{buildDepositWorkflowLabel(order)}</span>
-        </div>
-
-        <div style={{ display: "grid", gap: "2px" }}>
-          <span style={rowLabelStyle}>Approval Status</span>
-          <span style={rowValueStyle}>{order.artwork_approval_status || order.approval_status || "Not Sent"}</span>
         </div>
 
         <div style={{ display: "grid", gap: "2px" }}>
