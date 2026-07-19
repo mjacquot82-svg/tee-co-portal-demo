@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import "./OrderDetail.css";
 import { recordStoredOrderPayment, updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
@@ -82,6 +82,7 @@ function buildSizeBreakdownEntries(sizeBreakdown = {}) {
 
 export default function OrderDetail() {
   const { orderNumber } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const storedOrders = useStoredOrders();
   const storedProducts = useStoredProducts();
   const paymentsSnapshot = usePaymentsSnapshot();
@@ -101,6 +102,10 @@ export default function OrderDetail() {
   const selfAssignAllowed = order ? canSelfAssignOrder(order, activeStaffUser) : false;
   const hasProcessAuthority = Boolean(processProjection);
   const showLegacyProduction = processProjectionResolved && !hasProcessAuthority;
+  const requestedWorkspace = searchParams.get("workspace");
+  const activeWorkspace = ["financial", "details"].includes(requestedWorkspace)
+    ? requestedWorkspace
+    : "production";
 
   const selectedProduct = useMemo(() => {
     if (!order) return null;
@@ -548,6 +553,14 @@ export default function OrderDetail() {
       compactWorkflowContext={Boolean(processProjection)}
     />
   );
+
+  function selectWorkspace(workspace) {
+    const nextParams = new URLSearchParams(searchParams);
+    if (workspace === "production") nextParams.delete("workspace");
+    else nextParams.set("workspace", workspace);
+    setSearchParams(nextParams, { replace: true });
+  }
+
   return (
     <div
       className="order-detail-page"
@@ -650,9 +663,6 @@ export default function OrderDetail() {
             </div>
           ) : null}
 
-          <p style={{ margin: "12px 0 0", color: "#64748b", fontSize: "13px" }}>
-            Placed {placedAt.date} at {placedAt.time} · Updated {updatedAt.date} at {updatedAt.time}
-          </p>
         </div>
 
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
@@ -678,215 +688,189 @@ export default function OrderDetail() {
               : "Orders"}
           </Link>
 
-          <button
-            type="button"
-            onClick={handlePrintTicket}
-            style={{
-              background: "#171717",
-              color: "#ffffff",
-              border: "none",
-              borderRadius: "12px",
-              padding: "11px 14px",
-              fontWeight: 700,
-            }}
-          >
-            Print Production Sheet
-          </button>
-          {canManageAssignments && !isCanceledOperationalStatus(order.status) ? (
-            <button
-              type="button"
-              onClick={handleCancelProductionOrder}
-              style={{
-                border: "1px solid #fecaca",
-                background: "#fff5f5",
-                color: "#b91c1c",
-                borderRadius: "12px",
-                padding: "11px 14px",
-                fontWeight: 700,
-              }}
-            >
-              Cancel Production Order
-            </button>
-          ) : null}
         </div>
       </div>
 
-      {hasProcessAuthority ? (
-        <>
-          <div style={{ marginBottom: "18px" }}>
-            <ProductionProgressTracker order={order} processProjection={processProjection} />
-          </div>
-          <div className="production-workspace-controls" style={{ marginBottom: "28px" }}>
-            {assignmentPanel}
-          </div>
-          <div data-testid="supporting-order-information" style={{ borderTop: "1px solid #cbd5e1", paddingTop: "24px", marginBottom: "18px" }}>
-            <p style={{ ...sectionLabelStyle, color: "#475569" }}>Supporting Information</p>
-            <p style={{ margin: "6px 0 0", color: "#64748b" }}>Reference details for production, payment, and investigation.</p>
-          </div>
-        </>
-      ) : null}
-
-      {showLegacyProduction ? (
-        <div style={{ marginBottom: "18px" }}>
-          <ProductionProgressTracker order={order} />
-        </div>
-      ) : !processProjectionResolved ? (
-        <section
-          data-testid="production-authority-loading"
-          style={{ marginBottom: "18px", border: "1px solid #e2e8f0", borderRadius: "20px", padding: "18px", color: "#64748b", fontWeight: 700 }}
-        >
-          Resolving production authority…
-        </section>
-      ) : null}
-
-      <div className="order-detail-main-grid">
-        <div style={{ display: "grid", gap: "18px" }}>
-          <section style={cardStyle}>
-            <div
+      <nav
+        role="tablist"
+        data-testid="order-workspace-tabs"
+        aria-label="Order workspaces"
+        style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "18px", borderBottom: "1px solid #e2e8f0", paddingBottom: "10px" }}
+      >
+        {[
+          { key: "production", label: "Production" },
+          { key: "financial", label: "Financial" },
+          { key: "details", label: "Details" },
+        ].map((workspace) => {
+          const selected = activeWorkspace === workspace.key;
+          return (
+            <button
+              key={workspace.key}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              data-testid={`order-workspace-tab-${workspace.key}`}
+              onClick={() => selectWorkspace(workspace.key)}
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                gap: "14px",
-                flexWrap: "wrap",
-                marginBottom: "18px",
+                border: selected ? "1px solid #0f172a" : "1px solid #cbd5e1",
+                background: selected ? "#0f172a" : "#ffffff",
+                color: selected ? "#ffffff" : "#334155",
+                borderRadius: "12px",
+                padding: "10px 14px",
+                fontWeight: 800,
               }}
             >
-              <div>
-                <h2 style={{ margin: "0 0 4px" }}>Production Reference</h2>
-                <p style={{ margin: 0, color: "#64748b" }}>
-                  Placement and size details needed while producing this job.
-                </p>
-              </div>
-            </div>
+              {workspace.label}
+            </button>
+          );
+        })}
+      </nav>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                gap: "16px",
-                marginBottom: "18px",
-              }}
+      {activeWorkspace === "production" ? (
+        <div data-testid="order-workspace-production" style={{ display: "grid", gap: "18px" }}>
+          <div>
+            <button
+              type="button"
+              onClick={handlePrintTicket}
+              style={{ background: "#171717", color: "#ffffff", border: "none", borderRadius: "12px", padding: "11px 14px", fontWeight: 700 }}
             >
-              <div>
+              Print Production Sheet
+            </button>
+          </div>
+
+          {hasProcessAuthority ? (
+            <>
+              <ProductionProgressTracker order={order} processProjection={processProjection} />
+              <div className="production-workspace-controls">{assignmentPanel}</div>
+            </>
+          ) : showLegacyProduction ? (
+            <>
+              <ProductionProgressTracker order={order} />
+              {isStaffWorkspace || !orderNextAction ? null : (
+                <OwnerNextActionCard action={orderNextAction} onAction={handleOwnerNextAction} />
+              )}
+              {assignmentPanel}
+            </>
+          ) : (
+            <section
+              data-testid="production-authority-loading"
+              style={{ border: "1px solid #e2e8f0", borderRadius: "20px", padding: "18px", color: "#64748b", fontWeight: 700 }}
+            >
+              Resolving production authority…
+            </section>
+          )}
+
+          <div className="order-detail-main-grid">
+            <section style={cardStyle}>
+              <h2 style={{ margin: "0 0 4px" }}>Production Reference</h2>
+              <p style={{ margin: "0 0 18px", color: "#64748b" }}>Placement and size details needed while producing this job.</p>
+              <div style={{ marginBottom: "18px" }}>
                 <p style={sectionLabelStyle}>Placements</p>
                 <p style={sectionValueStyle}>
                   {Array.isArray(order.placements) && order.placements.length
-                    ? order.placements
-                        .map((placement) => placement?.placement)
-                        .filter(Boolean)
-                        .join(", ")
+                    ? order.placements.map((placement) => placement?.placement).filter(Boolean).join(", ")
                     : order.placement || "—"}
                 </p>
               </div>
-
-            </div>
-
-            <div
-              style={{
-                borderTop: "1px solid #e2e8f0",
-                paddingTop: "18px",
-                display: "grid",
-                gap: "12px",
-              }}
-            >
-              <div>
-                <h3 style={{ margin: "0 0 4px", fontSize: "16px" }}>Size Breakdown</h3>
-                <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>
-                  Recorded quantities for the production team.
-                </p>
-              </div>
-
-              {sizeBreakdownEntries.length ? (
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(88px, 1fr))",
-                    gap: "10px",
-                  }}
-                >
-                  {sizeBreakdownEntries.map(([size, quantity]) => (
-                    <div
-                      key={size}
-                      style={{
-                        border: "1px solid #e2e8f0",
-                        borderRadius: "14px",
-                        padding: "12px",
-                        background: "#f8fafc",
-                      }}
-                    >
-                      <p style={sectionLabelStyle}>{size}</p>
-                      <p style={{ ...sectionValueStyle, fontSize: "18px" }}>{quantity}</p>
-                    </div>
-                  ))}
+              <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "18px", display: "grid", gap: "12px" }}>
+                <div>
+                  <h3 style={{ margin: "0 0 4px", fontSize: "16px" }}>Size Breakdown</h3>
+                  <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>Recorded quantities for the production team.</p>
                 </div>
-              ) : (
-                <p style={{ margin: 0, color: "#94a3b8" }}>
-                  No size breakdown recorded for this order yet.
-                </p>
+                {sizeBreakdownEntries.length ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(88px, 1fr))", gap: "10px" }}>
+                    {sizeBreakdownEntries.map(([size, quantity]) => (
+                      <div key={size} style={{ border: "1px solid #e2e8f0", borderRadius: "14px", padding: "12px", background: "#f8fafc" }}>
+                        <p style={sectionLabelStyle}>{size}</p>
+                        <p style={{ ...sectionValueStyle, fontSize: "18px" }}>{quantity}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ margin: 0, color: "#94a3b8" }}>No size breakdown recorded for this order yet.</p>
+                )}
+              </div>
+            </section>
+            <ProductionInstructionsPanel order={order} showInternalNotes={false} />
+          </div>
+        </div>
+      ) : null}
+
+      {activeWorkspace === "financial" ? (
+        <div data-testid="order-workspace-financial" style={{ display: "grid", gap: "18px" }}>
+          {isStaffWorkspace ? (
+            <section style={cardStyle}>Financial workspace access is limited to owners.</section>
+          ) : (
+            <>
+              <FinancialSummaryPanel
+                order={normalizedOrder}
+                onRecordPayment={handleRecordPayment}
+                onMarkPickedUp={handleMarkPickedUp}
+                onSendDepositRequest={handleSendDepositRequest}
+              />
+              {!normalizedOrder || normalizedOrder.balance_due <= 0 || isCanceledOperationalStatus(order.status) ? null : (
+                <PaymentRequestForm
+                  id="owner-payment-request-form"
+                  title="Create Payment Request"
+                  description="Create a staff-managed payment request tied to this order without changing the existing deposit workflow."
+                  order={normalizedOrder}
+                  defaultType={normalizedOrder.payment_collection_state === "Awaiting Deposit" ? "deposit" : "balance"}
+                />
               )}
+              <section style={cardStyle}>
+                <details data-testid="quote-snapshot-disclosure">
+                  <summary style={{ cursor: "pointer", fontWeight: 800, fontSize: "18px", color: "#0f172a" }}>Quote Snapshot</summary>
+                  <div style={{ marginTop: "16px" }}>
+                    {quoteSnapshot ? (
+                      <PricingSummary quote={quoteSnapshot} quantity={quoteSnapshot.quantity || order.qty || 0} compact />
+                    ) : (
+                      <p style={{ color: "#94a3b8" }}>Quote snapshot unavailable.</p>
+                    )}
+                  </div>
+                </details>
+              </section>
+            </>
+          )}
+        </div>
+      ) : null}
+
+      {activeWorkspace === "details" ? (
+        <div data-testid="order-workspace-details" style={{ display: "grid", gap: "18px" }}>
+          <section style={cardStyle}>
+            <h2 style={{ marginTop: 0 }}>Order Reference</h2>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px" }}>
+              <div><p style={sectionLabelStyle}>Placed</p><p style={sectionValueStyle}>{placedAt.date} at {placedAt.time}</p></div>
+              <div><p style={sectionLabelStyle}>Last Updated</p><p style={sectionValueStyle}>{updatedAt.date} at {updatedAt.time}</p></div>
+              <div><p style={sectionLabelStyle}>Source</p><p style={sectionValueStyle}>{order.source || "Operational intake"}</p></div>
+              {showLegacyProduction ? (
+                <div><p style={sectionLabelStyle}>Legacy Order Status</p><p style={sectionValueStyle}>{order.status || "—"}</p></div>
+              ) : null}
+            </div>
+            <div style={{ borderTop: "1px solid #e2e8f0", marginTop: "18px", paddingTop: "18px" }}>
+              <p style={sectionLabelStyle}>Internal Notes</p>
+              <p style={{ ...sectionValueStyle, whiteSpace: "pre-wrap" }}>{order.internal_note || "No internal notes recorded."}</p>
             </div>
           </section>
 
-          <ProductionInstructionsPanel order={order} />
-        </div>
-
-        <aside style={{ display: "grid", gap: "18px" }}>
-          {!showLegacyProduction || isStaffWorkspace || !orderNextAction ? null : (
-            <OwnerNextActionCard action={orderNextAction} onAction={handleOwnerNextAction} />
-          )}
-
-          {isStaffWorkspace ? null : (
-            <FinancialSummaryPanel
-              order={normalizedOrder}
-              onRecordPayment={handleRecordPayment}
-              onMarkPickedUp={handleMarkPickedUp}
-              onSendDepositRequest={handleSendDepositRequest}
-            />
-          )}
-
-          {isStaffWorkspace || !normalizedOrder || normalizedOrder.balance_due <= 0 || isCanceledOperationalStatus(order.status) ? null : (
-            <PaymentRequestForm
-              id="owner-payment-request-form"
-              title="Create Payment Request"
-              description="Create a staff-managed payment request tied to this order without changing the existing deposit workflow."
-              order={normalizedOrder}
-              defaultType={
-                normalizedOrder.payment_collection_state === "Awaiting Deposit"
-                  ? "deposit"
-                  : "balance"
-              }
-            />
-          )}
-
-          {!isStaffWorkspace ? (
-            <section style={cardStyle}>
-              <details data-testid="quote-snapshot-disclosure">
-                <summary style={{ cursor: "pointer", fontWeight: 800, fontSize: "18px", color: "#0f172a" }}>
-                  Quote Snapshot
-                </summary>
-                <div style={{ marginTop: "16px" }}>
-                  {quoteSnapshot ? (
-                    <PricingSummary quote={quoteSnapshot} quantity={quoteSnapshot.quantity || order.qty || 0} compact />
-                  ) : (
-                    <p style={{ color: "#94a3b8" }}>Quote snapshot unavailable.</p>
-                  )}
-                </div>
-              </details>
-            </section>
+          {canManageAssignments && !isCanceledOperationalStatus(order.status) ? (
+            <div>
+              <button
+                type="button"
+                onClick={handleCancelProductionOrder}
+                style={{ border: "1px solid #fecaca", background: "#fff5f5", color: "#b91c1c", borderRadius: "12px", padding: "11px 14px", fontWeight: 700 }}
+              >
+                Cancel Production Order
+              </button>
+            </div>
           ) : null}
-        </aside>
-      </div>
 
-      <div className={hasProcessAuthority ? "order-detail-activity-section" : "order-detail-operational-grid"}>
-        {showLegacyProduction ? assignmentPanel : null}
-
-        <ActivityTimeline
-          events={normalizedOrder?.connected_timeline || order.activity_log || []}
-          compact
-          collapsedByDefault
-        />
-      </div>
+          <ActivityTimeline
+            events={normalizedOrder?.connected_timeline || order.activity_log || []}
+            compact
+            collapsedByDefault
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

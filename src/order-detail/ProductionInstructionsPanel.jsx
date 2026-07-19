@@ -37,7 +37,7 @@ const fileLinkStyle = {
   textDecoration: "none",
 };
 
-export default function ProductionInstructionsPanel({ order = {} }) {
+export default function ProductionInstructionsPanel({ order = {}, showInternalNotes = true }) {
   const productionType = normalizeProductionType(
     order.decoration_type ||
       order.production_type ||
@@ -111,12 +111,14 @@ export default function ProductionInstructionsPanel({ order = {} }) {
           </span>
         </div>
 
-        <div style={{ display: "grid", gap: "2px" }}>
-          <span style={rowLabelStyle}>Internal Notes</span>
-          <span style={{ ...rowValueStyle, whiteSpace: "pre-wrap" }}>
-            {order.internal_note || "—"}
-          </span>
-        </div>
+        {showInternalNotes ? (
+          <div style={{ display: "grid", gap: "2px" }}>
+            <span style={rowLabelStyle}>Internal Notes</span>
+            <span style={{ ...rowValueStyle, whiteSpace: "pre-wrap" }}>
+              {order.internal_note || "—"}
+            </span>
+          </div>
+        ) : null}
       </div>
 
       <div

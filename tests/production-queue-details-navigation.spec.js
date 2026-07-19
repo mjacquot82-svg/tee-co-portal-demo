@@ -99,14 +99,45 @@ test("Production Queue Details opens the correct full order workspace", async ({
     "Next recommended action",
   ].forEach((legacyConcept) => expect(visibleWorkstationText).not.toContain(legacyConcept));
 
-  await expect(page.getByRole("button", { name: "Send Deposit Request" })).toHaveCount(0);
-  await expect(page.getByTestId("payment-details-disclosure")).not.toHaveAttribute("open", "");
-  await expect(page.getByTestId("quote-snapshot-disclosure")).not.toHaveAttribute("open", "");
-  await expect(page.getByTestId("activity-timeline-disclosure")).not.toHaveAttribute("open", "");
+  await expect(page.getByTestId("order-workspace-tab-production")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("order-workspace-financial")).toHaveCount(0);
+  await expect(page.getByTestId("order-workspace-details")).toHaveCount(0);
+  await expect(page.getByText("Payment Summary", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Create Payment Request", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Quote Snapshot", { exact: true })).toHaveCount(0);
+  await expect(page.getByTestId("activity-timeline")).toHaveCount(0);
 
   const identityBox = await page.getByTestId("production-job-identity").boundingBox();
   const currentWorkBox = await page.getByTestId("production-progress-tracker").boundingBox();
   expect(identityBox?.y).toBeLessThan(currentWorkBox?.y || Number.POSITIVE_INFINITY);
+
+  await page.getByTestId("order-workspace-tab-financial").click();
+  await expect(page).toHaveURL(/workspace=financial/);
+  await expect(page.getByTestId("order-workspace-tab-financial")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByText("Payment Summary", { exact: true })).toBeVisible();
+  await expect(page.getByText("Create Payment Request", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("quote-snapshot-disclosure")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send Deposit Request" })).toHaveCount(0);
+  await expect(page.getByTestId("process-instance-summary")).toHaveCount(0);
+  await expect(page.getByTestId("activity-timeline")).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByTestId("order-workspace-tab-financial")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByText("Payment Summary", { exact: true })).toBeVisible();
+
+  await page.getByTestId("order-workspace-tab-details").click();
+  await expect(page).toHaveURL(/workspace=details/);
+  await expect(page.getByTestId("order-workspace-tab-details")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByText("Order Reference", { exact: true })).toBeVisible();
+  await expect(page.getByText("Internal Notes", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("activity-timeline")).toBeVisible();
+  await expect(page.getByTestId("activity-timeline-disclosure")).not.toHaveAttribute("open", "");
+  await expect(page.getByTestId("process-instance-summary")).toHaveCount(0);
+  await expect(page.getByText("Payment Summary", { exact: true })).toHaveCount(0);
+
+  await page.getByTestId("order-workspace-tab-production").click();
+  await expect(page).not.toHaveURL(/workspace=/);
+  await expect(page.getByTestId("process-instance-summary")).toBeVisible();
 
   await page.goBack();
   await expect(page.getByTestId("production-queue-page")).toBeVisible();

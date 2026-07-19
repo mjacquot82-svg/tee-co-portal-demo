@@ -122,25 +122,33 @@ test("Order Detail passes the process projection only into the existing producti
   );
   expect(source).toContain("workflowActions={processProjection ? [] : workflowActions}");
   expect(source).toContain('data-testid="production-job-identity"');
-  expect(source).toContain('data-testid="supporting-order-information"');
+  expect(source).toContain('data-testid="order-workspace-tabs"');
+  expect(source).toContain('data-testid="order-workspace-production"');
+  expect(source).toContain('data-testid="order-workspace-financial"');
+  expect(source).toContain('data-testid="order-workspace-details"');
 
   const jobIdentityIndex = source.indexOf('data-testid="production-job-identity"');
+  const workspaceTabsIndex = source.indexOf('data-testid="order-workspace-tabs"');
   const processWorkspaceIndex = source.indexOf(
     "<ProductionProgressTracker order={order} processProjection={processProjection} />"
   );
   const productionControlsIndex = source.indexOf('className="production-workspace-controls"');
-  const supportingInformationIndex = source.indexOf('data-testid="supporting-order-information"');
   const productionReferenceIndex = source.indexOf("Production Reference");
+  const financialWorkspaceIndex = source.indexOf('data-testid="order-workspace-financial"');
+  const detailsWorkspaceIndex = source.indexOf('data-testid="order-workspace-details"');
   const activityTimelineIndex = source.lastIndexOf("<ActivityTimeline");
 
   expect(jobIdentityIndex).toBeGreaterThan(-1);
-  expect(processWorkspaceIndex).toBeGreaterThan(jobIdentityIndex);
+  expect(workspaceTabsIndex).toBeGreaterThan(jobIdentityIndex);
+  expect(processWorkspaceIndex).toBeGreaterThan(workspaceTabsIndex);
   expect(productionControlsIndex).toBeGreaterThan(processWorkspaceIndex);
-  expect(supportingInformationIndex).toBeGreaterThan(productionControlsIndex);
-  expect(productionReferenceIndex).toBeGreaterThan(supportingInformationIndex);
-  expect(activityTimelineIndex).toBeGreaterThan(productionReferenceIndex);
+  expect(productionReferenceIndex).toBeGreaterThan(productionControlsIndex);
+  expect(financialWorkspaceIndex).toBeGreaterThan(productionReferenceIndex);
+  expect(detailsWorkspaceIndex).toBeGreaterThan(financialWorkspaceIndex);
+  expect(activityTimelineIndex).toBeGreaterThan(detailsWorkspaceIndex);
 
   expect(source).toContain('data-testid="quote-snapshot-disclosure"');
+  expect(source).toContain('showInternalNotes={false}');
   expect(source).toContain("collapsedByDefault");
 });
 
