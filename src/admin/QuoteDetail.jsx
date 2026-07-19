@@ -326,7 +326,6 @@ function PrimaryActionButton({ children, onClick, tone = "default" }) {
     neutral: { background: "#ffffff", border: "#cbd5e1", color: "#0f172a" },
     warning: { background: "#fff7ed", border: "#fdba74", color: "#9a3412" },
     danger: { background: "#fff5f5", border: "#fecaca", color: "#b91c1c" },
-    success: { background: "#ecfdf5", border: "#bbf7d0", color: "#166534" },
   };
   const palette = tones[tone] || tones.default;
 
@@ -782,10 +781,10 @@ function IntakeReviewScreen({
         </p>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           {availableActions.approveRequest ? (
-            <PrimaryActionButton onClick={onApproveRequest} tone="success">Approve Request</PrimaryActionButton>
+            <PrimaryActionButton onClick={onApproveRequest}>Approve Request</PrimaryActionButton>
           ) : null}
           {availableActions.approveArtwork ? (
-            <PrimaryActionButton onClick={onApproveArtwork} tone="success">Approve Artwork</PrimaryActionButton>
+            <PrimaryActionButton onClick={onApproveArtwork}>Approve Artwork</PrimaryActionButton>
           ) : null}
           {availableActions.requestArtwork ? (
             <PrimaryActionButton onClick={onRequestArtwork} tone="warning">Request Artwork</PrimaryActionButton>

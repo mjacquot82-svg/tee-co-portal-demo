@@ -41,12 +41,6 @@ function getWorkflowOverrideButton(page, overrideKey) {
   );
 }
 
-function getActiveOverride(page, overrideKey) {
-  return page.locator(
-    `[data-testid="workflow-active-override"][data-override-key="${overrideKey}"]`
-  );
-}
-
 function getNewOrderSizeInput(page, sizeKey) {
   return page.locator(
     `[data-testid="new-order-size-input"][data-size-key="${sizeKey}"]`
@@ -430,8 +424,12 @@ test("approval and deposit gating blocks production until operational requiremen
 
   await expect(getWorkflowGate(page, "artworkApproval")).toHaveAttribute("data-satisfied", "true");
   await expect(getWorkflowGate(page, "artworkApproval").getByTestId("workflow-gate-status")).toContainText(
-    "Approved"
+    "✓ Artwork Approved"
   );
+  await expect(getWorkflowQuickAction(page, "approve_artwork")).toHaveCount(0);
+  await expect(page.getByTestId("artwork-approval-select")).toHaveCount(0);
+  await expect(getWorkflowOverrideButton(page, "artworkApprovalRequirement")).toHaveCount(0);
+  await expect(getWorkflowQuickAction(page, "request_revision")).toBeVisible();
   await expect(getWorkflowBadge(page, "Artwork Approved")).toBeVisible();
   await expect(getWorkflowBadge(page, "Production Blocked")).toHaveCount(0);
   await expect(page.getByTestId("production-gating-alert")).toHaveCount(0);
@@ -479,7 +477,7 @@ test("approval and deposit gating blocks production until operational requiremen
 
   await expect(getWorkflowGate(page, "depositRequirement")).toHaveAttribute("data-satisfied", "true");
   await expect(getWorkflowGate(page, "depositRequirement").getByTestId("workflow-gate-status")).toContainText(
-    "Deposit Received"
+    "✓ Deposit Received"
   );
   await expect(getWorkflowBadge(page, "Deposit Received")).toBeVisible();
   await expect(getWorkflowBadge(page, "Production Blocked")).toHaveCount(0);
@@ -524,17 +522,10 @@ test("approval and deposit gating blocks production until operational requiremen
     `Expected a production movement timeline entry for ${orderNumber}.`
   );
 
-  await expect(getWorkflowOverrideButton(page, "depositRequirement")).toBeVisible();
-  const overrideMentionsBefore = await countTimelineMentions(page, ["override used"]);
-  await getWorkflowOverrideButton(page, "depositRequirement").click();
-
-  await expect(getActiveOverride(page, "depositRequirement")).toBeVisible();
-  await expectTimelineMentionCountToIncrease(
-    page,
-    ["override used"],
-    overrideMentionsBefore,
-    `Expected a workflow override timeline entry for ${orderNumber}.`
-  );
+  await expect(getWorkflowQuickAction(page, "request_deposit")).toHaveCount(0);
+  await expect(getWorkflowQuickAction(page, "mark_deposit_received")).toHaveCount(0);
+  await expect(getWorkflowOverrideButton(page, "depositRequirement")).toHaveCount(0);
+  await expect(page.getByText("Production Ready", { exact: true })).toBeVisible();
 
   await page.reload();
 
@@ -543,12 +534,11 @@ test("approval and deposit gating blocks production until operational requiremen
     "Ready For Production"
   );
   await expect(getWorkflowGate(page, "artworkApproval").getByTestId("workflow-gate-status")).toContainText(
-    "Approved"
+    "✓ Artwork Approved"
   );
   await expect(getWorkflowGate(page, "depositRequirement").getByTestId("workflow-gate-status")).toContainText(
-    "Deposit Received"
+    "✓ Deposit Received"
   );
-  await expect(getActiveOverride(page, "depositRequirement")).toBeVisible();
   await expect(page.getByTestId("customer-workflow-message")).toContainText("Ready for production");
   await expect(page.getByTestId("production-gating-alert")).toHaveCount(0);
   await expect(getWorkflowActionButton(page, "start_printing")).toBeVisible();

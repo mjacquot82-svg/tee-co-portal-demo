@@ -8,6 +8,7 @@ import {
   buildWorkflowStatusBadges,
   formatOverrideMeta,
 } from "../orders/workflowPresentation";
+import { buildPrerequisitePresentation } from "./prerequisitePresentation";
 
 function formatAssignedAt(value) {
   if (!value) return "Not assigned yet";
@@ -27,7 +28,6 @@ function QuickActionButton({
 }) {
   const tones = {
     neutral: { background: "#ffffff", border: "#cbd5e1", color: "#0f172a" },
-    success: { background: "#ecfdf5", border: "#bbf7d0", color: "#166534" },
     warning: { background: "#fff7ed", border: "#fdba74", color: "#9a3412" },
     dark: { background: "#0f172a", border: "#0f172a", color: "#ffffff" },
   };
@@ -106,6 +106,8 @@ export default function AssignmentPanel({
   const blockDetails = buildWorkflowBlockDetails(order, { targetStatus: "Ready For Production" });
   const customerWorkflowMessage = buildCustomerWorkflowMessage(order);
   const readiness = buildProductionReadinessSummary(order);
+  const prerequisitePresentation = buildPrerequisitePresentation(productionGating);
+  const artworkGate = prerequisitePresentation.artwork.gate;
 
   if (compactWorkflowContext) {
     return (
@@ -387,9 +389,9 @@ export default function AssignmentPanel({
         >
           <div style={{ display: "grid", gap: "10px" }}>
             <div>
-              <strong>Requirements</strong>
+              <strong>{prerequisitePresentation.allSatisfied ? "Production Ready" : "Requirements"}</strong>
               <div style={{ marginTop: "8px", display: "grid", gap: "8px" }}>
-                {(productionGating?.checks || []).map((check) => (
+                {prerequisitePresentation.checks.map((check) => (
                   <div
                     key={check.key}
                     data-testid="workflow-gate"
@@ -419,7 +421,7 @@ export default function AssignmentPanel({
                         data-testid="workflow-gate-status"
                         style={{ color: check.satisfied ? "#166534" : "#9a3412", fontWeight: 800 }}
                       >
-                        {check.statusLabel}
+                        {check.displayStatus}
                       </span>
                     </div>
                     {check.overridden ? (
@@ -435,46 +437,53 @@ export default function AssignmentPanel({
               </div>
             </div>
 
-            <div style={{ display: "grid", gap: "10px" }}>
-              <div style={{ display: "grid", gap: "6px" }}>
-                <strong style={{ fontSize: "13px" }}>Artwork Review</strong>
-                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                  <QuickActionButton
-                    actionKey="approve_artwork"
-                    label="Approve Artwork"
-                    tone="success"
-                    disabled={canceled}
-                    onClick={() => onArtworkApprovalChange?.("Approved")}
-                  />
-                  <QuickActionButton
-                    actionKey="request_revision"
-                    label="Request Revision"
-                    tone="warning"
-                    disabled={canceled}
-                    onClick={() => onArtworkApprovalChange?.("Needs Revision")}
-                  />
+            {artworkGate && (prerequisitePresentation.artwork.showApprove || prerequisitePresentation.artwork.showRequestRevision) ? (
+              <div style={{ display: "grid", gap: "10px" }}>
+                <div style={{ display: "grid", gap: "6px" }}>
+                  <strong style={{ fontSize: "13px" }}>Artwork Review</strong>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    {prerequisitePresentation.artwork.showApprove ? (
+                      <QuickActionButton
+                        actionKey="approve_artwork"
+                        label="Approve Artwork"
+                        tone="dark"
+                        disabled={canceled}
+                        onClick={() => onArtworkApprovalChange?.("Approved")}
+                      />
+                    ) : null}
+                    {prerequisitePresentation.artwork.showRequestRevision ? (
+                      <QuickActionButton
+                        actionKey="request_revision"
+                        label="Request Revision"
+                        tone="warning"
+                        disabled={canceled}
+                        onClick={() => onArtworkApprovalChange?.("Needs Revision")}
+                      />
+                    ) : null}
+                  </div>
                 </div>
+
+                {prerequisitePresentation.artwork.showSelector ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
+                    <label style={{ display: "grid", gap: "6px", fontSize: "13px", fontWeight: 700 }}>
+                      Artwork Approval
+                      <select
+                        data-testid="artwork-approval-select"
+                        value={order.artwork_approval_status || "Pending Review"}
+                        onChange={(event) => onArtworkApprovalChange?.(event.target.value)}
+                        disabled={canceled}
+                        style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "10px" }}
+                      >
+                        <option value="Pending Review">Pending Review</option>
+                        <option value="Approved">Approved</option>
+                        <option value="Not Required">Not Required</option>
+                        <option value="Needs Revision">Needs Revision</option>
+                      </select>
+                    </label>
+                  </div>
+                ) : null}
               </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
-              <label style={{ display: "grid", gap: "6px", fontSize: "13px", fontWeight: 700 }}>
-                Artwork Approval
-                <select
-                  data-testid="artwork-approval-select"
-                  value={order.artwork_approval_status || "Pending Review"}
-                  onChange={(event) => onArtworkApprovalChange?.(event.target.value)}
-                  disabled={canceled}
-                  style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "10px" }}
-                >
-                  <option value="Pending Review">Pending Review</option>
-                  <option value="Approved">Approved</option>
-                  <option value="Not Required">Not Required</option>
-                  <option value="Needs Revision">Needs Revision</option>
-                </select>
-              </label>
-
-            </div>
-            </div>
+            ) : null}
 
             {blockDetails.blocked ? (
               <div
@@ -565,7 +574,7 @@ export default function AssignmentPanel({
                     onClick={onForceMoveToProduction}
                   />
                 ) : null}
-                <button
+                {prerequisitePresentation.artwork.showOverride ? <button
                   type="button"
                   data-testid="workflow-override-button"
                   data-override-key="artworkApprovalRequirement"
@@ -579,8 +588,8 @@ export default function AssignmentPanel({
                   }}
                 >
                   Override Artwork Approval
-                </button>
-                <button
+                </button> : null}
+                {prerequisitePresentation.deposit.showOverride ? <button
                   type="button"
                   data-testid="workflow-override-button"
                   data-override-key="depositRequirement"
@@ -594,7 +603,7 @@ export default function AssignmentPanel({
                   }}
                 >
                   Override Deposit Requirement
-                </button>
+                </button> : null}
               </div>
             ) : null}
           </div>
