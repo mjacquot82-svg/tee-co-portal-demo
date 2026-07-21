@@ -35,53 +35,55 @@ export function buildDepositRequestConfirmation(order = {}, result = {}) {
   return `Deposit Request Sent for ${orderContext(order)} · ${money(amount)}`;
 }
 
-export function buildIntakeActionConfirmation(actionKey) {
-  const confirmations = {
-    approve_request: [
-      "✓ Request approved.",
-      "Workflow state: Approved — pending remaining requirements.",
-      "The customer can now complete any remaining requirements before production.",
-      "Next step: Review the artwork and deposit requirements.",
-    ],
-    request_artwork: [
-      "✓ Artwork requested.",
-      "Workflow state: Awaiting artwork.",
-      "The customer has been notified through the Customer Portal and can now upload artwork.",
-      "Next step: Review the artwork after the customer uploads it.",
-    ],
-    approve_artwork: [
-      "✓ Artwork approved.",
-      "Workflow state: Artwork approved.",
-      "The artwork requirement is complete.",
-      "Next step: Complete any remaining requirements before production.",
-    ],
-    request_changes: [
-      "✓ Changes requested.",
-      "Workflow state: Awaiting customer response.",
-      "The customer can now review the request and respond through the Customer Portal.",
-      "Next step: Continue review after the customer responds.",
-    ],
-    require_deposit: [
-      "✓ Deposit request created.",
-      "Workflow state: Awaiting deposit.",
-      "The customer can now pay the deposit from the Customer Portal.",
-      "Next step: Monitor for payment and complete any remaining requirements.",
-    ],
-    deposit_not_required: [
-      "✓ Deposit marked not required.",
-      "Workflow state: No deposit is required for this request.",
-      "The customer does not need to make a deposit payment.",
-      "Next step: Complete any remaining approval or artwork requirements.",
-    ],
-    reject_request: [
-      "✓ Request rejected.",
-      "Workflow state: Request canceled.",
-      "The request is closed and will not advance to production.",
-      "Next step: No further workflow action is required.",
-    ],
+export function buildIntakeActionConfirmation(actionKey, order = {}) {
+  const actionMessages = {
+    approve_request: "✓ Request approved.",
+    request_artwork: "✓ Artwork requested.",
+    approve_artwork: "✓ Artwork approved.",
+    request_changes: "✓ Changes requested.",
+    require_deposit: "✓ Deposit request created.",
+    deposit_not_required: "✓ Deposit marked not required.",
+    reject_request: "✓ Request rejected.",
   };
+  const actionMessage = actionMessages[actionKey] || "✓ Workflow action completed.";
 
-  return (confirmations[actionKey] || ["✓ Workflow action completed."]).join("\n");
+  if (actionKey === "reject_request") {
+    return [
+      actionMessage,
+      "Workflow state: Request canceled.",
+      "No remaining intake actions.",
+      "Next step: No further workflow action is required.",
+    ].join("\n");
+  }
+
+  return [actionMessage, buildIntakeWorkflowSummary(order)].join("\n");
+}
+
+export function buildIntakeWorkflowSummary(order = {}) {
+  const requirements = getOutstandingIntakeRequirements(order);
+  if (!requirements.length) {
+    return [
+      "Workflow state: Intake review complete.",
+      "No remaining intake actions.",
+      "Next step: This request is ready for the next business stage.",
+    ].join("\n");
+  }
+
+  const nextStep = requirements.includes("Customer Response")
+    ? "Wait for the customer to respond before continuing intake review."
+    : requirements.includes("Artwork Needed")
+    ? "Request the missing artwork from the customer."
+    : requirements.includes("Artwork Review")
+    ? "Review the uploaded artwork."
+    : requirements.includes("Deposit Decision")
+    ? "Decide whether a deposit is required."
+    : "Complete Staff Review.";
+
+  return [
+    "Workflow state: Intake review in progress.",
+    `Remaining requirements: ${requirements.join(", ")}.`,
+    `Next step: ${nextStep}`,
+  ].join("\n");
 }
 
 export function buildProductionEmptyState(statusFilter = "active") {
@@ -111,3 +113,4 @@ export function buildQuoteEmptyState(queueFilter = "all") {
 
   return messages[queueFilter] || "No active requests yet. New order requests will appear here for review.";
 }
+import { getOutstandingIntakeRequirements } from "./intakeActionPresentation";

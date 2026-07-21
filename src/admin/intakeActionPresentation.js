@@ -69,3 +69,35 @@ export function getAvailableIntakeActions(order = {}) {
       !artworkApproved && artworkStatuses.includes("pending review") && hasUploadedArtwork,
   };
 }
+
+export function getOutstandingIntakeRequirements(order = {}) {
+  const requirements = [];
+  const staffReview = normalized(order.staff_review_status || order.approval_status);
+  const artworkStatus = normalized(order.artwork_status || order.artwork_approval_status);
+  const depositStatus = normalized(order.deposit_workflow_status);
+  const depositRequirement = normalized(order.deposit_requirement);
+  const depositRequirementStatus = normalized(order.deposit_requirement_status);
+  const requestStatus = normalized(order.request_status);
+
+  if (staffReview !== "approved") requirements.push("Staff Review");
+
+  if (artworkStatus === "missing") {
+    requirements.push("Artwork Needed");
+  } else if (!artworkStatus || artworkStatus === "pending review") {
+    requirements.push("Artwork Review");
+  } else if (artworkStatus === "needs revision") {
+    requirements.push("Customer Response");
+  }
+
+  if (
+    depositStatus === "pending decision" ||
+    depositRequirementStatus === "undecided" ||
+    depositRequirement === "undecided"
+  ) {
+    requirements.push("Deposit Decision");
+  }
+
+  if (requestStatus === "awaiting customer response") requirements.push("Customer Response");
+
+  return Array.from(new Set(requirements));
+}

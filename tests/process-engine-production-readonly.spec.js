@@ -132,7 +132,7 @@ test("Order Detail passes the process projection only into the existing producti
     "<ProductionProgressTracker order={order} processProjection={processProjection} />"
   );
   const productionControlsIndex = source.indexOf('className="production-workspace-controls"');
-  const productionReferenceIndex = source.indexOf("Production Reference");
+  const artworkIndex = source.indexOf("<ProductionInstructionsPanel");
   const financialWorkspaceIndex = source.indexOf('data-testid="order-workspace-financial"');
   const detailsWorkspaceIndex = source.indexOf('data-testid="order-workspace-details"');
   const activityTimelineIndex = source.lastIndexOf("<ActivityTimeline");
@@ -141,14 +141,32 @@ test("Order Detail passes the process projection only into the existing producti
   expect(workspaceTabsIndex).toBeGreaterThan(jobIdentityIndex);
   expect(processWorkspaceIndex).toBeGreaterThan(workspaceTabsIndex);
   expect(productionControlsIndex).toBeGreaterThan(processWorkspaceIndex);
-  expect(productionReferenceIndex).toBeGreaterThan(productionControlsIndex);
-  expect(financialWorkspaceIndex).toBeGreaterThan(productionReferenceIndex);
+  expect(artworkIndex).toBeGreaterThan(productionControlsIndex);
+  expect(financialWorkspaceIndex).toBeGreaterThan(artworkIndex);
   expect(detailsWorkspaceIndex).toBeGreaterThan(financialWorkspaceIndex);
   expect(activityTimelineIndex).toBeGreaterThan(detailsWorkspaceIndex);
 
   expect(source).toContain('data-testid="quote-snapshot-disclosure"');
   expect(source).toContain('showInternalNotes={false}');
   expect(source).toContain("collapsedByDefault");
+  expect(source).toContain('data-testid="job-identity-placement"');
+  expect(source).toContain('data-testid="job-identity-due-date"');
+  expect(source).toContain('data-testid="job-identity-sizes"');
+  expect(source).not.toContain("Production Reference");
+});
+
+test("production execution sections do not repeat order identity fields", async () => {
+  const source = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/order-detail/ProductionInstructionsPanel.jsx", import.meta.url), "utf8")
+  );
+
+  expect(source).not.toContain("Production Instructions");
+  ["Customer", "Garment", "Production Type", "Quantity", "Due Date", "Placements"].forEach(
+    (duplicatedField) => expect(source).not.toContain(`>${duplicatedField}<`)
+  );
+  expect(source).toContain('data-testid="production-artwork"');
+  expect(source).toContain('data-testid="production-notes"');
+  expect(source).toContain('data-testid="production-files"');
 });
 
 test("Production Queue detail controls navigate to the full order details route", async () => {

@@ -1,232 +1,111 @@
-import { normalizeProductionType } from "../constants/productionTypes";
 import {
   getArtworkAssetUrl,
   getArtworkDisplayName,
+  getArtworkUsage,
   getOrderArtworkFiles,
   isArtworkImage,
 } from "../lib/orderArtwork";
 
-function formatPlacements(order) {
-  if (Array.isArray(order.placements) && order.placements.length) {
-    return order.placements
-      .map((item) => item?.placement)
-      .filter(Boolean)
-      .join(", ");
-  }
-
-  return order.placement || "—";
-}
-
-const rowLabelStyle = {
-  color: "#57534e",
-  fontSize: "11px",
-  fontWeight: 800,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
+const sectionStyle = {
+  background: "#ffffff",
+  border: "1px solid #e2e8f0",
+  borderRadius: "20px",
+  padding: "18px",
 };
 
-const rowValueStyle = {
-  color: "#171717",
-  fontSize: "14px",
-  fontWeight: 700,
-  lineHeight: 1.32,
-};
-
-const fileLinkStyle = {
-  color: "inherit",
-  textDecoration: "none",
+const sectionDescriptionStyle = {
+  margin: "4px 0 16px",
+  color: "#64748b",
+  fontSize: "13px",
+  lineHeight: 1.5,
 };
 
 export default function ProductionInstructionsPanel({ order = {}, showInternalNotes = true }) {
-  const productionType = normalizeProductionType(
-    order.decoration_type ||
-      order.production_type ||
-      "Screen Printing"
-  );
   const artworkFiles = getOrderArtworkFiles(order);
+  const artworkUsage = getArtworkUsage(order);
+  const artworkPreviews = artworkFiles.filter((file) => {
+    const assetUrl = getArtworkAssetUrl(file);
+    return isArtworkImage(file) && Boolean(assetUrl);
+  });
 
   return (
-    <section
-      style={{
-        background: "#ffffff",
-        border: "1px solid #e2e8f0",
-        borderRadius: "20px",
-        padding: "18px",
-      }}
-    >
-      <div style={{ display: "grid", gap: "4px", marginBottom: "14px" }}>
-        <span
-          style={{
-            color: "#78716c",
-            fontSize: "11px",
-            fontWeight: 800,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-          }}
-        >
-          Production Instructions
-        </span>
-        <h2 style={{ margin: 0, fontSize: "22px", lineHeight: 1.1 }}>
-          {order.order_number || "Unnumbered Order"}
-        </h2>
-      </div>
+    <>
+      <section data-testid="production-artwork" style={sectionStyle}>
+        <h2 style={{ margin: 0, fontSize: "22px" }}>Artwork</h2>
+        <p style={sectionDescriptionStyle}>Visual reference for what should be produced.</p>
 
-      <div style={{ display: "grid", gap: "8px" }}>
-        <div style={{ display: "grid", gap: "2px" }}>
-          <span style={rowLabelStyle}>Customer</span>
-          <span style={rowValueStyle}>{order.customer_name || "Walk-in Customer"}</span>
-        </div>
-
-        <div style={{ display: "grid", gap: "2px" }}>
-          <span style={rowLabelStyle}>Garment</span>
-          <span style={rowValueStyle}>{order.garment || order.item || "Custom garment"}</span>
-        </div>
-
-        <div style={{ display: "grid", gap: "2px" }}>
-          <span style={rowLabelStyle}>Placements</span>
-          <span style={rowValueStyle}>{formatPlacements(order)}</span>
-        </div>
-
-        <div style={{ display: "grid", gap: "2px" }}>
-          <span style={rowLabelStyle}>Production Type</span>
-          <span style={rowValueStyle}>{productionType}</span>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "8px" }}>
-          <div style={{ display: "grid", gap: "2px" }}>
-            <span style={rowLabelStyle}>Quantity</span>
-            <span style={rowValueStyle}>{order.qty || 0}</span>
-          </div>
-
-          <div style={{ display: "grid", gap: "2px" }}>
-            <span style={rowLabelStyle}>Due Date</span>
-            <span style={rowValueStyle}>{order.due_date || "—"}</span>
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gap: "2px" }}>
-          <span style={rowLabelStyle}>Production Notes</span>
-          <span style={{ ...rowValueStyle, whiteSpace: "pre-wrap" }}>
-            {order.production_notes || "—"}
-          </span>
-        </div>
-
-        {showInternalNotes ? (
-          <div style={{ display: "grid", gap: "2px" }}>
-            <span style={rowLabelStyle}>Internal Notes</span>
-            <span style={{ ...rowValueStyle, whiteSpace: "pre-wrap" }}>
-              {order.internal_note || "—"}
-            </span>
+        {artworkUsage.length ? (
+          <div style={{ display: "grid", gap: "8px", marginBottom: "14px" }}>
+            {artworkUsage.map(({ artwork, lineItems }) => (
+              <div key={artwork.id} style={{ padding: "10px 12px", borderRadius: "12px", background: "#f8fafc", border: "1px solid #dbe2ea" }}>
+                <strong>{getArtworkDisplayName(artwork)}</strong>
+                <span style={{ display: "block", marginTop: "3px", color: "#64748b", fontSize: "12px" }}>
+                  Used by: {lineItems.map((item) => item.garment || item.item || "Custom garment").join(", ") || "No garments"}
+                </span>
+              </div>
+            ))}
           </div>
         ) : null}
-      </div>
 
-      <div
-        style={{
-          marginTop: "16px",
-          paddingTop: "16px",
-          borderTop: "1px solid #e2e8f0",
-          display: "grid",
-          gap: "12px",
-        }}
-      >
-        <div style={{ display: "grid", gap: "4px" }}>
-          <span style={rowLabelStyle}>Artwork Files</span>
-          <span style={{ color: "#64748b", fontSize: "13px", lineHeight: 1.5 }}>
-            Files the production team should pull for this job.
-          </span>
-        </div>
+        {artworkPreviews.length ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
+            {artworkPreviews.map((file, index) => {
+              const assetUrl = getArtworkAssetUrl(file);
+              const displayName = getArtworkDisplayName(file);
+
+              return (
+                <article
+                  key={file.id || `${displayName}-${index}`}
+                  style={{ display: "grid", gap: "10px", padding: "12px", borderRadius: "16px", background: "#f8fafc", border: "1px solid #dbe2ea" }}
+                >
+                  <img
+                    src={assetUrl}
+                    alt={displayName}
+                    style={{ width: "100%", height: "180px", objectFit: "contain", display: "block", background: "#ffffff", borderRadius: "14px", border: "1px solid #e2e8f0" }}
+                  />
+                  {(file.placement_hint || file.type || file.file_type) ? (
+                    <span style={{ color: "#64748b", fontSize: "12px", lineHeight: 1.4 }}>
+                      {[file.placement_hint, file.type || file.file_type].filter(Boolean).join(" • ")}
+                    </span>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <p style={{ margin: 0, color: "#94a3b8" }}>No artwork preview available for production yet.</p>
+        )}
+      </section>
+
+      <section data-testid="production-notes" style={sectionStyle}>
+        <h2 style={{ margin: 0, fontSize: "22px" }}>Production Notes</h2>
+        <p style={{ margin: "10px 0 0", color: "#171717", fontSize: "14px", fontWeight: 700, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+          {order.production_notes || "No production notes recorded."}
+        </p>
+        {showInternalNotes ? (
+          <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
+            <h3 style={{ margin: 0, fontSize: "15px" }}>Internal Notes</h3>
+            <p style={{ margin: "8px 0 0", color: "#171717", fontSize: "14px", fontWeight: 700, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+              {order.internal_note || "No internal notes recorded."}
+            </p>
+          </div>
+        ) : null}
+      </section>
+
+      <section data-testid="production-files" style={sectionStyle}>
+        <h2 style={{ margin: 0, fontSize: "22px" }}>Production Files</h2>
+        <p style={sectionDescriptionStyle}>Open the source files needed to produce this job.</p>
 
         {artworkFiles.length ? (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-              gap: "12px",
-            }}
-          >
+          <div style={{ display: "grid", gap: "8px" }}>
             {artworkFiles.map((file, index) => {
               const assetUrl = getArtworkAssetUrl(file);
               const displayName = getArtworkDisplayName(file);
-              const imageFile = isArtworkImage(file) && Boolean(assetUrl);
-              const card = (
-                <article
-                  style={{
-                    display: "grid",
-                    gap: "10px",
-                    padding: "12px",
-                    borderRadius: "16px",
-                    background: "#f8fafc",
-                    border: "1px solid #dbe2ea",
-                    minHeight: "100%",
-                  }}
-                >
-                  <div
-                    style={{
-                      background: "#ffffff",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "14px",
-                      minHeight: "136px",
-                      overflow: "hidden",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: imageFile ? 0 : "18px",
-                    }}
-                  >
-                    {imageFile ? (
-                      <img
-                        src={assetUrl}
-                        alt={displayName}
-                        style={{
-                          width: "100%",
-                          height: "136px",
-                          objectFit: "cover",
-                          display: "block",
-                        }}
-                      />
-                    ) : (
-                      <div
-                        aria-hidden="true"
-                        style={{
-                          width: "52px",
-                          height: "52px",
-                          borderRadius: "14px",
-                          background: "#e2e8f0",
-                          color: "#475569",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: "24px",
-                          fontWeight: 800,
-                        }}
-                      >
-                        {assetUrl ? "FILE" : "N/A"}
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ display: "grid", gap: "4px" }}>
-                    <strong
-                      style={{
-                        color: "#111827",
-                        fontSize: "14px",
-                        lineHeight: 1.4,
-                        wordBreak: "break-word",
-                      }}
-                    >
-                      {displayName}
-                    </strong>
-
-                    {(file.placement_hint || file.type || file.file_type) && (
-                      <span style={{ color: "#64748b", fontSize: "12px", lineHeight: 1.4 }}>
-                        {[file.placement_hint, file.type || file.file_type]
-                          .filter(Boolean)
-                          .join(" • ")}
-                      </span>
-                    )}
-                  </div>
-                </article>
+              const content = (
+                <span style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", padding: "12px 14px", borderRadius: "12px", border: "1px solid #dbe2ea", background: "#f8fafc", color: "#111827", fontWeight: 700 }}>
+                  <span style={{ wordBreak: "break-word" }}>{displayName}</span>
+                  <span style={{ color: "#475569", fontSize: "12px" }}>{assetUrl ? "Open file" : "Unavailable"}</span>
+                </span>
               );
 
               return assetUrl ? (
@@ -235,22 +114,20 @@ export default function ProductionInstructionsPanel({ order = {}, showInternalNo
                   href={assetUrl}
                   target="_blank"
                   rel="noreferrer"
-                  style={fileLinkStyle}
+                  style={{ color: "inherit", textDecoration: "none" }}
                   title={`Open ${displayName}`}
                 >
-                  {card}
+                  {content}
                 </a>
               ) : (
-                <div key={file.id || `${displayName}-${index}`}>{card}</div>
+                <div key={file.id || `${displayName}-${index}`}>{content}</div>
               );
             })}
           </div>
         ) : (
-          <p style={{ margin: 0, color: "#94a3b8" }}>
-            No artwork files recorded for production yet.
-          </p>
+          <p style={{ margin: 0, color: "#94a3b8" }}>No production files recorded yet.</p>
         )}
-      </div>
-    </section>
+      </section>
+    </>
   );
 }

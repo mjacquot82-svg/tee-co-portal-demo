@@ -43,7 +43,6 @@ import {
   createAndSendDepositPaymentRequestForOrder,
 } from "../orders/depositRequests";
 import PaymentRequestForm from "./PaymentRequestForm";
-import { usePaymentsSnapshot } from "../lib/paymentsStore";
 import {
   buildDepositRequestConfirmation,
   buildWorkflowActionConfirmation,
@@ -87,7 +86,6 @@ export default function OrderDetail() {
   const [searchParams, setSearchParams] = useSearchParams();
   const storedOrders = useStoredOrders();
   const storedProducts = useStoredProducts();
-  const paymentsSnapshot = usePaymentsSnapshot();
   const [staffUsers, setStaffUsers] = useState(() =>
     getOperationalStaffUsers().filter((staffUser) => staffUser.status !== "Inactive")
   );
@@ -121,7 +119,7 @@ export default function OrderDetail() {
         ? [{ label: "generatedQuoteSnapshot", value: quoteSnapshot }]
         : [],
     });
-  }, [order, paymentsSnapshot, quoteSnapshot]);
+  }, [order, quoteSnapshot]);
   const workflowActions = useMemo(
     () => (order && showLegacyProduction ? getAvailableProductionActions(order) : []),
     [order, showLegacyProduction]
@@ -627,7 +625,19 @@ export default function OrderDetail() {
             </div>
             <div data-testid="job-identity-quantity">
               <p style={sectionLabelStyle}>Quantity</p>
-              <p style={{ ...sectionValueStyle, fontSize: "20px" }}>{order.qty || 0}</p>
+              <p style={{ ...sectionValueStyle, fontSize: "20px" }}>{getOrderTotalQuantity(order)}</p>
+            </div>
+            <div data-testid="job-identity-placement">
+              <p style={sectionLabelStyle}>Placement</p>
+              <p style={sectionValueStyle}>
+                {Array.isArray(order.placements) && order.placements.length
+                  ? order.placements.map((placement) => placement?.placement).filter(Boolean).join(", ")
+                  : order.placement || "—"}
+              </p>
+            </div>
+            <div data-testid="job-identity-due-date">
+              <p style={sectionLabelStyle}>Due Date</p>
+              <p style={sectionValueStyle}>{order.due_date || "—"}</p>
             </div>
             <div data-testid="job-identity-sizes" style={{ gridColumn: "1 / -1" }}>
               <p style={sectionLabelStyle}>Sizes</p>
@@ -780,39 +790,7 @@ export default function OrderDetail() {
             </section>
           )}
 
-          <div className="order-detail-main-grid">
-            <section style={cardStyle}>
-              <h2 style={{ margin: "0 0 4px" }}>Production Reference</h2>
-              <p style={{ margin: "0 0 18px", color: "#64748b" }}>Placement and size details needed while producing this job.</p>
-              <div style={{ marginBottom: "18px" }}>
-                <p style={sectionLabelStyle}>Placements</p>
-                <p style={sectionValueStyle}>
-                  {Array.isArray(order.placements) && order.placements.length
-                    ? order.placements.map((placement) => placement?.placement).filter(Boolean).join(", ")
-                    : order.placement || "—"}
-                </p>
-              </div>
-              <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "18px", display: "grid", gap: "12px" }}>
-                <div>
-                  <h3 style={{ margin: "0 0 4px", fontSize: "16px" }}>Size Breakdown</h3>
-                  <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>Recorded quantities for the production team.</p>
-                </div>
-                {sizeBreakdownEntries.length ? (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(88px, 1fr))", gap: "10px" }}>
-                    {sizeBreakdownEntries.map(([size, quantity]) => (
-                      <div key={size} style={{ border: "1px solid #e2e8f0", borderRadius: "14px", padding: "12px", background: "#f8fafc" }}>
-                        <p style={sectionLabelStyle}>{size}</p>
-                        <p style={{ ...sectionValueStyle, fontSize: "18px" }}>{quantity}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p style={{ margin: 0, color: "#94a3b8" }}>No size breakdown recorded for this order yet.</p>
-                )}
-              </div>
-            </section>
-            <ProductionInstructionsPanel order={order} showInternalNotes={false} />
-          </div>
+          <ProductionInstructionsPanel order={order} showInternalNotes={false} />
         </div>
       ) : null}
 

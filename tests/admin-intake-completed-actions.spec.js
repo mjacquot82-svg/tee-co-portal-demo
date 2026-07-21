@@ -93,14 +93,23 @@ test("approved artwork is completed and no longer offers artwork actions", () =>
   });
 });
 
-test("the intake UI renders completion indicators and conditionally omits completed buttons", async () => {
+test("the intake UI maps outstanding requirements to their resolving actions", async () => {
   const source = await import("node:fs/promises").then((fs) =>
     fs.readFile(new URL("../src/admin/QuoteDetail.jsx", import.meta.url), "utf8")
   );
 
   expect(source).toContain('data-testid="intake-completed-actions"');
-  expect(source).toContain("Completed");
-  expect(source).toContain("Available Actions");
+  expect(source).toContain('data-testid="intake-workflow-guidance"');
+  expect(source).toContain("Outstanding Requirements");
+  expect(source).toContain("Completed Decisions");
+  expect(source).not.toContain("Available Actions");
+  expect(source).not.toContain("Pricing Review Needed");
+  expect(source).toContain("review the estimated total below");
+  expect(source).toContain('data-testid="intake-requirement-staff"');
+  expect(source).toContain('data-testid="intake-requirement-artwork-upload"');
+  expect(source).toContain('data-testid="intake-requirement-artwork-review"');
+  expect(source).toContain('data-testid="intake-requirement-deposit"');
+  expect(source).toContain('data-testid="intake-requirement-customer-response"');
   expect(source).toContain("availableActions.approveRequest");
   expect(source).toContain("availableActions.approveArtwork");
   expect(source).toContain("availableActions.requestArtwork");

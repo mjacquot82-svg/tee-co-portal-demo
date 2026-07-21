@@ -15,6 +15,7 @@ import {
   resolvePortalNextActionDetails,
   resolvePortalOrderAttention,
 } from "../src/customer-portal/portalOrderDetail.js";
+import { resolveCustomerOrderMilestone } from "../src/customer-portal/customerOrderMilestones.js";
 
 test("collapsed order summaries expose ownership and concurrent customer needs", () => {
   const summary = buildPortalOrderCardSummary(
@@ -42,7 +43,7 @@ test("collapsed order summaries identify Tee & Co work and pickup readiness", ()
   expect(inProduction).toMatchObject({
     customerActionRequired: false,
     teeAndCoWorking: true,
-    ownership: { label: "Tee & Co is working on your order" },
+    ownership: { label: "No action required" },
   });
 
   const ready = buildPortalOrderCardSummary({ status: "Ready For Pickup" }, []);
@@ -76,8 +77,8 @@ test("buildPortalOrderTimeline maps unified customer milestones", () => {
   expect(timeline.map((step) => step.label)).toEqual([
     "Request Submitted",
     "Artwork Uploaded",
-    "Pricing Review Started",
-    "Quote Approved",
+    "Order Review Started",
+    "Order Approved",
     "Payment Requested",
     "Payment Received",
     "Production Started",
@@ -89,8 +90,8 @@ test("buildPortalOrderTimeline maps unified customer milestones", () => {
   ).toEqual([
     "Request Submitted",
     "Artwork Uploaded",
-    "Pricing Review Started",
-    "Quote Approved",
+    "Order Review Started",
+    "Order Approved",
     "Payment Requested",
     "Payment Received",
     "Production Started",
@@ -98,21 +99,24 @@ test("buildPortalOrderTimeline maps unified customer milestones", () => {
   ]);
 });
 
-test("customer quote presentation distinguishes preparation from completed milestones", () => {
+test("customer order presentation never turns internal quote states into customer approval", () => {
   const draftOrder = { quote_status: "Draft" };
 
-  expect(resolveCustomerQuoteStatus(draftOrder)).toBe("Tee & Co is preparing your quote");
-  expect(resolveCustomerQuoteApprovalStatus(draftOrder)).toBe("Not ready for approval");
+  expect(resolveCustomerQuoteStatus(draftOrder)).toBe("Request Received");
+  expect(resolveCustomerQuoteApprovalStatus(draftOrder)).toBe("Tee & Co review in progress");
   expect(buildPortalOrderTimeline(draftOrder)[2]).toEqual({
-    label: "Pricing Review Started",
+    label: "Order Review Started",
     complete: true,
   });
 
   expect(resolveCustomerQuoteStatus({ quote_status: "Awaiting Approval" })).toBe(
-    "Waiting for your approval"
+    "Request Received"
   );
-  expect(resolveCustomerQuoteApprovalStatus({ quote_status: "Awaiting Approval" })).toBe(
-    "Your approval is needed"
+  expect(resolveCustomerQuoteStatus({ quote_status: "Awaiting Approval", staff_review_status: "Approved" })).toBe(
+    "Order Approved"
+  );
+  expect(resolveCustomerQuoteApprovalStatus({ quote_status: "Awaiting Approval", staff_review_status: "Approved" })).toBe(
+    "No action required"
   );
 });
 
@@ -125,6 +129,11 @@ test("order detail explains when no payment has been requested", () => {
   expect(source).toContain("No payment is required right now.");
   expect(source).toContain("Tee & Co has not requested payment.");
   expect(source).toContain("Tee & Co is confirming your schedule");
+  expect(source).toContain("title={customerMilestone.label}");
+  expect(source).toContain("{customerMilestone.reassurance}");
+  expect(source).toContain("{customerMilestone.progress}");
+  expect(source).toContain('customerAttention.requiresAction ? `Your action: ${customerAttention.label}` : "No action required"');
+  expect(source).not.toContain('title="Next Action"');
   expect(source).not.toContain("Scheduling in progress");
 });
 
@@ -154,7 +163,7 @@ test("resolvePortalNextAction prioritizes existing customer workflows", () => {
     artwork_approval_required: false,
     quote_status: "Awaiting Approval",
   };
-  expect(resolvePortalNextAction(approvalOrder, [])).toBe("Approve Quote");
+  expect(resolvePortalNextAction(approvalOrder, [])).toBe("Request Received");
 
   const paymentOrder = {
     order_number: "TC-DETAIL-1004",
@@ -165,6 +174,33 @@ test("resolvePortalNextAction prioritizes existing customer workflows", () => {
   expect(
     resolvePortalNextAction(paymentOrder, [{ id: "pr-1", status: "sent", amount_requested: 100 }])
   ).toBe("View Payment Request");
+});
+
+test("customer milestones translate every operational stage into business language", () => {
+  expect(resolveCustomerOrderMilestone({ status: "New" }).label).toBe("Request Received");
+  expect(resolveCustomerOrderMilestone({ staff_review_status: "Approved" }).label).toBe("Order Approved");
+  expect(resolveCustomerOrderMilestone({ quote_status: "Awaiting Deposit" }).label).toBe("Deposit Required");
+  expect(resolveCustomerOrderMilestone({
+    staff_review_status: "Approved",
+    deposit_workflow_status: "Deposit Not Required",
+  }).label).toBe("Order Approved");
+  expect(resolveCustomerOrderMilestone({ artwork_status: "Needs Revision" }).label).toBe("Artwork Update Needed");
+  expect(resolveCustomerOrderMilestone({ status: "Ready For Production" }).label).toBe("Preparing for Production");
+  expect(resolveCustomerOrderMilestone({ status: "Printing" }).label).toBe("In Production");
+  expect(resolveCustomerOrderMilestone({ status: "Ready For Pickup" }).label).toBe("Ready for Pickup");
+  expect(resolveCustomerOrderMilestone({ status: "Completed" }).label).toBe("Completed");
+
+  const milestones = [
+    { status: "New" },
+    { staff_review_status: "Approved" },
+    { quote_status: "Awaiting Deposit" },
+    { artwork_status: "Needs Revision" },
+    { status: "Ready For Production" },
+    { status: "Printing" },
+    { status: "Ready For Pickup" },
+    { status: "Completed" },
+  ].map(resolveCustomerOrderMilestone);
+  expect(milestones.every((item) => item.reassurance && item.progress)).toBe(true);
 });
 
 test("resolvePortalNextActionDetails maps direct customer action routes", () => {
@@ -181,16 +217,16 @@ test("resolvePortalNextActionDetails maps direct customer action routes", () => 
 
   const quoteOrder = { order_number: "TC-DETAIL-2001", quote_status: "Sent" };
   expect(resolvePortalNextActionDetails(quoteOrder, [])).toEqual({
-    actionType: "quote_review",
-    label: "Review Quote",
-    to: "/quote/TC-DETAIL-2001",
+    actionType: "order_progress",
+    label: "View Order Progress",
+    to: "/portal/orders/TC-DETAIL-2001#activity-timeline",
   });
 
   const approvalOrder = { order_number: "TC-DETAIL-2002", quote_status: "Awaiting Approval" };
   expect(resolvePortalNextActionDetails(approvalOrder, [])).toEqual({
-    actionType: "quote_approval",
-    label: "Approve Quote",
-    to: "/approval/TC-DETAIL-2002",
+    actionType: "order_progress",
+    label: "View Order Progress",
+    to: "/portal/orders/TC-DETAIL-2002#activity-timeline",
   });
 
   const depositOrder = { order_number: "TC-DETAIL-2003", quote_status: "Approved" };
@@ -234,15 +270,15 @@ test("resolvePortalNextActionDetails maps direct customer action routes", () => 
   });
 });
 
-test("resolvePortalOrderAttention returns action-first summary labels", () => {
+test("resolvePortalOrderAttention reserves customer action for real obligations", () => {
   const quoteApprovalOrder = {
     order_number: "TC-SUMMARY-1001",
     quote_status: "Awaiting Approval",
   };
   expect(resolvePortalOrderAttention(quoteApprovalOrder, [])).toEqual({
-    tone: "warning",
-    label: "Approve Quote",
-    requiresAction: true,
+    tone: "neutral",
+    label: "No Action Required",
+    requiresAction: false,
   });
 
   const depositOrder = { order_number: "TC-SUMMARY-1002", quote_status: "Approved" };

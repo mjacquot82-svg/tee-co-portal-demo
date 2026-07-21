@@ -72,6 +72,7 @@ function CompactOrderCard({ order, expanded, onToggle }) {
   const status = resolveCustomerOrderStatus(order);
   const summary = buildPortalOrderCardSummary(order, paymentRequests);
   const ownershipStyle = getAttentionStyle(summary.ownership.tone);
+  const milestoneStyle = getAttentionStyle(status.tone);
   const balance = formatOrderBalance(order.balance_due);
   const activePaymentRequest = paymentRequests.find(isOpenCustomerPaymentRequest) || null;
   const amountDueNow = activePaymentRequest
@@ -123,6 +124,26 @@ function CompactOrderCard({ order, expanded, onToggle }) {
             </p>
           </div>
 
+          <div
+            data-testid="portal-order-primary-milestone"
+            style={{
+              borderRadius: "16px",
+              padding: "14px 16px",
+              background: milestoneStyle.background,
+              border: `1px solid ${milestoneStyle.border}`,
+              color: milestoneStyle.color,
+              display: "grid",
+              gap: "5px",
+            }}
+          >
+            <strong style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "18px" }}>
+              <span aria-hidden="true" style={{ width: "10px", height: "10px", borderRadius: "999px", background: milestoneStyle.dot }} />
+              {status.label}
+            </strong>
+            <span style={{ fontWeight: 700, lineHeight: 1.45 }}>{status.reassurance}</span>
+            <span style={{ lineHeight: 1.45 }}>{status.progress}</span>
+          </div>
+
           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
             <span
               style={{
@@ -149,23 +170,6 @@ function CompactOrderCard({ order, expanded, onToggle }) {
                 }}
               />
               {summary.ownership.label}
-            </span>
-
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                borderRadius: "999px",
-                padding: "8px 11px",
-                background: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                color: "#475569",
-                fontSize: "13px",
-                fontWeight: 800,
-                lineHeight: 1,
-              }}
-            >
-              Stage: {status.label}
             </span>
           </div>
 

@@ -25,8 +25,10 @@ import {
   resolveCustomerQuoteApprovalStatus,
   resolveCustomerQuoteStatus,
   resolvePortalNextActionDetails,
+  resolvePortalOrderAttention,
 } from "./portalOrderDetail";
 import { getOrderLineItems, getOrderTotalQuantity } from "../lib/orderLineItems";
+import { resolveCustomerOrderMilestone } from "./customerOrderMilestones";
 
 function TimelineStep({ step }) {
   return (
@@ -100,7 +102,15 @@ export default function CustomerPortalOrderDetail() {
       new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime()
   );
   const nextActionDetails = resolvePortalNextActionDetails(order, sortedPaymentRequests);
-  const nextAction = nextActionDetails.label;
+  const customerAttention = resolvePortalOrderAttention(order, sortedPaymentRequests);
+  const customerMilestone = resolveCustomerOrderMilestone(order);
+  const milestonePanel = customerMilestone.tone === "warning"
+    ? { border: "#fde68a", background: "#fffbeb", color: "#92400e" }
+    : customerMilestone.tone === "danger"
+    ? { border: "#fecaca", background: "#fef2f2", color: "#b91c1c" }
+    : customerMilestone.tone === "info"
+    ? { border: "#bfdbfe", background: "#eff6ff", color: "#1d4ed8" }
+    : { border: "#a7f3d0", background: "#ecfdf5", color: "#166534" };
   const timeline = buildPortalOrderTimeline(order, paymentRequests, payments, paymentEvents);
   const latestPaymentRequest = sortedPaymentRequests[0] || null;
   const activePaymentRequest = sortedPaymentRequests.find(isOpenCustomerPaymentRequest) || null;
@@ -109,37 +119,46 @@ export default function CustomerPortalOrderDetail() {
     <PortalPage
       eyebrow="Order Detail"
       title={`Order ${order.order_number}`}
-      description="Use this single page to review your request, artwork, approvals, payments, and production progress."
+      description="Use this page to review your order, artwork, payments, and production progress."
     >
-      <SectionCard title="Next Action" subtitle="What you should do next">
+      <SectionCard
+        title={customerMilestone.label}
+        subtitle="Where your order is now"
+      >
         <div
           style={{
             borderRadius: "18px",
-            border: "1px solid #a7f3d0",
-            background: "#ecfdf5",
+            border: `1px solid ${milestonePanel.border}`,
+            background: milestonePanel.background,
             padding: "14px 16px",
             display: "grid",
             gap: "10px",
           }}
         >
-          <strong style={{ fontSize: "18px", color: "#115e59" }}>{nextAction}</strong>
+          <strong style={{ fontSize: "20px", color: milestonePanel.color }}>{customerMilestone.reassurance}</strong>
+          <p style={{ margin: 0, color: milestonePanel.color, lineHeight: 1.55 }}>{customerMilestone.progress}</p>
+          <span style={{ fontWeight: 800, color: milestonePanel.color }}>
+            {customerAttention.requiresAction ? `Your action: ${customerAttention.label}` : "No action required"}
+          </span>
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-            <Link
-              to={nextActionDetails.to}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                minHeight: "40px",
-                borderRadius: "999px",
-                background: "#0f766e",
-                color: "#ffffff",
-                padding: "9px 14px",
-                textDecoration: "none",
-                fontWeight: 800,
-              }}
-            >
-              {nextActionDetails.label}
-            </Link>
+            {customerAttention.requiresAction ? (
+              <Link
+                to={nextActionDetails.to}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  minHeight: "40px",
+                  borderRadius: "999px",
+                  background: "#0f766e",
+                  color: "#ffffff",
+                  padding: "9px 14px",
+                  textDecoration: "none",
+                  fontWeight: 800,
+                }}
+              >
+                {nextActionDetails.label}
+              </Link>
+            ) : null}
             <Link
               to="/portal/orders"
               style={{
@@ -210,12 +229,12 @@ export default function CustomerPortalOrderDetail() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Quote, Artwork, and Approval" subtitle="Current quote and artwork approval workflow status.">
+      <SectionCard title="Order and Artwork" subtitle="Current order review and artwork status.">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" }}>
-          <DetailPair label="Quote Status" value={resolveCustomerQuoteStatus(order)} />
+          <DetailPair label="Order Status" value={resolveCustomerQuoteStatus(order)} />
           <DetailPair label="Artwork Choice" value={order.artwork_requirement || "Not selected"} />
           <DetailPair label="Artwork Status" value={order.artwork_status || order.artwork_approval_status || "Pending Review"} />
-          <DetailPair label="Your Approval" value={resolveCustomerQuoteApprovalStatus(order)} />
+          <DetailPair label="Customer Action" value={resolveCustomerQuoteApprovalStatus(order)} />
           <DetailPair label="Customer Selected" value={artworkReferenceNames.join(", ") || "No filename provided"} />
           <DetailPair label="Artwork Uploaded" value={uploadedArtworkFiles.map((file) => getArtworkDisplayName(file)).join(", ") || "None"} />
         </div>
@@ -252,7 +271,7 @@ export default function CustomerPortalOrderDetail() {
               </span>
             </div>
           )}
-          <DetailPair label="Production Status" value={order.status || "In Progress"} />
+          <DetailPair label="Current Milestone" value={resolveCustomerQuoteStatus(order)} />
           <DetailPair label="Pickup Status" value={order.pickup_status || "Not Ready"} />
           <DetailPair label="Payments Recorded" value={payments.length} />
         </div>

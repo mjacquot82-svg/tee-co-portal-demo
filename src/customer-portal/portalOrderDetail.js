@@ -1,11 +1,12 @@
 import { getCustomerArtworkActionState, isCustomerArtworkActionRequired } from "../lib/customerArtworkActions";
 import { getCustomerPaymentStatusLabel } from "./customerPortalPayments";
+import { resolveCustomerOrderMilestone } from "./customerOrderMilestones";
 
 const TIMELINE_STEPS = Object.freeze([
   "Request Submitted",
   "Artwork Uploaded",
-  "Pricing Review Started",
-  "Quote Approved",
+  "Order Review Started",
+  "Order Approved",
   "Payment Requested",
   "Payment Received",
   "Production Started",
@@ -25,11 +26,13 @@ function hasQuote(order = {}) {
   return Boolean(normalizeText(order.quote_status));
 }
 
-function hasQuoteApproval(order = {}) {
+function hasOrderApproval(order = {}) {
   const quoteStatus = normalizeText(order.quote_status);
+  const staffApproval = normalizeLower(order.staff_review_status || order.approval_status);
   return (
+    staffApproval === "approved" ||
     ["Approved", "Ready For Production"].includes(quoteStatus) ||
-    Boolean(order.approved_at || order.customer_approved_at)
+    Boolean(order.approved_at)
   );
 }
 
@@ -75,8 +78,8 @@ export function buildPortalOrderTimeline(order = {}, paymentRequests = [], payme
     "Artwork Uploaded":
       (Array.isArray(order.artwork_files) && order.artwork_files.length > 0) ||
       Boolean(order.customer_artwork_id),
-    "Pricing Review Started": hasQuote(order),
-    "Quote Approved": hasQuoteApproval(order),
+    "Order Review Started": hasQuote(order),
+    "Order Approved": hasOrderApproval(order),
     "Payment Requested": paymentRequests.length > 0,
     "Payment Received": hasSuccessfulPayment(payments, paymentEvents),
     "Production Started": hasProductionStarted(order),
@@ -91,40 +94,17 @@ export function buildPortalOrderTimeline(order = {}, paymentRequests = [], payme
 }
 
 export function resolveCustomerQuoteStatus(order = {}) {
-  const quoteStatus = normalizeLower(order.quote_status);
-
-  if (!quoteStatus || quoteStatus === "draft") return "Tee & Co is preparing your quote";
-  if (quoteStatus === "sent") return "Ready for your review";
-  if (["awaiting approval", "awaiting artwork approval"].includes(quoteStatus)) {
-    return "Waiting for your approval";
-  }
-  if (["approved", "ready for production"].includes(quoteStatus)) return "Approved";
-  return normalizeText(order.quote_status);
+  return resolveCustomerOrderMilestone(order).label;
 }
 
 export function resolveCustomerQuoteApprovalStatus(order = {}) {
-  if (hasQuoteApproval(order)) return "Approved";
-
-  const quoteStatus = normalizeLower(order.quote_status);
-  if (["sent", "awaiting approval", "awaiting artwork approval"].includes(quoteStatus)) {
-    return "Your approval is needed";
-  }
-
-  return "Not ready for approval";
+  return hasOrderApproval(order) ? "No action required" : "Tee & Co review in progress";
 }
 
 export function resolvePortalNextAction(order = {}, paymentRequests = []) {
   if (isCustomerArtworkActionRequired(order)) {
     const artworkAction = getCustomerArtworkActionState(order);
     return artworkAction.primaryLabel || "Upload Artwork";
-  }
-
-  const quoteStatus = normalizeLower(order.quote_status);
-  if (["sent", "draft"].includes(quoteStatus)) {
-    return "Review Quote";
-  }
-  if (["awaiting approval", "awaiting artwork approval"].includes(quoteStatus)) {
-    return "Approve Quote";
   }
 
   const openPaymentRequest = paymentRequests.find((request) => {
@@ -147,7 +127,7 @@ export function resolvePortalNextAction(order = {}, paymentRequests = []) {
     return "Awaiting Production";
   }
 
-  return "Order In Progress";
+  return resolveCustomerOrderMilestone(order).label;
 }
 
 function buildOrderActionRoute(orderNumber, pathSuffix = "") {
@@ -163,7 +143,6 @@ function resolveOpenPaymentRequest(paymentRequests = []) {
 
 export function resolvePortalNextActionDetails(order = {}, paymentRequests = []) {
   const orderNumber = order.order_number || order.id || "";
-  const encodedOrderNumber = encodeURIComponent(orderNumber);
 
   if (isCustomerArtworkActionRequired(order)) {
     const artworkAction = getCustomerArtworkActionState(order);
@@ -171,22 +150,6 @@ export function resolvePortalNextActionDetails(order = {}, paymentRequests = [])
       actionType: "artwork",
       label: artworkAction.primaryLabel || "Upload Artwork",
       to: buildOrderActionRoute(orderNumber, "/artwork"),
-    };
-  }
-
-  const quoteStatus = normalizeLower(order.quote_status);
-  if (["sent", "draft"].includes(quoteStatus)) {
-    return {
-      actionType: "quote_review",
-      label: "Review Quote",
-      to: `/quote/${encodedOrderNumber}`,
-    };
-  }
-  if (["awaiting approval", "awaiting artwork approval"].includes(quoteStatus)) {
-    return {
-      actionType: "quote_approval",
-      label: "Approve Quote",
-      to: `/approval/${encodedOrderNumber}`,
     };
   }
 
@@ -234,22 +197,6 @@ export function resolvePortalOrderAttention(order = {}, paymentRequests = []) {
     };
   }
 
-  if (actionType === "quote_review") {
-    return {
-      tone: "warning",
-      label: "Review Quote",
-      requiresAction: true,
-    };
-  }
-
-  if (actionType === "quote_approval") {
-    return {
-      tone: "warning",
-      label: "Approve Quote",
-      requiresAction: true,
-    };
-  }
-
   if (actionType === "payment_sent_confirmation") {
     return {
       tone: "warning",
@@ -287,7 +234,7 @@ export function resolvePortalOrderAttention(order = {}, paymentRequests = []) {
   if (hasProductionStarted(order) || normalizeText(order.status) === "Ready For Production") {
     return {
       tone: "info",
-      label: "In Production",
+      label: normalizeText(order.status) === "Ready For Production" ? "Preparing for Production" : "In Production",
       requiresAction: false,
     };
   }
@@ -320,7 +267,7 @@ export function buildPortalOrderCardSummary(order = {}, paymentRequests = []) {
 
   let ownership = {
     tone: attention.tone,
-    label: attention.requiresAction ? `Your action: ${attention.label}` : "Tee & Co is working on your order",
+    label: attention.requiresAction ? `Your action: ${attention.label}` : "No action required",
     requiresAction: attention.requiresAction,
   };
 

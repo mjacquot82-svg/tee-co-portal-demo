@@ -30,6 +30,7 @@ import {
   getRemainingPaymentAmount,
   isOpenCustomerPaymentRequest,
 } from "./customerPortalPayments";
+import { resolveCustomerOrderMilestone } from "./customerOrderMilestones";
 
 const EMPTY_RECORDS = Object.freeze([]);
 const STATUS_FALLBACK_CACHE = new Map();
@@ -234,15 +235,6 @@ function PortalStatusBadge({ label, tone = "neutral" }) {
 }
 
 const STATUS_BADGES = Object.freeze({
-  orderCanceled: Object.freeze({ label: "Canceled", tone: "danger" }),
-  orderCompleted: Object.freeze({ label: "Completed", tone: "success" }),
-  orderReady: Object.freeze({ label: "Ready for Pickup", tone: "info" }),
-  orderAwaitingApproval: Object.freeze({ label: "Awaiting Approval", tone: "warning" }),
-  orderPaymentDue: Object.freeze({ label: "Payment Due", tone: "warning" }),
-  orderProduction: Object.freeze({ label: "In Production", tone: "info" }),
-  orderInProgress: Object.freeze({ label: "In Progress", tone: "neutral" }),
-  quoteApproved: Object.freeze({ label: "Approved", tone: "success" }),
-  quoteInReview: Object.freeze({ label: "In Review", tone: "neutral" }),
   paymentPaid: Object.freeze({ label: "Paid", tone: "success" }),
   paymentDueInfo: Object.freeze({ label: "Payment Due", tone: "info" }),
   paymentDueWarning: Object.freeze({ label: "Payment Due", tone: "warning" }),
@@ -252,93 +244,12 @@ const STATUS_BADGES = Object.freeze({
   paymentBillingPending: Object.freeze({ label: "Billing Pending", tone: "neutral" }),
 });
 
-function normalizeOperationalStatusValue(status) {
-  const normalized = String(status || "").trim().toLowerCase();
-  if (normalized === "ready for pickup") return "Ready For Pickup";
-  if (normalized === "awaiting production") return "Ready For Production";
-  if (normalized === "in production") return "Printing";
-  return String(status || "").trim();
-}
-
 export function resolveCustomerOrderStatus(order = {}) {
-  const operationalStatus = normalizeOperationalStatusValue(order.status);
-  const quoteStatus = String(order.quote_status || "").trim();
-  const pickupStatus = String(order.pickup_status || "").trim();
-  const invoiceStatus = String(order.invoice_status || "").trim();
-
-  if (operationalStatus === "Canceled" || quoteStatus === "Canceled") {
-    return STATUS_BADGES.orderCanceled;
-  }
-
-  if (pickupStatus === "Picked Up" || operationalStatus === "Completed") {
-    return STATUS_BADGES.orderCompleted;
-  }
-
-  if (pickupStatus === "Ready for Pickup" || operationalStatus === "Ready For Pickup") {
-    return STATUS_BADGES.orderReady;
-  }
-
-  if (quoteStatus === "Awaiting Approval" || quoteStatus === "Awaiting Artwork Approval") {
-    return STATUS_BADGES.orderAwaitingApproval;
-  }
-
-  if (quoteStatus === "Awaiting Deposit") {
-    return STATUS_BADGES.orderPaymentDue;
-  }
-
-  if (
-    invoiceStatus === "Awaiting Deposit" ||
-    invoiceStatus === "Awaiting Payment" ||
-    invoiceStatus === "Awaiting Final Payment" ||
-    invoiceStatus === "Sent" ||
-    invoiceStatus === "Overdue"
-  ) {
-    return STATUS_BADGES.orderPaymentDue;
-  }
-
-  if (
-    ["Ready For Production", "Printing", "Embroidery", "QC / Finishing"].includes(
-      operationalStatus
-    )
-  ) {
-    return STATUS_BADGES.orderProduction;
-  }
-
-  if (quoteStatus === "Approved" || quoteStatus === "Ready For Production") {
-    return STATUS_BADGES.orderProduction;
-  }
-
-  if (operationalStatus === "New" || quoteStatus === "Sent" || quoteStatus === "Draft") {
-    return STATUS_BADGES.orderAwaitingApproval;
-  }
-
-  return STATUS_BADGES.orderInProgress;
+  return resolveCustomerOrderMilestone(order);
 }
 
 function resolveCustomerQuoteStatus(record = {}) {
-  const quoteStatus = String(record.quote_status || "").trim();
-
-  if (quoteStatus === "Awaiting Approval" || quoteStatus === "Awaiting Artwork Approval") {
-    return STATUS_BADGES.orderAwaitingApproval;
-  }
-
-  if (quoteStatus === "Awaiting Deposit") {
-    return STATUS_BADGES.orderPaymentDue;
-  }
-
-  if (quoteStatus === "Approved" || quoteStatus === "Ready For Production") {
-    return STATUS_BADGES.quoteApproved;
-  }
-
-  if (quoteStatus === "Sent" || quoteStatus === "Draft") {
-    return STATUS_BADGES.quoteInReview;
-  }
-
-  if (quoteStatus === "Canceled") {
-    return STATUS_BADGES.orderCanceled;
-  }
-
-  return getStableStatusBadge(quoteStatus || "In Review");
+  return resolveCustomerOrderMilestone(record);
 }
 
 export function resolveCustomerPaymentStatus(record = {}, options = {}) {

@@ -54,6 +54,8 @@ export function getOrderLineItems(order = {}) {
       product_image: order.product_image,
       selected_color: order.selected_color,
       decoration_type: order.decoration_type,
+      artwork_id: order.customer_artwork_id,
+      artwork_name: order.customer_artwork_name,
       placement: order.placement,
       placements: order.placements,
       size_breakdown: order.size_breakdown,

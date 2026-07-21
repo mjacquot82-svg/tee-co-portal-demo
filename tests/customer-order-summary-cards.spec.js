@@ -8,7 +8,10 @@ test("collapsed customer order cards render scan-friendly workflow summaries", a
 
   expect(source).toContain("buildPortalOrderCardSummary");
   expect(source).toContain("summary.ownership.label");
-  expect(source).toContain("Stage: {status.label}");
+  expect(source).toContain('data-testid="portal-order-primary-milestone"');
+  expect(source).toContain("{status.reassurance}");
+  expect(source).toContain("{status.progress}");
+  expect(source).not.toContain("Stage: {status.label}");
   expect(source).toContain('data-testid="portal-order-summary-indicators"');
   expect(source).toContain("summary.indicators.map");
   expect(source).toContain('data-summary-indicator={indicator.key}');

@@ -6,10 +6,12 @@ import { formatDateTime } from "../lib/dateFormatting";
 import {
   getArtworkAssetUrl,
   getArtworkDisplayName,
+  getLineItemArtwork,
   getOrderArtworkReferenceNames,
   getUploadedOrderArtworkFiles,
   isArtworkImage,
 } from "../lib/orderArtwork";
+import { getOrderLineItems } from "../lib/orderLineItems";
 import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
@@ -34,11 +36,13 @@ import {
 } from "./adminRoleView";
 import PaymentRequestForm from "./PaymentRequestForm";
 import { requestQuoteDeposit } from "./quoteDepositRequestAction";
-import { buildIntakeActionConfirmation } from "./workflowCopy";
+import { buildIntakeActionConfirmation, buildIntakeWorkflowSummary } from "./workflowCopy";
 import {
   getAvailableIntakeActions,
   getCompletedIntakeActions,
+  getOutstandingIntakeRequirements,
 } from "./intakeActionPresentation";
+import { getPricingAttentionReason } from "./intakePricingPresentation";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -56,6 +60,15 @@ function formatValue(value, fallback = "—") {
 function formatList(values = [], fallback = "—") {
   const items = Array.from(new Set((values || []).map((value) => String(value || "").trim()).filter(Boolean)));
   return items.length ? items.join(", ") : fallback;
+}
+
+function getIntakeCustomerNotes(order = {}) {
+  return String(order.customer_notes || order.request_details || order.notes || "")
+    .split("\n")
+    .filter((line) => !/^\s*artwork reference\s*:/i.test(line))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function cardStyle(background = "#ffffff", compact = false) {
@@ -320,7 +333,7 @@ function ArchivedAccordionSection({
   );
 }
 
-function PrimaryActionButton({ children, onClick, tone = "default" }) {
+function PrimaryActionButton({ children, onClick, tone = "default", type = "button" }) {
   const tones = {
     default: { background: "#0f172a", border: "#0f172a", color: "#ffffff" },
     neutral: { background: "#ffffff", border: "#cbd5e1", color: "#0f172a" },
@@ -331,7 +344,7 @@ function PrimaryActionButton({ children, onClick, tone = "default" }) {
 
   return (
     <button
-      type="button"
+      type={type}
       onClick={onClick}
       style={{
         border: `1px solid ${palette.border}`,
@@ -560,58 +573,12 @@ function DepositRequestModal({ order, totalAmount, onCancel, onConfirm }) {
   );
 }
 
-function formatSizeBreakdown(sizeBreakdown = {}) {
-  const entries = Object.entries(sizeBreakdown || {})
-    .filter(([, quantity]) => Number(quantity) > 0)
-    .map(([size, quantity]) => `${size}: ${quantity}`);
-
-  return entries.length ? entries.join(", ") : "";
-}
-
 function resolveArtworkChoice(order = {}) {
   const requirement = String(order.artwork_requirement || "").trim();
   if (requirement) return requirement;
   if (Array.isArray(order.artwork_files) && order.artwork_files.length) return "Uploaded";
   if (order.customer_artwork_id) return "Uploaded";
   return "Upload Later";
-}
-
-function buildIntakeAttentionItems(order = {}, productionReadiness) {
-  const items = [];
-  const staffReview = String(order.staff_review_status || order.approval_status || "").trim();
-  const artworkStatus = String(order.artwork_status || order.artwork_approval_status || "").trim();
-  const depositStatus = String(order.deposit_workflow_status || "").trim();
-  const requestStatus = String(order.request_status || "").trim();
-
-  if (staffReview !== "Approved") {
-    items.push("Staff Review Pending");
-  }
-
-  if (artworkStatus === "Missing") {
-    items.push("Artwork Missing");
-  } else if (!artworkStatus || artworkStatus === "Pending Review") {
-    items.push("Artwork Pending Review");
-  } else if (artworkStatus === "Needs Revision") {
-    items.push("Customer Response Needed");
-  }
-
-  if (
-    depositStatus === "Pending Decision" ||
-    order.deposit_requirement_status === "Undecided" ||
-    String(order.deposit_requirement || "").trim().toLowerCase() === "undecided"
-  ) {
-    items.push("Deposit Decision Needed");
-  }
-
-  if (order.quote_status === "Draft" || !productionReadiness?.ready) {
-    items.push("Pricing Review Needed");
-  }
-
-  if (requestStatus === "Awaiting Customer Response") {
-    items.push("Awaiting Customer Response");
-  }
-
-  return Array.from(new Set(items));
 }
 
 function IntakeReviewScreen({
@@ -628,19 +595,22 @@ function IntakeReviewScreen({
   onRequestChanges,
   onRequireDeposit,
   onMarkDepositNotRequired,
+  onUpdatePrice,
   onRejectRequest,
   onArchiveRequest,
-  flashMessage,
-  flashTone,
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [depositModalOpen, setDepositModalOpen] = useState(false);
+  const [priceEditing, setPriceEditing] = useState(false);
+  const [priceDraft, setPriceDraft] = useState("");
+  const [priceError, setPriceError] = useState("");
   const submittedAt = formatDateTime(order.created_at, " • ");
   const artworkFiles = getUploadedOrderArtworkFiles(order);
   const artworkReferenceNames = getOrderArtworkReferenceNames(order);
-  const attentionItems = buildIntakeAttentionItems(order, productionReadiness);
+  const attentionItems = getOutstandingIntakeRequirements(order);
   const completedActions = getCompletedIntakeActions(order);
   const availableActions = getAvailableIntakeActions(order);
+  const customerNotes = getIntakeCustomerNotes(order);
   const completedActionLabels = [
     completedActions.approveRequest ? "Request Approved" : null,
     completedActions.requestArtwork ? "Artwork Requested" : null,
@@ -649,15 +619,15 @@ function IntakeReviewScreen({
     completedActions.markDepositNotRequired ? "Deposit Not Required" : null,
     completedActions.approveArtwork ? "Artwork Approved" : null,
   ].filter(Boolean);
-  const sizeSummary =
-    formatSizeBreakdown(order.size_breakdown) ||
-    formatList([order.selected_size, order.size].filter(Boolean));
-  const placementSummary = formatList(
-    (Array.isArray(order.placements) ? order.placements : [])
-      .map((entry) => entry?.placement)
-      .filter(Boolean),
-    order.placement || "—"
-  );
+  const orderLineItems = getOrderLineItems(order);
+  const pricingAttentionReason = getPricingAttentionReason(order, financials);
+  const requiresStaffReview = attentionItems.includes("Staff Review");
+  const requiresArtworkUpload = attentionItems.includes("Artwork Needed");
+  const requiresArtworkReview = attentionItems.includes("Artwork Review");
+  const requiresCustomerResponse = attentionItems.includes("Customer Response");
+  const requiresDepositDecision = attentionItems.includes("Deposit Decision");
+  const intakeComplete = attentionItems.length === 0;
+  const workflowSummary = buildIntakeWorkflowSummary(order);
 
   function handleOpenDepositModal() {
     setDepositModalOpen(true);
@@ -668,29 +638,47 @@ function IntakeReviewScreen({
     onRequireDeposit(requestDetails);
   }
 
+  function handleOpenPriceEditor() {
+    setPriceDraft(Number(financials?.total_amount || 0).toFixed(2));
+    setPriceError("");
+    setPriceEditing(true);
+  }
+
+  async function handlePriceSubmit(event) {
+    event.preventDefault();
+    const nextPrice = Number(priceDraft);
+
+    if (!Number.isFinite(nextPrice) || nextPrice <= 0) {
+      setPriceError("Enter an order total greater than $0.00.");
+      return;
+    }
+
+    await onUpdatePrice(roundCurrency(nextPrice));
+    setPriceEditing(false);
+    setPriceError("");
+  }
+
   return (
     <div
       data-testid="intake-review-screen"
       style={{ maxWidth: "1180px", margin: "0 auto", padding: "24px", display: "grid", gap: "18px" }}
     >
-      {flashMessage ? (
-        <section
-          aria-live="polite"
-          data-testid="intake-workflow-confirmation"
-          style={{
-            borderRadius: "16px",
-            padding: "16px 18px",
-            border: flashTone === "success" ? "1px solid #bbf7d0" : "1px solid #cbd5e1",
-            background: flashTone === "success" ? "#ecfdf5" : "#f8fafc",
-            color: flashTone === "success" ? "#166534" : "#334155",
-            fontWeight: 700,
-            lineHeight: 1.6,
-            whiteSpace: "pre-line",
-          }}
-        >
-          {flashMessage}
-        </section>
-      ) : null}
+      <section
+        aria-live="polite"
+        data-testid="intake-workflow-confirmation"
+        style={{
+          borderRadius: "16px",
+          padding: "16px 18px",
+          border: intakeComplete ? "1px solid #bbf7d0" : "1px solid #fed7aa",
+          background: intakeComplete ? "#ecfdf5" : "#fff7ed",
+          color: intakeComplete ? "#166534" : "#9a3412",
+          fontWeight: 700,
+          lineHeight: 1.6,
+          whiteSpace: "pre-line",
+        }}
+      >
+        {workflowSummary}
+      </section>
 
       <header
         style={{
@@ -716,7 +704,11 @@ function IntakeReviewScreen({
           </p>
           <h1 style={{ margin: "6px 0" }}>Order Request {order.order_number}</h1>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-            <StatusPill tone="warning">{order.request_status || "Pending Staff Review"}</StatusPill>
+            <StatusPill tone={intakeComplete ? "success" : "warning"}>
+              {intakeComplete
+                ? "Intake Review Complete"
+                : `${attentionItems.length} Intake Requirement${attentionItems.length === 1 ? "" : "s"} Remaining`}
+            </StatusPill>
             <span style={{ color: "#64748b", fontWeight: 700 }}>{submittedAt}</span>
           </div>
         </div>
@@ -738,7 +730,7 @@ function IntakeReviewScreen({
       </header>
 
       <section
-        data-testid="intake-needs-attention"
+        data-testid="intake-workflow-guidance"
         style={{
           ...cardStyle("#fff7ed"),
           border: "1px solid #fed7aa",
@@ -748,26 +740,94 @@ function IntakeReviewScreen({
       >
         <div>
           <p style={{ margin: 0, color: "#9a3412", fontSize: "12px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Needs Attention
+            Outstanding Requirements
           </p>
           <h2 style={{ margin: "6px 0 0", color: "#7c2d12" }}>
-            {attentionItems.length ? "Resolve before production" : "Ready for final review"}
+            {attentionItems.length ? "What to do next" : "All intake decisions are complete"}
           </h2>
+          <p style={{ margin: "8px 0 0", color: "#9a3412", lineHeight: 1.5 }}>
+            {attentionItems.length
+              ? "Review each requirement below and use the action shown with it."
+              : "This request has no remaining intake requirements."}
+          </p>
         </div>
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          {(attentionItems.length ? attentionItems : ["No open review items"]).map((item) => (
-            <StatusPill key={item} tone={attentionItems.length ? "warning" : "success"}>
-              {item}
-            </StatusPill>
-          ))}
-        </div>
-      </section>
+        {attentionItems.length ? (
+          <div data-testid="intake-outstanding-requirements" style={{ display: "grid", gap: "12px" }}>
+            {requiresStaffReview ? (
+              <article data-testid="intake-requirement-staff" style={cardStyle("#ffffff")}>
+                <h3 style={{ margin: 0, color: "#7c2d12" }}>Staff Review</h3>
+                <p style={{ margin: "6px 0 12px", color: "#475569", lineHeight: 1.5 }}>
+                  Verify the submitted garments and artwork, and review the estimated total below. Approve the request when it is complete and ready to move forward.
+                </p>
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  {availableActions.approveRequest ? (
+                    <PrimaryActionButton onClick={onApproveRequest}>Approve Request</PrimaryActionButton>
+                  ) : null}
+                  {availableActions.requestChanges ? (
+                    <PrimaryActionButton onClick={onRequestChanges} tone="neutral">Request Changes</PrimaryActionButton>
+                  ) : null}
+                </div>
+              </article>
+            ) : null}
 
-      <section data-testid="intake-primary-actions" style={cardStyle("#ffffff")}>
+            {requiresArtworkUpload ? (
+              <article data-testid="intake-requirement-artwork-upload" style={cardStyle("#ffffff")}>
+                <h3 style={{ margin: 0, color: "#7c2d12" }}>Artwork Needed</h3>
+                <p style={{ margin: "6px 0 12px", color: "#475569", lineHeight: 1.5 }}>
+                  The customer has not supplied the artwork needed for production. Ask them to provide it.
+                </p>
+                {availableActions.requestArtwork ? (
+                  <PrimaryActionButton onClick={onRequestArtwork} tone="warning">Request Artwork</PrimaryActionButton>
+                ) : null}
+              </article>
+            ) : null}
+
+            {requiresArtworkReview ? (
+              <article data-testid="intake-requirement-artwork-review" style={cardStyle("#ffffff")}>
+                <h3 style={{ margin: 0, color: "#7c2d12" }}>Artwork Review</h3>
+                <p style={{ margin: "6px 0 12px", color: "#475569", lineHeight: 1.5 }}>
+                  Check the uploaded artwork and approve it when it is suitable for this order.
+                </p>
+                {availableActions.approveArtwork ? (
+                  <PrimaryActionButton onClick={onApproveArtwork}>Approve Artwork</PrimaryActionButton>
+                ) : null}
+              </article>
+            ) : null}
+
+            {requiresDepositDecision ? (
+              <article data-testid="intake-requirement-deposit" style={cardStyle("#ffffff")}>
+                <h3 style={{ margin: 0, color: "#7c2d12" }}>Deposit Decision</h3>
+                <p style={{ margin: "6px 0 12px", color: "#475569", lineHeight: 1.5 }}>
+                  Decide whether payment is required before this order can move forward.
+                </p>
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  {availableActions.requireDeposit ? (
+                    <PrimaryActionButton onClick={handleOpenDepositModal} tone="warning">Require Deposit</PrimaryActionButton>
+                  ) : null}
+                  {availableActions.markDepositNotRequired ? (
+                    <PrimaryActionButton onClick={onMarkDepositNotRequired} tone="neutral">Mark Deposit Not Required</PrimaryActionButton>
+                  ) : null}
+                </div>
+              </article>
+            ) : null}
+
+            {requiresCustomerResponse ? (
+              <article data-testid="intake-requirement-customer-response" style={cardStyle("#ffffff")}>
+                <h3 style={{ margin: 0, color: "#7c2d12" }}>Customer Response</h3>
+                <p style={{ margin: "6px 0 0", color: "#475569", lineHeight: 1.5 }}>
+                  Changes have already been requested. No staff action is required until the customer responds.
+                </p>
+              </article>
+            ) : null}
+          </div>
+        ) : (
+          <StatusPill tone="success">No open review items</StatusPill>
+        )}
+
         {completedActionLabels.length ? (
-          <div data-testid="intake-completed-actions" style={{ marginBottom: "16px" }}>
+          <div data-testid="intake-completed-actions" style={{ borderTop: "1px solid #fed7aa", paddingTop: "14px" }}>
             <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: "12px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-              Completed
+              Completed Decisions
             </p>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
               {completedActionLabels.map((label) => (
@@ -776,28 +836,10 @@ function IntakeReviewScreen({
             </div>
           </div>
         ) : null}
-        <p style={{ margin: "0 0 12px", color: "#64748b", fontSize: "12px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-          Available Actions
-        </p>
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          {availableActions.approveRequest ? (
-            <PrimaryActionButton onClick={onApproveRequest}>Approve Request</PrimaryActionButton>
-          ) : null}
-          {availableActions.approveArtwork ? (
-            <PrimaryActionButton onClick={onApproveArtwork}>Approve Artwork</PrimaryActionButton>
-          ) : null}
-          {availableActions.requestArtwork ? (
-            <PrimaryActionButton onClick={onRequestArtwork} tone="warning">Request Artwork</PrimaryActionButton>
-          ) : null}
-          {availableActions.requestChanges ? (
-            <PrimaryActionButton onClick={onRequestChanges} tone="neutral">Request Changes</PrimaryActionButton>
-          ) : null}
-          {availableActions.requireDeposit ? (
-            <PrimaryActionButton onClick={handleOpenDepositModal} tone="warning">Require Deposit</PrimaryActionButton>
-          ) : null}
-          {availableActions.markDepositNotRequired ? (
-            <PrimaryActionButton onClick={onMarkDepositNotRequired} tone="neutral">Mark Deposit Not Required</PrimaryActionButton>
-          ) : null}
+        <div data-testid="intake-other-actions" style={{ borderTop: "1px solid #fed7aa", paddingTop: "14px" }}>
+          <p style={{ margin: "0 0 10px", color: "#64748b", fontSize: "12px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Other Action
+          </p>
           <PrimaryActionButton onClick={onRejectRequest} tone="danger">Reject Request</PrimaryActionButton>
         </div>
       </section>
@@ -828,24 +870,53 @@ function IntakeReviewScreen({
 
           <WorkspaceCard
             eyebrow="Order Details"
-            title="What they want"
-            description="Customer-selected garment, configuration, and notes."
+            title="Order Contents"
+            description="Garments and configurations exactly as the customer submitted them."
           >
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "14px" }}>
-              <DetailItem label="Garment" value={order.garment || order.item} />
-              <DetailItem label="Color" value={order.selected_color || order.color} />
-              <DetailItem label="Sizes" value={sizeSummary} />
-              <DetailItem label="Quantity" value={formatValue(order.qty, "0")} />
-              <DetailItem label="Decoration Type" value={order.decoration_type} />
-              <DetailItem label="Placement" value={placementSummary} />
+            <div data-testid="intake-order-contents" style={{ display: "grid", gap: "14px" }}>
+              {orderLineItems.map((lineItem, index) => {
+                const assignedArtwork = getLineItemArtwork(order, lineItem);
+                const sizes = Object.entries(lineItem.size_breakdown || {}).filter(([, quantity]) => Number(quantity) > 0);
+
+                return (
+                  <article
+                    key={lineItem.id || `order-line-item-${index + 1}`}
+                    data-testid="intake-order-line-item"
+                    style={{ border: "1px solid #dbe2ea", borderRadius: "16px", padding: "16px", background: "#f8fafc" }}
+                  >
+                    <h3 style={{ margin: "0 0 14px", color: "#0f172a", fontSize: "18px" }}>
+                      {lineItem.garment || "Custom garment"}
+                    </h3>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "14px" }}>
+                      <DetailItem label="Color" value={lineItem.selected_color} />
+                      <div>
+                        <p style={{ margin: 0, color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Size Breakdown</p>
+                        {sizes.length ? (
+                          <ul style={{ margin: "6px 0 0", paddingLeft: "20px", color: "#171717", fontWeight: 700 }}>
+                            {sizes.map(([size, quantity]) => <li key={size}>{size} ×{quantity}</li>)}
+                          </ul>
+                        ) : (
+                          <strong style={{ display: "block", marginTop: "6px", color: "#171717" }}>—</strong>
+                        )}
+                      </div>
+                      <DetailItem label="Decoration Method" value={lineItem.decoration_type} />
+                      <DetailItem label="Placement" value={lineItem.placement} />
+                      <DetailItem label="Artwork" value={assignedArtwork ? getArtworkDisplayName(assignedArtwork) : lineItem.artwork_name || "No artwork selected"} />
+                      <DetailItem label="Quantity" value={formatValue(lineItem.quantity, "0")} />
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "14px", marginTop: "16px" }}>
               <DetailItem label="Needed By" value={order.due_date} />
               <DetailItem label="Estimated Total" value={money(financials?.total_amount)} />
             </div>
-            {order.customer_notes || order.request_details || order.notes ? (
+            {customerNotes ? (
               <div style={{ marginTop: "16px" }}>
                 <p style={{ margin: 0, color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Customer Notes</p>
                 <p style={{ margin: "6px 0 0", color: "#171717", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
-                  {order.customer_notes || order.request_details || order.notes}
+                  {customerNotes}
                 </p>
               </div>
             ) : null}
@@ -963,6 +1034,36 @@ function IntakeReviewScreen({
             <div style={{ display: "grid", gap: "14px" }}>
               <DetailItem label="Estimated Total" value={money(financials?.total_amount)} />
               <DetailItem label="Deposit Decision Status" value={depositStatus} />
+              {order.pricing_override === true ? <StatusPill tone="warning">Staff Price Override</StatusPill> : null}
+              {pricingAttentionReason ? (
+                <div data-testid="intake-pricing-attention" style={{ border: "1px solid #fed7aa", background: "#fff7ed", borderRadius: "12px", padding: "12px" }}>
+                  <strong style={{ color: "#9a3412" }}>Pricing attention required</strong>
+                  <p style={{ margin: "6px 0 0", color: "#9a3412", lineHeight: 1.5 }}>{pricingAttentionReason}</p>
+                </div>
+              ) : null}
+              {!priceEditing ? (
+                <PrimaryActionButton onClick={handleOpenPriceEditor} tone="neutral">Edit Price</PrimaryActionButton>
+              ) : (
+                <form data-testid="intake-price-editor" onSubmit={handlePriceSubmit} style={{ display: "grid", gap: "10px" }}>
+                  <label style={{ display: "grid", gap: "6px", color: "#334155", fontWeight: 800 }}>
+                    Order Total
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={priceDraft}
+                      onChange={(event) => setPriceDraft(event.target.value)}
+                      autoFocus
+                      style={{ border: "1px solid #cbd5e1", borderRadius: "10px", padding: "10px 12px", font: "inherit" }}
+                    />
+                  </label>
+                  {priceError ? <p role="alert" style={{ margin: 0, color: "#b91c1c", fontWeight: 700 }}>{priceError}</p> : null}
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    <PrimaryActionButton type="submit">Save Price</PrimaryActionButton>
+                    <PrimaryActionButton onClick={() => setPriceEditing(false)} tone="neutral">Cancel</PrimaryActionButton>
+                  </div>
+                </form>
+              )}
             </div>
           </WorkspaceCard>
 
@@ -1290,20 +1391,21 @@ export default function QuoteDetail() {
   async function handleApproveRequest() {
     if (archived || canceled) return;
 
-    await updateStoredOrder(order.order_number, {
+    const updates = {
       request_status: "Approved - Pending Requirements",
       staff_review_status: "Approved",
       approval_status: "Approved",
       activity_type: "order_request_review",
       activity_note: `Order request approved by ${activeStaffUser?.name || "staff"}.`,
-    });
-    showWorkflowConfirmation(buildIntakeActionConfirmation("approve_request"));
+    };
+    await updateStoredOrder(order.order_number, updates);
+    showWorkflowConfirmation(buildIntakeActionConfirmation("approve_request", { ...order, ...updates }));
   }
 
   async function handleRequestArtwork() {
     if (archived || canceled) return;
 
-    await updateStoredOrder(order.order_number, {
+    const updates = {
       request_status: "Awaiting Artwork",
       artwork_status: "Missing",
       artwork_approval_required: true,
@@ -1311,8 +1413,9 @@ export default function QuoteDetail() {
       quote_status: "Awaiting Artwork Approval",
       activity_type: "artwork_request",
       activity_note: `Artwork requested by ${activeStaffUser?.name || "staff"}.`,
-    });
-    showWorkflowConfirmation(buildIntakeActionConfirmation("request_artwork"));
+    };
+    await updateStoredOrder(order.order_number, updates);
+    showWorkflowConfirmation(buildIntakeActionConfirmation("request_artwork", { ...order, ...updates }));
   }
 
   async function handleApproveArtwork() {
@@ -1337,61 +1440,69 @@ export default function QuoteDetail() {
       activity_type: "artwork_approval",
       activity_note: `Artwork approved by ${activeStaffUser?.name || "staff"}.`,
     });
-    showWorkflowConfirmation(
-      nextReadiness.ready
-        ? [
-            "✓ Artwork approved.",
-            "Workflow state: Ready for production.",
-            "All intake requirements are complete.",
-            "Next step: Begin production when scheduled.",
-          ].join("\n")
-        : buildIntakeActionConfirmation("approve_artwork")
-    );
+    showWorkflowConfirmation(buildIntakeActionConfirmation("approve_artwork", nextOrder));
   }
 
   async function handleRequestChanges() {
     if (archived || canceled) return;
 
-    await updateStoredOrder(order.order_number, {
+    const updates = {
       request_status: "Awaiting Customer Response",
       staff_review_status: "Changes Requested",
       approval_status: "Revision Requested",
       quote_status: "Awaiting Approval",
       activity_type: "order_request_changes",
       activity_note: `Changes requested by ${activeStaffUser?.name || "staff"}.`,
-    });
-    showWorkflowConfirmation(buildIntakeActionConfirmation("request_changes"));
+    };
+    await updateStoredOrder(order.order_number, updates);
+    showWorkflowConfirmation(buildIntakeActionConfirmation("request_changes", { ...order, ...updates }));
   }
 
   async function handleRequireDeposit(requestDetails = {}) {
     if (archived || canceled) return;
 
-    await requestQuoteDeposit({
+    const result = await requestQuoteDeposit({
       order,
       requestDetails,
       activeStaffUser,
     });
-    showWorkflowConfirmation(buildIntakeActionConfirmation("require_deposit"));
+    showWorkflowConfirmation(buildIntakeActionConfirmation("require_deposit", result?.updatedOrder || order));
   }
 
   async function handleMarkDepositNotRequired() {
     if (archived || canceled) return;
 
-    await updateStoredOrder(order.order_number, {
+    const updates = {
       deposit_required: false,
       deposit_requirement: "not_required",
       deposit_requirement_status: "Not Required",
       deposit_workflow_status: "Deposit Not Required",
       activity_type: "deposit_workflow",
       activity_note: `Deposit marked not required by ${activeStaffUser?.name || "staff"}.`,
+    };
+    await updateStoredOrder(order.order_number, updates);
+    showWorkflowConfirmation(buildIntakeActionConfirmation("deposit_not_required", { ...order, ...updates }));
+  }
+
+  async function handleUpdatePrice(totalAmount) {
+    if (archived || canceled) return;
+
+    await updateStoredOrder(order.order_number, {
+      total_amount: totalAmount,
+      total: totalAmount,
+      pricing_override: true,
+      pricing_override_amount: totalAmount,
+      pricing_status: "Staff Override",
+      activity_type: "pricing_override",
+      activity_note: `Order total changed to ${money(totalAmount)} by ${activeStaffUser?.name || "staff"}.`,
     });
-    showWorkflowConfirmation(buildIntakeActionConfirmation("deposit_not_required"));
+    showWorkflowConfirmation(`Price updated to ${money(totalAmount)} for ${order.order_number}.`);
   }
 
   async function handleRejectRequest() {
     if (archived || canceled) return;
 
-    await updateStoredOrder(order.order_number, {
+    const updates = {
       request_status: "Rejected",
       staff_review_status: "Rejected",
       approval_status: "Rejected",
@@ -1402,8 +1513,9 @@ export default function QuoteDetail() {
       canceled_at: new Date().toISOString(),
       activity_type: "order_request_rejected",
       activity_note: `Order request rejected by ${activeStaffUser?.name || "staff"}.`,
-    });
-    showWorkflowConfirmation(buildIntakeActionConfirmation("reject_request"));
+    };
+    await updateStoredOrder(order.order_number, updates);
+    showWorkflowConfirmation(buildIntakeActionConfirmation("reject_request", { ...order, ...updates }));
   }
 
   function handleToggleArchivedSection(sectionKey) {
@@ -1429,10 +1541,9 @@ export default function QuoteDetail() {
         onRequestChanges={handleRequestChanges}
         onRequireDeposit={handleRequireDeposit}
         onMarkDepositNotRequired={handleMarkDepositNotRequired}
+        onUpdatePrice={handleUpdatePrice}
         onRejectRequest={handleRejectRequest}
         onArchiveRequest={handleArchiveQuote}
-        flashMessage={flashMessage}
-        flashTone={flashTone}
       />
     );
   }
