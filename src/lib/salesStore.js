@@ -2,6 +2,7 @@ import { buildStaffAuditFields } from "./staffUsersStore";
 import { getJsonStorageItem, hasBrowserStorage, setJsonStorageItem } from "./browserStorage";
 import { normalizeCustomerId } from "./customerIds";
 import { validatePaymentAmount } from "./financialValidation";
+import { getCustomerDisplayName, resolveCustomerForRecord } from "./customerRecordMatching";
 
 const STORAGE_KEY = "teeCoQuickSales";
 
@@ -13,10 +14,14 @@ function buildPaymentValidationError(validation) {
 
 export function getStoredQuickSales() {
   if (!hasBrowserStorage()) return [];
-  return getJsonStorageItem(STORAGE_KEY, []).map((sale) => ({
-    ...sale,
-    customer_id: normalizeCustomerId(sale.customer_id),
-  }));
+  return getJsonStorageItem(STORAGE_KEY, []).map((sale) => {
+    const matchedCustomer = resolveCustomerForRecord(sale);
+    return {
+      ...sale,
+      customer_id: normalizeCustomerId(sale.customer_id || matchedCustomer?.id),
+      customer_name: getCustomerDisplayName(sale, undefined, "Walk-in Customer"),
+    };
+  });
 }
 
 export function saveStoredQuickSales(sales) {
@@ -37,6 +42,7 @@ export function createStoredQuickSale(saleInput) {
   const amountPaid = Number.isFinite(parsedAmountPaid) ? parsedAmountPaid : 0;
   const balanceDue = Number(saleInput.balance_due) || 0;
   const staffAudit = buildStaffAuditFields("created");
+  const matchedCustomer = resolveCustomerForRecord(saleInput);
 
   if (hasAmountPaidInput && !Number.isFinite(parsedAmountPaid)) {
     throw buildPaymentValidationError({
@@ -64,8 +70,8 @@ export function createStoredQuickSale(saleInput) {
   const sale = {
     id: `quick-sale-${Date.now()}`,
     sale_number: saleNumber,
-    customer_id: normalizeCustomerId(saleInput.customer_id),
-    customer_name: saleInput.customer_name || "Walk-in Customer",
+    customer_id: normalizeCustomerId(saleInput.customer_id || matchedCustomer?.id),
+    customer_name: getCustomerDisplayName(saleInput, undefined, "Walk-in Customer"),
     payment_method: saleInput.payment_method || "Not Recorded",
     payment_status: saleInput.payment_status || "Paid",
     payment_reference: saleInput.payment_reference || "",

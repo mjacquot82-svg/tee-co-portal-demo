@@ -27,7 +27,7 @@ import { createOperationalEvent } from "./operationalEventsStore";
 import { backfillOrderPaymentsToPayments, recordPayment } from "./paymentsStore";
 import { normalizeCustomerId } from "./customerIds";
 import { addCustomerTimelineEvent } from "./customerTimelineStore";
-import { resolveCustomerForRecord } from "./customerRecordMatching";
+import { getCustomerDisplayName, resolveCustomerForRecord } from "./customerRecordMatching";
 import { deriveOperationalWorkflowState } from "./operationalWorkflow";
 import { updateArtworkApprovalStatus } from "./customerArtworkStore";
 import { linkCustomerArtworkToOrder, linkCustomerArtworkToQuote } from "../services/customerArtworkService";
@@ -212,6 +212,7 @@ function normalizeOrderTimestamps(order = {}) {
 }
 
 function normalizeStoredOrder(order = {}) {
+  const matchedCustomer = resolveCustomerForRecord(order);
   const assignedToStaffId = order.assigned_to_staff_id || "";
   const assignedToStaffName = order.assigned_to_staff_name || "";
   const hasAssignedStaff = Boolean(assignedToStaffId);
@@ -269,7 +270,8 @@ function normalizeStoredOrder(order = {}) {
     ...order,
     ...timestamps,
     customer_id:
-      normalizeCustomerId(order.customer_id) || resolveCustomerForRecord(order)?.id || "",
+      normalizeCustomerId(order.customer_id) || matchedCustomer?.id || "",
+    customer_name: getCustomerDisplayName(order, undefined, "Walk-in Customer"),
     date: order.date || formatShortDate(timestamps.created_at),
     status,
     quote_status: quoteStatus,

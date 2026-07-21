@@ -9,6 +9,21 @@ function normalizePhone(value) {
   return normalize(value).replace(/\D/g, "");
 }
 
+export function looksLikeEmailAddress(value) {
+  const normalizedValue = String(value || "").trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedValue);
+}
+
+export function getCustomerDisplayName(record = {}, customers = getStoredCustomers(), fallback = "Customer") {
+  const matchedCustomer = resolveCustomerForRecord(record, customers);
+  const canonicalName = String(matchedCustomer?.name || "").trim();
+  const recordName = String(record.customer_name || record.name || "").trim();
+
+  if (canonicalName && !looksLikeEmailAddress(canonicalName)) return canonicalName;
+  if (recordName && !looksLikeEmailAddress(recordName)) return recordName;
+  return fallback;
+}
+
 export function matchesCustomerRecord(customer, record) {
   if (!customer) return false;
 
