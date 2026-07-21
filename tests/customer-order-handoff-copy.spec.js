@@ -95,7 +95,8 @@ test("product detail owns color only while garment configuration owns all sizing
   expect(sizeEditorSource).toContain('type="number"');
   expect(configurationSource).toContain("Decoration Method");
   expect(configurationSource).toContain("Decoration Preference");
-  expect(configurationSource).toContain("Artwork Upload");
+  expect(configurationSource).toContain("Choose Existing Artwork");
+  expect(configurationSource).toContain("Upload New Artwork");
   expect(configurationSource).toContain("Notes for Tee &amp; Co");
 });
 

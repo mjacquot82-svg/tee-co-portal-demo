@@ -12,7 +12,7 @@ import {
 } from "../lib/pendingCustomerRequestStore";
 import {
   clearPendingCustomerArtwork,
-  getPendingCustomerArtwork,
+  getPendingCustomerArtworkAssets,
 } from "../lib/pendingCustomerArtworkStore";
 import { generateOrderQuoteSnapshot } from "../lib/quoteEngine";
 import { getLineItemQuantity } from "../lib/orderLineItems";
@@ -128,10 +128,7 @@ export default function CustomerPortalRequestOrder() {
   const [needByDate, setNeedByDate] = useState("");
   const [notes, setNotes] = useState("");
   const [additionalInstructions, setAdditionalInstructions] = useState("");
-  const [artworkOption, setArtworkOption] = useState("upload_later");
-  const [artworkFile, setArtworkFile] = useState(null);
-  const [artworkCarriedForward, setArtworkCarriedForward] = useState(false);
-  const [isReplacingArtwork, setIsReplacingArtwork] = useState(false);
+  const [pendingArtworkAssets, setPendingArtworkAssets] = useState([]);
   const [contactName, setContactName] = useState(customerSession.displayName || "");
   const [contactPhone, setContactPhone] = useState(customerSession.phone || "");
   const [submitState, setSubmitState] = useState("idle");
@@ -168,7 +165,8 @@ export default function CustomerPortalRequestOrder() {
         selected_color: item.selectedColor,
         placement: item.placement,
         decoration_type: item.decorationType,
-        artwork_name: item.artworkName === pendingRequest.artworkName ? item.artworkName : "",
+        artwork_id: item.artworkId || "",
+        artwork_name: item.artworkName || "",
         size_breakdown: item.size_breakdown,
         quantity: item.quantity,
       })));
@@ -275,11 +273,9 @@ export default function CustomerPortalRequestOrder() {
     if (draftRecoveryRequired) return undefined;
     let active = true;
 
-    void getPendingCustomerArtwork().then((file) => {
-      if (!active || !file) return;
-      setArtworkFile(file);
-      setArtworkOption("upload_now");
-      setArtworkCarriedForward(true);
+    void getPendingCustomerArtworkAssets().then((assets) => {
+      if (!active) return;
+      setPendingArtworkAssets(assets);
     });
 
     return () => {
@@ -341,16 +337,6 @@ export default function CustomerPortalRequestOrder() {
     }
 
     const normalizedQuantity = orderQuantity;
-    const normalizedArtworkOption = ["upload_now", "upload_later", "need_help"].includes(artworkOption)
-      ? artworkOption
-      : "upload_later";
-
-    if (normalizedArtworkOption === "upload_now" && !artworkFile) {
-      setSubmitState("error");
-      setSubmitMessage("Choose an artwork file or select Upload Artwork Later.");
-      return;
-    }
-
     setSubmitState("submitting");
     setSubmitMessage("");
 
@@ -366,77 +352,64 @@ export default function CustomerPortalRequestOrder() {
     const primaryLineItem = configuredLineItems[0];
     const primaryProduct = storefrontProducts.find((product) => product.id === primaryLineItem.product_id);
     const decorationType = primaryLineItem.decoration_type;
-    const artworkReferenceName = normalizeText(pendingRequest?.artworkName);
-    let uploadedArtwork = null;
-
-    if (normalizedArtworkOption === "upload_now" && artworkFile) {
-      try {
-        uploadedArtwork = await uploadCustomerArtwork(profile?.id || "", artworkFile, {
+    const draftArtworkLibrary = pendingRequest?.artworkLibrary || [];
+    const uploadedByDraftId = new Map();
+    try {
+      for (const draftAsset of draftArtworkLibrary) {
+        const pendingAsset = pendingArtworkAssets.find((asset) => asset.id === draftAsset.id);
+        if (!pendingAsset?.file) continue;
+        const uploaded = await uploadCustomerArtwork(profile?.id || "", pendingAsset.file, {
           uploadedBy: customerSession.displayName || customerSession.email || "Customer Portal",
           notes: "Uploaded with customer order request.",
         });
-      } catch (error) {
-        setSubmitState("error");
-        setSubmitMessage(
-          error instanceof Error && error.message
-            ? error.message
-            : "Artwork could not be uploaded. Try again or choose Upload Artwork Later."
-        );
-        return;
+        uploadedByDraftId.set(draftAsset.id, uploaded);
       }
+    } catch (error) {
+      setSubmitState("error");
+      setSubmitMessage(error instanceof Error && error.message ? error.message : "Artwork could not be uploaded. Please try again.");
+      return;
     }
 
-    const artworkDisplayName =
-      uploadedArtwork?.file_name ||
-      uploadedArtwork?.name ||
-      artworkFile?.name ||
-      artworkReferenceName;
-    const artworkRequirement =
-      normalizedArtworkOption === "upload_now"
-        ? "Uploaded"
-        : normalizedArtworkOption === "need_help"
-        ? "Help Needed"
-        : "Upload Later";
+    const artworkLibrary = draftArtworkLibrary.map((draftAsset) => {
+      const uploaded = uploadedByDraftId.get(draftAsset.id);
+      return {
+        ...(uploaded || {}),
+        id: uploaded?.id || draftAsset.id,
+        display_name: draftAsset.displayName,
+        name: draftAsset.displayName,
+        original_filename: draftAsset.originalFilename,
+        file_name: uploaded?.file_name || draftAsset.originalFilename,
+        storage_reference: uploaded?.storage_path || uploaded?.asset_reference || draftAsset.storageReference || "",
+      };
+    });
+    const persistedIdByDraftId = new Map(
+      draftArtworkLibrary.map((asset, index) => [asset.id, artworkLibrary[index]?.id || asset.id])
+    );
     const finalNotes = [normalizeText(notes), normalizeText(additionalInstructions)]
       .filter(Boolean)
       .join("\n\n");
-    const artworkFiles = uploadedArtwork
-      ? [
-          {
-            ...uploadedArtwork,
-            id: uploadedArtwork.id || "",
-            name: artworkDisplayName,
-            file_name: uploadedArtwork.file_name || artworkDisplayName,
-            artwork_approval_status: "Pending Review",
-          },
-        ]
-      : [];
-    const hasGarmentArtworkReferences = configuredLineItems.some(
-      (lineItem) => lineItem.artwork_name === artworkDisplayName
-    );
-    const primaryArtworkName = primaryLineItem.artwork_name ||
-      (!hasGarmentArtworkReferences ? artworkDisplayName : "");
+    const artworkFiles = artworkLibrary;
+    const primaryArtworkId = persistedIdByDraftId.get(primaryLineItem.artwork_id) || primaryLineItem.artwork_id || "";
+    const primaryArtworkName = primaryLineItem.artwork_name || "";
     const requestPlacements = primaryLineItem.placement
       ? [
           {
             placement: primaryLineItem.placement,
             decoration_type: decorationType,
-            artwork_id: primaryArtworkName ? uploadedArtwork?.id || "" : "",
+            artwork_id: primaryArtworkId,
             artwork_name: primaryArtworkName,
           },
         ]
       : [];
-    const submittedLineItems = configuredLineItems.map((lineItem, index) => {
-      const lineArtworkName = lineItem.artwork_name === artworkDisplayName
-        ? artworkDisplayName
-        : (!hasGarmentArtworkReferences && index === 0 ? artworkDisplayName : "");
+    const submittedLineItems = configuredLineItems.map((lineItem) => {
+      const artworkId = persistedIdByDraftId.get(lineItem.artwork_id) || lineItem.artwork_id || "";
       return {
         ...lineItem,
-        artwork_name: lineArtworkName,
+        artwork_id: artworkId,
         placements: lineItem.placements.map((placement) => ({
           ...placement,
-          artwork_id: lineArtworkName ? uploadedArtwork?.id || "" : "",
-          artwork_name: lineArtworkName,
+          artwork_id: artworkId,
+          artwork_name: lineItem.artwork_name || "",
         })),
       };
     });
@@ -471,14 +444,15 @@ export default function CustomerPortalRequestOrder() {
         placement: primaryLineItem.placement,
         placements: requestPlacements,
         decoration_type: decorationType,
-        customer_artwork_id: uploadedArtwork?.id || "",
-        customer_artwork_name: artworkDisplayName,
+        customer_artwork_id: artworkLibrary.length === 1 ? artworkLibrary[0].id : "",
+        customer_artwork_name: artworkLibrary.length === 1 ? artworkLibrary[0].display_name : "",
+        artwork_library: artworkLibrary,
         artwork_files: artworkFiles,
-        artwork_reference_names: artworkDisplayName ? [artworkDisplayName] : [],
-        artwork_requirement: artworkRequirement,
-        artwork_status: uploadedArtwork ? "Pending Review" : "Missing",
-        artwork_approval_required: true,
-        artwork_approval_status: "Pending Review",
+        artwork_reference_names: artworkLibrary.map((asset) => asset.display_name),
+        artwork_requirement: artworkLibrary.length ? "Uploaded" : "Upload Later",
+        artwork_status: artworkLibrary.length ? "Pending Review" : "Missing",
+        artwork_approval_required: artworkLibrary.length > 0,
+        artwork_approval_status: artworkLibrary.length ? "Pending Review" : "Not Required",
         approval_status: "Pending Review",
         due_date: needByDate || "",
         notes: finalNotes,
@@ -519,7 +493,7 @@ export default function CustomerPortalRequestOrder() {
           selectedColor: primaryLineItem.selected_color,
           selectedSize: Object.keys(primaryLineItem.size_breakdown).join(", "),
           quantity: normalizedQuantity,
-          artworkName: artworkDisplayName,
+          artworkName: artworkLibrary.map((asset) => asset.display_name).join(", "),
           notes: finalNotes,
           quote,
         },
@@ -630,7 +604,7 @@ export default function CustomerPortalRequestOrder() {
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
                   <strong>Line Item {index + 1}: {product?.name || lineItem.garment || "Custom garment"}</strong>
                   <div style={{ display: "flex", gap: "8px" }}>
-                    <button type="button" onClick={() => { const editItem = { ...pendingRequest.lineItems[index], productId: lineItem.product_id, artworkName: lineItem.artwork_name }; navigate("/order-preview", { state: { ...editItem, lineItem: editItem } }); }}>Edit Garment</button>
+                    <button type="button" onClick={() => { const editItem = { ...pendingRequest.lineItems[index], productId: lineItem.product_id, artworkId: lineItem.artwork_id, artworkName: lineItem.artwork_name }; navigate("/order-preview", { state: { ...editItem, lineItem: editItem } }); }}>Edit Garment</button>
                     {lineItems.length > 1 ? <button type="button" onClick={() => removeReviewedGarment(lineItem.id)}>Remove Garment</button> : null}
                   </div>
                 </div>
@@ -685,101 +659,27 @@ export default function CustomerPortalRequestOrder() {
               }}
             >
               <legend style={{ padding: "0 6px", color: "#0f172a", fontWeight: 800 }}>
-                Artwork Submission
+                Artwork Library
               </legend>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", borderRadius: "14px", background: "#f8fafc", padding: "12px 14px" }}>
-                <ReviewItem label="Garment Assignments" value="Shown on each garment above" />
-                <ReviewItem label="Submission File" value={artworkFile?.name || pendingRequest?.artworkName || "None"} />
-              </div>
-              {pendingRequest?.artworkName && !artworkFile ? (
-                <p style={{ margin: 0, color: "#92400e", lineHeight: 1.5, fontSize: "13px", fontWeight: 700 }}>
-                  {pendingRequest.artworkName} is a filename reference only. Choose Upload Artwork Now and select the actual file to attach it to this request.
-                </p>
-              ) : null}
-              {artworkCarriedForward && artworkFile && !isReplacingArtwork ? (
-                <div style={{ display: "grid", gap: "10px", borderRadius: "14px", border: "1px solid #86efac", background: "#f0fdf4", padding: "14px" }}>
-                  <div>
-                    <strong style={{ display: "block", color: "#166534" }}>Current uploaded artwork: {artworkFile.name}</strong>
-                    <span style={{ display: "block", marginTop: "4px", color: "#166534", fontSize: "13px", lineHeight: 1.5 }}>
-                      Artwork carried forward. It will be securely attached when you submit.
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsReplacingArtwork(true)}
-                    style={{
-                      justifySelf: "start",
-                      borderRadius: "999px",
-                      border: "1px solid #0f766e",
-                      background: "#ffffff",
-                      color: "#0f766e",
-                      padding: "9px 14px",
-                      fontWeight: 800,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Replace Artwork
-                  </button>
+              {(pendingRequest?.artworkLibrary || []).length ? (
+                <div data-testid="final-review-artwork-library" style={{ display: "grid", gap: "12px" }}>
+                  {pendingRequest.artworkLibrary.map((asset) => {
+                    const usedBy = configuredLineItems
+                      .filter((lineItem) => lineItem.artwork_id === asset.id)
+                      .map((lineItem) => lineItem.garment);
+                    return (
+                      <div key={asset.id} style={{ borderRadius: "14px", background: "#f8fafc", padding: "12px 14px" }}>
+                        <strong style={{ color: "#0f172a" }}>{asset.displayName}</strong>
+                        <span style={{ display: "block", marginTop: "5px", color: "#64748b", fontSize: "13px" }}>
+                          Used by: {usedBy.join(", ") || "No garments"}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
-                <>
-                  <p style={{ margin: 0, color: "#475569", lineHeight: 1.5 }}>
-                    Confirm how you want to provide the artwork for this request.
-                  </p>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                      gap: "10px",
-                    }}
-                  >
-                    {[
-                      ["upload_now", "Upload Artwork Now"],
-                      ["upload_later", "Upload Artwork Later"],
-                      ["need_help", "Need Artwork Help"],
-                    ].map(([value, label]) => (
-                      <label
-                        key={value}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "9px",
-                          border: artworkOption === value ? "1px solid #0f766e" : "1px solid #dbe4ee",
-                          background: artworkOption === value ? "#ecfdf5" : "#ffffff",
-                          color: "#0f172a",
-                          borderRadius: "14px",
-                          padding: "11px 12px",
-                          fontWeight: 800,
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          name="artwork_option"
-                          value={value}
-                          checked={artworkOption === value}
-                          onChange={(event) => setArtworkOption(event.target.value)}
-                        />
-                        {label}
-                      </label>
-                    ))}
-                  </div>
-                </>
+                <p style={{ margin: 0, color: "#64748b" }}>No artwork has been added. Tee &amp; Co can confirm artwork after submission.</p>
               )}
-              {artworkOption === "upload_now" && (!artworkCarriedForward || isReplacingArtwork) ? (
-                <label style={labelStyle()}>
-                  Artwork file
-                  <input
-                    type="file"
-                    accept=".png,.jpg,.jpeg,.pdf,.svg,.ai"
-                    onChange={(event) => {
-                      const nextFile = event.target.files?.[0] || null;
-                      setArtworkFile(nextFile);
-                      if (nextFile) setArtworkCarriedForward(false);
-                    }}
-                    style={fieldStyle()}
-                  />
-                </label>
-              ) : null}
             </fieldset>
 
             <div style={{ display: "grid", gap: "8px", borderRadius: "16px", border: "1px solid #e2e8f0", background: "#f8fafc", padding: "14px 16px" }}>

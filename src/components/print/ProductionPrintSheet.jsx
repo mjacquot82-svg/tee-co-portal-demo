@@ -1,6 +1,7 @@
 import { normalizeProductionType } from "../../constants/productionTypes";
 import { formatShortDate } from "../../lib/dateFormatting";
-import { getArtworkDisplayName, getOrderArtworkFiles } from "../../lib/orderArtwork";
+import { getArtworkDisplayName, getLineItemArtwork, getOrderArtworkFiles } from "../../lib/orderArtwork";
+import { getOrderLineItems } from "../../lib/orderLineItems";
 
 function normalizeText(value, fallback = "—") {
   if (typeof value === "string") {
@@ -17,6 +18,18 @@ function normalizeText(value, fallback = "—") {
 }
 
 function buildOrderItems(order = {}) {
+  const lineItems = getOrderLineItems(order);
+  if (lineItems.length) {
+    return lineItems.map((item) => ({
+      id: item.id,
+      garment: item.garment,
+      quantity: item.quantity,
+      placements: item.placements.map((placement) => placement?.placement).filter(Boolean).join(", ") || item.placement,
+      productionType: normalizeProductionType(item.decoration_type || order.decoration_type || "Screen Printing"),
+      sizeBreakdown: item.size_breakdown,
+      artwork: getLineItemArtwork(order, item),
+    }));
+  }
   if (Array.isArray(order.items) && order.items.length) {
     return order.items.map((item, index) => ({
       id: item.id || item.sku || `${order.order_number || "order"}-item-${index + 1}`,
@@ -29,6 +42,7 @@ function buildOrderItems(order = {}) {
         item.productionType || item.production_type || item.decoration_type || order.decoration_type || order.production_type || "Screen Printing"
       ),
       sizeBreakdown: item.sizeBreakdown || item.size_breakdown || {},
+      artwork: getLineItemArtwork(order, item),
     }));
   }
 
@@ -44,6 +58,7 @@ function buildOrderItems(order = {}) {
         order.decoration_type || order.production_type || "Screen Printing"
       ),
       sizeBreakdown: order.size_breakdown || {},
+      artwork: getLineItemArtwork(order, order),
     },
   ];
 }
@@ -201,10 +216,15 @@ export default function ProductionPrintSheet({ order = {} }) {
                   </div>
                 </div>
 
-                <div style={{ marginBottom: sizeBreakdown.length ? "10px" : 0 }}>
+                <div style={{ marginBottom: "10px" }}>
                     <p style={sectionLabelStyle}>Placements</p>
                     <p style={sectionValueStyle}>{normalizeText(item.placements)}</p>
                   </div>
+
+                <div style={{ marginBottom: sizeBreakdown.length ? "10px" : 0 }}>
+                  <p style={sectionLabelStyle}>Artwork</p>
+                  <p style={sectionValueStyle}>{item.artwork ? getArtworkDisplayName(item.artwork) : "No artwork assigned"}</p>
+                </div>
 
                 <div>
                   <p style={sectionLabelStyle}>Sizes / Quantities</p>

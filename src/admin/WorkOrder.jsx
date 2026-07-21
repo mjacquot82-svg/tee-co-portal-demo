@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useStoredOrders } from "../lib/ordersStore";
 import StatusBadge from "../components/StatusBadge";
-import { getArtworkDisplayName, getOrderArtworkFiles } from "../lib/orderArtwork";
+import { getArtworkDisplayName, getLineItemArtwork, getOrderArtworkFiles } from "../lib/orderArtwork";
 import { getOrderLineItems, getOrderTotalQuantity } from "../lib/orderLineItems";
 
 function formatDate(value) {
@@ -151,6 +151,7 @@ export default function WorkOrder() {
               <article key={item.id} style={{ border: "1px solid #e2e8f0", borderRadius: "14px", padding: "14px" }}>
                 <strong>{item.garment}</strong> · {item.quantity} pieces
                 <p>Color: {label(item.selected_color)} · Decoration: {label(item.decoration_type)} · Placement: {label(item.placement)}</p>
+                <p>Artwork: {getLineItemArtwork(order, item) ? getArtworkDisplayName(getLineItemArtwork(order, item)) : "No artwork assigned"}</p>
                 <p>Sizes: {Object.entries(item.size_breakdown).map(([size, quantity]) => `${size} ×${quantity}`).join(" · ") || "Not recorded"}</p>
               </article>
             ))}

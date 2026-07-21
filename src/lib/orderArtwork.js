@@ -64,6 +64,8 @@ export function normalizeArtworkFile(file = {}) {
     asset_reference:
       normalizeText(safeFile.asset_reference) ||
       normalizeText(safeFile.asset_id) ||
+      normalizeText(safeFile.storage_reference) ||
+      normalizeText(safeFile.storage_path) ||
       assetUrl ||
       safeFile.id ||
       "",
@@ -104,6 +106,37 @@ export function getOrderArtworkFiles(order = {}) {
     safeOrder.customer_artwork_name,
     ...placementArtworkNames,
   ]);
+}
+
+export function getOrderArtworkLibrary(order = {}) {
+  const safeOrder = order && typeof order === "object" ? order : {};
+  const library = Array.isArray(safeOrder.artwork_library) ? safeOrder.artwork_library : [];
+  if (library.length) return library.map((asset) => normalizeArtworkFile(asset)).filter(Boolean);
+  return getOrderArtworkFiles(safeOrder);
+}
+
+export function getLineItemArtwork(order = {}, lineItem = {}) {
+  const artworkId = normalizeText(lineItem.artwork_id || lineItem.artworkId);
+  const library = getOrderArtworkLibrary(order);
+  if (artworkId) {
+    const matched = library.find((asset) => normalizeText(asset.id) === artworkId);
+    if (matched) return matched;
+  }
+  const artworkName = normalizeText(lineItem.artwork_name || lineItem.artworkName);
+  return artworkName
+    ? library.find((asset) => getArtworkDisplayName(asset) === artworkName) || normalizeArtworkFile({ name: artworkName })
+    : null;
+}
+
+export function getArtworkUsage(order = {}) {
+  const lineItems = Array.isArray(order.line_items) ? order.line_items : [];
+  return getOrderArtworkLibrary(order).map((asset) => ({
+    artwork: asset,
+    lineItems: lineItems.filter((lineItem) => {
+      const assigned = getLineItemArtwork(order, lineItem);
+      return assigned?.id === asset.id;
+    }),
+  }));
 }
 
 export function getOrderArtworkNames(order = {}) {

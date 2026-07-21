@@ -5,13 +5,23 @@ import { expect, test } from "@playwright/test";
 import {
   clearPendingCustomerArtwork,
   getPendingCustomerArtwork,
+  getPendingCustomerArtworkAssets,
   savePendingCustomerArtwork,
+  savePendingCustomerArtworkAsset,
 } from "../src/lib/pendingCustomerArtworkStore.js";
 import {
   normalizePendingCustomerRequest,
-  reconcilePendingLineItemArtwork,
   upsertPendingCustomerLineItem,
 } from "../src/lib/pendingCustomerRequestStore.js";
+
+test("garment configuration offers existing artwork or a new upload", () => {
+  const previewSource = fs.readFileSync(path.resolve(process.cwd(), "src/pages/OrderPreview.jsx"), "utf8");
+
+  expect(previewSource).toContain("Choose Existing Artwork");
+  expect(previewSource).toContain("Upload New Artwork");
+  expect(previewSource).toContain("artworkId: selectedArtwork?.id");
+  expect(previewSource).toContain("artworkLibrary: nextArtworkLibrary");
+});
 
 test("pending artwork survives the route handoff without JSON serialization", async () => {
   const artwork = {
@@ -28,6 +38,19 @@ test("pending artwork survives the route handoff without JSON serialization", as
   expect(await getPendingCustomerArtwork()).toBeNull();
 });
 
+test("multiple pending artwork files survive the route handoff", async () => {
+  const logo = { name: "logo.png", type: "image/png", lastModified: Date.now() };
+  const back = { name: "back.pdf", type: "application/pdf", lastModified: Date.now() };
+  await clearPendingCustomerArtwork();
+  expect(await savePendingCustomerArtworkAsset("artwork-a", logo)).toBe(true);
+  expect(await savePendingCustomerArtworkAsset("artwork-b", back)).toBe(true);
+  expect(await getPendingCustomerArtworkAssets()).toEqual([
+    expect.objectContaining({ id: "artwork-a", file: logo }),
+    expect.objectContaining({ id: "artwork-b", file: back }),
+  ]);
+  await clearPendingCustomerArtwork();
+});
+
 test("selection review persists the file and authenticated review restores it", () => {
   const previewSource = fs.readFileSync(path.resolve(process.cwd(), "src/pages/OrderPreview.jsx"), "utf8");
   const requestSource = fs.readFileSync(
@@ -35,18 +58,12 @@ test("selection review persists the file and authenticated review restores it", 
     "utf8"
   );
 
-  expect(previewSource).toContain("savePendingCustomerArtwork(artwork.file)");
-  expect(requestSource).toContain("getPendingCustomerArtwork()");
-  expect(requestSource).toContain('setArtworkOption("upload_now")');
-  expect(requestSource).toContain("setArtworkCarriedForward(true)");
-  expect(requestSource).toContain('label="Submission File" value={artworkFile?.name || pendingRequest?.artworkName || "None"}');
+  expect(previewSource).toContain("savePendingCustomerArtworkAsset(artwork.id, artwork.file)");
+  expect(requestSource).toContain("getPendingCustomerArtworkAssets()");
+  expect(requestSource).toContain('data-testid="final-review-artwork-library"');
   expect(requestSource).not.toContain('ReviewItem label="Customer Selected"');
-  expect(requestSource).toContain("artworkCarriedForward && artworkFile && !isReplacingArtwork");
-  expect(requestSource).toContain("Current uploaded artwork: {artworkFile.name}");
-  expect(requestSource).toContain("It will be securely attached when you submit.");
-  expect(requestSource).toContain("Replace Artwork");
-  expect(requestSource).toContain("setIsReplacingArtwork(true)");
-  expect(requestSource).toContain('artworkOption === "upload_now" && (!artworkCarriedForward || isReplacingArtwork)');
+  expect(requestSource).toContain("uploadedByDraftId");
+  expect(requestSource).toContain("artwork_library: artworkLibrary");
   expect(requestSource).toContain("await clearPendingCustomerArtwork()");
 });
 
@@ -88,20 +105,26 @@ test("review and submission associate existing artwork with its garment", () => 
     "utf8"
   );
 
-  expect(requestSource).toContain('artwork_name: item.artworkName === pendingRequest.artworkName ? item.artworkName : ""');
-  expect(requestSource).toContain("artworkName: lineItem.artwork_name");
+  expect(requestSource).toContain('artwork_id: item.artworkId || ""');
+  expect(requestSource).toContain('artwork_name: item.artworkName || ""');
   expect(requestSource).toContain('label="Artwork" value={lineItem.artwork_name || "No artwork selected for this garment"}');
-  expect(requestSource).toContain("const hasGarmentArtworkReferences");
-  expect(requestSource).toContain('artwork_id: lineArtworkName ? uploadedArtwork?.id || "" : ""');
+  expect(requestSource).toContain("persistedIdByDraftId");
+  expect(requestSource).toContain("artwork_id: artworkId");
+  expect(requestSource).toContain("artwork_library: artworkLibrary");
 });
 
-test("one order artwork can be shared while conflicting garment references are removed", () => {
+test("one order artwork can be shared by multiple garment references", () => {
   const lineItems = [
-    { id: "hoodie", productId: "hoodie", garmentName: "Hoodie", artworkName: "opa.png" },
-    { id: "shirt", productId: "shirt", garmentName: "T-Shirt", artworkName: "qr.png" },
-    { id: "hat", productId: "hat", garmentName: "Hat", artworkName: "qr.png" },
+    { id: "hoodie", productId: "hoodie", garmentName: "Hoodie", artworkId: "artwork-a", artworkName: "Company Logo" },
+    { id: "jacket", productId: "jacket", garmentName: "Jacket", artworkId: "artwork-b", artworkName: "Back Logo" },
+    { id: "hat", productId: "hat", garmentName: "Hat", artworkId: "artwork-a", artworkName: "Company Logo" },
   ];
-
-  const reconciled = reconcilePendingLineItemArtwork(lineItems, "qr.png");
-  expect(reconciled.map((item) => item.artworkName)).toEqual(["", "qr.png", "qr.png"]);
+  const restored = normalizePendingCustomerRequest({
+    artworkLibrary: [
+      { id: "artwork-a", displayName: "Company Logo", originalFilename: "logo.png" },
+      { id: "artwork-b", displayName: "Back Logo", originalFilename: "back.pdf" },
+    ],
+    lineItems,
+  });
+  expect(restored.lineItems.map((item) => item.artworkId)).toEqual(["artwork-a", "artwork-b", "artwork-a"]);
 });

@@ -6,6 +6,24 @@ const MAX_AGE_MS = 2 * 60 * 60 * 1000;
 
 let memoryArtwork = null;
 
+function normalizeAssetRecord(assetId, file) {
+  return {
+    id: String(assetId || "").trim(),
+    file,
+    createdAt: Date.now(),
+    name: String(file?.name || "customer-artwork"),
+    type: String(file?.type || ""),
+    lastModified: Number(file?.lastModified || Date.now()),
+  };
+}
+
+function normalizeStoredAssets(record) {
+  if (!record) return [];
+  if (Array.isArray(record.assets)) return record.assets.filter((asset) => asset?.id && asset?.file);
+  if (record.file) return [normalizeAssetRecord("legacy-artwork", record.file)];
+  return [];
+}
+
 function canUseIndexedDb() {
   return typeof indexedDB !== "undefined";
 }
@@ -68,6 +86,47 @@ export async function savePendingCustomerArtwork(file) {
   }
 }
 
+export async function savePendingCustomerArtworkAsset(assetId, file) {
+  if (!assetId || !file) return false;
+  const currentAssets = await getPendingCustomerArtworkAssets();
+  const nextAsset = normalizeAssetRecord(assetId, file);
+  const assets = [
+    ...currentAssets
+      .filter((asset) => asset.id !== nextAsset.id)
+      .map((asset) => normalizeAssetRecord(asset.id, asset.file)),
+    nextAsset,
+  ];
+  const record = { assets, createdAt: Date.now() };
+  memoryArtwork = record;
+
+  if (!canUseIndexedDb()) return true;
+  try {
+    await runTransaction("readwrite", (store) => store.put(record, RECORD_KEY));
+    return true;
+  } catch (error) {
+    console.error("Unable to persist pending customer artwork library", error);
+    return false;
+  }
+}
+
+export async function getPendingCustomerArtworkAssets() {
+  let record = memoryArtwork;
+  if (canUseIndexedDb()) {
+    try {
+      record = await runTransaction("readonly", (store) => store.get(RECORD_KEY));
+    } catch (error) {
+      console.error("Unable to restore pending customer artwork library", error);
+    }
+  }
+
+  if (!record) return [];
+  if (Date.now() - Number(record.createdAt || 0) > MAX_AGE_MS) {
+    await clearPendingCustomerArtwork();
+    return [];
+  }
+  return normalizeStoredAssets(record);
+}
+
 export async function getPendingCustomerArtwork() {
   let record = memoryArtwork;
 
@@ -85,7 +144,7 @@ export async function getPendingCustomerArtwork() {
     return null;
   }
 
-  return record.file || null;
+  return record.file || normalizeStoredAssets(record)[0]?.file || null;
 }
 
 export async function clearPendingCustomerArtwork() {

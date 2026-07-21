@@ -64,7 +64,19 @@ function normalizeLineItem(item = {}, index = 0) {
     placement: normalizeText(item.placement),
     placements: normalizePlacements(item.placements, item.placement),
     decorationType: normalizeText(item.decorationType || item.decoration_type),
+    artworkId: normalizeText(item.artworkId || item.artwork_id),
     artworkName: normalizeText(item.artworkName || item.artwork_name),
+  };
+}
+
+function normalizeArtworkAsset(asset = {}, index = 0) {
+  const originalFilename = normalizeText(asset.originalFilename || asset.original_filename || asset.file_name || asset.name);
+  const displayName = normalizeText(asset.displayName || asset.display_name) || originalFilename || `Artwork ${index + 1}`;
+  return {
+    id: normalizeText(asset.id) || `draft-artwork-${index + 1}`,
+    displayName,
+    originalFilename,
+    storageReference: normalizeText(asset.storageReference || asset.storage_reference || asset.storage_path || asset.asset_reference),
   };
 }
 
@@ -117,6 +129,11 @@ export function normalizePendingCustomerRequest(request = {}) {
     decorationType: normalizeText(request.decorationType),
     notes: normalizeText(request.notes),
     artworkName: normalizeText(request.artworkName),
+    artworkLibrary: Array.isArray(request.artworkLibrary || request.artwork_library)
+      ? (request.artworkLibrary || request.artwork_library).map(normalizeArtworkAsset)
+      : request.artworkName
+      ? [normalizeArtworkAsset({ id: "legacy-artwork", displayName: request.artworkName, originalFilename: request.artworkName })]
+      : [],
     lineItems,
   };
 }

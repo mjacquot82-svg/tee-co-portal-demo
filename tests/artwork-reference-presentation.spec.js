@@ -1,9 +1,36 @@
 // @ts-check
 import { expect, test } from "@playwright/test";
 import {
+  getArtworkUsage,
+  getLineItemArtwork,
+  getOrderArtworkLibrary,
   getOrderArtworkReferenceNames,
   getUploadedOrderArtworkFiles,
 } from "../src/lib/orderArtwork.js";
+
+test("order artwork library resolves garment references by asset id", () => {
+  const order = {
+    artwork_library: [
+      { id: "artwork-a", display_name: "Company Logo", original_filename: "logo.png", storage_reference: "customer-artwork/a" },
+      { id: "artwork-b", display_name: "Large Back Logo", original_filename: "back.pdf", storage_reference: "customer-artwork/b" },
+    ],
+    line_items: [
+      { id: "hoodie", garment: "Hoodie", artwork_id: "artwork-a", artwork_name: "Company Logo" },
+      { id: "jacket", garment: "Jacket", artwork_id: "artwork-b", artwork_name: "Large Back Logo" },
+      { id: "hat", garment: "Hat", artwork_id: "artwork-a", artwork_name: "Company Logo" },
+    ],
+  };
+
+  expect(getOrderArtworkLibrary(order)).toHaveLength(2);
+  expect(getLineItemArtwork(order, order.line_items[1])).toMatchObject({ id: "artwork-b", display_name: "Large Back Logo" });
+  expect(getArtworkUsage(order).map((entry) => ({
+    id: entry.artwork.id,
+    garments: entry.lineItems.map((item) => item.garment),
+  }))).toEqual([
+    { id: "artwork-a", garments: ["Hoodie", "Hat"] },
+    { id: "artwork-b", garments: ["Jacket"] },
+  ]);
+});
 
 test("filename references are not presented as uploaded artwork assets", () => {
   const order = {
@@ -60,5 +87,18 @@ test("customer and admin intake views label references and uploads separately", 
     expect(source).toContain("Customer Selected");
     expect(source).toContain("Artwork Uploaded");
     expect(source).toContain("reference only");
+  }
+});
+
+test("production tickets present the artwork assigned to each garment", async () => {
+  const sources = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/order-detail/PrintableProductionTicket.jsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/components/print/ProductionPrintSheet.jsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/admin/WorkOrder.jsx", import.meta.url), "utf8")),
+  ]);
+
+  for (const source of sources) {
+    expect(source).toContain("getLineItemArtwork");
+    expect(source).toContain("Artwork");
   }
 });

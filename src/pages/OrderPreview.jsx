@@ -13,13 +13,12 @@ import {
 import { getActiveCustomerSession } from "../lib/customerSessionStore";
 import {
   getPendingCustomerRequest,
-  reconcilePendingLineItemArtwork,
   savePendingCustomerRequest,
   upsertPendingCustomerLineItem,
 } from "../lib/pendingCustomerRequestStore";
 import {
   clearPendingCustomerArtwork,
-  savePendingCustomerArtwork,
+  savePendingCustomerArtworkAsset,
 } from "../lib/pendingCustomerArtworkStore";
 import { generateQuoteSnapshot } from "../lib/quoteEngine";
 import { useStoredProducts } from "../lib/productsStore";
@@ -49,6 +48,13 @@ export default function OrderPreview() {
     [passedState, products]
   );
   const editingLineItem = passedState.lineItem || null;
+  const existingRequest = getPendingCustomerRequest() || {};
+  const artworkLibrary = existingRequest.artworkLibrary || [];
+  const editingArtworkId =
+    editingLineItem?.artworkId ||
+    editingLineItem?.artwork_id ||
+    artworkLibrary.find((asset) => asset.displayName === editingLineItem?.artworkName)?.id ||
+    "";
   const initialSize = editingLineItem?.size_breakdown
     ? ""
     : passedState.selectedSize || passedState.availableSizes?.[0] || selectedProduct?.sizes?.[0] || "";
@@ -96,6 +102,12 @@ export default function OrderPreview() {
   );
   const [notes, setNotes] = useState("");
   const [artwork, setArtwork] = useState(null);
+  const [artworkChoice, setArtworkChoice] = useState(
+    editingArtworkId || artworkLibrary.length ? "existing" : "upload"
+  );
+  const [selectedArtworkId, setSelectedArtworkId] = useState(
+    editingArtworkId || artworkLibrary[0]?.id || ""
+  );
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
   const [submitError, setSubmitError] = useState("");
 
@@ -159,20 +171,30 @@ export default function OrderPreview() {
     });
   }
 
-  function handleUpload(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  function acceptArtworkFile(file) {
+    if (artwork?.previewUrl) URL.revokeObjectURL(artwork.previewUrl);
     const previewUrl = URL.createObjectURL(file);
 
     setArtwork({
+      id: typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : `draft-artwork-${Date.now()}`,
       file,
       name: file.name,
+      displayName: file.name,
       previewUrl,
     });
   }
 
+  function handleUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    acceptArtworkFile(file);
+    setArtworkChoice("upload");
+  }
+
   function buildConfiguredLineItem() {
+    const selectedExistingArtwork = artworkLibrary.find((asset) => asset.id === selectedArtworkId);
+    const selectedArtwork = artworkChoice === "existing" ? selectedExistingArtwork : artwork;
     return {
       id: editingLineItem?.id || `line-${Date.now()}`,
       garmentId: passedState.garmentId || "",
@@ -190,7 +212,8 @@ export default function OrderPreview() {
       placements: selectedPlacements,
       placement: selectedPlacements[0] || "",
       decorationType,
-      artworkName: artwork?.name || editingLineItem?.artworkName || "",
+      artworkId: selectedArtwork?.id || "",
+      artworkName: selectedArtwork?.displayName || selectedArtwork?.name || "",
     };
   }
 
@@ -199,20 +222,27 @@ export default function OrderPreview() {
       setSubmitError("Add at least one size and quantity before saving this garment.");
       return;
     }
-    const existingRequest = getPendingCustomerRequest() || {};
     const configuredLineItem = buildConfiguredLineItem();
     const existingLineItems = existingRequest.lineItems || [];
     const updatedLineItems = upsertPendingCustomerLineItem(existingLineItems, configuredLineItem);
-    const authoritativeArtworkName = artwork?.name || existingRequest.artworkName || "";
-    const lineItems = artwork?.file
-      ? reconcilePendingLineItemArtwork(updatedLineItems, authoritativeArtworkName)
-      : updatedLineItems;
+    const newArtworkAsset = artwork?.file
+      ? {
+          id: artwork.id,
+          displayName: artwork.displayName,
+          originalFilename: artwork.name,
+          storageReference: "",
+        }
+      : null;
+    const nextArtworkLibrary = newArtworkAsset && !artworkLibrary.some((asset) => asset.id === newArtworkAsset.id)
+      ? [...artworkLibrary, newArtworkAsset]
+      : artworkLibrary;
     const pendingRequest = {
       ...existingRequest,
       ...configuredLineItem,
-      lineItems,
+      lineItems: updatedLineItems,
       notes: existingRequest.notes || notes,
-      artworkName: authoritativeArtworkName,
+      artworkName: nextArtworkLibrary[0]?.displayName || "",
+      artworkLibrary: nextArtworkLibrary,
     };
 
     if (!savePendingCustomerRequest(pendingRequest)) {
@@ -221,8 +251,8 @@ export default function OrderPreview() {
     }
 
     const artworkSaved = artwork?.file
-      ? await savePendingCustomerArtwork(artwork.file)
-      : existingRequest.artworkName
+      ? await savePendingCustomerArtworkAsset(artwork.id, artwork.file)
+      : nextArtworkLibrary.length
       ? true
       : await clearPendingCustomerArtwork();
     if (!artworkSaved) {
@@ -383,9 +413,9 @@ export default function OrderPreview() {
             <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
               Custom decoration included
             </p>
-            {artwork?.name || editingLineItem?.artworkName ? (
+            {artwork?.name || artworkLibrary.find((asset) => asset.id === selectedArtworkId)?.displayName || editingLineItem?.artworkName ? (
               <p style={{ margin: 0, color: "#57534e", fontSize: "14px" }}>
-                Artwork: {artwork?.name || editingLineItem?.artworkName}
+                Artwork: {artworkChoice === "existing" ? artworkLibrary.find((asset) => asset.id === selectedArtworkId)?.displayName : artwork?.name || editingLineItem?.artworkName}
               </p>
             ) : null}
           </div>
@@ -561,35 +591,58 @@ export default function OrderPreview() {
 
           <div style={{ marginTop: "18px" }}>
             <p style={{ fontWeight: "700", margin: "0 0 8px 0", fontSize: "15px" }}>
-              Artwork Upload
+              Artwork
             </p>
 
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              style={{
-                padding: "11px 14px",
-                borderRadius: "12px",
-                border: "1px solid #d6d3d1",
-                background: "#ffffff",
-                color: "#171717",
-                cursor: "pointer",
-                fontWeight: 600,
-                fontSize: "14px",
-              }}
-            >
-              {artwork || editingLineItem?.artworkName ? "Replace Artwork" : "Upload Artwork"}
-            </button>
+            {artworkLibrary.length ? (
+              <div style={{ display: "grid", gap: "8px", marginBottom: "12px" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700 }}>
+                  <input type="radio" name="artwork_choice" checked={artworkChoice === "existing"} onChange={() => setArtworkChoice("existing")} />
+                  Choose Existing Artwork
+                </label>
+                {artworkChoice === "existing" ? (
+                  <select
+                    aria-label="Choose existing artwork"
+                    value={selectedArtworkId}
+                    onChange={(event) => setSelectedArtworkId(event.target.value)}
+                    style={{ padding: "11px", borderRadius: "12px", border: "1px solid #d6d3d1", background: "#ffffff" }}
+                  >
+                    {artworkLibrary.map((asset) => (
+                      <option key={asset.id} value={asset.id}>{asset.displayName}</option>
+                    ))}
+                  </select>
+                ) : null}
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700 }}>
+                  <input type="radio" name="artwork_choice" checked={artworkChoice === "upload"} onChange={() => setArtworkChoice("upload")} />
+                  Upload New Artwork
+                </label>
+              </div>
+            ) : (
+              <p style={{ margin: "0 0 10px", color: "#78716c", fontSize: "13px" }}>
+                Upload artwork for this garment. You can reuse it on the next garment.
+              </p>
+            )}
+
+            {artworkChoice === "upload" ? (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                style={{ padding: "11px 14px", borderRadius: "12px", border: "1px solid #d6d3d1", background: "#ffffff", color: "#171717", cursor: "pointer", fontWeight: 600, fontSize: "14px" }}
+              >
+                {artwork ? "Choose Another File" : "Upload New Artwork"}
+              </button>
+            ) : null}
 
             <input
               ref={fileInputRef}
+              data-testid="order-artwork-upload-input"
               type="file"
               accept="image/*,.pdf,.ai,.eps,.svg"
               onChange={handleUpload}
               style={{ display: "none" }}
             />
 
-            {artwork || editingLineItem?.artworkName ? (
+            {artworkChoice === "upload" && artwork ? (
               <div
                 style={{
                   marginTop: "12px",
@@ -610,21 +663,10 @@ export default function OrderPreview() {
                     wordBreak: "break-word",
                   }}
                 >
-                  {artwork?.name || editingLineItem?.artworkName}
+                  {artwork.name}
                 </p>
               </div>
-            ) : (
-              <p
-                style={{
-                  margin: "10px 0 0 0",
-                  color: "#78716c",
-                  fontSize: "13px",
-                  lineHeight: 1.5,
-                }}
-              >
-                Upload artwork, logo, or design reference for this order request.
-              </p>
-            )}
+            ) : null}
           </div>
 
           <div style={{ marginTop: "18px" }}>
@@ -730,6 +772,7 @@ export default function OrderPreview() {
           </div>
         </div>
       </div>
+
     </div>
   );
 }
