@@ -11,7 +11,12 @@ import {
   resolveCustomerOrderProduct,
 } from "../lib/orderConfiguration";
 import { getActiveCustomerSession } from "../lib/customerSessionStore";
-import { getPendingCustomerRequest, savePendingCustomerRequest, upsertPendingCustomerLineItem } from "../lib/pendingCustomerRequestStore";
+import {
+  getPendingCustomerRequest,
+  reconcilePendingLineItemArtwork,
+  savePendingCustomerRequest,
+  upsertPendingCustomerLineItem,
+} from "../lib/pendingCustomerRequestStore";
 import {
   clearPendingCustomerArtwork,
   savePendingCustomerArtwork,
@@ -185,6 +190,7 @@ export default function OrderPreview() {
       placements: selectedPlacements,
       placement: selectedPlacements[0] || "",
       decorationType,
+      artworkName: artwork?.name || editingLineItem?.artworkName || "",
     };
   }
 
@@ -196,13 +202,17 @@ export default function OrderPreview() {
     const existingRequest = getPendingCustomerRequest() || {};
     const configuredLineItem = buildConfiguredLineItem();
     const existingLineItems = existingRequest.lineItems || [];
-    const lineItems = upsertPendingCustomerLineItem(existingLineItems, configuredLineItem);
+    const updatedLineItems = upsertPendingCustomerLineItem(existingLineItems, configuredLineItem);
+    const authoritativeArtworkName = artwork?.name || existingRequest.artworkName || "";
+    const lineItems = artwork?.file
+      ? reconcilePendingLineItemArtwork(updatedLineItems, authoritativeArtworkName)
+      : updatedLineItems;
     const pendingRequest = {
       ...existingRequest,
       ...configuredLineItem,
       lineItems,
       notes: existingRequest.notes || notes,
-      artworkName: existingRequest.artworkName || artwork?.name || "",
+      artworkName: authoritativeArtworkName,
     };
 
     if (!savePendingCustomerRequest(pendingRequest)) {
@@ -373,9 +383,9 @@ export default function OrderPreview() {
             <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
               Custom decoration included
             </p>
-            {artwork?.name ? (
+            {artwork?.name || editingLineItem?.artworkName ? (
               <p style={{ margin: 0, color: "#57534e", fontSize: "14px" }}>
-                Artwork: {artwork.name}
+                Artwork: {artwork?.name || editingLineItem?.artworkName}
               </p>
             ) : null}
           </div>
@@ -568,7 +578,7 @@ export default function OrderPreview() {
                 fontSize: "14px",
               }}
             >
-              {artwork ? "Replace Artwork" : "Upload Artwork"}
+              {artwork || editingLineItem?.artworkName ? "Replace Artwork" : "Upload Artwork"}
             </button>
 
             <input
@@ -579,7 +589,7 @@ export default function OrderPreview() {
               style={{ display: "none" }}
             />
 
-            {artwork ? (
+            {artwork || editingLineItem?.artworkName ? (
               <div
                 style={{
                   marginTop: "12px",
@@ -600,7 +610,7 @@ export default function OrderPreview() {
                     wordBreak: "break-word",
                   }}
                 >
-                  {artwork.name}
+                  {artwork?.name || editingLineItem?.artworkName}
                 </p>
               </div>
             ) : (

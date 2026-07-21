@@ -168,6 +168,7 @@ export default function CustomerPortalRequestOrder() {
         selected_color: item.selectedColor,
         placement: item.placement,
         decoration_type: item.decorationType,
+        artwork_name: item.artworkName === pendingRequest.artworkName ? item.artworkName : "",
         size_breakdown: item.size_breakdown,
         quantity: item.quantity,
       })));
@@ -410,24 +411,35 @@ export default function CustomerPortalRequestOrder() {
           },
         ]
       : [];
+    const hasGarmentArtworkReferences = configuredLineItems.some(
+      (lineItem) => lineItem.artwork_name === artworkDisplayName
+    );
+    const primaryArtworkName = primaryLineItem.artwork_name ||
+      (!hasGarmentArtworkReferences ? artworkDisplayName : "");
     const requestPlacements = primaryLineItem.placement
       ? [
           {
             placement: primaryLineItem.placement,
             decoration_type: decorationType,
-            artwork_id: uploadedArtwork?.id || "",
-            artwork_name: artworkDisplayName,
+            artwork_id: primaryArtworkName ? uploadedArtwork?.id || "" : "",
+            artwork_name: primaryArtworkName,
           },
         ]
       : [];
-    const submittedLineItems = configuredLineItems.map((lineItem) => ({
-      ...lineItem,
-      placements: lineItem.placements.map((placement) => ({
-        ...placement,
-        artwork_id: uploadedArtwork?.id || "",
-        artwork_name: artworkDisplayName,
-      })),
-    }));
+    const submittedLineItems = configuredLineItems.map((lineItem, index) => {
+      const lineArtworkName = lineItem.artwork_name === artworkDisplayName
+        ? artworkDisplayName
+        : (!hasGarmentArtworkReferences && index === 0 ? artworkDisplayName : "");
+      return {
+        ...lineItem,
+        artwork_name: lineArtworkName,
+        placements: lineItem.placements.map((placement) => ({
+          ...placement,
+          artwork_id: lineArtworkName ? uploadedArtwork?.id || "" : "",
+          artwork_name: lineArtworkName,
+        })),
+      };
+    });
     const quote = generateOrderQuoteSnapshot({ line_items: submittedLineItems, setup_fees: [] }, storefrontProducts);
 
     try {
@@ -618,7 +630,7 @@ export default function CustomerPortalRequestOrder() {
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
                   <strong>Line Item {index + 1}: {product?.name || lineItem.garment || "Custom garment"}</strong>
                   <div style={{ display: "flex", gap: "8px" }}>
-                    <button type="button" onClick={() => { const editItem = { ...pendingRequest.lineItems[index], productId: lineItem.product_id }; navigate("/order-preview", { state: { ...editItem, lineItem: editItem } }); }}>Edit Garment</button>
+                    <button type="button" onClick={() => { const editItem = { ...pendingRequest.lineItems[index], productId: lineItem.product_id, artworkName: lineItem.artwork_name }; navigate("/order-preview", { state: { ...editItem, lineItem: editItem } }); }}>Edit Garment</button>
                     {lineItems.length > 1 ? <button type="button" onClick={() => removeReviewedGarment(lineItem.id)}>Remove Garment</button> : null}
                   </div>
                 </div>
@@ -628,6 +640,7 @@ export default function CustomerPortalRequestOrder() {
                   <ReviewItem label="Size" value={Object.entries(lineItem.size_breakdown || {}).map(([size, amount]) => `${size} ×${amount}`).join(" · ") || "Open / mixed sizing"} />
                   <ReviewItem label="Placement" value={lineItem.placement || "Confirm later"} />
                   <ReviewItem label="Decoration" value={lineItem.decoration_type || "Confirm later"} />
+                  <ReviewItem label="Artwork" value={lineItem.artwork_name || "No artwork selected for this garment"} />
                 </div>
               </article>
             );
@@ -672,11 +685,11 @@ export default function CustomerPortalRequestOrder() {
               }}
             >
               <legend style={{ padding: "0 6px", color: "#0f172a", fontWeight: 800 }}>
-                Artwork Decision
+                Artwork Submission
               </legend>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px", borderRadius: "14px", background: "#f8fafc", padding: "12px 14px" }}>
-                <ReviewItem label="Customer Selected" value={pendingRequest?.artworkName || "No filename provided"} />
-                <ReviewItem label="Artwork Uploaded" value={artworkFile?.name || "None"} />
+                <ReviewItem label="Garment Assignments" value="Shown on each garment above" />
+                <ReviewItem label="Submission File" value={artworkFile?.name || pendingRequest?.artworkName || "None"} />
               </div>
               {pendingRequest?.artworkName && !artworkFile ? (
                 <p style={{ margin: 0, color: "#92400e", lineHeight: 1.5, fontSize: "13px", fontWeight: 700 }}>

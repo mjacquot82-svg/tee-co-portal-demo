@@ -64,6 +64,7 @@ function normalizeLineItem(item = {}, index = 0) {
     placement: normalizeText(item.placement),
     placements: normalizePlacements(item.placements, item.placement),
     decorationType: normalizeText(item.decorationType || item.decoration_type),
+    artworkName: normalizeText(item.artworkName || item.artwork_name),
   };
 }
 
@@ -74,6 +75,17 @@ export function upsertPendingCustomerLineItem(lineItems = [], lineItem = {}) {
   return matchingIndex >= 0
     ? normalizedItems.map((item, index) => index === matchingIndex ? normalizedLineItem : item)
     : [...normalizedItems, normalizedLineItem];
+}
+
+export function reconcilePendingLineItemArtwork(lineItems = [], authoritativeArtworkName = "") {
+  const artworkName = normalizeText(authoritativeArtworkName);
+  return (Array.isArray(lineItems) ? lineItems : []).map((item, index) => {
+    const normalized = normalizeLineItem(item, index);
+    return {
+      ...normalized,
+      artworkName: normalized.artworkName === artworkName ? artworkName : "",
+    };
+  });
 }
 
 export function normalizePendingCustomerRequest(request = {}) {

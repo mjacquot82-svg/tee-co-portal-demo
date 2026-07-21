@@ -31,6 +31,7 @@ export function normalizeOrderLineItem(lineItem = {}, index = 0) {
     product_image: lineItem.product_image || "",
     selected_color: lineItem.selected_color || lineItem.color || "",
     decoration_type: lineItem.decoration_type || "",
+    artwork_name: lineItem.artwork_name || lineItem.artworkName || "",
     placement: lineItem.placement || placements[0]?.placement || "",
     placements,
     size_breakdown: sizeBreakdown,
