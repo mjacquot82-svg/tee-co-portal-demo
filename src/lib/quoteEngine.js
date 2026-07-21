@@ -1,4 +1,5 @@
 import { getProductPlacementConfig, resolveProductBasePrice } from "./productsStore";
+import { getLineItemQuantity, getOrderLineItems } from "./orderLineItems";
 
 export function getPlacementUnitPrice(product, placementName, quantity = 0) {
   const configEntry = getProductPlacementConfig(product).find(
@@ -104,6 +105,61 @@ export function generateQuoteSnapshot(order, product) {
     production_charges_subtotal: productionSubtotal,
     setup_fees,
     placement_subtotal: placementSubtotal,
+    setup_subtotal: setupSubtotal,
+    additional_fees_subtotal: setupSubtotal,
+    subtotal,
+    tax: null,
+    taxes_placeholder: "Calculated at checkout",
+    total: subtotal,
+    generated_at: new Date().toISOString(),
+  };
+}
+
+export function generateOrderQuoteSnapshot(order, products = []) {
+  const lineItems = getOrderLineItems(order);
+  if (!lineItems.length) {
+    const product = products.find((item) => item.id === order?.product_id) || products[0] || null;
+    return generateQuoteSnapshot(order, product);
+  }
+
+  const lineQuotes = lineItems.map((lineItem) => {
+    const product = products.find((item) => item.id === lineItem.product_id) || null;
+    const quantity = getLineItemQuantity(lineItem);
+    const quote = generateQuoteSnapshot(
+      {
+        ...order,
+        ...lineItem,
+        qty: quantity,
+        setup_fees: [],
+      },
+      product
+    );
+    return { ...quote, id: lineItem.id, size_breakdown: lineItem.size_breakdown };
+  });
+  const pricingAvailable = lineQuotes.every((quote) => quote.garment_pricing_available);
+  const sum = (field) => lineQuotes.reduce((total, quote) => total + Number(quote[field] || 0), 0);
+  const setupFees = Array.isArray(order?.setup_fees) ? order.setup_fees : [];
+  const setupSubtotal = setupFees.reduce((total, fee) => total + Number(fee.amount || 0), 0);
+  const subtotal = pricingAvailable
+    ? sum("garment_subtotal") + sum("placement_subtotal") + sum("production_method_subtotal") + setupSubtotal
+    : null;
+
+  return {
+    order_number: order?.order_number || "",
+    customer_name: order?.customer_name || "",
+    garment: lineItems.map((item) => item.garment).join(", "),
+    quantity: lineItems.reduce((total, item) => total + getLineItemQuantity(item), 0),
+    line_items: lineQuotes,
+    garment_unit_price: null,
+    garment_subtotal: pricingAvailable ? sum("garment_subtotal") : null,
+    garment_pricing_available: pricingAvailable,
+    placement_lines: lineQuotes.flatMap((quote) => quote.placement_lines),
+    production_lines: lineQuotes.flatMap((quote) => quote.production_lines),
+    production_subtotal: sum("production_subtotal"),
+    production_method_subtotal: sum("production_method_subtotal"),
+    production_charges_subtotal: sum("production_method_subtotal"),
+    placement_subtotal: sum("placement_subtotal"),
+    setup_fees: setupFees,
     setup_subtotal: setupSubtotal,
     additional_fees_subtotal: setupSubtotal,
     subtotal,

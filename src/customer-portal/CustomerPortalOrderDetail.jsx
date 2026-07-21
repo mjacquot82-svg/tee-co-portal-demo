@@ -26,6 +26,7 @@ import {
   resolveCustomerQuoteStatus,
   resolvePortalNextActionDetails,
 } from "./portalOrderDetail";
+import { getOrderLineItems, getOrderTotalQuantity } from "../lib/orderLineItems";
 
 function TimelineStep({ step }) {
   return (
@@ -198,8 +199,8 @@ export default function CustomerPortalOrderDetail() {
       <SectionCard title="Request Information" subtitle="Core request details for this order.">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" }}>
           <DetailPair label="Order Number" value={order.order_number} />
-          <DetailPair label="Item" value={order.garment || "Custom order"} />
-          <DetailPair label="Quantity" value={order.qty || 0} />
+          <DetailPair label="Items" value={getOrderLineItems(order).map((item) => `${item.garment} (${item.quantity})`).join(", ") || order.garment || "Custom order"} />
+          <DetailPair label="Quantity" value={getOrderTotalQuantity(order)} />
           <DetailPair label="Requested" value={order.created_at ? formatShortDate(order.created_at) : "Recently"} />
           <DetailPair
             label={order.due_date ? "Due Date" : "Timing"}

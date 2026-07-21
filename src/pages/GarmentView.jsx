@@ -91,8 +91,6 @@ function buildFallbackColorRecords(colorNames = [], keyPrefix = "fallback") {
 export default function GarmentView() {
   const { garmentId } = useParams();
   const [selectedColor, setSelectedColor] = useState("");
-  const [selectedSize, setSelectedSize] = useState("");
-  const [quantity, setQuantity] = useState(1);
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.innerWidth < 900 : false
   );
@@ -187,9 +185,6 @@ export default function GarmentView() {
   const currentSelectedColor = availableColors.includes(selectedColor)
     ? selectedColor
     : availableColors[0] || "";
-  const currentSelectedSize = availableSizes.includes(selectedSize)
-    ? selectedSize
-    : availableSizes[0] || "";
 
   useEffect(() => {
     const handleResize = () => {
@@ -248,16 +243,7 @@ export default function GarmentView() {
       ? selectedProduct.placement_config
       : (garment?.placements_allowed || []).map((label) => ({ id: label, label }));
 
-  const decreaseQuantity = () => {
-    setQuantity((prev) => Math.max(1, prev - 1));
-  };
-
-  const increaseQuantity = () => {
-    setQuantity((prev) => prev + 1);
-  };
-
   const categorySlug = storefrontCategory?.id || normalizeCategorySlug(detailCategory) || "catalog";
-  const orderTotal = Number.isFinite(startingPrice) && startingPrice > 0 ? startingPrice * quantity : null;
 
   return (
     <div
@@ -396,14 +382,8 @@ export default function GarmentView() {
             <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
               Color: {currentSelectedColor}
             </p>
-            <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
-              Size: {currentSelectedSize}
-            </p>
-            <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
-              Quantity: {quantity}
-            </p>
             <p style={{ margin: 0, color: "#57534e", fontSize: "14px" }}>
-              Custom decoration included
+              Sizes, quantities, decoration, artwork, and notes are configured next.
             </p>
           </div>
 
@@ -419,12 +399,12 @@ export default function GarmentView() {
               gap: "8px",
             }}
           >
-            <span style={{ fontSize: "13px", opacity: 0.76 }}>Order Total</span>
+            <span style={{ fontSize: "13px", opacity: 0.76 }}>Starting Price</span>
             <strong style={{ fontSize: isMobile ? "30px" : "36px", lineHeight: 1 }}>
-              {orderTotal !== null ? money(orderTotal) : "Price unavailable"}
+              {formatBasePrice(startingPrice)}
             </strong>
             <span style={{ fontSize: "13px", opacity: 0.76 }}>
-              Final decorated catalog pricing
+              Per garment; quantities are configured next
             </span>
           </div>
         </div>
@@ -599,52 +579,6 @@ export default function GarmentView() {
             <p
               style={{
                 fontWeight: "700",
-                margin: "0 0 8px 0",
-                fontSize: "15px",
-              }}
-            >
-              Choose Size
-            </p>
-
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "8px",
-              }}
-            >
-              {availableSizes.map((size) => (
-                <button
-                  key={size}
-                  onClick={() => setSelectedSize(size)}
-                  style={{
-                    padding: "9px 12px",
-                    borderRadius: "12px",
-                    border:
-                      currentSelectedSize === size
-                        ? "2px solid #171717"
-                        : "1px solid #d6d3d1",
-                    background:
-                      currentSelectedSize === size ? "#171717" : "#ffffff",
-                    color:
-                      currentSelectedSize === size ? "#ffffff" : "#171717",
-                    cursor: "pointer",
-                    fontWeight: 600,
-                    minWidth: "60px",
-                    fontSize: "14px",
-                  }}
-                >
-                  {size}
-                </button>
-              ))}
-            </div>
-
-          </div>
-
-          <div style={{ marginTop: "18px" }}>
-            <p
-              style={{
-                fontWeight: "700",
                 margin: "0 0 6px 0",
                 fontSize: "15px",
               }}
@@ -702,76 +636,6 @@ export default function GarmentView() {
             </div>
           </div>
 
-          <div style={{ marginTop: "18px" }}>
-            <p
-              style={{
-                fontWeight: "700",
-                margin: "0 0 8px 0",
-                fontSize: "15px",
-              }}
-            >
-              Choose Quantity
-            </p>
-
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "10px",
-                padding: "8px",
-                borderRadius: "14px",
-                border: "1px solid #e7e5e4",
-                background: "#fafaf9",
-              }}
-            >
-              <button
-                onClick={decreaseQuantity}
-                style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "10px",
-                  border: "1px solid #d6d3d1",
-                  background: "#ffffff",
-                  cursor: "pointer",
-                  fontWeight: 700,
-                  fontSize: "18px",
-                  color: "#171717",
-                }}
-              >
-                -
-              </button>
-
-              <span
-                style={{
-                  minWidth: "28px",
-                  textAlign: "center",
-                  fontWeight: 700,
-                  fontSize: "15px",
-                  color: "#171717",
-                }}
-              >
-                {quantity}
-              </span>
-
-              <button
-                onClick={increaseQuantity}
-                style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "10px",
-                  border: "1px solid #d6d3d1",
-                  background: "#ffffff",
-                  cursor: "pointer",
-                  fontWeight: 700,
-                  fontSize: "18px",
-                  color: "#171717",
-                }}
-              >
-                +
-              </button>
-            </div>
-          </div>
-
           <div
             style={{
               marginTop: "20px",
@@ -791,8 +655,7 @@ export default function GarmentView() {
                 description: detailDescription,
                 imageSrc,
                 selectedColor: currentSelectedColor,
-                selectedSize: currentSelectedSize,
-                quantity,
+                availableSizes,
               }}
               style={{
                 background: "#171717",
@@ -805,7 +668,7 @@ export default function GarmentView() {
                 fontSize: "14px",
               }}
             >
-              Continue Order
+              Continue to Configure Garment
             </Link>
 
             <Link

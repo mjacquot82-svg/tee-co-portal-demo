@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import { useStoredOrders } from "../lib/ordersStore";
 import StatusBadge from "../components/StatusBadge";
 import { getArtworkDisplayName, getOrderArtworkFiles } from "../lib/orderArtwork";
+import { getOrderLineItems, getOrderTotalQuantity } from "../lib/orderLineItems";
 
 function formatDate(value) {
   if (!value) return "—";
@@ -44,6 +45,7 @@ export default function WorkOrder() {
 
   const artworkFiles = getOrderArtworkFiles(order);
   const quote = order.quote;
+  const orderLineItems = getOrderLineItems(order);
 
   return (
     <div
@@ -129,9 +131,8 @@ export default function WorkOrder() {
             <div>
               <h2 style={{ marginTop: 0 }}>Job Summary</h2>
               <p><strong>Customer:</strong> {label(order.customer_name)}</p>
-              <p><strong>Garment / Product:</strong> {label(order.garment)}</p>
-              <p><strong>Color:</strong> {label(order.garment_color)}</p>
-              <p><strong>Quantity:</strong> {label(order.qty)}</p>
+              <p><strong>Garment Lines:</strong> {orderLineItems.length}</p>
+              <p><strong>Total Quantity:</strong> {getOrderTotalQuantity(order)}</p>
               <p><strong>Due Date:</strong> {formatDate(order.due_date)}</p>
             </div>
             <div style={{ minWidth: "220px" }}>
@@ -140,6 +141,19 @@ export default function WorkOrder() {
               <p style={{ marginTop: "16px" }}><strong>Production Ready:</strong> {order.production_ready ? "Yes" : "No"}</p>
               <p><strong>Deposit:</strong> {order.deposit?.status || "not set"}</p>
             </div>
+          </div>
+        </section>
+
+        <section style={{ background: "#ffffff", borderRadius: "20px", padding: "22px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+          <h2 style={{ marginTop: 0 }}>Garments &amp; Sizes</h2>
+          <div style={{ display: "grid", gap: "12px" }}>
+            {orderLineItems.map((item) => (
+              <article key={item.id} style={{ border: "1px solid #e2e8f0", borderRadius: "14px", padding: "14px" }}>
+                <strong>{item.garment}</strong> · {item.quantity} pieces
+                <p>Color: {label(item.selected_color)} · Decoration: {label(item.decoration_type)} · Placement: {label(item.placement)}</p>
+                <p>Sizes: {Object.entries(item.size_breakdown).map(([size, quantity]) => `${size} ×${quantity}`).join(" · ") || "Not recorded"}</p>
+              </article>
+            ))}
           </div>
         </section>
 

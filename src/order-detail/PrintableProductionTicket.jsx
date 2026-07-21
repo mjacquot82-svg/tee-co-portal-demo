@@ -2,8 +2,21 @@ import { forwardRef } from "react";
 import { normalizeProductionType } from "../constants/productionTypes";
 import { formatShortDate } from "../lib/dateFormatting";
 import { getArtworkDisplayName, getOrderArtworkFiles } from "../lib/orderArtwork";
+import { getOrderLineItems } from "../lib/orderLineItems";
 
 function buildOrderItems(order = {}) {
+  const lineItems = getOrderLineItems(order);
+  if (lineItems.length) {
+    return lineItems.map((item) => ({
+      id: item.id,
+      garment: item.garment,
+      quantity: item.quantity,
+      placements: item.placements.map((placement) => placement?.placement).filter(Boolean).join(", ") || item.placement,
+      productionType: normalizeProductionType(item.decoration_type || "Screen Printing"),
+      sizeBreakdown: item.size_breakdown,
+    }));
+  }
+
   if (Array.isArray(order.items) && order.items.length) {
     return order.items;
   }

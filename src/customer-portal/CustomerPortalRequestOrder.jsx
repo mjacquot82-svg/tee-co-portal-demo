@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useOutletContext } from "react-router-dom";
-import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import { useCatalogLookups } from "../lib/catalogLookupsStore";
 import { ensureCustomerProfile } from "../lib/customerProfileStore";
 import { linkOrderToCustomer } from "../lib/customersStore";
@@ -9,23 +8,23 @@ import { getDefaultDecorationType } from "../lib/orderConfiguration";
 import {
   clearPendingCustomerRequest,
   getPendingCustomerRequest,
+  savePendingCustomerRequest,
 } from "../lib/pendingCustomerRequestStore";
 import {
   clearPendingCustomerArtwork,
   getPendingCustomerArtwork,
 } from "../lib/pendingCustomerArtworkStore";
-import { generateQuoteSnapshot } from "../lib/quoteEngine";
+import { generateOrderQuoteSnapshot } from "../lib/quoteEngine";
+import { getLineItemQuantity } from "../lib/orderLineItems";
 import {
   buildStorefrontCategories,
   getStorefrontProductCategoryLabel,
   getStorefrontProductImage,
   getStorefrontProducts,
-  resolveStorefrontProductImage,
 } from "../lib/storefrontCatalog";
 import {
   areStoredProductsReady,
   getProductPlacementConfig,
-  resolveProductBasePrice,
   useStoredProducts,
 } from "../lib/productsStore";
 import { uploadCustomerArtwork } from "../services/customerArtworkService";
@@ -125,6 +124,7 @@ export default function CustomerPortalRequestOrder() {
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedSize, setSelectedSize] = useState("");
   const [selectedPlacement, setSelectedPlacement] = useState("");
+  const [lineItems, setLineItems] = useState([]);
   const [needByDate, setNeedByDate] = useState("");
   const [notes, setNotes] = useState("");
   const [additionalInstructions, setAdditionalInstructions] = useState("");
@@ -146,19 +146,82 @@ export default function CustomerPortalRequestOrder() {
   const [draftRecoveryError, setDraftRecoveryError] = useState("");
   const [draftRecoveryBusy, setDraftRecoveryBusy] = useState(false);
   const appliedPendingRequestRef = useRef("");
+  const initializedLineItemsRef = useRef(false);
 
   const resolvedColor = availableColors.includes(selectedColor) ? selectedColor : availableColors[0] || "";
   const resolvedSize = availableSizes.includes(selectedSize) ? selectedSize : availableSizes[0] || "";
   const resolvedPlacement = placements.some((placement) => placement.label === selectedPlacement)
     ? selectedPlacement
     : placements[0]?.label || "";
-  const estimatedUnitPrice = resolveProductBasePrice(selectedProduct);
-  const estimatedTotal =
-    Number.isFinite(estimatedUnitPrice) && estimatedUnitPrice > 0 ? estimatedUnitPrice * Number(quantity || 0) : null;
   const draftRecoveryRequired = Boolean(
     pendingRequest &&
       (draftRecoveryState === "choose" || location.state?.draftRecoveryRequested)
   );
+
+  useEffect(() => {
+    if (!selectedProduct || draftRecoveryRequired || initializedLineItemsRef.current) return;
+    if (pendingRequest && !appliedPendingRequestRef.current) return;
+    if (pendingRequest?.lineItems?.length) {
+      setLineItems(pendingRequest.lineItems.map((item) => ({
+        id: item.id,
+        product_id: item.productId,
+        selected_color: item.selectedColor,
+        placement: item.placement,
+        decoration_type: item.decorationType,
+        size_breakdown: item.size_breakdown,
+        quantity: item.quantity,
+      })));
+      initializedLineItemsRef.current = true;
+      return;
+    }
+    const initialSize = resolvedSize === "Open" ? "" : resolvedSize;
+    const decorationType = getDefaultDecorationType(selectedProduct);
+    setLineItems([
+      {
+        id: `line-${Date.now()}`,
+        product_id: selectedProduct.id,
+        selected_color: resolvedColor === "Open" ? "" : resolvedColor,
+        placement: resolvedPlacement,
+        decoration_type: decorationType,
+        size_breakdown: initialSize ? { [initialSize]: Math.max(1, Number(quantity || 1)) } : {},
+        quantity: Math.max(1, Number(quantity || 1)),
+      },
+    ]);
+    initializedLineItemsRef.current = true;
+  }, [draftRecoveryRequired, pendingRequest, quantity, resolvedColor, resolvedPlacement, resolvedSize, selectedProduct]);
+
+  const configuredLineItems = lineItems.map((lineItem) => {
+    const product = storefrontProducts.find((item) => item.id === lineItem.product_id);
+    const quantityFromSizes = getLineItemQuantity(lineItem);
+    const placement = lineItem.placement || getProductPlacementConfig(product)[0]?.label || "";
+    const decorationType = lineItem.decoration_type || getDefaultDecorationType(product);
+    return {
+      ...lineItem,
+      product_id: product?.id || lineItem.product_id,
+      garment: product?.name || "Custom garment",
+      category: getStorefrontProductCategoryLabel(product, storefrontCategoryLookups),
+      product_image: getStorefrontProductImage(product),
+      product_notes: product?.notes || "",
+      placement,
+      placements: placement ? [{ placement, decoration_type: decorationType }] : [],
+      decoration_type: decorationType,
+      quantity: quantityFromSizes,
+    };
+  });
+  const orderQuantity = configuredLineItems.reduce((total, item) => total + item.quantity, 0);
+  const estimatedOrderQuote = configuredLineItems.length
+    ? generateOrderQuoteSnapshot({ line_items: configuredLineItems }, storefrontProducts)
+    : null;
+
+  function removeReviewedGarment(lineItemId) {
+    const remainingDraftItems = (pendingRequest?.lineItems || []).filter((item) => item.id !== lineItemId);
+    if (!remainingDraftItems.length) return;
+    const nextPendingRequest = { ...pendingRequest, lineItems: remainingDraftItems };
+    if (savePendingCustomerRequest(nextPendingRequest)) {
+      setPendingRequest(nextPendingRequest);
+      setLineItems((current) => current.filter((item) => item.id !== lineItemId));
+    }
+  }
 
   useEffect(() => {
     if (!shouldRedirectRequestOrderToStorefront({ pendingRequest, pendingRequestSource })) {
@@ -270,13 +333,13 @@ export default function CustomerPortalRequestOrder() {
   async function handleSubmit(event) {
     event.preventDefault();
 
-    if (!selectedProduct) {
+    if (!configuredLineItems.length || configuredLineItems.some((item) => !item.product_id || item.quantity < 1)) {
       setSubmitState("error");
-      setSubmitMessage("Choose a product before sending the request.");
+      setSubmitMessage("Add at least one garment and a quantity before sending the request.");
       return;
     }
 
-    const normalizedQuantity = Math.max(1, Number(quantity || 1));
+    const normalizedQuantity = orderQuantity;
     const normalizedArtworkOption = ["upload_now", "upload_later", "need_help"].includes(artworkOption)
       ? artworkOption
       : "upload_later";
@@ -299,7 +362,9 @@ export default function CustomerPortalRequestOrder() {
       setSubmitMessage("Your customer account could not be linked. Please try again.");
       return;
     }
-    const decorationType = getDefaultDecorationType(selectedProduct);
+    const primaryLineItem = configuredLineItems[0];
+    const primaryProduct = storefrontProducts.find((product) => product.id === primaryLineItem.product_id);
+    const decorationType = primaryLineItem.decoration_type;
     const artworkReferenceName = normalizeText(pendingRequest?.artworkName);
     let uploadedArtwork = null;
 
@@ -345,28 +410,25 @@ export default function CustomerPortalRequestOrder() {
           },
         ]
       : [];
-    const requestPlacements = resolvedPlacement
+    const requestPlacements = primaryLineItem.placement
       ? [
           {
-            placement: resolvedPlacement,
+            placement: primaryLineItem.placement,
             decoration_type: decorationType,
             artwork_id: uploadedArtwork?.id || "",
             artwork_name: artworkDisplayName,
           },
         ]
       : [];
-    const quote = generateQuoteSnapshot(
-      {
-        garment: selectedProduct.name,
-        product_id: selectedProduct.id,
-        qty: normalizedQuantity,
-        placement: resolvedPlacement,
-        placements: requestPlacements,
-        decoration_type: decorationType,
-        setup_fees: [],
-      },
-      selectedProduct
-    );
+    const submittedLineItems = configuredLineItems.map((lineItem) => ({
+      ...lineItem,
+      placements: lineItem.placements.map((placement) => ({
+        ...placement,
+        artwork_id: uploadedArtwork?.id || "",
+        artwork_name: artworkDisplayName,
+      })),
+    }));
+    const quote = generateOrderQuoteSnapshot({ line_items: submittedLineItems, setup_fees: [] }, storefrontProducts);
 
     try {
       const createdOrder = await createStoredOrder({
@@ -376,11 +438,11 @@ export default function CustomerPortalRequestOrder() {
         customer_phone: normalizeText(contactPhone) || profile?.phone || "",
         customer_company: profile?.company || "",
         contact_name: normalizeText(contactName) || customerSession.displayName || "",
-        product_id: selectedProduct.id,
-        garment: selectedProduct.name,
-        category: getStorefrontProductCategoryLabel(selectedProduct, storefrontCategoryLookups),
-        product_image: getStorefrontProductImage(selectedProduct),
-        product_notes: selectedProduct.notes || "",
+        product_id: primaryLineItem.product_id,
+        garment: primaryLineItem.garment,
+        category: primaryLineItem.category,
+        product_image: primaryLineItem.product_image,
+        product_notes: primaryProduct?.notes || "",
         source: "Customer Portal",
         request_type: "Order Request",
         request_status: "Pending Staff Review",
@@ -390,10 +452,11 @@ export default function CustomerPortalRequestOrder() {
         operational_visible: false,
         production_ready: false,
         qty: normalizedQuantity,
-        selected_color: resolvedColor === "Open" ? "" : resolvedColor,
-        selected_size: resolvedSize === "Open" ? "" : resolvedSize,
-        size_breakdown: resolvedSize && resolvedSize !== "Open" ? { [resolvedSize]: normalizedQuantity } : {},
-        placement: resolvedPlacement,
+        selected_color: primaryLineItem.selected_color,
+        selected_size: Object.keys(primaryLineItem.size_breakdown)[0] || "",
+        size_breakdown: primaryLineItem.size_breakdown,
+        line_items: submittedLineItems,
+        placement: primaryLineItem.placement,
         placements: requestPlacements,
         decoration_type: decorationType,
         customer_artwork_id: uploadedArtwork?.id || "",
@@ -439,10 +502,10 @@ export default function CustomerPortalRequestOrder() {
         replace: true,
         state: {
           createdOrderNumber: createdOrder.order_number,
-          garmentName: selectedProduct.name,
-          category: getStorefrontProductCategoryLabel(selectedProduct, storefrontCategoryLookups),
-          selectedColor: resolvedColor,
-          selectedSize: resolvedSize,
+          garmentName: configuredLineItems.map((item) => item.garment).join(", "),
+          category: primaryLineItem.category,
+          selectedColor: primaryLineItem.selected_color,
+          selectedSize: Object.keys(primaryLineItem.size_breakdown).join(", "),
           quantity: normalizedQuantity,
           artworkName: artworkDisplayName,
           notes: finalNotes,
@@ -528,7 +591,7 @@ export default function CustomerPortalRequestOrder() {
     >
         <SectionCard
           title="Your Request"
-          subtitle="Review the selection you already made. Use Edit Selection only if the product configuration needs to change."
+          subtitle="Review each completed garment. Use Edit Garment only when a product configuration needs to change."
         >
           {!productsReady ? (
             <p style={{ margin: 0, color: "#64748b" }}>Loading your selection…</p>
@@ -548,46 +611,32 @@ export default function CustomerPortalRequestOrder() {
             </div>
           ) : null}
 
-          {selectedProduct ? (
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 240px) minmax(0, 1fr)", gap: "20px", alignItems: "start" }}>
-              <div style={{ width: "100%", aspectRatio: "1 / 1", borderRadius: "18px", background: "#f8fafc", border: "1px solid #e2e8f0", overflow: "hidden", display: "grid", placeItems: "center" }}>
-                {resolveStorefrontProductImage(selectedProduct, { size: "thumb" }).src ? (
-                  <img
-                    src={resolveStorefrontProductImage(selectedProduct, { size: "thumb" }).src}
-                    alt={resolveStorefrontProductImage(selectedProduct, { size: "thumb" }).alt}
-                    width="320"
-                    height="320"
-                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                  />
-                ) : (
-                  <NoImagePlaceholder style={{ width: "100%", height: "100%", borderRadius: "18px" }} />
-                )}
-              </div>
-              <div style={{ display: "grid", gap: "18px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "16px" }}>
-                  <ReviewItem label="Garment" value={selectedProduct.name} />
-                  <ReviewItem label="Quantity" value={Math.max(1, Number(quantity || 1))} />
-                  <ReviewItem label="Color" value={resolvedColor === "Open" ? "Open / flexible" : resolvedColor} />
-                  <ReviewItem label="Size" value={resolvedSize === "Open" ? "Open / mixed sizing" : resolvedSize} />
-                  <ReviewItem label="Placement" value={resolvedPlacement || "Confirm later"} />
-                  <ReviewItem label="Decoration" value={getDefaultDecorationType(selectedProduct)} />
+          {lineItems.map((lineItem, index) => {
+            const product = storefrontProducts.find((item) => item.id === lineItem.product_id);
+            return (
+              <article key={lineItem.id} data-testid="customer-order-line-item" style={{ display: "grid", gap: "14px", border: "1px solid #dbe4ee", borderRadius: "18px", padding: "18px", marginBottom: "16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+                  <strong>Line Item {index + 1}: {product?.name || lineItem.garment || "Custom garment"}</strong>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button type="button" onClick={() => { const editItem = { ...pendingRequest.lineItems[index], productId: lineItem.product_id }; navigate("/order-preview", { state: { ...editItem, lineItem: editItem } }); }}>Edit Garment</button>
+                    {lineItems.length > 1 ? <button type="button" onClick={() => removeReviewedGarment(lineItem.id)}>Remove Garment</button> : null}
+                  </div>
                 </div>
-                <div style={{ borderRadius: "16px", background: "#f8fafc", border: "1px solid #e2e8f0", padding: "14px 16px" }}>
-                  <ReviewItem label="Estimated Pricing" value={estimatedTotal !== null ? `${formatMoney(estimatedTotal)} estimated total` : "Pricing confirmed after review"} />
-                  <p style={{ margin: "8px 0 0", color: "#64748b", fontSize: "13px", lineHeight: 1.5 }}>
-                    Pricing is an estimate. Tee & Co will review and confirm it before production.
-                  </p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "12px" }}>
+                  <ReviewItem label="Quantity" value={getLineItemQuantity(lineItem)} />
+                  <ReviewItem label="Color" value={lineItem.selected_color || "Open / flexible"} />
+                  <ReviewItem label="Size" value={Object.entries(lineItem.size_breakdown || {}).map(([size, amount]) => `${size} ×${amount}`).join(" · ") || "Open / mixed sizing"} />
+                  <ReviewItem label="Placement" value={lineItem.placement || "Confirm later"} />
+                  <ReviewItem label="Decoration" value={lineItem.decoration_type || "Confirm later"} />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => navigate(PUBLIC_STOREFRONT_PATH, { state: { portalOrderStart: true } })}
-                  style={{ justifySelf: "start", borderRadius: "999px", border: "1px solid #cbd5e1", background: "#ffffff", color: "#0f172a", padding: "10px 15px", fontWeight: 800, cursor: "pointer" }}
-                >
-                  Edit Selection
-                </button>
-              </div>
-            </div>
-          ) : null}
+              </article>
+            );
+          })}
+          <button type="button" onClick={() => navigate(PUBLIC_STOREFRONT_PATH, { state: { addingAnotherGarment: true } })}>Add Another Garment</button>
+          <div style={{ marginTop: "16px", borderRadius: "16px", background: "#f8fafc", border: "1px solid #e2e8f0", padding: "14px 16px" }}>
+            <ReviewItem label="Order Summary" value={`${lineItems.length} garment line ${lineItems.length === 1 ? "item" : "items"} · ${orderQuantity} total pieces`} />
+            <ReviewItem label="Estimated Pricing" value={estimatedOrderQuote?.total !== null && estimatedOrderQuote?.total !== undefined ? `${formatMoney(estimatedOrderQuote.total)} estimated total` : "Pricing confirmed after review"} />
+          </div>
         </SectionCard>
 
         <form onSubmit={handleSubmit} noValidate>

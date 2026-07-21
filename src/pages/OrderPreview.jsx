@@ -2,13 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import PlacementOptionList from "../components/PlacementOptionList";
+import SizeBreakdownEditor from "../components/SizeBreakdownEditor";
+import GarmentConfigurationSummary from "../components/GarmentConfigurationSummary";
 import {
   buildPlacementPricingOptions,
   getDefaultDecorationType,
+  getProductDecorationOptions,
   resolveCustomerOrderProduct,
 } from "../lib/orderConfiguration";
 import { getActiveCustomerSession } from "../lib/customerSessionStore";
-import { savePendingCustomerRequest } from "../lib/pendingCustomerRequestStore";
+import { getPendingCustomerRequest, savePendingCustomerRequest, upsertPendingCustomerLineItem } from "../lib/pendingCustomerRequestStore";
 import {
   clearPendingCustomerArtwork,
   savePendingCustomerArtwork,
@@ -40,7 +43,22 @@ export default function OrderPreview() {
     () => resolveCustomerOrderProduct(products, passedState),
     [passedState, products]
   );
-  const quantity = Number(passedState.quantity || 1);
+  const editingLineItem = passedState.lineItem || null;
+  const initialSize = editingLineItem?.size_breakdown
+    ? ""
+    : passedState.selectedSize || passedState.availableSizes?.[0] || selectedProduct?.sizes?.[0] || "";
+  const [sizeBreakdown, setSizeBreakdown] = useState(
+    editingLineItem?.size_breakdown || (initialSize ? { [initialSize]: Number(passedState.quantity || 1) } : {})
+  );
+  const availableSizes = useMemo(() => {
+    const source = editingLineItem?.availableSizes?.length
+      ? editingLineItem.availableSizes
+      : passedState.availableSizes?.length
+      ? passedState.availableSizes
+      : selectedProduct?.sizes || [];
+    return Array.from(new Set(source.map((size) => String(size || "").trim()).filter((size) => size && size !== "Open")));
+  }, [editingLineItem, passedState.availableSizes, selectedProduct]);
+  const quantity = Object.values(sizeBreakdown).reduce((total, value) => total + Math.max(0, Number(value || 0)), 0);
   const placementOptions = useMemo(
     () => buildPlacementPricingOptions(selectedProduct, quantity),
     [quantity, selectedProduct]
@@ -63,9 +81,14 @@ export default function OrderPreview() {
     "Review your garment details, artwork, and decoration preferences before continuing to the secure request form.";
   const imageSrc = passedState.imageSrc || selectedProduct?.image || "";
   const selectedColor = passedState.selectedColor || "Black";
-  const selectedSize = passedState.selectedSize || "M";
+  const selectedSize = Object.keys(sizeBreakdown)[0] || passedState.selectedSize || "";
 
-  const [requestedPlacements, setRequestedPlacements] = useState([]);
+  const [requestedPlacements, setRequestedPlacements] = useState(
+    editingLineItem?.placements || (editingLineItem?.placement ? [editingLineItem.placement] : [])
+  );
+  const [decorationType, setDecorationType] = useState(
+    editingLineItem?.decorationType || editingLineItem?.decoration_type || defaultDecorationType
+  );
   const [notes, setNotes] = useState("");
   const [artwork, setArtwork] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
@@ -99,15 +122,15 @@ export default function OrderPreview() {
         placement: selectedPlacements[0] || "",
         placements: selectedPlacements.map((placement) => ({
           placement,
-          decoration_type: defaultDecorationType,
+          decoration_type: decorationType,
         })),
-        decoration_type: defaultDecorationType,
+        decoration_type: decorationType,
         setup_fees: [],
       },
       selectedProduct
     );
   }, [
-    defaultDecorationType,
+    decorationType,
     garmentName,
     passedState.productId,
     quantity,
@@ -144,8 +167,9 @@ export default function OrderPreview() {
     });
   }
 
-  async function handleSubmit() {
-    const pendingRequest = {
+  function buildConfiguredLineItem() {
+    return {
+      id: editingLineItem?.id || `line-${Date.now()}`,
       garmentId: passedState.garmentId || "",
       productId: selectedProduct?.id || passedState.productId || "",
       garmentName,
@@ -155,12 +179,30 @@ export default function OrderPreview() {
       imageSrc,
       selectedColor,
       selectedSize,
+      availableSizes,
+      size_breakdown: sizeBreakdown,
       quantity,
       placements: selectedPlacements,
       placement: selectedPlacements[0] || "",
-      notes,
-      artworkName: artwork?.name || "",
-      decorationType: defaultDecorationType,
+      decorationType,
+    };
+  }
+
+  async function saveConfiguredGarment(destination) {
+    if (!quantity) {
+      setSubmitError("Add at least one size and quantity before saving this garment.");
+      return;
+    }
+    const existingRequest = getPendingCustomerRequest() || {};
+    const configuredLineItem = buildConfiguredLineItem();
+    const existingLineItems = existingRequest.lineItems || [];
+    const lineItems = upsertPendingCustomerLineItem(existingLineItems, configuredLineItem);
+    const pendingRequest = {
+      ...existingRequest,
+      ...configuredLineItem,
+      lineItems,
+      notes: existingRequest.notes || notes,
+      artworkName: existingRequest.artworkName || artwork?.name || "",
     };
 
     if (!savePendingCustomerRequest(pendingRequest)) {
@@ -170,9 +212,16 @@ export default function OrderPreview() {
 
     const artworkSaved = artwork?.file
       ? await savePendingCustomerArtwork(artwork.file)
+      : existingRequest.artworkName
+      ? true
       : await clearPendingCustomerArtwork();
     if (!artworkSaved) {
       setSubmitError("We could not carry your artwork into the secure request form. Please try again.");
+      return;
+    }
+
+    if (destination === "catalogue") {
+      navigate("/", { state: { addingAnotherGarment: true } });
       return;
     }
 
@@ -193,6 +242,10 @@ export default function OrderPreview() {
         pendingRequestSource: PUBLIC_GARMENT_FLOW_SOURCE,
       },
     });
+  }
+
+  async function handleSubmit() {
+    await saveConfiguredGarment("review");
   }
 
   return (
@@ -312,10 +365,10 @@ export default function OrderPreview() {
               Color: {selectedColor}
             </p>
             <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
-              Size: {selectedSize}
+              Total Pieces: {quantity}
             </p>
             <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
-              Quantity: {quantity}
+              Size Breakdown: {Object.entries(sizeBreakdown).map(([size, amount]) => `${size} ×${Number(amount)}`).join(" · ") || "Not configured"}
             </p>
             <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
               Custom decoration included
@@ -446,44 +499,24 @@ export default function OrderPreview() {
                 color: "#171717",
               }}
             >
-              Selected Options
+              Garment Summary
             </p>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))",
-                gap: "10px 16px",
-              }}
-            >
-              <div>
-                <p style={{ margin: "0 0 2px 0", fontSize: "12px", color: "#78716c" }}>
-                  Color
-                </p>
-                <p style={{ margin: 0, fontWeight: 600 }}>{selectedColor}</p>
-              </div>
+            <GarmentConfigurationSummary color={selectedColor} decorationType={decorationType} sizeBreakdown={sizeBreakdown} />
+          </div>
 
-              <div>
-                <p style={{ margin: "0 0 2px 0", fontSize: "12px", color: "#78716c" }}>
-                  Size
-                </p>
-                <p style={{ margin: 0, fontWeight: 600 }}>{selectedSize}</p>
-              </div>
+          <div style={{ marginTop: "18px" }}>
+            <p style={{ fontWeight: "700", margin: "0 0 8px 0", fontSize: "15px" }}>Size Breakdown</p>
+            <p style={{ margin: "0 0 12px", color: "#78716c", fontSize: "13px" }}>Add every size needed for this garment and set its quantity.</p>
+            <SizeBreakdownEditor availableSizes={availableSizes} value={sizeBreakdown} onChange={setSizeBreakdown} />
+          </div>
 
-              <div>
-                <p style={{ margin: "0 0 2px 0", fontSize: "12px", color: "#78716c" }}>
-                  Quantity
-                </p>
-                <p style={{ margin: 0, fontWeight: 600 }}>{quantity}</p>
-              </div>
-
-              <div>
-                <p style={{ margin: "0 0 2px 0", fontSize: "12px", color: "#78716c" }}>
-                  Decoration
-                </p>
-                <p style={{ margin: 0, fontWeight: 600 }}>Custom decoration included</p>
-              </div>
-            </div>
+          <div style={{ marginTop: "18px" }}>
+            <label style={{ display: "grid", gap: "8px", fontWeight: 700 }}>Decoration Method
+              <select value={decorationType} onChange={(event) => setDecorationType(event.target.value)} style={{ padding: "11px", borderRadius: "12px", border: "1px solid #d6d3d1", background: "#fff" }}>
+                {getProductDecorationOptions(selectedProduct).map((method) => <option key={method} value={method}>{method}</option>)}
+              </select>
+            </label>
           </div>
 
           <div style={{ marginTop: "18px" }}>
@@ -660,8 +693,14 @@ export default function OrderPreview() {
                 fontSize: "14px",
               }}
             >
-              Continue to Secure Request Form
+              {editingLineItem ? "Save Garment Changes" : "Save Garment & Continue to Review"}
             </button>
+
+            {!editingLineItem ? (
+              <button type="button" onClick={() => saveConfiguredGarment("catalogue")} style={{ border: "1px solid #171717", color: "#171717", padding: "12px 16px", borderRadius: "12px", background: "#ffffff", cursor: "pointer", fontWeight: 700 }}>
+                Save Garment & Add Another Garment
+              </button>
+            ) : null}
 
             <button
               type="button"

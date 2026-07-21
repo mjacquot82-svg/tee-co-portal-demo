@@ -8,7 +8,8 @@ import {
   getOperationalStaffUsers,
   subscribeToStaffUsers,
 } from "../lib/staffUsersStore";
-import { generateQuoteSnapshot } from "../lib/quoteEngine";
+import { generateOrderQuoteSnapshot } from "../lib/quoteEngine";
+import { getOrderLineItems, getOrderTotalQuantity } from "../lib/orderLineItems";
 import { printProductionSheet } from "../lib/printProductionSheet";
 import PricingSummary from "../components/PricingSummary";
 import StatusBadge from "../components/StatusBadge";
@@ -108,20 +109,10 @@ export default function OrderDetail() {
     ? requestedWorkspace
     : "production";
 
-  const selectedProduct = useMemo(() => {
-    if (!order) return null;
-
-    return storedProducts.find(
-      (product) =>
-        product.id === order.product_id ||
-        product.name === order.garment
-    );
-  }, [order, storedProducts]);
-
   const quoteSnapshot = useMemo(() => {
     if (!order) return null;
-    return generateQuoteSnapshot(order, selectedProduct);
-  }, [order, selectedProduct]);
+    return generateOrderQuoteSnapshot(order, storedProducts);
+  }, [order, storedProducts]);
   const normalizedOrder = useMemo(() => {
     if (!order) return null;
 
@@ -534,6 +525,7 @@ export default function OrderDetail() {
 
   const placedAt = formatDateTimeParts(order.created_at);
   const updatedAt = formatDateTimeParts(order.updated_at);
+  const orderLineItems = getOrderLineItems(order);
   const sizeBreakdownEntries = buildSizeBreakdownEntries(order.size_breakdown);
   const printOrder = normalizedOrder || order;
   const assignmentPanel = hasProcessAuthority ? (
@@ -627,7 +619,7 @@ export default function OrderDetail() {
             </div>
             <div data-testid="job-identity-garment" style={{ gridColumn: "span 2" }}>
               <p style={sectionLabelStyle}>Garment</p>
-              <p style={{ ...sectionValueStyle, fontSize: "18px" }}>{order.garment || order.item || "Custom garment"}</p>
+              <p style={{ ...sectionValueStyle, fontSize: "18px" }}>{orderLineItems.map((item) => item.garment).join(", ") || order.garment || order.item || "Custom garment"}</p>
             </div>
             <div data-testid="job-identity-decoration-method">
               <p style={sectionLabelStyle}>Decoration Method</p>
@@ -637,6 +629,24 @@ export default function OrderDetail() {
               <p style={sectionLabelStyle}>Quantity</p>
               <p style={{ ...sectionValueStyle, fontSize: "20px" }}>{order.qty || 0}</p>
             </div>
+            <div data-testid="job-identity-sizes" style={{ gridColumn: "1 / -1" }}>
+              <p style={sectionLabelStyle}>Sizes</p>
+              <p style={sectionValueStyle}>
+                {sizeBreakdownEntries.length
+                  ? sizeBreakdownEntries.map(([size, quantity]) => `${size}: ${quantity}`).join(" · ")
+                  : "No size breakdown recorded"}
+              </p>
+            </div>
+            {orderLineItems.length > 1 ? (
+              <div data-testid="job-identity-line-items" style={{ gridColumn: "1 / -1" }}>
+                <p style={sectionLabelStyle}>Garment Line Items</p>
+                {orderLineItems.map((item) => (
+                  <p key={item.id} style={sectionValueStyle}>
+                    {item.garment} · {item.quantity} · {Object.entries(item.size_breakdown).map(([size, quantity]) => `${size}: ${quantity}`).join(" · ") || "No sizes recorded"} · {item.decoration_type || "Decoration not specified"} · {item.placement || "Placement not specified"}
+                  </p>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <div data-testid="order-detail-status-summary" style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", marginTop: "12px" }}>
