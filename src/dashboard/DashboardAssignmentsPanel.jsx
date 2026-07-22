@@ -19,7 +19,7 @@ export default function DashboardAssignmentsPanel() {
       <AssignmentAlertCard count={pendingAssignments} />
 
       <Link
-        to="/admin/assignments"
+        to="/admin/orders?employee=unassigned"
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -32,7 +32,7 @@ export default function DashboardAssignmentsPanel() {
           fontWeight: 800,
         }}
       >
-        Open Assignments Workspace
+        Open Unassigned Production
       </Link>
     </section>
   );

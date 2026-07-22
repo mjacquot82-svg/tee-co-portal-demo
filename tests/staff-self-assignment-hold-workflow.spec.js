@@ -120,7 +120,7 @@ test("staff can claim unassigned work and it appears in My Assigned Work", async
   await page.reload();
   await openOrderDetail(page, orderNumber);
 
-  const assignmentPanel = page.getByTestId("order-assignment-panel");
+  const assignmentPanel = page.getByTestId("production-header-assignment");
   await expect(assignmentPanel).toBeVisible();
 
   // Claim button is only visible when a staff user is logged in and the order is unassigned

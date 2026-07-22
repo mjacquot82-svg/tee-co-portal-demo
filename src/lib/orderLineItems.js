@@ -35,6 +35,8 @@ export function normalizeOrderLineItem(lineItem = {}, index = 0) {
     artwork_name: lineItem.artwork_name || lineItem.artworkName || "",
     placement: lineItem.placement || placements[0]?.placement || "",
     placements,
+    production_notes: lineItem.production_notes || "",
+    manufacturing_instructions: lineItem.manufacturing_instructions || "",
     size_breakdown: sizeBreakdown,
     quantity: getLineItemQuantity({ ...lineItem, size_breakdown: sizeBreakdown }),
   };

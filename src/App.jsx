@@ -28,7 +28,6 @@ import NewOrder from "./admin/NewOrder";
 import OrderDetail from "./admin/OrderDetail";
 import Products from "./admin/Products";
 import GarmentLibrary from "./admin/GarmentLibrary";
-import Assignments from "./admin/Assignments";
 import Customers from "./admin/Customers";
 import CustomerDetail from "./admin/CustomerDetail";
 import QuickSale from "./admin/QuickSale";
@@ -82,7 +81,7 @@ export default function App() {
 
             <Route path="admin/products" element={<Products />} />
             <Route path="admin/garments" element={<GarmentLibrary />} />
-            <Route path="admin/assignments" element={<Assignments />} />
+            <Route path="admin/assignments" element={<Navigate to="/admin/orders?employee=unassigned" replace />} />
             <Route path="admin/financial" element={<InvoicesPayments />} />
             <Route path="admin/financial/requests/:requestId" element={<PaymentRequestDetail />} />
             <Route path="admin/financial/reconciliation" element={<PaymentReconciliation />} />

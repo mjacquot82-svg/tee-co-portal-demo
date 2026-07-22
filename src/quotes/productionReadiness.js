@@ -57,3 +57,13 @@ export function buildProductionReadiness(order, financials) {
     remainingRequirements,
   };
 }
+
+export function buildProductionReadyWorkflowUpdates(order, financials) {
+  if (!buildProductionReadiness(order, financials).ready) return {};
+
+  return {
+    status: "Ready For Production",
+    quote_status: "Ready For Production",
+    production_ready: true,
+  };
+}

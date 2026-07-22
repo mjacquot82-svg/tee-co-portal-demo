@@ -74,7 +74,7 @@ test("Production Queue Details opens the correct full order workspace", async ({
     "data-order-number",
     orderNumber
   );
-  await expect(page.getByTestId("process-instance-summary")).toBeVisible();
+  await expect(page.getByTestId("production-current-action")).toBeVisible();
   await expect(page.getByTestId("order-detail-page")).toHaveAttribute("data-workflow-state", "");
   await expect(page.getByTestId("job-identity-customer")).toContainText("Details Navigation Test");
   await expect(page.getByTestId("job-identity-garment")).toContainText("Gildan 18000 Crewneck Sweatshirt");
@@ -133,7 +133,7 @@ test("Production Queue Details opens the correct full order workspace", async ({
   await expect(page.getByTestId("production-files")).toBeVisible();
 
   const identityBox = await page.getByTestId("production-job-identity").boundingBox();
-  const currentWorkBox = await page.getByTestId("production-progress-tracker").boundingBox();
+  const currentWorkBox = await page.getByTestId("production-current-action").boundingBox();
   const artworkBox = await page.getByTestId("production-artwork").boundingBox();
   const notesBox = await page.getByTestId("production-notes").boundingBox();
   const filesBox = await page.getByTestId("production-files").boundingBox();
@@ -168,7 +168,7 @@ test("Production Queue Details opens the correct full order workspace", async ({
 
   await page.getByTestId("order-workspace-tab-production").click();
   await expect(page).not.toHaveURL(/workspace=/);
-  await expect(page.getByTestId("process-instance-summary")).toBeVisible();
+  await expect(page.getByTestId("production-current-action")).toBeVisible();
 
   await page.goBack();
   await expect(page.getByTestId("production-queue-page")).toBeVisible();

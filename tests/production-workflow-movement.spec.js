@@ -420,14 +420,7 @@ test("completed orders do not expose production start actions even with stale wo
 
   await page.goto(`/admin/orders/${completedOrderNumber}`);
   await expect(page.getByTestId("order-detail-page")).toHaveAttribute("data-workflow-state", "Completed");
-  await expect(page.getByTestId("production-readiness-indicator")).toHaveAttribute(
-    "data-production-readiness",
-    "completed"
-  );
-  await expect(page.getByTestId("production-readiness-summary")).toHaveAttribute(
-    "data-production-readiness",
-    "completed"
-  );
+  await expect(page.getByTestId("production-current-action")).toBeVisible();
   await expect(getWorkflowActionButton(page, "move_to_production")).toHaveCount(0);
   await expect(getWorkflowActionButton(page, "start_printing")).toHaveCount(0);
 

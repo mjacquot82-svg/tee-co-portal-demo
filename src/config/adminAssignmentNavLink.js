@@ -1,5 +1,5 @@
 export const assignmentSidebarLink = {
-  to: "/admin/assignments",
-  label: "Assignments",
+  to: "/admin/orders?employee=unassigned",
+  label: "Unassigned Production",
   badgeKey: "assignments",
 };

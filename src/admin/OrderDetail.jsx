@@ -9,15 +9,15 @@ import {
   subscribeToStaffUsers,
 } from "../lib/staffUsersStore";
 import { generateOrderQuoteSnapshot } from "../lib/quoteEngine";
-import { getOrderLineItems, getOrderTotalQuantity } from "../lib/orderLineItems";
 import { printProductionSheet } from "../lib/printProductionSheet";
 import PricingSummary from "../components/PricingSummary";
 import StatusBadge from "../components/StatusBadge";
-import ProductionProgressTracker from "../order-detail/ProductionProgressTracker";
-import AssignmentPanel from "../order-detail/AssignmentPanel";
 import AssignmentOnlyPanel from "../order-detail/AssignmentOnlyPanel";
+import ProductionActionPanel from "../order-detail/ProductionActionPanel";
+import ProcessCurrentActionPanel from "../order-detail/ProcessCurrentActionPanel";
 import ActivityTimeline from "../order-detail/ActivityTimeline";
 import ProductionInstructionsPanel from "../order-detail/ProductionInstructionsPanel";
+import GarmentProductionCards from "../order-detail/GarmentProductionCards";
 import FinancialSummaryPanel from "../order-detail/FinancialSummaryPanel";
 import { buildOrderUrgency } from "../order-detail/buildOrderUrgency";
 import { buildWorkflowActionUpdates } from "../orders/buildWorkflowActionUpdates";
@@ -28,16 +28,9 @@ import {
   isCanceledOperationalStatus,
   normalizeOperationalStatus,
 } from "../orders/orderWorkflow";
-import { buildProductionGatingState } from "../orders/workflowGating";
 import { isAdminWorkspaceView, isStaffWorkspaceView, canSelfAssignOrder } from "./adminRoleView";
 import { markAssignmentAttentionSeen } from "../lib/staffAssignmentAttentionStore";
-import WorkflowBadge from "../components/WorkflowBadge";
-import OwnerNextActionCard from "../components/OwnerNextActionCard";
-import {
-  buildWorkflowBlockDetails,
-  buildWorkflowStatusBadges,
-} from "../orders/workflowPresentation";
-import { deriveOwnerOrderNextAction } from "../orders/ownerWorkflowActions";
+import { buildWorkflowBlockDetails } from "../orders/workflowPresentation";
 import {
   buildDepositRequestContent,
   createAndSendDepositPaymentRequestForOrder,
@@ -75,10 +68,6 @@ const sectionValueStyle = {
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
-}
-
-function buildSizeBreakdownEntries(sizeBreakdown = {}) {
-  return Object.entries(sizeBreakdown).filter(([, quantity]) => Number(quantity) > 0);
 }
 
 export default function OrderDetail() {
@@ -124,21 +113,6 @@ export default function OrderDetail() {
     () => (order && showLegacyProduction ? getAvailableProductionActions(order) : []),
     [order, showLegacyProduction]
   );
-  const productionGating = useMemo(
-    () => (order && showLegacyProduction ? buildProductionGatingState(order, { targetStatus: "Ready For Production" }) : null),
-    [order, showLegacyProduction]
-  );
-  const workflowBadges = useMemo(
-    () => (order && showLegacyProduction ? buildWorkflowStatusBadges(order) : []),
-    [order, showLegacyProduction]
-  );
-  const ownerNextAction = useMemo(
-    () => (normalizedOrder && showLegacyProduction ? deriveOwnerOrderNextAction(normalizedOrder) : null),
-    [normalizedOrder, showLegacyProduction]
-  );
-  const orderNextAction = ownerNextAction?.actionKey
-    ? { ...ownerNextAction, href: "" }
-    : ownerNextAction;
 
   useEffect(() => {
     return subscribeToStaffUsers((nextUsers) => {
@@ -296,107 +270,6 @@ export default function OrderDetail() {
     await saveOrderUpdates(updates);
   }
 
-  async function handleArtworkApprovalChange(nextStatus) {
-    if (isCanceledOperationalStatus(order.status)) return;
-
-    const normalizedStatus = String(nextStatus || "").trim();
-    const now = new Date().toISOString();
-    const artworkSatisfied =
-      normalizedStatus === "Approved" || normalizedStatus === "Not Required";
-    const depositStatus = String(order.deposit_workflow_status || "").trim();
-    const depositResolved =
-      depositStatus === "Deposit Not Required" || depositStatus === "Deposit Received";
-    await saveOrderUpdates({
-      artwork_approval_status: normalizedStatus,
-      artwork_status: normalizedStatus,
-      staff_review_status: artworkSatisfied
-        ? "Approved"
-        : normalizedStatus === "Needs Revision"
-        ? "Changes Requested"
-        : "Pending Review",
-      approval_status:
-        normalizedStatus === "Approved"
-          ? "Approved"
-          : normalizedStatus === "Not Required"
-          ? "Approved"
-          : normalizedStatus === "Needs Revision"
-          ? "Revision Requested"
-          : "Pending Review",
-      quote_status:
-        order.operational_visible === false
-          ? artworkSatisfied
-            ? !depositResolved
-              ? order.quote_status
-              : order.deposit_required
-              ? "Awaiting Deposit"
-              : "Approved"
-            : "Awaiting Artwork Approval"
-          : order.quote_status,
-      customer_approved_at: normalizedStatus === "Approved" ? order.customer_approved_at || now : null,
-      customer_revision_requested_at:
-        normalizedStatus === "Needs Revision"
-          ? order.customer_revision_requested_at || now
-          : null,
-      activity_type: "artwork_approval",
-      activity_note:
-        normalizedStatus === "Approved"
-          ? `Artwork approved by ${activeStaffUser?.name || "staff"}.`
-          : normalizedStatus === "Not Required"
-          ? `Artwork marked not required by ${activeStaffUser?.name || "staff"}.`
-          : normalizedStatus === "Needs Revision"
-          ? `Artwork revision requested by ${activeStaffUser?.name || "staff"}.`
-          : "Artwork moved to pending review.",
-    });
-    setWorkflowFeedback(null);
-  }
-
-  async function handleGatingOverride(overrideKey) {
-    if (!canManageAssignments || isCanceledOperationalStatus(order.status)) return;
-
-    const now = new Date().toISOString();
-    const overrideLabels = {
-      forceProduction: "Force Move To Production",
-      depositRequirement: "Override Deposit Requirement",
-      artworkApprovalRequirement: "Override Artwork Approval Requirement",
-    };
-
-    await saveOrderUpdates({
-      workflow_overrides: {
-        ...order.workflow_overrides,
-        [overrideKey]: {
-          active: true,
-          usedAt: now,
-          usedByName: activeStaffUser?.name || "Unknown Staff",
-          usedByRole: activeStaffUser?.role || "",
-        },
-      },
-      activity_type: "gating_override_used",
-      activity_note: `${overrideLabels[overrideKey] || "Workflow gating override"} used.`,
-    });
-    setWorkflowFeedback({
-      tone: "info",
-      summary: "Override applied.",
-      detail: "This requirement remains visible in the workflow history.",
-      nextActionLabel: "",
-    });
-  }
-
-  async function handleForceMoveToProduction() {
-    await handleGatingOverride("forceProduction");
-
-    const updates = buildWorkflowActionUpdates(order, {
-      key: "move_to_production",
-      label: "Move To Production",
-      targetStatus: "Ready For Production",
-    });
-    if (!updates) return;
-
-    await saveOrderUpdates({
-      ...updates,
-      activity_note: "Move To Production forced with operational override.",
-    });
-  }
-
   function handlePrintTicket() {
     printProductionSheet(printOrder, {
       title: `Production Sheet ${order.order_number || orderNumber}`,
@@ -484,29 +357,6 @@ export default function OrderDetail() {
     };
   }
 
-  function handleOwnerNextAction(actionKey) {
-    if (actionKey === "create_payment_request") {
-      document.getElementById("owner-payment-request-form")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-      return;
-    }
-
-    if (actionKey === "move_to_production") {
-      const action = workflowActions.find((entry) => entry.key === "move_to_production");
-      if (action) handleWorkflowAction(action);
-      return;
-    }
-
-    if (actionKey === "view_blocking_reason") {
-      document.querySelector("[data-testid='production-gating-alert']")?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }
-  }
-
   async function handleCancelProductionOrder() {
     if (isCanceledOperationalStatus(order.status)) return;
 
@@ -523,10 +373,8 @@ export default function OrderDetail() {
 
   const placedAt = formatDateTimeParts(order.created_at);
   const updatedAt = formatDateTimeParts(order.updated_at);
-  const orderLineItems = getOrderLineItems(order);
-  const sizeBreakdownEntries = buildSizeBreakdownEntries(order.size_breakdown);
   const printOrder = normalizedOrder || order;
-  const assignmentPanel = hasProcessAuthority ? (
+  const assignmentPanel = (
     <AssignmentOnlyPanel
       order={order}
       staffUsers={staffUsers}
@@ -535,22 +383,8 @@ export default function OrderDetail() {
       canSelfAssign={selfAssignAllowed}
       onSelfAssign={handleSelfAssign}
       canceled={isCanceledOperationalStatus(order.status)}
-    />
-  ) : (
-    <AssignmentPanel
-      order={order}
-      staffUsers={staffUsers}
-      onAssign={handleAssign}
-      workflowActions={workflowActions}
-      onRunWorkflowAction={handleWorkflowAction}
-      canManageAssignments={canManageAssignments}
-      canSelfAssign={selfAssignAllowed}
-      onSelfAssign={handleSelfAssign}
-      productionGating={productionGating}
-      onArtworkApprovalChange={handleArtworkApprovalChange}
-      onGatingOverride={handleGatingOverride}
-      onForceMoveToProduction={handleForceMoveToProduction}
-      workflowFeedback={workflowFeedback}
+      compact
+      currentStaffUser={activeStaffUser}
     />
   );
 
@@ -560,6 +394,43 @@ export default function OrderDetail() {
     else nextParams.set("workspace", workspace);
     setSearchParams(nextParams, { replace: true });
   }
+
+  const workspaceNavigation = (
+    <nav
+      role="tablist"
+      data-testid="order-workspace-tabs"
+      aria-label="Secondary order reference"
+      style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "18px", marginBottom: "18px", borderTop: "1px solid #e2e8f0", paddingTop: "14px" }}
+    >
+      {[
+        { key: "production", label: "Production" },
+        { key: "financial", label: "Financial" },
+        { key: "details", label: "Details" },
+      ].map((workspace) => {
+        const selected = activeWorkspace === workspace.key;
+        return (
+          <button
+            key={workspace.key}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            data-testid={`order-workspace-tab-${workspace.key}`}
+            onClick={() => selectWorkspace(workspace.key)}
+            style={{
+              border: selected ? "1px solid #0f172a" : "1px solid #cbd5e1",
+              background: selected ? "#0f172a" : "#ffffff",
+              color: selected ? "#ffffff" : "#334155",
+              borderRadius: "10px",
+              padding: "8px 12px",
+              fontWeight: 800,
+            }}
+          >
+            {workspace.label}
+          </button>
+        );
+      })}
+    </nav>
+  );
 
   return (
     <div
@@ -591,88 +462,19 @@ export default function OrderDetail() {
               letterSpacing: "0.08em",
             }}
           >
-            {isStaffWorkspace ? "Production Work Order" : "Production Order"}
+            Current Job
           </p>
 
-          <h1 style={{ margin: "6px 0" }}>
+          <h1 style={{ margin: "6px 0", fontSize: "38px", letterSpacing: "-0.02em" }}>
             Order {order.order_number || orderNumber}
           </h1>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-              gap: "14px",
-              marginTop: "16px",
-              padding: "16px",
-              borderRadius: "16px",
-              border: "1px solid #dbeafe",
-              background: "#f8fafc",
-              maxWidth: "820px",
-            }}
-          >
-            <div data-testid="job-identity-customer">
-              <p style={sectionLabelStyle}>Customer</p>
-              <p style={sectionValueStyle}>{order.customer_name || "Walk-in Customer"}</p>
-            </div>
-            <div data-testid="job-identity-garment" style={{ gridColumn: "span 2" }}>
-              <p style={sectionLabelStyle}>Garment</p>
-              <p style={{ ...sectionValueStyle, fontSize: "18px" }}>{orderLineItems.map((item) => item.garment).join(", ") || order.garment || order.item || "Custom garment"}</p>
-            </div>
-            <div data-testid="job-identity-decoration-method">
-              <p style={sectionLabelStyle}>Decoration Method</p>
-              <p style={sectionValueStyle}>{order.decoration_type || order.production_type || "Not specified"}</p>
-            </div>
-            <div data-testid="job-identity-quantity">
-              <p style={sectionLabelStyle}>Quantity</p>
-              <p style={{ ...sectionValueStyle, fontSize: "20px" }}>{getOrderTotalQuantity(order)}</p>
-            </div>
-            <div data-testid="job-identity-placement">
-              <p style={sectionLabelStyle}>Placement</p>
-              <p style={sectionValueStyle}>
-                {Array.isArray(order.placements) && order.placements.length
-                  ? order.placements.map((placement) => placement?.placement).filter(Boolean).join(", ")
-                  : order.placement || "—"}
-              </p>
-            </div>
-            <div data-testid="job-identity-due-date">
-              <p style={sectionLabelStyle}>Due Date</p>
-              <p style={sectionValueStyle}>{order.due_date || "—"}</p>
-            </div>
-            <div data-testid="job-identity-sizes" style={{ gridColumn: "1 / -1" }}>
-              <p style={sectionLabelStyle}>Sizes</p>
-              <p style={sectionValueStyle}>
-                {sizeBreakdownEntries.length
-                  ? sizeBreakdownEntries.map(([size, quantity]) => `${size}: ${quantity}`).join(" · ")
-                  : "No size breakdown recorded"}
-              </p>
-            </div>
-            {orderLineItems.length > 1 ? (
-              <div data-testid="job-identity-line-items" style={{ gridColumn: "1 / -1" }}>
-                <p style={sectionLabelStyle}>Garment Line Items</p>
-                {orderLineItems.map((item) => (
-                  <p key={item.id} style={sectionValueStyle}>
-                    {item.garment} · {item.quantity} · {Object.entries(item.size_breakdown).map(([size, quantity]) => `${size}: ${quantity}`).join(" · ") || "No sizes recorded"} · {item.decoration_type || "Decoration not specified"} · {item.placement || "Placement not specified"}
-                  </p>
-                ))}
-              </div>
-            ) : null}
+          <div data-testid="production-job-header" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "14px", marginTop: "16px", padding: "20px", borderRadius: "20px", border: "2px solid #0f172a", background: "#ffffff", maxWidth: "980px", boxShadow: "0 10px 30px rgba(15, 23, 42, 0.10)" }}>
+            <div data-testid="order-detail-current-status" data-workflow-state={order.status || ""}><p style={sectionLabelStyle}>Production Status</p><div style={{ marginTop: "6px", fontSize: "18px" }}><StatusBadge status={order.status} /></div></div>
+            <div><p style={sectionLabelStyle}>Due Date</p><p style={sectionValueStyle}>{order.due_date || "—"}</p></div>
+            <div><p style={sectionLabelStyle}>Priority</p><p style={{ ...sectionValueStyle, color: urgency.color }}>{urgency.label}</p></div>
+            {assignmentPanel}
           </div>
-
-          <div data-testid="order-detail-status-summary" style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", marginTop: "12px" }}>
-            {showLegacyProduction ? (
-              <span data-testid="order-detail-current-status" data-workflow-state={order.status || ""}>
-                <StatusBadge status={order.status} />
-              </span>
-            ) : null}
-            <span style={{ color: urgency.color, fontWeight: 800 }}>{urgency.label}</span>
-          </div>
-
-          {showLegacyProduction && workflowBadges.length ? (
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
-              {workflowBadges.map((badge) => <WorkflowBadge key={badge.label} label={badge.label} tone={badge.tone} />)}
-            </div>
-          ) : null}
 
           {isCanceledOperationalStatus(order.status) ? (
             <div
@@ -721,66 +523,15 @@ export default function OrderDetail() {
         </div>
       </div>
 
-      <nav
-        role="tablist"
-        data-testid="order-workspace-tabs"
-        aria-label="Order workspaces"
-        style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "18px", borderBottom: "1px solid #e2e8f0", paddingBottom: "10px" }}
-      >
-        {[
-          { key: "production", label: "Production" },
-          { key: "financial", label: "Financial" },
-          { key: "details", label: "Details" },
-        ].map((workspace) => {
-          const selected = activeWorkspace === workspace.key;
-          return (
-            <button
-              key={workspace.key}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              data-testid={`order-workspace-tab-${workspace.key}`}
-              onClick={() => selectWorkspace(workspace.key)}
-              style={{
-                border: selected ? "1px solid #0f172a" : "1px solid #cbd5e1",
-                background: selected ? "#0f172a" : "#ffffff",
-                color: selected ? "#ffffff" : "#334155",
-                borderRadius: "12px",
-                padding: "10px 14px",
-                fontWeight: 800,
-              }}
-            >
-              {workspace.label}
-            </button>
-          );
-        })}
-      </nav>
+      {workspaceNavigation}
 
       {activeWorkspace === "production" ? (
         <div data-testid="order-workspace-production" style={{ display: "grid", gap: "18px" }}>
-          <div>
-            <button
-              type="button"
-              onClick={handlePrintTicket}
-              style={{ background: "#171717", color: "#ffffff", border: "none", borderRadius: "12px", padding: "11px 14px", fontWeight: 700 }}
-            >
-              Print Production Sheet
-            </button>
-          </div>
-
+          <div id="production-handoff" style={{ scrollMarginTop: "24px" }}>
           {hasProcessAuthority ? (
-            <>
-              <ProductionProgressTracker order={order} processProjection={processProjection} />
-              <div className="production-workspace-controls">{assignmentPanel}</div>
-            </>
+            <ProcessCurrentActionPanel projection={processProjection} onPrint={handlePrintTicket} />
           ) : showLegacyProduction ? (
-            <>
-              <ProductionProgressTracker order={order} />
-              {isStaffWorkspace || !orderNextAction ? null : (
-                <OwnerNextActionCard action={orderNextAction} onAction={handleOwnerNextAction} />
-              )}
-              {assignmentPanel}
-            </>
+            <ProductionActionPanel order={order} actions={workflowActions} onRunAction={handleWorkflowAction} feedback={workflowFeedback} onPrint={handlePrintTicket} />
           ) : (
             <section
               data-testid="production-authority-loading"
@@ -789,13 +540,15 @@ export default function OrderDetail() {
               Resolving production authority…
             </section>
           )}
+          </div>
 
+          <GarmentProductionCards order={order} />
           <ProductionInstructionsPanel order={order} showInternalNotes={false} />
         </div>
       ) : null}
 
       {activeWorkspace === "financial" ? (
-        <div data-testid="order-workspace-financial" style={{ display: "grid", gap: "18px" }}>
+        <div data-testid="order-workspace-financial" data-reference-role="secondary" style={{ display: "grid", gap: "18px" }}>
           {isStaffWorkspace ? (
             <section style={cardStyle}>Financial workspace access is limited to owners.</section>
           ) : (
@@ -833,17 +586,18 @@ export default function OrderDetail() {
       ) : null}
 
       {activeWorkspace === "details" ? (
-        <div data-testid="order-workspace-details" style={{ display: "grid", gap: "18px" }}>
-          <section style={cardStyle}>
-            <h2 style={{ marginTop: 0 }}>Order Reference</h2>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px" }}>
-              <div><p style={sectionLabelStyle}>Placed</p><p style={sectionValueStyle}>{placedAt.date} at {placedAt.time}</p></div>
-              <div><p style={sectionLabelStyle}>Last Updated</p><p style={sectionValueStyle}>{updatedAt.date} at {updatedAt.time}</p></div>
-              <div><p style={sectionLabelStyle}>Source</p><p style={sectionValueStyle}>{order.source || "Operational intake"}</p></div>
-              {showLegacyProduction ? (
-                <div><p style={sectionLabelStyle}>Legacy Order Status</p><p style={sectionValueStyle}>{order.status || "—"}</p></div>
-              ) : null}
-            </div>
+        <div data-testid="order-workspace-details" data-reference-role="secondary" style={{ display: "grid", gap: "18px" }}>
+              <section style={cardStyle}>
+                <h2 style={{ marginTop: 0 }}>Order Reference</h2>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px" }}>
+                  <div><p style={sectionLabelStyle}>Customer</p><p style={sectionValueStyle}>{order.customer_name || "Walk-in Customer"}</p></div>
+                  <div><p style={sectionLabelStyle}>Placed</p><p style={sectionValueStyle}>{placedAt.date} at {placedAt.time}</p></div>
+                  <div><p style={sectionLabelStyle}>Last Updated</p><p style={sectionValueStyle}>{updatedAt.date} at {updatedAt.time}</p></div>
+                  <div><p style={sectionLabelStyle}>Source</p><p style={sectionValueStyle}>{order.source || "Operational intake"}</p></div>
+                  <div><p style={sectionLabelStyle}>Request Approval</p><p style={sectionValueStyle}>{order.staff_review_status || order.approval_status || "—"}</p></div>
+                  <div><p style={sectionLabelStyle}>Artwork Approval</p><p style={sectionValueStyle}>{order.artwork_status || order.artwork_approval_status || "—"}</p></div>
+                  <div><p style={sectionLabelStyle}>Deposit Decision</p><p style={sectionValueStyle}>{order.deposit_workflow_status || order.deposit_requirement_status || "—"}</p></div>
+                </div>
             <div style={{ borderTop: "1px solid #e2e8f0", marginTop: "18px", paddingTop: "18px" }}>
               <p style={sectionLabelStyle}>Internal Notes</p>
               <p style={{ ...sectionValueStyle, whiteSpace: "pre-wrap" }}>{order.internal_note || "No internal notes recorded."}</p>

@@ -234,7 +234,7 @@ function buildOwnerWorkspaceModel(orders = [], operationalEvents = []) {
       label: "Ready for Production",
       count: snapshot.readyForProduction,
       detail: "Approved work can move into production now.",
-      to: "/admin/orders?status=ready-for-production",
+      to: "/admin/quotes?queue=ready",
     },
     {
       key: "ready-for-pickup",

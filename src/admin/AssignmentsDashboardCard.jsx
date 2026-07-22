@@ -14,7 +14,7 @@ export default function AssignmentsDashboardCard() {
       <AssignmentAlertCard count={pendingAssignments} />
 
       <Link
-        to="/admin/assignments"
+        to="/admin/orders?employee=unassigned"
         style={{
           background: "#171717",
           color: "#ffffff",
@@ -25,7 +25,7 @@ export default function AssignmentsDashboardCard() {
           textAlign: "center",
         }}
       >
-        Open Assignment Workspace
+        Open Unassigned Production
       </Link>
     </div>
   );

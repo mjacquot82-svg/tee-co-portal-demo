@@ -6,7 +6,7 @@ export default function AssignmentsSidebarLink({
 }) {
   return (
     <Link
-      to="/admin/assignments"
+      to="/admin/orders?employee=unassigned"
       style={{
         display: "flex",
         alignItems: "center",
@@ -22,7 +22,7 @@ export default function AssignmentsSidebarLink({
         fontSize: "14px",
       }}
     >
-      <span>Assignments</span>
+      <span>Unassigned Production</span>
 
       {assignmentCount > 0 && (
         <span

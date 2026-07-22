@@ -216,12 +216,6 @@ function getAdminSections(staffUser) {
       title: "Business",
       links: [
         { to: "/admin/sales/new", label: "Front Counter", navKey: "frontCounter" },
-        {
-          to: "/admin/assignments",
-          label: "Assign Work",
-          navKey: "assignments",
-          badgeKey: "assignments",
-        },
         { to: "/admin/sales", label: "Sales History", navKey: "counterSales" },
         { to: "/admin/garments", label: "Garment Library", navKey: "garments" },
         { to: "/admin/products", label: "Customer Storefront", navKey: "products" },
@@ -276,7 +270,6 @@ function getAdminSections(staffUser) {
 
 function getActiveSidebarLink(pathname, staffUser) {
   if (pathname.startsWith("/admin/notifications")) return "staffNotifications";
-  if (pathname.startsWith("/admin/assignments")) return "assignments";
   if (pathname.startsWith("/admin/garments")) return "garments";
   if (pathname.startsWith("/admin/products")) return "products";
   if (pathname.startsWith("/admin/customers")) return "customers";

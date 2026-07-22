@@ -1,21 +1,17 @@
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getOrderArtworkNames } from "../lib/orderArtwork";
 import { getJsonStorageItem, setJsonStorageItem } from "../lib/browserStorage";
 import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
-import { normalizeOrderFinancials } from "../orders/orderFinancials";
 import {
   canAdvanceQuoteStatus,
   getNextQuoteStatus,
   isActiveQuoteWorkflowOrder,
-  isQuoteReadyForProduction,
   sortQuotesByStatus,
 } from "../quotes/quoteWorkflow";
 import {
-  buildApprovalStatus,
-  buildDepositStatus,
-  buildProductionReadiness,
-} from "../quotes/productionReadiness";
+  buildQuoteSummary,
+  matchesQuoteQueueFilter,
+} from "../quotes/requestQueueReadiness";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 import {
   canManageArchivedQuotes,
@@ -57,40 +53,6 @@ function readExpandedQuotesState() {
   return Object.fromEntries(
     Object.entries(storedState).filter(([, value]) => typeof value === "boolean")
   );
-}
-
-function buildQuoteSummary(order) {
-  const financials = normalizeOrderFinancials(order, {
-    additionalSources: order.quote ? [{ label: "storedQuote", value: order.quote }] : [],
-  });
-  const placements = Array.isArray(order.placements) ? order.placements : [];
-  const artworkNames = getOrderArtworkNames(order);
-  const readiness = buildProductionReadiness(order, financials);
-
-  return {
-    financials,
-    total: financials.total_amount,
-    depositTarget: financials.deposit_amount,
-    balance: financials.balance_due,
-    depositStatus: buildDepositStatus(order, financials),
-    approvalStatus: buildApprovalStatus(order),
-    dueDate: formatValue(order.due_date),
-    artworkNames,
-    placementSummary: formatList(placements.map((entry) => entry.placement)),
-    decorationSummary: formatList(
-      placements.map((entry) => entry.decoration_type || order.decoration_type),
-      formatValue(order.decoration_type)
-    ),
-    readiness,
-  };
-}
-
-function buildStatusCountMap(quotes) {
-  return quotes.reduce((counts, quote) => {
-    const key = quote.quote_status || "Draft";
-    counts[key] = (counts[key] || 0) + 1;
-    return counts;
-  }, {});
 }
 
 function FilterPill({ active, children, count, tone = "default", onClick }) {
@@ -138,29 +100,6 @@ function FilterPill({ active, children, count, tone = "default", onClick }) {
         {count}
       </span>
     </button>
-  );
-}
-
-function SummaryCard({ label, value, tone = "default" }) {
-  const tones = {
-    default: { background: "#ffffff", border: "#e2e8f0", color: "#0f172a" },
-    warning: { background: "#fff7ed", border: "#fed7aa", color: "#9a3412" },
-    success: { background: "#ecfdf5", border: "#bbf7d0", color: "#166534" },
-  };
-  const palette = tones[tone] || tones.default;
-
-  return (
-    <article
-      style={{
-        background: palette.background,
-        border: `1px solid ${palette.border}`,
-        borderRadius: "18px",
-        padding: "18px",
-      }}
-    >
-      <p style={{ margin: 0, color: "#64748b", fontWeight: 800 }}>{label}</p>
-      <h2 style={{ margin: "8px 0 0", color: palette.color }}>{value}</h2>
-    </article>
   );
 }
 
@@ -301,16 +240,6 @@ function buildQuoteSearchableText(quote, summary) {
     .join(" ");
 }
 
-function matchesQuoteQueueFilter(quote, summary, filterKey) {
-  if (filterKey === "all") return true;
-  if (filterKey === "awaiting-approval") return quote.quote_status === "Awaiting Approval";
-  if (filterKey === "awaiting-artwork") return quote.quote_status === "Awaiting Artwork Approval";
-  if (filterKey === "awaiting-deposit") return quote.quote_status === "Awaiting Deposit";
-  if (filterKey === "ready") return summary.readiness.ready && isQuoteReadyForProduction(quote.quote_status);
-  if (filterKey === "blocked") return !summary.readiness.ready;
-  return true;
-}
-
 export default function Quotes() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -345,14 +274,6 @@ export default function Quotes() {
         };
       }),
     [quotes]
-  );
-  const statusCounts = useMemo(() => buildStatusCountMap(quotes), [quotes]);
-  const readyQuotes = useMemo(
-    () =>
-      quoteRecords.filter(
-        ({ quote, summary }) => summary.readiness.ready && isQuoteReadyForProduction(quote.quote_status)
-      ),
-    [quoteRecords]
   );
   const filterCounts = useMemo(
     () =>
@@ -519,6 +440,26 @@ export default function Quotes() {
     });
   }
 
+  async function handleReleaseToProduction(quote, summary) {
+    if (!summary.readiness.ready) return;
+
+    await updateStoredOrder(quote.order_number, {
+      quote_status: "Ready For Production",
+      status: "Awaiting Production",
+      operational_visible: true,
+      production_ready: true,
+      activity_type: "release_to_production",
+      activity_note: "Quote released into Production Orders.",
+    });
+
+    navigate(`/admin/orders/${quote.order_number}`, {
+      state: {
+        flashMessage: `Order Moved to Production for ${quote.order_number} · ${quote.customer_name || "Customer"}`,
+        flashTone: "success",
+      },
+    });
+  }
+
   return (
     <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "24px" }}>
       <div
@@ -591,20 +532,8 @@ export default function Quotes() {
       </div>
 
       <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: "12px",
-          marginBottom: "20px",
-        }}
-      >
-        <SummaryCard label="Open Requests" value={quotes.length} />
-        <SummaryCard label="Awaiting Customer" value={statusCounts["Awaiting Approval"] || 0} tone="warning" />
-        <SummaryCard label="Awaiting Deposit" value={statusCounts["Awaiting Deposit"] || 0} tone="warning" />
-        <SummaryCard label="Ready for Production" value={readyQuotes.length} tone="success" />
-      </section>
-
-      <section
+        data-testid="order-request-filter-bar"
+        aria-label="Filter order requests"
         style={{
           background: "#ffffff",
           borderRadius: "20px",
@@ -855,6 +784,25 @@ export default function Quotes() {
                     </button>
 
                     <div style={{ display: "grid", gap: "10px", alignItems: "stretch" }}>
+                      {summary.readiness.ready ? (
+                        <button
+                          type="button"
+                          data-testid="quote-list-release-to-production"
+                          onClick={() => handleReleaseToProduction(quote, summary)}
+                          style={{
+                            color: "#ffffff",
+                            fontWeight: 800,
+                            padding: "0 14px",
+                            borderRadius: "12px",
+                            border: "1px solid #166534",
+                            background: "#166534",
+                            cursor: "pointer",
+                            minHeight: "56px",
+                          }}
+                        >
+                          Release to Production
+                        </button>
+                      ) : null}
                       <Link
                         to={`/admin/quotes/${quote.order_number}`}
                         style={{
@@ -868,7 +816,7 @@ export default function Quotes() {
                           display: "inline-flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          minHeight: canViewArchivedQuotes ? "56px" : "100%",
+                          minHeight: "56px",
                         }}
                       >
                         Open Request

@@ -4,6 +4,7 @@ import {
   normalizeQuoteStatus,
 } from "../quotes/quoteWorkflow";
 import { buildProductionReadiness } from "../quotes/productionReadiness";
+import { normalizeOrderFinancials } from "../orders/orderFinancials";
 import {
   isCanceledOperationalStatus,
   isCompletedOperationalStatus,
@@ -26,7 +27,12 @@ export function buildOwnerWorkflowSnapshot(orders = []) {
     const quoteStatus = normalizeQuoteStatus(order.quote_status);
 
     if (isActiveQuoteWorkflowOrder(order)) {
-      const readiness = buildProductionReadiness(order, order);
+      const readiness = buildProductionReadiness(
+        order,
+        normalizeOrderFinancials(order, {
+          additionalSources: order.quote ? [{ label: "storedQuote", value: order.quote }] : [],
+        })
+      );
 
       if (quoteStatus === "Draft") {
         snapshot.newOrderRequests += 1;
@@ -44,7 +50,7 @@ export function buildOwnerWorkflowSnapshot(orders = []) {
         snapshot.awaitingArtwork += 1;
       }
 
-      if (readiness.ready && quoteStatus === "Ready For Production") {
+      if (readiness.ready) {
         snapshot.readyForProduction += 1;
       }
 
@@ -109,7 +115,7 @@ export function buildOwnerWorkflowQueues(orders = []) {
       label: "Ready for Production",
       count: snapshot.readyForProduction,
       description: "Approved work can move directly into the production queue.",
-      to: "/admin/orders?status=ready-for-production",
+      to: "/admin/quotes?queue=ready",
       tone: "success",
     },
     {

@@ -20,12 +20,12 @@ import {
   getNextQuoteStatus,
   isQuoteArchived,
   isQuoteCanceled,
-  isQuoteReadyForProduction,
 } from "../quotes/quoteWorkflow";
 import {
   buildApprovalStatus,
   buildDepositStatus,
   buildProductionReadiness,
+  buildProductionReadyWorkflowUpdates,
 } from "../quotes/productionReadiness";
 import { deriveOwnerQuoteNextAction } from "../orders/ownerWorkflowActions";
 import { buildDepositWorkflowLabel } from "../orders/depositWorkflowDisplay";
@@ -732,23 +732,23 @@ function IntakeReviewScreen({
       <section
         data-testid="intake-workflow-guidance"
         style={{
-          ...cardStyle("#fff7ed"),
-          border: "1px solid #fed7aa",
+          ...cardStyle(intakeComplete ? "#ecfdf5" : "#fff7ed"),
+          border: intakeComplete ? "1px solid #bbf7d0" : "1px solid #fed7aa",
           display: "grid",
           gap: "14px",
         }}
       >
         <div>
-          <p style={{ margin: 0, color: "#9a3412", fontSize: "12px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Outstanding Requirements
+          <p style={{ margin: 0, color: intakeComplete ? "#166534" : "#9a3412", fontSize: "12px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            {intakeComplete ? "Next Business Phase" : "Outstanding Requirements"}
           </p>
-          <h2 style={{ margin: "6px 0 0", color: "#7c2d12" }}>
-            {attentionItems.length ? "What to do next" : "All intake decisions are complete"}
+          <h2 style={{ margin: "6px 0 0", color: intakeComplete ? "#14532d" : "#7c2d12" }}>
+            {attentionItems.length ? "What to do next" : "Continue this order into production"}
           </h2>
-          <p style={{ margin: "8px 0 0", color: "#9a3412", lineHeight: 1.5 }}>
+          <p style={{ margin: "8px 0 0", color: intakeComplete ? "#166534" : "#9a3412", lineHeight: 1.5 }}>
             {attentionItems.length
               ? "Review each requirement below and use the action shown with it."
-              : "This request has no remaining intake requirements."}
+              : "Intake is complete and this order is ready to be released into the Production Queue. Continue in the existing production workspace, where you can also assign the work or leave it unassigned."}
           </p>
         </div>
         {attentionItems.length ? (
@@ -821,7 +821,36 @@ function IntakeReviewScreen({
             ) : null}
           </div>
         ) : (
-          <StatusPill tone="success">No open review items</StatusPill>
+          <div data-testid="intake-production-handoff" style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+            <Link
+              to={`/admin/orders/${order.order_number}#production-handoff`}
+              style={{
+                background: "#166534",
+                color: "#ffffff",
+                borderRadius: "12px",
+                padding: "11px 14px",
+                textDecoration: "none",
+                fontWeight: 800,
+              }}
+            >
+              Continue to Production
+            </Link>
+            <Link
+              to="/admin/orders"
+              style={{
+                background: "#ffffff",
+                color: "#166534",
+                border: "1px solid #86efac",
+                borderRadius: "12px",
+                padding: "10px 14px",
+                textDecoration: "none",
+                fontWeight: 800,
+              }}
+            >
+              View Production Queue
+            </Link>
+            <StatusPill tone="success">No open intake items</StatusPill>
+          </div>
         )}
 
         {completedActionLabels.length ? (
@@ -1214,6 +1243,7 @@ export default function QuoteDetail() {
   });
   const archived = isQuoteArchived(order);
   const canceled = isQuoteCanceled(order);
+  const canReleaseToProduction = !archived && !canceled && productionReadiness.ready;
   const isOrderRequestIntake =
     order?.request_type === "Order Request" && order?.operational_visible === false && !archived && !canceled;
   const archivedAt = archived ? formatDateTime(order.quote_archived_at, " • ") : "—";
@@ -1233,10 +1263,10 @@ export default function QuoteDetail() {
     ? "Archived from active workflow"
     : canceled
     ? "Workflow canceled"
+    : canReleaseToProduction
+    ? "Release to Production"
     : canAdvanceQuoteStatus(order?.quote_status)
     ? `Mark ${getNextQuoteStatus(order.quote_status)}`
-    : isQuoteReadyForProduction(order?.quote_status)
-    ? "Release to Production"
     : "Await remaining request requirements";
 
   useEffect(() => {
@@ -1291,7 +1321,7 @@ export default function QuoteDetail() {
 
   async function handleReleaseToProduction() {
     if (archived || canceled) return;
-    if (!isQuoteReadyForProduction(order.quote_status)) return;
+    if (!productionReadiness.ready) return;
 
     await updateStoredOrder(order.order_number, {
       quote_status: "Ready For Production",
@@ -1391,10 +1421,14 @@ export default function QuoteDetail() {
   async function handleApproveRequest() {
     if (archived || canceled) return;
 
-    const updates = {
+    const reviewUpdates = {
       request_status: "Approved - Pending Requirements",
       staff_review_status: "Approved",
       approval_status: "Approved",
+    };
+    const updates = {
+      ...reviewUpdates,
+      ...buildProductionReadyWorkflowUpdates({ ...order, ...reviewUpdates }, financials),
       activity_type: "order_request_review",
       activity_note: `Order request approved by ${activeStaffUser?.name || "staff"}.`,
     };
@@ -1426,17 +1460,10 @@ export default function QuoteDetail() {
       artwork_approval_status: "Approved",
       artwork_status: "Approved",
     };
-    const nextReadiness = buildProductionReadiness(nextOrder, financials);
     await updateStoredOrder(order.order_number, {
       artwork_approval_status: "Approved",
       artwork_status: "Approved",
-      ...(nextReadiness.ready
-        ? {
-            status: "Ready For Production",
-            quote_status: "Ready For Production",
-            production_ready: true,
-          }
-        : {}),
+      ...buildProductionReadyWorkflowUpdates(nextOrder, financials),
       activity_type: "artwork_approval",
       activity_note: `Artwork approved by ${activeStaffUser?.name || "staff"}.`,
     });
@@ -1472,11 +1499,15 @@ export default function QuoteDetail() {
   async function handleMarkDepositNotRequired() {
     if (archived || canceled) return;
 
-    const updates = {
+    const depositUpdates = {
       deposit_required: false,
       deposit_requirement: "not_required",
       deposit_requirement_status: "Not Required",
       deposit_workflow_status: "Deposit Not Required",
+    };
+    const updates = {
+      ...depositUpdates,
+      ...buildProductionReadyWorkflowUpdates({ ...order, ...depositUpdates }, financials),
       activity_type: "deposit_workflow",
       activity_note: `Deposit marked not required by ${activeStaffUser?.name || "staff"}.`,
     };
@@ -1621,7 +1652,7 @@ export default function QuoteDetail() {
           >
             {archived ? "Back to Archived Requests" : canceled ? "Back to Canceled Orders" : "Back to Order Requests"}
           </Link>
-          {!archived && !canceled && canAdvanceQuoteStatus(order.quote_status) ? (
+          {!canReleaseToProduction && !archived && !canceled && canAdvanceQuoteStatus(order.quote_status) ? (
             <button
               type="button"
               data-testid="quote-detail-advance-status"
@@ -1639,7 +1670,7 @@ export default function QuoteDetail() {
               Mark {getNextQuoteStatus(order.quote_status)}
             </button>
           ) : null}
-          {!archived && !canceled && isQuoteReadyForProduction(order.quote_status) ? (
+          {canReleaseToProduction ? (
             <button
               type="button"
               data-testid="quote-detail-release-to-production"
@@ -1991,7 +2022,7 @@ export default function QuoteDetail() {
           background="#f8fafc"
         >
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "16px" }}>
-            <StatusPill tone={canceled ? "danger" : isQuoteReadyForProduction(order.quote_status) ? "success" : "default"}>
+            <StatusPill tone={canceled ? "danger" : productionReadiness.ready ? "success" : "default"}>
               {canceled ? "Canceled" : order.quote_status}
             </StatusPill>
             {archived ? <StatusPill>Archived</StatusPill> : null}
@@ -2326,7 +2357,7 @@ export default function QuoteDetail() {
             </div>
 
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-              {canAdvanceQuoteStatus(order.quote_status) ? (
+              {!canReleaseToProduction && canAdvanceQuoteStatus(order.quote_status) ? (
                 <button
                   type="button"
                   onClick={handleAdvanceQuote}
@@ -2345,7 +2376,7 @@ export default function QuoteDetail() {
                   Mark {getNextQuoteStatus(order.quote_status)}
                 </button>
               ) : null}
-              {isQuoteReadyForProduction(order.quote_status) ? (
+              {canReleaseToProduction ? (
                 <button
                   type="button"
                   onClick={handleReleaseToProduction}

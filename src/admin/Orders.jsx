@@ -16,7 +16,6 @@ import { useCustomerTimeline } from "../lib/customerTimelineStore";
 import { getOperationalStaffUsers } from "../lib/staffUsersStore";
 import { getArtworkAssetUrl, isArtworkImage } from "../lib/orderArtwork";
 import {
-  buildProductionWorkspaceSummary,
   buildResultsLabel,
   getProductionMethodCounts,
   getProductionStatusCounts,
@@ -30,6 +29,7 @@ import {
   PRODUCTION_STATUS_FILTERS,
 } from "../production/productionWorkspace";
 import { sortQueueByPriority } from "../queue/buildQueuePriority";
+import { matchesProductionEmployee } from "../production/productionEmployeeFilter";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 import {
   canSelfAssignOrder,
@@ -46,32 +46,27 @@ import {
 } from "./workflowCopy";
 
 const ESCALATION_COOLDOWN_MS = 24 * 60 * 60 * 1000;
-const PRIMARY_QUEUE_FILTERS = [
-  { key: "today", label: "Today", type: "date", value: "today" },
-  { key: "ready", label: "Ready to Start", type: "status", value: "ready-for-production" },
-  { key: "in-production", label: "In Production", type: "status", value: "in-production" },
-  { key: "qc", label: "QC / Finishing", type: "status", value: "qc-finishing" },
+const DAILY_STATUS_FILTERS = [
+  { key: "active", label: "All Active" },
+  { key: "ready-for-production", label: "Ready to Start" },
+  { key: "in-production", label: "In Production" },
+  { key: "qc-finishing", label: "QC / Finishing" },
+  { key: "ready-for-pickup", label: "Ready for Pickup" },
 ];
 const ATTENTION_FILTERS = [
   { key: "blocked", label: "Blocked", tone: "danger" },
   { key: "on-hold", label: "On Hold", tone: "danger" },
   { key: "urgent", label: "Urgent", tone: "warning" },
-  { key: "unassigned", label: "Unassigned", tone: "warning" },
-];
-const SECONDARY_VISIBLE_STATUS_FILTERS = [
-  { key: "completed", label: "Completed", tone: "success" },
-  { key: "canceled", label: "Canceled", tone: "danger" },
 ];
 const VISIBLE_STATUS_FILTER_KEYS = new Set([
   "active",
   "blocked",
   "on-hold",
   "urgent",
-  "unassigned",
   "ready-for-production",
   "in-production",
   "qc-finishing",
-  ...SECONDARY_VISIBLE_STATUS_FILTERS.map((filter) => filter.key),
+  "ready-for-pickup",
 ]);
 
 function FilterPill({ active, children, count, tone = "default", onClick, testId }) {
@@ -1063,6 +1058,7 @@ export default function Orders() {
   const activeStatusFilter = searchParams.get("status") || "active";
   const activeMethodFilter = searchParams.get("workflow") || "all";
   const activeDateFilter = searchParams.get("date") || "all";
+  const activeEmployeeFilter = searchParams.get("employee") || "all";
   const searchTerm = searchParams.get("q") || "";
   const customStart = searchParams.get("start") || "";
   const customEnd = searchParams.get("end") || "";
@@ -1071,13 +1067,14 @@ export default function Orders() {
     activeStatusFilter !== "active" ||
     activeMethodFilter !== "all" ||
     activeDateFilter !== "all" ||
+    activeEmployeeFilter !== "all" ||
     Boolean(searchTerm) ||
     Boolean(customStart) ||
     Boolean(customEnd);
   const hasAdvancedFilterActivity =
     !VISIBLE_STATUS_FILTER_KEYS.has(activeStatusFilter) ||
     activeMethodFilter !== "all" ||
-    !["all", "today"].includes(activeDateFilter) ||
+    activeDateFilter !== "all" ||
     Boolean(customStart) ||
     Boolean(customEnd);
 
@@ -1091,19 +1088,6 @@ export default function Orders() {
   );
   const statusCounts = useMemo(() => getProductionStatusCounts(workspaceOrders), [workspaceOrders]);
   const methodCounts = useMemo(() => getProductionMethodCounts(workspaceOrders), [workspaceOrders]);
-  const workspaceSummary = useMemo(
-    () => buildProductionWorkspaceSummary(workspaceOrders),
-    [workspaceOrders]
-  );
-  const primaryFilterCounts = useMemo(
-    () => ({
-      today: workspaceOrders.filter((order) => matchesDateFilter(order, "today")).length,
-      ready: workspaceOrders.filter((order) => matchesProductionStatus(order, "ready-for-production")).length,
-      "in-production": workspaceOrders.filter((order) => matchesProductionStatus(order, "in-production")).length,
-      qc: workspaceOrders.filter((order) => matchesProductionStatus(order, "qc-finishing")).length,
-    }),
-    [workspaceOrders]
-  );
   const staffUsers = useMemo(
     () => getOperationalStaffUsers().filter((staff) => staff.status !== "Inactive"),
     []
@@ -1116,6 +1100,7 @@ export default function Orders() {
           (order) =>
             matchesProductionStatus(order, activeStatusFilter) &&
             matchesProductionMethod(order, activeMethodFilter) &&
+            matchesProductionEmployee(order, activeEmployeeFilter, staffUsers) &&
             matchesDateFilter(order, activeDateFilter, customStart, customEnd) &&
             matchesSearch(order, searchTerm)
         )
@@ -1124,10 +1109,12 @@ export default function Orders() {
       workspaceOrders,
       activeStatusFilter,
       activeMethodFilter,
+      activeEmployeeFilter,
       activeDateFilter,
       customStart,
       customEnd,
       searchTerm,
+      staffUsers,
     ]
   );
   const selectedOrder = useMemo(
@@ -1148,6 +1135,7 @@ export default function Orders() {
         (key === "order" && !value) ||
         (key === "status" && value === "active") ||
         (key === "workflow" && value === "all") ||
+        (key === "employee" && value === "all") ||
         (key === "date" && value === "all")
       ) {
         nextParams.delete(key);
@@ -1328,36 +1316,37 @@ export default function Orders() {
               }}
             />
 
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-              {PRIMARY_QUEUE_FILTERS.map((filter) => {
-                const active =
-                  filter.type === "date"
-                    ? activeDateFilter === filter.value
-                    : activeStatusFilter === filter.value;
-                return (
-                  <FilterPill
-                    key={filter.key}
-                    testId={filter.type === "status" ? `production-status-filter-${filter.value}` : undefined}
-                    active={active}
-                    count={primaryFilterCounts[filter.key] || 0}
-                    onClick={() =>
-                      filter.type === "date"
-                        ? updateFilters({ date: filter.value })
-                        : updateFilters({ status: filter.value })
-                    }
-                  >
-                    {filter.label}
-                  </FilterPill>
-                );
-              })}
-              <FilterPill
-                testId="production-status-filter-active"
-                active={activeStatusFilter === "active" && activeDateFilter === "all"}
-                count={statusCounts.active || 0}
-                onClick={() => updateFilters({ status: "active", date: "all" })}
+            <label style={{ display: "grid", gap: "6px", maxWidth: "320px", color: "#475569", fontSize: "12px", fontWeight: 900, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+              Assigned Employee
+              <select
+                data-testid="production-employee-filter"
+                value={activeEmployeeFilter}
+                onChange={(event) => updateFilters({ employee: event.target.value })}
+                style={{ border: "1px solid #cbd5e1", borderRadius: "12px", padding: "11px 12px", background: "#ffffff", color: "#0f172a", fontSize: "15px", fontWeight: 800, textTransform: "none", letterSpacing: 0 }}
               >
-                All Active
-              </FilterPill>
+                <option value="all">All Employees</option>
+                <option value="unassigned">Unassigned</option>
+                {staffUsers.map((staff) => (
+                  <option key={staff.id} value={staff.id}>{staff.name}{staff.role ? ` (${staff.role})` : ""}</option>
+                ))}
+              </select>
+            </label>
+
+            <div style={{ display: "grid", gap: "7px" }}>
+              <strong style={{ color: "#475569", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Production Status</strong>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                {DAILY_STATUS_FILTERS.map((filter) => (
+                <FilterPill
+                  key={filter.key}
+                  testId={`production-status-filter-${filter.key}`}
+                  active={activeStatusFilter === filter.key}
+                  count={statusCounts[filter.key] || 0}
+                  onClick={() => updateFilters({ status: filter.key })}
+                >
+                  {filter.label}
+                </FilterPill>
+                ))}
+              </div>
             </div>
           </section>
 
@@ -1373,11 +1362,6 @@ export default function Orders() {
           >
             <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
               <strong style={{ color: "#0f172a" }}>Needs Attention</strong>
-              {!isStaffWorkspace ? (
-                <Link to="/admin/assignments" style={{ color: "#475569", fontSize: "13px", fontWeight: 800 }}>
-                  Assign Work
-                </Link>
-              ) : null}
             </div>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
               {ATTENTION_FILTERS.map((filter) => (
@@ -1411,18 +1395,6 @@ export default function Orders() {
               >
                 Advanced Filters {advancedFiltersOpen ? "▲" : "▼"}
               </button>
-              {SECONDARY_VISIBLE_STATUS_FILTERS.map((filter) => (
-                <FilterPill
-                  key={filter.key}
-                  testId={`production-status-filter-${filter.key}`}
-                  active={activeStatusFilter === filter.key}
-                  count={statusCounts[filter.key] || 0}
-                  tone={filter.tone}
-                  onClick={() => updateFilters({ status: filter.key })}
-                >
-                  {filter.label}
-                </FilterPill>
-              ))}
             </div>
 
             {advancedFiltersOpen || hasAdvancedFilterActivity ? (
@@ -1435,8 +1407,10 @@ export default function Orders() {
                   gap: "12px",
                 }}
               >
-                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-                  {PRODUCTION_STATUS_FILTERS.filter((filter) => !VISIBLE_STATUS_FILTER_KEYS.has(filter.key)).map((filter) => (
+                <div style={{ display: "grid", gap: "7px" }}>
+                  <strong style={{ color: "#475569", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Additional Status</strong>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                    {PRODUCTION_STATUS_FILTERS.filter((filter) => !VISIBLE_STATUS_FILTER_KEYS.has(filter.key) && filter.key !== "unassigned").map((filter) => (
                     <FilterPill
                       key={filter.key}
                       testId={`production-status-filter-${filter.key}`}
@@ -1455,11 +1429,14 @@ export default function Orders() {
                     >
                       {filter.label}
                     </FilterPill>
-                  ))}
+                    ))}
+                  </div>
                 </div>
 
-                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                  {PRODUCTION_METHOD_FILTERS.map((filter) => (
+                <div style={{ display: "grid", gap: "7px" }}>
+                  <strong style={{ color: "#475569", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Decoration Method</strong>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    {PRODUCTION_METHOD_FILTERS.map((filter) => (
                     <FilterPill
                       key={filter.key}
                       active={activeMethodFilter === filter.key}
@@ -1468,11 +1445,14 @@ export default function Orders() {
                     >
                       {filter.label}
                     </FilterPill>
-                  ))}
+                    ))}
+                  </div>
                 </div>
 
-                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                  {PRODUCTION_DATE_FILTERS.map((filter) => (
+                <div style={{ display: "grid", gap: "7px" }}>
+                  <strong style={{ color: "#475569", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Date</strong>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    {PRODUCTION_DATE_FILTERS.map((filter) => (
                     <FilterPill
                       key={filter.key}
                       active={activeDateFilter === filter.key}
@@ -1481,7 +1461,8 @@ export default function Orders() {
                     >
                       {filter.label}
                     </FilterPill>
-                  ))}
+                    ))}
+                  </div>
                 </div>
 
                 {activeDateFilter === "custom" ? (

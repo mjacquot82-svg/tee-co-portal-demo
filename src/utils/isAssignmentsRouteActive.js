@@ -1,3 +1,3 @@
 export function isAssignmentsRouteActive(pathname = "") {
-  return pathname === "/admin/assignments" || pathname.startsWith("/admin/assignments/");
+  return pathname === "/admin/orders";
 }
