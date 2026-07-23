@@ -240,29 +240,30 @@ function QueueWorkflowIndicator({ order }) {
     <div
       aria-label={`Workflow: ${stages.map((stage) => stage.label).join(", ")}`}
       data-testid="production-queue-workflow-indicator"
-      style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}
+      style={{ display: "flex", alignItems: "center", gap: "9px", flexWrap: "wrap" }}
     >
       {stages.map((stage, index) => {
         const complete = index < currentStageIndex;
         const active = index === currentStageIndex;
         return (
-          <div key={stage.key} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <div key={stage.key} style={{ display: "flex", alignItems: "center", gap: "9px" }}>
             <span
               data-stage-state={active ? "active" : complete ? "complete" : "pending"}
               style={{
-                border: active ? "1px solid #0f172a" : complete ? "1px solid #bbf7d0" : "1px solid #e2e8f0",
-                background: active ? "#0f172a" : complete ? "#ecfdf5" : "#f8fafc",
-                color: active ? "#ffffff" : complete ? "#166534" : "#94a3b8",
-                borderRadius: "999px",
-                padding: "4px 8px",
-                fontSize: "12px",
-                fontWeight: active ? 900 : 750,
+                border: active ? "2px solid #0f172a" : complete ? "1px solid #cbd5e1" : "1px solid #e2e8f0",
+                background: active ? "#ffffff" : complete ? "#f1f5f9" : "#f8fafc",
+                color: active ? "#0f172a" : complete ? "#334155" : "#94a3b8",
+                borderRadius: "10px",
+                padding: active ? "6px 11px" : "7px 11px",
+                fontSize: "13px",
+                fontWeight: active ? 900 : complete ? 800 : 700,
+                boxShadow: active ? "0 0 0 2px rgba(15, 23, 42, 0.08)" : "none",
               }}
             >
               {complete ? "✓ " : ""}{stage.label}
             </span>
             {index < stages.length - 1 ? (
-              <span aria-hidden="true" style={{ color: "#cbd5e1", fontSize: "12px", fontWeight: 900 }}>→</span>
+              <span aria-hidden="true" style={{ color: "#cbd5e1", fontSize: "14px", fontWeight: 800 }}>→</span>
             ) : null}
           </div>
         );
@@ -347,16 +348,16 @@ function QueueRow({ order, onRunAction, onOpenDetail, onEscalate, onClaim, curre
       data-unassigned={isUnassigned ? "true" : "false"}
       style={{
         display: "grid",
-        gap: "12px",
+        gap: "14px",
         ...rowStyle,
         borderRadius: "16px",
-        padding: "14px 16px",
+        padding: "16px 18px",
         boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
       }}
     >
-      <div style={{ display: "grid", gap: "8px" }}>
+      <div style={{ display: "grid", gap: "6px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start", flexWrap: "wrap" }}>
-          <div style={{ minWidth: 0, display: "grid", gap: "3px" }}>
+          <div style={{ minWidth: 0, display: "grid", gap: "6px" }}>
             <div style={{ display: "flex", gap: "8px", alignItems: "baseline", flexWrap: "wrap" }}>
               <button
                 type="button"
@@ -374,10 +375,16 @@ function QueueRow({ order, onRunAction, onOpenDetail, onEscalate, onClaim, curre
               >
                 {order.order_number}
               </button>
-              <strong style={{ color: "#0f172a", fontSize: "17px" }}>{order.customer_name}</strong>
+              <strong style={{ color: "#334155", fontSize: "16px" }}>{order.customer_name}</strong>
             </div>
-            <span data-testid="production-queue-row-assignment" style={{ color: isUnassigned ? "#9a3412" : "#475569", fontSize: "13px", fontWeight: 800 }}>
-              Assigned To: {order.assigned_to_staff_name}
+            <span
+              data-testid="production-queue-row-assignment"
+              style={{ display: "inline-flex", alignItems: "baseline", gap: "6px", color: "#64748b", fontSize: "13px", fontWeight: 700 }}
+            >
+              Assigned To
+              <strong style={{ color: isUnassigned ? "#9a3412" : "#334155", fontSize: "14px", fontWeight: 900 }}>
+                {order.assigned_to_staff_name}
+              </strong>
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
@@ -395,13 +402,9 @@ function QueueRow({ order, onRunAction, onOpenDetail, onEscalate, onClaim, curre
             </span>
           </div>
         </div>
-
-        <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 600 }}>
-          {[order.garment, order.decoration_type].filter(Boolean).join(" · ")}
-        </span>
       </div>
 
-      <div style={{ display: "grid", gap: "5px" }}>
+      <div style={{ display: "grid", gap: "7px", padding: "2px 0" }}>
         <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 900, textTransform: "uppercase" }}>
           Workflow
         </span>
@@ -482,8 +485,8 @@ function QueueRow({ order, onRunAction, onOpenDetail, onEscalate, onClaim, curre
         </div>
       ) : null}
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1fr) auto auto", gap: "16px", alignItems: "end" }}>
-        <div style={{ display: "grid", gap: "5px" }}>
+      <div style={{ display: "grid", gap: "12px" }}>
+        <div style={{ display: "grid", gap: "6px", justifyItems: "start" }}>
           <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 900, textTransform: "uppercase" }}>
             Next Action
           </span>
@@ -518,33 +521,47 @@ function QueueRow({ order, onRunAction, onOpenDetail, onEscalate, onClaim, curre
             </span>
           )}
         </div>
-        <div style={{ display: "grid", gap: "2px", minWidth: "110px", textAlign: "right" }}>
-          <strong
-            style={{
-              color: due.tone === "danger" ? "#b91c1c" : due.tone === "warning" ? "#9a3412" : due.tone === "quiet" ? "#94a3b8" : "#475569",
-              fontSize: due.tone === "quiet" ? "12px" : "14px",
-            }}
-          >
-            {due.label}
-          </strong>
-          {due.detail ? <span style={{ color: "#94a3b8", fontSize: "11px" }}>{due.detail}</span> : null}
-        </div>
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+        <div
+          style={{
+            borderTop: "1px solid #e2e8f0",
+            paddingTop: "10px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "12px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 600 }}>
+              {[order.garment, order.decoration_type].filter(Boolean).join(" · ")}
+            </span>
+            <span aria-hidden="true" style={{ color: "#cbd5e1" }}>·</span>
+            <span
+              style={{
+                color: due.tone === "danger" ? "#b91c1c" : due.tone === "warning" ? "#9a3412" : due.tone === "quiet" ? "#94a3b8" : "#64748b",
+                fontSize: "12px",
+                fontWeight: due.tone === "danger" || due.tone === "warning" ? 800 : 700,
+              }}
+            >
+              {due.label}{due.detail ? ` · ${due.detail}` : ""}
+            </span>
+          </div>
           <button
             type="button"
             data-testid="production-queue-row-details"
             onClick={() => onOpenDetail(order)}
             style={{
-              border: "1px solid #cbd5e1",
-              background: "#ffffff",
-              color: "#0f172a",
-              borderRadius: "10px",
-              padding: "8px 10px",
+              border: "none",
+              background: "transparent",
+              color: "#64748b",
+              padding: "4px 0",
+              fontSize: "12px",
               fontWeight: 700,
               cursor: "pointer",
             }}
           >
-            Details
+            Details →
           </button>
         </div>
 
@@ -563,6 +580,7 @@ function QueueRow({ order, onRunAction, onOpenDetail, onEscalate, onClaim, curre
               padding: "10px 12px",
               display: "grid",
               gap: "3px",
+              justifySelf: "start",
             }}
           >
             <strong style={{ fontSize: "13px" }}>{actionFeedback.summary}</strong>
@@ -1138,6 +1156,9 @@ export default function Orders() {
     [isStaffWorkspace, orders]
   );
   const statusCounts = useMemo(() => getProductionStatusCounts(workspaceOrders), [workspaceOrders]);
+  const hasAttentionItems = ATTENTION_FILTERS.some(
+    (filter) => Number(statusCounts[filter.key] || 0) > 0
+  );
   const staffUsers = useMemo(
     () => getOperationalStaffUsers().filter((staff) => staff.status !== "Inactive"),
     []
@@ -1357,12 +1378,13 @@ export default function Orders() {
               onChange={(event) => updateFilters({ q: event.target.value })}
               placeholder="Search active jobs"
               style={{
-                border: "1px solid #cbd5e1",
-                borderRadius: "12px",
-                padding: "10px 12px",
-                fontSize: "15px",
-                width: "min(100%, 520px)",
+                border: "1px solid #d6dbe4",
+                borderRadius: "10px",
+                padding: "8px 10px",
+                fontSize: "14px",
+                width: "min(100%, 400px)",
                 boxSizing: "border-box",
+                color: "#475569",
               }}
             />
 
@@ -1403,17 +1425,19 @@ export default function Orders() {
           <section
             style={{
               border: "1px solid #e2e8f0",
-              borderRadius: "16px",
-              padding: "10px 12px",
+              borderRadius: hasAttentionItems ? "16px" : "12px",
+              padding: hasAttentionItems ? "10px 12px" : "7px 10px",
               background: "#f8fafc",
-              display: "grid",
-              gap: "8px",
+              display: hasAttentionItems ? "grid" : "flex",
+              gap: hasAttentionItems ? "8px" : "10px",
+              alignItems: "center",
+              flexWrap: "wrap",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-              <strong style={{ color: "#0f172a" }}>Needs Attention</strong>
+              <strong style={{ color: hasAttentionItems ? "#0f172a" : "#64748b", fontSize: hasAttentionItems ? "16px" : "12px" }}>Needs Attention</strong>
             </div>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: hasAttentionItems ? "8px" : "6px", flexWrap: "wrap" }}>
               {ATTENTION_FILTERS.map((filter) => (
                 <FilterPill
                   key={filter.key}
