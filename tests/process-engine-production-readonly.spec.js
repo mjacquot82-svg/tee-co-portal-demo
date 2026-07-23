@@ -110,8 +110,11 @@ test("engine-backed production presentation does not derive execution state from
 });
 
 test("Order Detail presents process authority through the single next action", async () => {
-  const source = await import("node:fs/promises").then((fs) =>
-    fs.readFile(new URL("../src/admin/OrderDetail.jsx", import.meta.url), "utf8")
+  const [source, orderManagementSource] = await import("node:fs/promises").then((fs) =>
+    Promise.all([
+      fs.readFile(new URL("../src/admin/OrderDetail.jsx", import.meta.url), "utf8"),
+      fs.readFile(new URL("../src/order-detail/OrderManagementWorkspace.jsx", import.meta.url), "utf8"),
+    ])
   );
 
   expect(source).toContain("buildProcessInstanceProjection(result.processInstance)");
@@ -122,14 +125,14 @@ test("Order Detail presents process authority through the single next action", a
   expect(source).toContain('data-testid="order-workspace-tabs"');
   expect(source).toContain('data-testid="order-workspace-production"');
   expect(source).toContain('data-testid="order-workspace-financial"');
-  expect(source).toContain('data-testid="order-workspace-details"');
+  expect(source).toContain("<OrderManagementWorkspace");
 
   const jobIdentityIndex = source.indexOf('data-testid="production-job-identity"');
   const nextActionIndex = source.indexOf("<ProcessCurrentActionPanel");
   const garmentIndex = source.indexOf("<GarmentProductionCards");
   const notesIndex = source.indexOf("<ProductionInstructionsPanel");
   const financialWorkspaceIndex = source.indexOf('data-testid="order-workspace-financial"');
-  const detailsWorkspaceIndex = source.indexOf('data-testid="order-workspace-details"');
+  const orderManagementWorkspaceIndex = source.indexOf("<OrderManagementWorkspace");
   const activityTimelineIndex = source.lastIndexOf("<ActivityTimeline");
 
   expect(jobIdentityIndex).toBeGreaterThan(-1);
@@ -137,12 +140,12 @@ test("Order Detail presents process authority through the single next action", a
   expect(garmentIndex).toBeGreaterThan(nextActionIndex);
   expect(notesIndex).toBeGreaterThan(garmentIndex);
   expect(financialWorkspaceIndex).toBeGreaterThan(notesIndex);
-  expect(detailsWorkspaceIndex).toBeGreaterThan(financialWorkspaceIndex);
-  expect(activityTimelineIndex).toBeGreaterThan(detailsWorkspaceIndex);
+  expect(orderManagementWorkspaceIndex).toBeGreaterThan(financialWorkspaceIndex);
+  expect(activityTimelineIndex).toBe(-1);
 
   expect(source).toContain('data-testid="quote-snapshot-disclosure"');
   expect(source).toContain('showInternalNotes={false}');
-  expect(source).toContain("collapsedByDefault");
+  expect(orderManagementSource).toContain("collapsedByDefault");
   expect(source).toContain('data-testid="production-job-header"');
   expect(source).toContain("<GarmentProductionCards order={order} />");
   expect(source).not.toContain("Production Reference");

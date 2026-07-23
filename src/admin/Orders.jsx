@@ -29,6 +29,7 @@ import { getActiveStaffUser } from "../lib/staffUsersStore";
 import {
   canSelfAssignOrder,
   getOperationalOrdersForStaff,
+  isOwnerView,
   isStaffWorkspaceView,
 } from "./adminRoleView";
 import {
@@ -39,6 +40,7 @@ import {
   buildProductionEmptyState,
   buildWorkflowActionConfirmation,
 } from "./workflowCopy";
+import { buildOwnerBlockedQueuePresentation } from "../production/ownerBlockedQueuePresentation";
 
 const ESCALATION_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const DAILY_STATUS_FILTERS = [
@@ -305,13 +307,17 @@ function buildQueueDuePresentation(order, priority) {
   };
 }
 
-function QueueRow({ order, onRunAction, onOpenDetail, onEscalate, onClaim, currentStaffUser = null, actionFeedback = null }) {
+function QueueRow({ order, onRunAction, onOpenDetail, onOwnerBlockedAction, onEscalate, onClaim, currentStaffUser = null, actionFeedback = null }) {
   const primaryAction = (order.available_actions || []).find((action) => action.blocked !== true);
   const priority = order.queue_priority || {};
   const due = buildQueueDuePresentation(order, priority);
   const readiness = order.production_readiness || buildProductionReadinessSummary(order);
   const isOnHold = isOnHoldOperationalStatus(order.status);
   const isBlocked = readiness.blocked === true;
+  const isOwner = isOwnerView(currentStaffUser);
+  const ownerBlockedPresentation = isOwner && isBlocked
+    ? buildOwnerBlockedQueuePresentation(readiness)
+    : null;
   const isAssignedToMe =
     currentStaffUser?.id && order.assigned_to_staff_id === currentStaffUser.id;
   const isUnassigned =
@@ -433,11 +439,33 @@ function QueueRow({ order, onRunAction, onOpenDetail, onEscalate, onClaim, curre
             }}
           >
             <strong>Blocked: {readiness.detail}</strong>
+            <span>Responsible: {ownerBlockedPresentation?.responsibleLabel || readiness.responsibleParty}</span>
             <span>
-              Next recommended action: {readiness.nextRecommendedAction}
+              Next action: {ownerBlockedPresentation?.actionLabel || readiness.nextRecommendedAction}
             </span>
-            <span>Responsible: {readiness.responsibleParty}</span>
-            {onEscalate ? (
+            {ownerBlockedPresentation ? (
+              <button
+                type="button"
+                data-testid="owner-blocked-action-button"
+                data-blocker-key={readiness.blockers?.[0]?.key || "workflow"}
+                onClick={() => onOwnerBlockedAction?.(order, ownerBlockedPresentation)}
+                style={{
+                  marginTop: "4px",
+                  border: "1px solid #991b1b",
+                  background: "#ffffff",
+                  color: "#991b1b",
+                  borderRadius: "8px",
+                  padding: "7px 10px",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  fontSize: "12px",
+                  alignSelf: "start",
+                  justifySelf: "start",
+                }}
+              >
+                {ownerBlockedPresentation.actionLabel}
+              </button>
+            ) : onEscalate ? (
               <button
                 type="button"
                 data-testid="escalate-to-owner-button"
@@ -1271,6 +1299,13 @@ export default function Orders() {
     navigate(`/admin/orders/${encodeURIComponent(order.order_number)}`);
   }
 
+  function handleOwnerBlockedAction(order, presentation) {
+    if (!order?.order_number) return;
+    const orderPath = `/admin/orders/${encodeURIComponent(order.order_number)}`;
+    const workspace = presentation?.workspace;
+    navigate(workspace && workspace !== "production" ? `${orderPath}?workspace=${workspace}` : orderPath);
+  }
+
   async function handleAssign(order, staffId) {
     const selectedWorker = staffUsers.find((worker) => worker.id === staffId);
     const previousAssignment = order.assigned_to_staff_name || "";
@@ -1461,6 +1496,7 @@ export default function Orders() {
                   order={order}
                   onRunAction={handleRunAction}
                   onOpenDetail={handleOpenDetail}
+                  onOwnerBlockedAction={handleOwnerBlockedAction}
                   onEscalate={handleEscalate}
                   onClaim={handleClaim}
                   currentStaffUser={staffUser}

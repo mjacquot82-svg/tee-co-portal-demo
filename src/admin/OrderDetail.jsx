@@ -15,7 +15,6 @@ import StatusBadge from "../components/StatusBadge";
 import AssignmentOnlyPanel from "../order-detail/AssignmentOnlyPanel";
 import ProductionActionPanel from "../order-detail/ProductionActionPanel";
 import ProcessCurrentActionPanel from "../order-detail/ProcessCurrentActionPanel";
-import ActivityTimeline from "../order-detail/ActivityTimeline";
 import ProductionInstructionsPanel from "../order-detail/ProductionInstructionsPanel";
 import GarmentProductionCards from "../order-detail/GarmentProductionCards";
 import FinancialSummaryPanel from "../order-detail/FinancialSummaryPanel";
@@ -30,7 +29,10 @@ import {
 } from "../orders/orderWorkflow";
 import { isAdminWorkspaceView, isStaffWorkspaceView, canSelfAssignOrder } from "./adminRoleView";
 import { markAssignmentAttentionSeen } from "../lib/staffAssignmentAttentionStore";
-import { buildWorkflowBlockDetails } from "../orders/workflowPresentation";
+import {
+  buildProductionReadinessSummary,
+  buildWorkflowBlockDetails,
+} from "../orders/workflowPresentation";
 import {
   buildDepositRequestContent,
   createAndSendDepositPaymentRequestForOrder,
@@ -42,6 +44,7 @@ import {
 } from "./workflowCopy";
 import { ensureTeeCoProductionProcess } from "../integrations/teeCoProductionProcess";
 import { buildProcessInstanceProjection } from "../process-engine/processProjection";
+import OrderManagementWorkspace from "../order-detail/OrderManagementWorkspace";
 
 const cardStyle = {
   background: "#ffffff",
@@ -92,9 +95,12 @@ export default function OrderDetail() {
   const hasProcessAuthority = Boolean(processProjection);
   const showLegacyProduction = processProjectionResolved && !hasProcessAuthority;
   const requestedWorkspace = searchParams.get("workspace");
-  const activeWorkspace = ["financial", "details"].includes(requestedWorkspace)
-    ? requestedWorkspace
-    : "production";
+  const activeWorkspace =
+    requestedWorkspace === "details"
+      ? "order-management"
+      : ["financial", "order-management"].includes(requestedWorkspace)
+      ? requestedWorkspace
+      : "production";
 
   const quoteSnapshot = useMemo(() => {
     if (!order) return null;
@@ -109,6 +115,10 @@ export default function OrderDetail() {
         : [],
     });
   }, [order, quoteSnapshot]);
+  const productionReadiness = useMemo(
+    () => (order ? buildProductionReadinessSummary(order) : null),
+    [order]
+  );
   const workflowActions = useMemo(
     () => (order && showLegacyProduction ? getAvailableProductionActions(order) : []),
     [order, showLegacyProduction]
@@ -405,7 +415,7 @@ export default function OrderDetail() {
       {[
         { key: "production", label: "Production" },
         { key: "financial", label: "Financial" },
-        { key: "details", label: "Details" },
+        { key: "order-management", label: "Order Management" },
       ].map((workspace) => {
         const selected = activeWorkspace === workspace.key;
         return (
@@ -473,7 +483,6 @@ export default function OrderDetail() {
             <div data-testid="order-detail-current-status" data-workflow-state={order.status || ""}><p style={sectionLabelStyle}>Production Status</p><div style={{ marginTop: "6px", fontSize: "18px" }}><StatusBadge status={order.status} /></div></div>
             <div><p style={sectionLabelStyle}>Due Date</p><p style={sectionValueStyle}>{order.due_date || "—"}</p></div>
             <div><p style={sectionLabelStyle}>Priority</p><p style={{ ...sectionValueStyle, color: urgency.color }}>{urgency.label}</p></div>
-            {assignmentPanel}
           </div>
 
           {isCanceledOperationalStatus(order.status) ? (
@@ -527,6 +536,13 @@ export default function OrderDetail() {
 
       {activeWorkspace === "production" ? (
         <div data-testid="order-workspace-production" style={{ display: "grid", gap: "18px" }}>
+          <section
+            data-testid="production-assignment"
+            style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "20px", padding: "18px" }}
+          >
+            <p style={sectionLabelStyle}>Production Assignment</p>
+            <div style={{ marginTop: "12px" }}>{assignmentPanel}</div>
+          </section>
           <div id="production-handoff" style={{ scrollMarginTop: "24px" }}>
           {hasProcessAuthority ? (
             <ProcessCurrentActionPanel projection={processProjection} onPrint={handlePrintTicket} />
@@ -585,43 +601,17 @@ export default function OrderDetail() {
         </div>
       ) : null}
 
-      {activeWorkspace === "details" ? (
-        <div data-testid="order-workspace-details" data-reference-role="secondary" style={{ display: "grid", gap: "18px" }}>
-              <section style={cardStyle}>
-                <h2 style={{ marginTop: 0 }}>Order Reference</h2>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px" }}>
-                  <div><p style={sectionLabelStyle}>Customer</p><p style={sectionValueStyle}>{order.customer_name || "Walk-in Customer"}</p></div>
-                  <div><p style={sectionLabelStyle}>Placed</p><p style={sectionValueStyle}>{placedAt.date} at {placedAt.time}</p></div>
-                  <div><p style={sectionLabelStyle}>Last Updated</p><p style={sectionValueStyle}>{updatedAt.date} at {updatedAt.time}</p></div>
-                  <div><p style={sectionLabelStyle}>Source</p><p style={sectionValueStyle}>{order.source || "Operational intake"}</p></div>
-                  <div><p style={sectionLabelStyle}>Request Approval</p><p style={sectionValueStyle}>{order.staff_review_status || order.approval_status || "—"}</p></div>
-                  <div><p style={sectionLabelStyle}>Artwork Approval</p><p style={sectionValueStyle}>{order.artwork_status || order.artwork_approval_status || "—"}</p></div>
-                  <div><p style={sectionLabelStyle}>Deposit Decision</p><p style={sectionValueStyle}>{order.deposit_workflow_status || order.deposit_requirement_status || "—"}</p></div>
-                </div>
-            <div style={{ borderTop: "1px solid #e2e8f0", marginTop: "18px", paddingTop: "18px" }}>
-              <p style={sectionLabelStyle}>Internal Notes</p>
-              <p style={{ ...sectionValueStyle, whiteSpace: "pre-wrap" }}>{order.internal_note || "No internal notes recorded."}</p>
-            </div>
-          </section>
-
-          {canManageAssignments && !isCanceledOperationalStatus(order.status) ? (
-            <div>
-              <button
-                type="button"
-                onClick={handleCancelProductionOrder}
-                style={{ border: "1px solid #fecaca", background: "#fff5f5", color: "#b91c1c", borderRadius: "12px", padding: "11px 14px", fontWeight: 700 }}
-              >
-                Cancel Production Order
-              </button>
-            </div>
-          ) : null}
-
-          <ActivityTimeline
-            events={normalizedOrder?.connected_timeline || order.activity_log || []}
-            compact
-            collapsedByDefault
-          />
-        </div>
+      {activeWorkspace === "order-management" ? (
+        <OrderManagementWorkspace
+          order={order}
+          normalizedOrder={normalizedOrder}
+          readiness={productionReadiness}
+          placedAt={placedAt}
+          updatedAt={updatedAt}
+          canCancelOrder={canManageAssignments && !isCanceledOperationalStatus(order.status)}
+          onCancelOrder={handleCancelProductionOrder}
+          onOpenFinancial={() => selectWorkspace("financial")}
+        />
       ) : null}
     </div>
   );

@@ -122,7 +122,7 @@ test("Production Queue Details opens the correct full order workspace", async ({
 
   await expect(page.getByTestId("order-workspace-tab-production")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("order-workspace-financial")).toHaveCount(0);
-  await expect(page.getByTestId("order-workspace-details")).toHaveCount(0);
+  await expect(page.getByTestId("order-workspace-order-management")).toHaveCount(0);
   await expect(page.getByText("Payment Summary", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Create Payment Request", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Quote Snapshot", { exact: true })).toHaveCount(0);
@@ -156,11 +156,11 @@ test("Production Queue Details opens the correct full order workspace", async ({
   await expect(page.getByTestId("order-workspace-tab-financial")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("Payment Summary", { exact: true })).toBeVisible();
 
-  await page.getByTestId("order-workspace-tab-details").click();
-  await expect(page).toHaveURL(/workspace=details/);
-  await expect(page.getByTestId("order-workspace-tab-details")).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByText("Order Reference", { exact: true })).toBeVisible();
-  await expect(page.getByText("Internal Notes", { exact: true })).toBeVisible();
+  await page.getByTestId("order-workspace-tab-order-management").click();
+  await expect(page).toHaveURL(/workspace=order-management/);
+  await expect(page.getByTestId("order-workspace-tab-order-management")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByText("Manage this order", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("order-management-notes")).toBeVisible();
   await expect(page.getByTestId("activity-timeline")).toBeVisible();
   await expect(page.getByTestId("activity-timeline-disclosure")).not.toHaveAttribute("open", "");
   await expect(page.getByTestId("process-instance-summary")).toHaveCount(0);
