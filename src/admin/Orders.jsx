@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import StatusBadge from "../components/StatusBadge";
 import WorkflowBadge from "../components/WorkflowBadge";
 import { formatShortDate } from "../lib/dateFormatting";
 import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
@@ -17,16 +16,12 @@ import { getOperationalStaffUsers } from "../lib/staffUsersStore";
 import { getArtworkAssetUrl, isArtworkImage } from "../lib/orderArtwork";
 import {
   buildResultsLabel,
-  getProductionMethodCounts,
   getProductionStatusCounts,
   matchesDateFilter,
   matchesProductionMethod,
   matchesProductionStatus,
   matchesSearch,
   normalizeProductionOrder,
-  PRODUCTION_DATE_FILTERS,
-  PRODUCTION_METHOD_FILTERS,
-  PRODUCTION_STATUS_FILTERS,
 } from "../production/productionWorkspace";
 import { sortQueueByPriority } from "../queue/buildQueuePriority";
 import { matchesProductionEmployee } from "../production/productionEmployeeFilter";
@@ -49,25 +44,15 @@ const ESCALATION_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const DAILY_STATUS_FILTERS = [
   { key: "active", label: "All Active" },
   { key: "ready-for-production", label: "Ready to Start" },
-  { key: "in-production", label: "In Production" },
+  { key: "in-production", label: "In Progress" },
   { key: "qc-finishing", label: "QC / Finishing" },
   { key: "ready-for-pickup", label: "Ready for Pickup" },
 ];
 const ATTENTION_FILTERS = [
   { key: "blocked", label: "Blocked", tone: "danger" },
   { key: "on-hold", label: "On Hold", tone: "danger" },
-  { key: "urgent", label: "Urgent", tone: "warning" },
+  { key: "urgent", label: "Due Soon / Overdue", tone: "warning" },
 ];
-const VISIBLE_STATUS_FILTER_KEYS = new Set([
-  "active",
-  "blocked",
-  "on-hold",
-  "urgent",
-  "ready-for-production",
-  "in-production",
-  "qc-finishing",
-  "ready-for-pickup",
-]);
 
 function FilterPill({ active, children, count, tone = "default", onClick, testId }) {
   const activeBackground =
@@ -228,11 +213,101 @@ function QueueActionButton({ action, onClick, emphasis = "secondary" }) {
   );
 }
 
+function QueueWorkflowIndicator({ order }) {
+  const workflowState = String(order.workflow_state || order.status || "").trim().toLowerCase();
+  const productionLabel =
+    workflowState === "embroidery" || String(order.decoration_type || "").trim().toLowerCase() === "embroidery"
+      ? "Embroidery"
+      : "Printing";
+  const stages = [
+    { key: "ready", label: "Ready" },
+    { key: "production", label: productionLabel },
+    { key: "qc", label: "QC" },
+    { key: "pickup", label: "Pickup" },
+  ];
+  const currentStageIndex =
+    workflowState === "completed"
+      ? stages.length
+      : workflowState === "ready for pickup"
+      ? 3
+      : workflowState === "qc / finishing"
+      ? 2
+      : ["printing", "embroidery"].includes(workflowState)
+      ? 1
+      : 0;
+
+  return (
+    <div
+      aria-label={`Workflow: ${stages.map((stage) => stage.label).join(", ")}`}
+      data-testid="production-queue-workflow-indicator"
+      style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}
+    >
+      {stages.map((stage, index) => {
+        const complete = index < currentStageIndex;
+        const active = index === currentStageIndex;
+        return (
+          <div key={stage.key} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span
+              data-stage-state={active ? "active" : complete ? "complete" : "pending"}
+              style={{
+                border: active ? "1px solid #0f172a" : complete ? "1px solid #bbf7d0" : "1px solid #e2e8f0",
+                background: active ? "#0f172a" : complete ? "#ecfdf5" : "#f8fafc",
+                color: active ? "#ffffff" : complete ? "#166534" : "#94a3b8",
+                borderRadius: "999px",
+                padding: "4px 8px",
+                fontSize: "12px",
+                fontWeight: active ? 900 : 750,
+              }}
+            >
+              {complete ? "✓ " : ""}{stage.label}
+            </span>
+            {index < stages.length - 1 ? (
+              <span aria-hidden="true" style={{ color: "#cbd5e1", fontSize: "12px", fontWeight: 900 }}>→</span>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function buildQueueDuePresentation(order, priority) {
+  if (!order.due_date || priority.daysUntilDue === null) {
+    return {
+      label: "No due date",
+      detail: "",
+      tone: "quiet",
+    };
+  }
+
+  if (priority.daysUntilDue < 0) {
+    const overdueDays = Math.abs(priority.daysUntilDue);
+    return {
+      label: overdueDays === 1 ? "Overdue by 1 day" : `Overdue by ${overdueDays} days`,
+      detail: formatShortDate(order.due_date),
+      tone: "danger",
+    };
+  }
+
+  if (priority.daysUntilDue === 0) {
+    return { label: "Due Today", detail: formatShortDate(order.due_date), tone: "warning" };
+  }
+
+  if (priority.daysUntilDue === 1) {
+    return { label: "Due Tomorrow", detail: formatShortDate(order.due_date), tone: "warning" };
+  }
+
+  return {
+    label: `Due in ${priority.daysUntilDue} days`,
+    detail: formatShortDate(order.due_date),
+    tone: priority.dueSoon ? "warning" : "default",
+  };
+}
+
 function QueueRow({ order, onRunAction, onOpenDetail, onEscalate, onClaim, currentStaffUser = null, actionFeedback = null }) {
   const primaryAction = (order.available_actions || []).find((action) => action.blocked !== true);
   const priority = order.queue_priority || {};
-  const dueTone = priority.overdue ? "danger" : priority.dueSoon ? "warning" : "default";
-  const dueLabel = order.due_date ? formatShortDate(order.due_date) : "No due date";
+  const due = buildQueueDuePresentation(order, priority);
   const readiness = order.production_readiness || buildProductionReadinessSummary(order);
   const isOnHold = isOnHoldOperationalStatus(order.status);
   const isBlocked = readiness.blocked === true;
@@ -253,10 +328,12 @@ function QueueRow({ order, onRunAction, onOpenDetail, onEscalate, onClaim, curre
   const rowStyle = isOnHold
     ? { background: "#fff7ed", border: "1px solid #fed7aa" }
     : isBlocked
-    ? { background: "#fef2f2", border: "1px solid #fecaca" }
-    : isAssignedToMe
-    ? { background: "#f0fdf4", border: "1px solid #bbf7d0" }
+    ? { background: "#fffbeb", border: "1px solid #fde68a" }
     : isUnassigned
+    ? { background: "#fffbeb", border: "1px solid #fde68a" }
+    : priority.overdue
+    ? { background: "#fef2f2", border: "1px solid #fecaca" }
+    : priority.dueSoon
     ? { background: "#fffbeb", border: "1px solid #fde68a" }
     : { background: "#ffffff", border: "1px solid #e2e8f0" };
 
@@ -270,35 +347,41 @@ function QueueRow({ order, onRunAction, onOpenDetail, onEscalate, onClaim, curre
       data-unassigned={isUnassigned ? "true" : "false"}
       style={{
         display: "grid",
-        gap: "14px",
+        gap: "12px",
         ...rowStyle,
         borderRadius: "16px",
-        padding: "16px",
+        padding: "14px 16px",
         boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
       }}
     >
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "14px", alignItems: "start" }}>
-        <div style={{ minWidth: 0, display: "grid", gap: "8px" }}>
+      <div style={{ display: "grid", gap: "8px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start", flexWrap: "wrap" }}>
+          <div style={{ minWidth: 0, display: "grid", gap: "3px" }}>
+            <div style={{ display: "flex", gap: "8px", alignItems: "baseline", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                data-testid="production-queue-open-detail"
+                onClick={() => onOpenDetail(order)}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  padding: 0,
+                  color: "#0f172a",
+                  fontSize: "18px",
+                  fontWeight: 900,
+                  cursor: "pointer",
+                }}
+              >
+                {order.order_number}
+              </button>
+              <strong style={{ color: "#0f172a", fontSize: "17px" }}>{order.customer_name}</strong>
+            </div>
+            <span data-testid="production-queue-row-assignment" style={{ color: isUnassigned ? "#9a3412" : "#475569", fontSize: "13px", fontWeight: 800 }}>
+              Assigned To: {order.assigned_to_staff_name}
+            </span>
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              data-testid="production-queue-open-detail"
-              onClick={() => onOpenDetail(order)}
-              style={{
-                border: "none",
-                background: "transparent",
-                padding: 0,
-                color: "#0f172a",
-                fontSize: "18px",
-                fontWeight: 900,
-                cursor: "pointer",
-              }}
-            >
-              {order.order_number}
-            </button>
-            {priority.overdue ? <QueueFlag label="Overdue" tone="danger" /> : null}
-            {!priority.overdue && priority.dueSoon ? <QueueFlag label="Due Soon" tone="warning" /> : null}
-            {order.rush_active ? <QueueFlag label="Rush" tone="warning" /> : null}
+            {order.rush_active && !priority.overdue && !priority.dueSoon ? <QueueFlag label="Rush" tone="warning" /> : null}
             {isBlocked ? <QueueFlag label="Blocked" tone="danger" /> : null}
             {isOnHold ? <QueueFlag label="On Hold" tone="warning" /> : null}
             {isUnassigned ? <QueueFlag label="Unassigned" tone="warning" /> : null}
@@ -311,51 +394,21 @@ function QueueRow({ order, onRunAction, onOpenDetail, onEscalate, onClaim, curre
               {order.workflow_state || order.status}
             </span>
           </div>
-
-          <div style={{ display: "grid", gap: "3px" }}>
-            <strong style={{ color: "#0f172a", fontSize: "17px" }}>{order.customer_name}</strong>
-            <span style={{ color: "#475569", fontWeight: 700 }}>
-              {[order.garment, order.decoration_type].filter(Boolean).join(" · ")}
-            </span>
-          </div>
         </div>
 
-        <div style={{ textAlign: "right", display: "grid", gap: "3px" }}>
-          <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 900, textTransform: "uppercase" }}>
-            Due
-          </span>
-          <strong style={{ color: dueTone === "danger" ? "#b91c1c" : dueTone === "warning" ? "#9a3412" : "#0f172a" }}>
-            {dueLabel}
-          </strong>
-        </div>
+        <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 600 }}>
+          {[order.garment, order.decoration_type].filter(Boolean).join(" · ")}
+        </span>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-          gap: "12px",
-        }}
-      >
-        <div style={{ display: "grid", gap: "3px" }}>
-          <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 900, textTransform: "uppercase" }}>
-            Stage
-          </span>
-          <StatusBadge status={order.workflow_state || order.status} />
-        </div>
-
-        <div style={{ display: "grid", gap: "3px" }}>
-          <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 900, textTransform: "uppercase" }}>
-            Assigned
-          </span>
-          <span data-testid="production-queue-row-assignment" style={{ color: "#0f172a", fontWeight: 800 }}>
-            {order.assigned_to_staff_name}
-          </span>
-          <span data-testid="production-queue-row-owner" style={{ display: "none" }}>
-            Owner: {order.production_owner_staff_name || "Unassigned"}
-          </span>
-        </div>
-
+      <div style={{ display: "grid", gap: "5px" }}>
+        <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 900, textTransform: "uppercase" }}>
+          Workflow
+        </span>
+        <QueueWorkflowIndicator order={order} />
+        <span data-testid="production-queue-row-owner" style={{ display: "none" }}>
+          Owner: {order.production_owner_staff_name || "Unassigned"}
+        </span>
         <span data-testid="production-queue-row-next-action" style={{ display: "none" }}>
           {readiness.nextRecommendedAction}
         </span>
@@ -429,8 +482,11 @@ function QueueRow({ order, onRunAction, onOpenDetail, onEscalate, onClaim, curre
         </div>
       ) : null}
 
-      <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-        <div>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1fr) auto auto", gap: "16px", alignItems: "end" }}>
+        <div style={{ display: "grid", gap: "5px" }}>
+          <span style={{ color: "#64748b", fontSize: "11px", fontWeight: 900, textTransform: "uppercase" }}>
+            Next Action
+          </span>
           {cardAction ? (
             cardAction.key === "claim_job" ? (
               <button
@@ -461,6 +517,17 @@ function QueueRow({ order, onRunAction, onOpenDetail, onEscalate, onClaim, curre
               No production action available
             </span>
           )}
+        </div>
+        <div style={{ display: "grid", gap: "2px", minWidth: "110px", textAlign: "right" }}>
+          <strong
+            style={{
+              color: due.tone === "danger" ? "#b91c1c" : due.tone === "warning" ? "#9a3412" : due.tone === "quiet" ? "#94a3b8" : "#475569",
+              fontSize: due.tone === "quiet" ? "12px" : "14px",
+            }}
+          >
+            {due.label}
+          </strong>
+          {due.detail ? <span style={{ color: "#94a3b8", fontSize: "11px" }}>{due.detail}</span> : null}
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <button
@@ -1050,7 +1117,6 @@ export default function Orders() {
   const storedOrders = useStoredOrders();
   const staffUser = getActiveStaffUser();
   const [actionFeedbackByOrder, setActionFeedbackByOrder] = useState({});
-  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [selectedOrderSnapshot, setSelectedOrderSnapshot] = useState(null);
   const isStaffWorkspace = isStaffWorkspaceView(staffUser);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1063,21 +1129,6 @@ export default function Orders() {
   const customStart = searchParams.get("start") || "";
   const customEnd = searchParams.get("end") || "";
 
-  const hasActiveFilters =
-    activeStatusFilter !== "active" ||
-    activeMethodFilter !== "all" ||
-    activeDateFilter !== "all" ||
-    activeEmployeeFilter !== "all" ||
-    Boolean(searchTerm) ||
-    Boolean(customStart) ||
-    Boolean(customEnd);
-  const hasAdvancedFilterActivity =
-    !VISIBLE_STATUS_FILTER_KEYS.has(activeStatusFilter) ||
-    activeMethodFilter !== "all" ||
-    activeDateFilter !== "all" ||
-    Boolean(customStart) ||
-    Boolean(customEnd);
-
   const orders = useMemo(
     () => sortOrdersByOperationalStatus(storedOrders.map(normalizeProductionOrder)),
     [storedOrders]
@@ -1087,7 +1138,6 @@ export default function Orders() {
     [isStaffWorkspace, orders]
   );
   const statusCounts = useMemo(() => getProductionStatusCounts(workspaceOrders), [workspaceOrders]);
-  const methodCounts = useMemo(() => getProductionMethodCounts(workspaceOrders), [workspaceOrders]);
   const staffUsers = useMemo(
     () => getOperationalStaffUsers().filter((staff) => staff.status !== "Inactive"),
     []
@@ -1274,13 +1324,13 @@ export default function Orders() {
           style={{
             background: "#ffffff",
             borderRadius: "20px",
-            padding: "18px",
+            padding: "16px 18px",
             border: "1px solid #e8edf3",
             display: "grid",
-            gap: "16px",
+            gap: "12px",
           }}
         >
-          <section style={{ display: "grid", gap: "12px" }}>
+          <section style={{ display: "grid", gap: "10px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "end", flexWrap: "wrap" }}>
               <div>
                 <p
@@ -1305,19 +1355,19 @@ export default function Orders() {
               data-testid="production-queue-search"
               value={searchTerm}
               onChange={(event) => updateFilters({ q: event.target.value })}
-              placeholder="Search order, customer, garment, artwork, staff"
+              placeholder="Search active jobs"
               style={{
                 border: "1px solid #cbd5e1",
-                borderRadius: "16px",
-                padding: "15px 16px",
-                fontSize: "18px",
-                width: "100%",
+                borderRadius: "12px",
+                padding: "10px 12px",
+                fontSize: "15px",
+                width: "min(100%, 520px)",
                 boxSizing: "border-box",
               }}
             />
 
             <label style={{ display: "grid", gap: "6px", maxWidth: "320px", color: "#475569", fontSize: "12px", fontWeight: 900, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-              Assigned Employee
+              Assigned To
               <select
                 data-testid="production-employee-filter"
                 value={activeEmployeeFilter}
@@ -1354,10 +1404,10 @@ export default function Orders() {
             style={{
               border: "1px solid #e2e8f0",
               borderRadius: "16px",
-              padding: "12px",
+              padding: "10px 12px",
               background: "#f8fafc",
               display: "grid",
-              gap: "10px",
+              gap: "8px",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
@@ -1379,144 +1429,7 @@ export default function Orders() {
             </div>
           </section>
 
-          <section style={{ display: "grid", gap: "10px" }}>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-              <button
-                type="button"
-                onClick={() => setAdvancedFiltersOpen((open) => !open)}
-                style={{
-                  border: "1px solid #cbd5e1",
-                  background: "#ffffff",
-                  borderRadius: "12px",
-                  padding: "10px 14px",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                }}
-              >
-                Advanced Filters {advancedFiltersOpen ? "▲" : "▼"}
-              </button>
-            </div>
-
-            {advancedFiltersOpen || hasAdvancedFilterActivity ? (
-              <div
-                style={{
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "16px",
-                  padding: "12px",
-                  display: "grid",
-                  gap: "12px",
-                }}
-              >
-                <div style={{ display: "grid", gap: "7px" }}>
-                  <strong style={{ color: "#475569", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Additional Status</strong>
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-                    {PRODUCTION_STATUS_FILTERS.filter((filter) => !VISIBLE_STATUS_FILTER_KEYS.has(filter.key) && filter.key !== "unassigned").map((filter) => (
-                    <FilterPill
-                      key={filter.key}
-                      testId={`production-status-filter-${filter.key}`}
-                      active={activeStatusFilter === filter.key}
-                      count={statusCounts[filter.key] || 0}
-                      tone={
-                        filter.key === "completed"
-                          ? "success"
-                          : filter.key === "canceled" || filter.key === "on-hold" || filter.key === "blocked"
-                          ? "danger"
-                          : filter.key === "urgent" || filter.key === "unassigned"
-                          ? "warning"
-                          : "default"
-                      }
-                      onClick={() => updateFilters({ status: filter.key })}
-                    >
-                      {filter.label}
-                    </FilterPill>
-                    ))}
-                  </div>
-                </div>
-
-                <div style={{ display: "grid", gap: "7px" }}>
-                  <strong style={{ color: "#475569", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Decoration Method</strong>
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                    {PRODUCTION_METHOD_FILTERS.map((filter) => (
-                    <FilterPill
-                      key={filter.key}
-                      active={activeMethodFilter === filter.key}
-                      count={methodCounts[filter.key] || 0}
-                      onClick={() => updateFilters({ workflow: filter.key })}
-                    >
-                      {filter.label}
-                    </FilterPill>
-                    ))}
-                  </div>
-                </div>
-
-                <div style={{ display: "grid", gap: "7px" }}>
-                  <strong style={{ color: "#475569", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Date</strong>
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                    {PRODUCTION_DATE_FILTERS.map((filter) => (
-                    <FilterPill
-                      key={filter.key}
-                      active={activeDateFilter === filter.key}
-                      count={filteredOrders.length}
-                      onClick={() => updateFilters({ date: filter.key })}
-                    >
-                      {filter.label}
-                    </FilterPill>
-                    ))}
-                  </div>
-                </div>
-
-                {activeDateFilter === "custom" ? (
-                  <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                    <label style={{ display: "grid", gap: "6px", color: "#475569", fontWeight: 700 }}>
-                      Start
-                      <input
-                        type="date"
-                        value={customStart}
-                        onChange={(event) => updateFilters({ start: event.target.value })}
-                        style={{
-                          border: "1px solid #cbd5e1",
-                          borderRadius: "12px",
-                          padding: "10px 12px",
-                        }}
-                      />
-                    </label>
-                    <label style={{ display: "grid", gap: "6px", color: "#475569", fontWeight: 700 }}>
-                      End
-                      <input
-                        type="date"
-                        value={customEnd}
-                        onChange={(event) => updateFilters({ end: event.target.value })}
-                        style={{
-                          border: "1px solid #cbd5e1",
-                          borderRadius: "12px",
-                          padding: "10px 12px",
-                        }}
-                      />
-                    </label>
-                  </div>
-                ) : null}
-
-                {hasActiveFilters ? (
-                  <button
-                    type="button"
-                    onClick={() => setSearchParams(new URLSearchParams())}
-                    style={{
-                      justifySelf: "start",
-                      border: "1px solid #cbd5e1",
-                      background: "#ffffff",
-                      borderRadius: "12px",
-                      padding: "10px 14px",
-                      fontWeight: 800,
-                    }}
-                  >
-                    Reset Filters
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-          </section>
-
-          <section style={{ display: "grid", gap: "10px" }}>
+          <section style={{ display: "grid", gap: "8px" }}>
             {filteredOrders.length ? (
               filteredOrders.map((order) => (
                 <QueueRow
