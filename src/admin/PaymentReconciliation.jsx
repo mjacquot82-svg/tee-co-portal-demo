@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { formatDateTime } from "../lib/dateFormatting";
-import { getStoredOrders, updateStoredOrder } from "../lib/ordersStore";
 import {
   listPaymentEvents,
   listPaymentRequests,
@@ -10,7 +9,6 @@ import {
 } from "../lib/paymentsStore";
 import {
   buildPaymentExceptionQueue,
-  buildOrderPaymentReconciliationUpdates,
   buildPaymentReconciliationInsights,
   getInsightTone,
   getPaymentConfidenceLabel,
@@ -22,6 +20,7 @@ import {
   upsertPaymentReconciliationReview,
 } from "../lib/paymentReconciliationStore";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
+import { synchronizeStoredOrderPaymentRollups } from "../services/orderPaymentRollupSynchronization";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -118,24 +117,13 @@ export default function PaymentReconciliation() {
   const manualReviewCount = exceptionQueue.filter((item) => item.insight.severity === "high").length;
 
   useEffect(() => {
-    const orders = getStoredOrders();
-    const staleOrderUpdates = orders
-      .map((order) => ({
-        order,
-        updates: buildOrderPaymentReconciliationUpdates({
-          order,
-          paymentRequests,
-          payments,
-        }),
-      }))
-      .filter((entry) => entry.updates);
-
-    if (!staleOrderUpdates.length) return;
-
-    void Promise.all(
-      staleOrderUpdates.map(({ order, updates }) => updateStoredOrder(order.order_number, updates))
-    ).then(() => {
-      setRefreshKey((value) => value + 1);
+    void synchronizeStoredOrderPaymentRollups({
+      paymentRequests,
+      payments,
+    }).then((result) => {
+      if (result.updatedOrderCount) {
+        setRefreshKey((value) => value + 1);
+      }
     }).catch((error) => {
       console.error("[PaymentReconciliation] Failed to repair order payment rollup", error);
     });

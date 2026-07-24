@@ -29,6 +29,7 @@ import { getUserInitials } from "../utils/getUserInitials";
 import AdminDiagnosticsPanel from "./AdminDiagnosticsPanel";
 import { useStaffAssignmentAttention } from "../lib/staffAssignmentAttentionStore";
 import { usePaymentReconciliationRefresh } from "../lib/usePaymentReconciliationRefresh";
+import { AdminPaymentRollupSynchronization } from "../lib/useAdminPaymentRollupSynchronization";
 import { buildStaffAssignmentAttentionItems } from "../staff/buildStaffAssignmentAttentionItems";
 import { useUnreadStaffNotificationCount, ensureStaffNotificationsHydrated } from "../lib/staffNotificationsStore";
 import { ensureNotificationTemplatesHydrated } from "../lib/notificationTemplatesStore";
@@ -1587,6 +1588,9 @@ export default function Layout() {
           staffUser={visibleStaffUser}
           workspaceAccess={workspaceAccess}
         >
+          {isAdminWorkspaceView(visibleStaffUser) ? (
+            <AdminPaymentRollupSynchronization />
+          ) : null}
           {location.pathname.startsWith("/admin/garments")
             ? console.log("[Layout] allowing admin garments Outlet render", {
                 pathname: location.pathname,
