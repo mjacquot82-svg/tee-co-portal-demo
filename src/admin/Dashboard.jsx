@@ -81,6 +81,10 @@ function money(value) {
   }).format(Number(value || 0));
 }
 
+function formatCount(count, singular, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 function hasCustomerArtwork(order = {}) {
   return (
     (Array.isArray(order.artwork_files) && order.artwork_files.length > 0) ||
@@ -97,7 +101,9 @@ function isCurrentMonth(dateValue) {
   return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
 }
 
-function buildOwnerWorkspaceModel(orders = [], operationalEvents = []) {
+// Exported for count-to-destination contract tests.
+// eslint-disable-next-line react-refresh/only-export-components
+export function buildOwnerWorkspaceModel(orders = [], operationalEvents = []) {
   const snapshot = buildOwnerWorkflowSnapshot(orders);
   const metrics = buildOperationalMetrics(orders);
 
@@ -106,6 +112,7 @@ function buildOwnerWorkspaceModel(orders = [], operationalEvents = []) {
   let artworkUploads = 0;
   let depositRequestsToSend = 0;
   let activeOrders = 0;
+  let readyForStaff = 0;
   let outstandingBalance = 0;
   let revenueThisMonth = 0;
 
@@ -149,6 +156,9 @@ function buildOwnerWorkspaceModel(orders = [], operationalEvents = []) {
     const status = normalizeOperationalStatus(order.status);
     if (!isCompletedOperationalStatus(status) && !isCanceledOperationalStatus(status)) {
       activeOrders += 1;
+      if (status === "Ready For Production") {
+        readyForStaff += 1;
+      }
     }
   });
 
@@ -175,7 +185,8 @@ function buildOwnerWorkspaceModel(orders = [], operationalEvents = []) {
       count: snapshot.newOrderRequests,
       detail: "Review incoming customer requests and decide the next step.",
       action: "Open Requests",
-      to: "/admin/quotes",
+      to: "/admin/quotes?queue=new",
+      countSingular: "request",
       tone: "attention",
     },
     {
@@ -184,7 +195,8 @@ function buildOwnerWorkspaceModel(orders = [], operationalEvents = []) {
       count: quotesToPrepare,
       detail: "Requests are in intake and need pricing or quote review.",
       action: "Prepare Quotes",
-      to: "/admin/quotes",
+      to: "/admin/quotes?queue=quote-preparation",
+      countSingular: "quote",
       tone: "attention",
     },
     {
@@ -193,7 +205,8 @@ function buildOwnerWorkspaceModel(orders = [], operationalEvents = []) {
       count: artworkToReview,
       detail: "Customer files are in and need Teresa's approval decision.",
       action: "Review Artwork",
-      to: "/admin/quotes?queue=awaiting-artwork",
+      to: "/admin/quotes?queue=artwork-review",
+      countSingular: "artwork review",
       tone: "attention",
     },
     {
@@ -202,7 +215,8 @@ function buildOwnerWorkspaceModel(orders = [], operationalEvents = []) {
       count: depositRequestsToSend,
       detail: "Deposit requirements exist but the request has not been sent.",
       action: "Send Requests",
-      to: "/admin/quotes?queue=awaiting-deposit",
+      to: "/admin/quotes?queue=deposit-request-needed",
+      countSingular: "deposit",
       tone: "attention",
     },
   ];
@@ -213,18 +227,21 @@ function buildOwnerWorkspaceModel(orders = [], operationalEvents = []) {
       label: "Quotes Awaiting Approval",
       count: snapshot.awaitingCustomerApproval,
       to: "/admin/quotes?queue=awaiting-approval",
+      countSingular: "quote",
     },
     {
       key: "deposits-awaiting-payment",
       label: "Deposits Awaiting Payment",
       count: snapshot.awaitingDeposit,
       to: "/admin/quotes?queue=awaiting-deposit",
+      countSingular: "deposit",
     },
     {
       key: "artwork-uploads",
-      label: "Artwork Uploads",
+      label: "Waiting for Customer Artwork",
       count: artworkUploads,
-      to: "/admin/quotes?queue=awaiting-artwork",
+      to: "/admin/quotes?queue=customer-artwork",
+      countSingular: "order",
     },
   ];
 
@@ -232,9 +249,10 @@ function buildOwnerWorkspaceModel(orders = [], operationalEvents = []) {
     {
       key: "ready-for-production",
       label: "Ready for Production",
-      count: snapshot.readyForProduction,
+      count: readyForStaff,
       detail: "Approved work can move into production now.",
-      to: "/admin/quotes?queue=ready",
+      to: "/admin/orders?status=ready-for-production",
+      countSingular: "job",
     },
     {
       key: "ready-for-pickup",
@@ -242,6 +260,7 @@ function buildOwnerWorkspaceModel(orders = [], operationalEvents = []) {
       count: snapshot.readyForPickup,
       detail: "Finished jobs are ready for handoff.",
       to: "/admin/orders?status=ready-for-pickup",
+      countSingular: "job",
     },
   ];
 
@@ -299,7 +318,7 @@ function AttentionCard({ item, priority = "secondary" }) {
           </p>
         </div>
         <strong className="owner-attention-card__count">
-          {item.count}
+          {formatCount(item.count, item.countSingular)}
         </strong>
       </div>
       <span className="owner-attention-card__action">
@@ -325,7 +344,9 @@ function WaitingItem({ item }) {
       }}
     >
       <span style={{ fontWeight: 850, fontSize: "17px" }}>{item.label}</span>
-      <strong style={{ fontSize: "28px", color: "#8a4b12" }}>{item.count}</strong>
+      <strong style={{ fontSize: "22px", color: "#8a4b12" }}>
+        {formatCount(item.count, item.countSingular)}
+      </strong>
     </Link>
   );
 }
@@ -347,7 +368,9 @@ function ReadyWorkCard({ item }) {
         border: "1px solid #d5ead9",
       }}
     >
-      <strong style={{ fontSize: "48px", lineHeight: 1 }}>{item.count}</strong>
+      <strong style={{ fontSize: "34px", lineHeight: 1 }}>
+        {formatCount(item.count, item.countSingular)}
+      </strong>
       <span>
         <strong style={{ display: "block", fontSize: "19px" }}>{item.label}</strong>
         <span style={{ display: "block", marginTop: "5px", color: "#52685a", lineHeight: 1.4, fontSize: "14px" }}>
@@ -428,7 +451,7 @@ function OwnerDashboard({ orders, operationalEvents }) {
           description="These are the places where Teresa can move an order forward this morning."
           action={
             <strong style={{ color: attentionTotal ? "#7c3f10" : "#817568", fontSize: "14px" }}>
-              {attentionTotal} open
+              {formatCount(attentionTotal, "owner action")}
             </strong>
           }
         >
@@ -471,9 +494,9 @@ function OwnerDashboard({ orders, operationalEvents }) {
         </WorkspaceSection>
 
         <WorkspaceSection
-          eyebrow="Ready to Work"
-          title="Staff queues"
-          description="These jobs are no longer waiting on customer decisions and can be picked up by the team."
+          eyebrow="Ready for Staff"
+          title="Work the team can start"
+          description="Owner decisions are complete, so these jobs can be picked up by the team."
         >
           <div
             style={{

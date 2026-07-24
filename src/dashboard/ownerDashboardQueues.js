@@ -76,6 +76,15 @@ export function buildOwnerWorkflowSnapshot(orders = []) {
 
 export function buildOwnerWorkflowQueues(orders = []) {
   const snapshot = buildOwnerWorkflowSnapshot(orders);
+  const readyForStaff = orders.filter((order) => {
+    if (order.operational_visible === false) return false;
+    const status = normalizeOperationalStatus(order.status);
+    return (
+      !isCompletedOperationalStatus(status) &&
+      !isCanceledOperationalStatus(status) &&
+      status === "Ready For Production"
+    );
+  }).length;
 
   return [
     {
@@ -113,9 +122,9 @@ export function buildOwnerWorkflowQueues(orders = []) {
     {
       key: "ready-for-production",
       label: "Ready for Production",
-      count: snapshot.readyForProduction,
+      count: readyForStaff,
       description: "Approved work can move directly into the production queue.",
-      to: "/admin/quotes?queue=ready",
+      to: "/admin/orders?status=ready-for-production",
       tone: "success",
     },
     {
