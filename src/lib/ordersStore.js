@@ -28,6 +28,7 @@ import { backfillOrderPaymentsToPayments, recordPayment } from "./paymentsStore"
 import { normalizeCustomerId } from "./customerIds";
 import { addCustomerTimelineEvent } from "./customerTimelineStore";
 import { getCustomerDisplayName, resolveCustomerForRecord } from "./customerRecordMatching";
+import { requireCustomerIdentity } from "./customerIdentity";
 import { deriveOperationalWorkflowState } from "./operationalWorkflow";
 import { updateArtworkApprovalStatus } from "./customerArtworkStore";
 import { linkCustomerArtworkToOrder, linkCustomerArtworkToQuote } from "../services/customerArtworkService";
@@ -271,7 +272,7 @@ function normalizeStoredOrder(order = {}) {
     ...timestamps,
     customer_id:
       normalizeCustomerId(order.customer_id) || matchedCustomer?.id || "",
-    customer_name: getCustomerDisplayName(order, undefined, "Walk-in Customer"),
+    customer_name: getCustomerDisplayName(order, undefined, "Customer identity unavailable"),
     date: order.date || formatShortDate(timestamps.created_at),
     status,
     quote_status: quoteStatus,
@@ -368,7 +369,7 @@ function buildSeedOrder(order, index = 0) {
     customer_name:
       order.customer_name ||
       ["ABC Construction", "City Hockey", "Local Customer"][index] ||
-      "Walk-in Customer",
+      "Customer identity unavailable",
     garment: order.garment || order.item || "Custom garment",
     qty: Number(order.qty || 0),
     due_date: order.due_date || "",
@@ -1420,14 +1421,25 @@ export async function createStoredOrder(orderInput) {
   const createdAt = new Date().toISOString();
   const createdAuditFields = buildStaffAuditFields("created");
   const matchedCustomer = resolveCustomerForRecord(orderInput);
+  const customerIdentity = requireCustomerIdentity({
+    ...matchedCustomer,
+    ...orderInput,
+    customer_name: orderInput.customer_name || matchedCustomer?.name || "",
+    customer_phone:
+      orderInput.customer_phone || orderInput.phone || matchedCustomer?.phone || "",
+  });
 
   const order = {
     ...orderInput,
     ...createdAuditFields,
     order_number: orderNumber,
+    customer_first_name: customerIdentity.firstName,
+    customer_last_name: customerIdentity.lastName,
+    customer_name: customerIdentity.displayName,
     customer_id: normalizeCustomerId(orderInput.customer_id || matchedCustomer?.id) || "",
     customer_email:
       orderInput.customer_email || orderInput.email || matchedCustomer?.email || "",
+    customer_phone: customerIdentity.phone,
     status: normalizeOperationalStatus(orderInput.status || "New"),
     date: formatShortDate(createdAt),
     created_at: createdAt,
@@ -1436,7 +1448,7 @@ export async function createStoredOrder(orderInput) {
     activity_log: [
       buildActivityEvent(
         "created",
-        `Order created for ${orderInput.customer_name || "Walk-in Customer"}.`,
+        `Order created for ${customerIdentity.displayName}.`,
         createdAt
       ),
     ],

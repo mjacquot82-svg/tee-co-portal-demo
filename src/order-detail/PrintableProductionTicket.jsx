@@ -122,7 +122,7 @@ const PrintableProductionTicket = forwardRef(function PrintableProductionTicket(
         >
           <div style={{ display: "grid", gap: "2px" }}>
             <span style={sectionLabelStyle}>Customer</span>
-            <span style={sectionValueStyle}>{order.customer_name || "Walk-in Customer"}</span>
+            <span style={sectionValueStyle}>{order.customer_name || "Customer identity unavailable"}</span>
           </div>
 
           <div style={{ display: "grid", gap: "2px" }}>

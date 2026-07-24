@@ -110,7 +110,7 @@ export default function SaleReceipt() {
           </div>
           <div>
             <strong>Customer</strong>
-            <p style={{ margin: "4px 0 0" }}>{sale.customer_name || "Walk-in Customer"}</p>
+            <p style={{ margin: "4px 0 0" }}>{sale.customer_name || "Customer identity unavailable"}</p>
           </div>
           <div style={{ textAlign: "right" }}>
             <strong>Payment</strong>

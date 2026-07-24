@@ -49,6 +49,9 @@ describe("customer registration", () => {
     fireEvent.change(screen.getByPlaceholderText("you@example.com"), {
       target: { value: "customer@example.com" },
     });
+    fireEvent.change(screen.getByPlaceholderText("Phone number"), {
+      target: { value: "555-0100" },
+    });
     fireEvent.change(screen.getByPlaceholderText("At least 8 characters"), {
       target: { value: "password123" },
     });

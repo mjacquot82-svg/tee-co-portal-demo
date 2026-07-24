@@ -155,7 +155,7 @@ export default function ProductionPrintSheet({ order = {} }) {
         >
           <div>
             <p style={sectionLabelStyle}>Customer Name</p>
-            <p style={sectionValueStyle}>{normalizeText(order.customer_name, "Walk-in Customer")}</p>
+            <p style={sectionValueStyle}>{normalizeText(order.customer_name, "Customer identity unavailable")}</p>
           </div>
 
           <div>

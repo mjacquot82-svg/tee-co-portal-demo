@@ -60,7 +60,7 @@ export function buildStaffAssignmentAttentionItems({
         detail:
           latestAssignmentEvent?.note ||
           `${order.order_number} assigned to ${staffUser.name || "staff"}.`,
-        supportingDetail: `${order.order_number} • ${order.customer_name || "Walk-in Customer"} • ${dueDateLabel}`,
+        supportingDetail: `${order.order_number} • ${order.customer_name || "Customer identity unavailable"} • ${dueDateLabel}`,
         to: `/admin/orders/${order.order_number}`,
         orderNumber: order.order_number,
         assignedAt: order.assigned_at,

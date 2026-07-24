@@ -208,7 +208,7 @@ export default function ArchivedQuotes() {
               >
                 <strong style={{ color: "#0f172a" }}>{quote.order_number || "—"}</strong>
                 <span style={{ color: "#334155", fontWeight: 600 }}>
-                  {quote.customer_name || "Walk-in Customer"}
+                  {quote.customer_name || "Customer identity unavailable"}
                 </span>
                 <span style={{ color: "#475569" }}>
                   {formatShortDate(quote.quote_archived_at || quote.updated_at)}

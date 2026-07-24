@@ -36,7 +36,7 @@ function isOpenOrder(order) {
 function normalizeOrder(order, index = 0) {
   return {
     ...order,
-    customer_name: order.customer_name || ["ABC Construction", "City Hockey", "Local Customer"][index] || "Walk-in Customer",
+    customer_name: order.customer_name || ["ABC Construction", "City Hockey", "Local Customer"][index] || "Customer identity unavailable",
     garment: order.garment || order.item || "Custom garment",
     status: normalizeOperationalStatus(order.status || "New"),
     qty: Number(order.qty || 0),

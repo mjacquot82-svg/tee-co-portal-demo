@@ -4,6 +4,7 @@ import { useCatalogLookups } from "../lib/catalogLookupsStore";
 import { ensureCustomerProfile } from "../lib/customerProfileStore";
 import { linkOrderToCustomer } from "../lib/customersStore";
 import { createStoredOrder } from "../lib/ordersStore";
+import { validateCustomerIdentity } from "../lib/customerIdentity";
 import { getDefaultDecorationType } from "../lib/orderConfiguration";
 import {
   clearPendingCustomerRequest,
@@ -330,6 +331,18 @@ export default function CustomerPortalRequestOrder() {
   async function handleSubmit(event) {
     event.preventDefault();
 
+    const identityValidation = validateCustomerIdentity({
+      customer_name: normalizeText(contactName) || customerSession.displayName || "",
+      customer_first_name: customerSession.firstName || "",
+      customer_last_name: customerSession.lastName || "",
+      customer_phone: normalizeText(contactPhone) || customerSession.phone || "",
+    });
+    if (!identityValidation.valid) {
+      setSubmitState("error");
+      setSubmitMessage(identityValidation.message);
+      return;
+    }
+
     if (!configuredLineItems.length || configuredLineItems.some((item) => !item.product_id || item.quantity < 1)) {
       setSubmitState("error");
       setSubmitMessage("Add at least one garment and a quantity before sending the request.");
@@ -418,9 +431,11 @@ export default function CustomerPortalRequestOrder() {
     try {
       const createdOrder = await createStoredOrder({
         customer_id: profile?.id || "",
-        customer_name: profile?.name || customerSession.displayName || "Customer Account",
+        customer_first_name: identityValidation.identity.firstName,
+        customer_last_name: identityValidation.identity.lastName,
+        customer_name: identityValidation.identity.displayName,
         customer_email: customerSession.email || profile?.email || "",
-        customer_phone: normalizeText(contactPhone) || profile?.phone || "",
+        customer_phone: identityValidation.identity.phone,
         customer_company: profile?.company || "",
         contact_name: normalizeText(contactName) || customerSession.displayName || "",
         product_id: primaryLineItem.product_id,
@@ -709,11 +724,12 @@ export default function CustomerPortalRequestOrder() {
               }}
             >
               <label style={labelStyle()}>
-                Contact name
+                Contact name (First and Last)
                 <input
                   type="text"
                   value={contactName}
                   onChange={(event) => setContactName(event.target.value)}
+                  required
                   style={fieldStyle()}
                 />
               </label>
@@ -721,9 +737,10 @@ export default function CustomerPortalRequestOrder() {
               <label style={labelStyle()}>
                 Contact phone
                 <input
-                  type="text"
+                  type="tel"
                   value={contactPhone}
                   onChange={(event) => setContactPhone(event.target.value)}
+                  required
                   placeholder="Best number for questions about this request"
                   style={fieldStyle()}
                 />

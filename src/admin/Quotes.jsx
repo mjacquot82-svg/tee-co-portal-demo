@@ -203,7 +203,7 @@ function buildReadinessSummary(readiness) {
 function getCollapsedSummaryFields(quote, summary) {
   return [
     { label: "Request #", value: formatValue(quote.order_number) },
-    { label: "Customer", value: formatValue(quote.customer_name, "Walk-in Customer") },
+    { label: "Customer", value: formatValue(quote.customer_name, "Customer identity unavailable") },
     { label: "Status", value: formatValue(quote.quote_status, "Draft") },
     {
       label: "Production readiness",

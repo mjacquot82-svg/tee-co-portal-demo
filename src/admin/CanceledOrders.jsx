@@ -337,7 +337,7 @@ export default function CanceledOrders() {
 
                 <div style={{ display: "grid", gap: "4px" }}>
                   <strong style={{ color: "#0f172a" }}>
-                    {record.customer_name || "Walk-in Customer"}
+                    {record.customer_name || "Customer identity unavailable"}
                   </strong>
                   <span style={{ color: "#475569" }}>{record.garment || "Custom garment"}</span>
                 </div>

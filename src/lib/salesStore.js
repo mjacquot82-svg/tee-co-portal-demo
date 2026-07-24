@@ -3,6 +3,7 @@ import { getJsonStorageItem, hasBrowserStorage, setJsonStorageItem } from "./bro
 import { normalizeCustomerId } from "./customerIds";
 import { validatePaymentAmount } from "./financialValidation";
 import { getCustomerDisplayName, resolveCustomerForRecord } from "./customerRecordMatching";
+import { requireCustomerIdentity } from "./customerIdentity";
 
 const STORAGE_KEY = "teeCoQuickSales";
 
@@ -19,7 +20,7 @@ export function getStoredQuickSales() {
     return {
       ...sale,
       customer_id: normalizeCustomerId(sale.customer_id || matchedCustomer?.id),
-      customer_name: getCustomerDisplayName(sale, undefined, "Walk-in Customer"),
+      customer_name: getCustomerDisplayName(sale, undefined, "Customer identity unavailable"),
     };
   });
 }
@@ -43,6 +44,12 @@ export function createStoredQuickSale(saleInput) {
   const balanceDue = Number(saleInput.balance_due) || 0;
   const staffAudit = buildStaffAuditFields("created");
   const matchedCustomer = resolveCustomerForRecord(saleInput);
+  const customerIdentity = requireCustomerIdentity({
+    ...matchedCustomer,
+    ...saleInput,
+    customer_name: saleInput.customer_name || matchedCustomer?.name || "",
+    customer_phone: saleInput.customer_phone || matchedCustomer?.phone || "",
+  });
 
   if (hasAmountPaidInput && !Number.isFinite(parsedAmountPaid)) {
     throw buildPaymentValidationError({
@@ -71,7 +78,10 @@ export function createStoredQuickSale(saleInput) {
     id: `quick-sale-${Date.now()}`,
     sale_number: saleNumber,
     customer_id: normalizeCustomerId(saleInput.customer_id || matchedCustomer?.id),
-    customer_name: getCustomerDisplayName(saleInput, undefined, "Walk-in Customer"),
+    customer_first_name: customerIdentity.firstName,
+    customer_last_name: customerIdentity.lastName,
+    customer_name: customerIdentity.displayName,
+    customer_phone: customerIdentity.phone,
     payment_method: saleInput.payment_method || "Not Recorded",
     payment_status: saleInput.payment_status || "Paid",
     payment_reference: saleInput.payment_reference || "",

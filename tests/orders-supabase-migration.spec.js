@@ -200,6 +200,7 @@ test("creates orders by writing Supabase first and then publishing the local cac
     customer_id: "customer-1784339622477",
     customer_name: "Created Customer",
     customer_email: "created@example.com",
+    customer_phone: "555-0100",
     garment: "Hoodie",
     qty: 12,
     quote_status: "Draft",
@@ -220,6 +221,28 @@ test("creates orders by writing Supabase first and then publishing the local cac
     id: "customer-1784339622477",
   });
   expect(customerOrders.map((order) => order.order_number)).toEqual([created.order_number]);
+});
+
+test("rejects incomplete customer identity before creating an order", async () => {
+  const client = configureFakeOrders();
+  const incompleteIdentities = [
+    { customer_name: "Morgan", customer_phone: "555-0100" },
+    { customer_last_name: "Lee", customer_phone: "555-0100" },
+    { customer_name: "Morgan Lee", customer_phone: "" },
+  ];
+
+  for (const identity of incompleteIdentities) {
+    await expect(
+      createStoredOrder({
+        ...identity,
+        garment: "Hoodie",
+        qty: 12,
+        source: "Walk-in",
+      })
+    ).rejects.toMatchObject({ code: "CUSTOMER_IDENTITY_REQUIRED" });
+  }
+
+  expect(client.operations).toHaveLength(0);
 });
 
 test("updates orders through awaited Supabase writes", async () => {

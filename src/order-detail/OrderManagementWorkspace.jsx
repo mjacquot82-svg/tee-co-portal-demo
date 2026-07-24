@@ -172,7 +172,7 @@ export default function OrderManagementWorkspace({
         testId="order-management-customer"
       >
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px" }}>
-          <Decision label="Customer" value={order.customer_name || "Walk-in Customer"} />
+          <Decision label="Customer" value={order.customer_name || "Customer identity unavailable"} />
           <Decision label="Email" value={order.customer_email || order.email} />
           <Decision label="Phone" value={order.customer_phone || order.phone} />
           <Decision label="Customer Status" value={order.customer_status_message || order.customer_order_status} />

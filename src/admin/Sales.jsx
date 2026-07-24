@@ -586,7 +586,7 @@ export default function Sales() {
                     </td>
                     <td style={{ padding: "12px" }}>
                       <div style={{ fontWeight: 700 }}>
-                        {sale.customer_name || "Walk-in Customer"}
+                        {sale.customer_name || "Customer identity unavailable"}
                       </div>
                       {sale.notes ? (
                         <div style={{ color: "#64748b", fontSize: "12px", marginTop: "4px" }}>

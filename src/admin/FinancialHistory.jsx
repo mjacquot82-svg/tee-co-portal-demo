@@ -243,7 +243,7 @@ export default function FinancialHistory() {
                       <Link to={`/admin/orders/${event.order_number}`} style={{ color: "#0f172a", fontWeight: 700, textDecoration: "none" }}>
                         {event.order_number}
                       </Link>
-                      <span>{event.customer_name || "Walk-in Customer"}</span>
+                      <span>{event.customer_name || "Customer identity unavailable"}</span>
                       {event.invoice_status ? <span>Invoice {event.invoice_status}</span> : null}
                       {event.payment_collection_state ? <span>{event.payment_collection_state}</span> : null}
                     </div>

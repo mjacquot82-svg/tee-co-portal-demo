@@ -71,7 +71,7 @@ export function normalizeProductionOrder(order) {
 
   return {
     ...order,
-    customer_name: order.customer_name || "Walk-in Customer",
+    customer_name: order.customer_name || "Customer identity unavailable",
     garment: order.garment || order.item || "Custom garment",
     assigned_to_staff_name: order.assigned_to_staff_name || "Unassigned",
     production_owner_staff_name:

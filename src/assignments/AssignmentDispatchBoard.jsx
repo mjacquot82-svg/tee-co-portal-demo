@@ -63,7 +63,7 @@ function OrderSummary({ order, priority }) {
         <strong>{order.order_number}</strong>
         <PriorityBadge priority={priority} />
       </div>
-      <span>{order.customer_name || "Walk-in Customer"}</span>
+      <span>{order.customer_name || "Customer identity unavailable"}</span>
       <span>{order.garment || order.item || "Custom garment"}</span>
       <span>Qty: {order.qty || 0}</span>
       <span>Due: {order.due_date || "—"}</span>

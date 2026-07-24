@@ -2,6 +2,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useStoredProducts } from "../lib/productsStore";
 import { createStoredQuickSale } from "../lib/salesStore";
+import { validateCustomerIdentity } from "../lib/customerIdentity";
 import { createStoredCustomer, getStoredCustomers } from "../lib/customersStore";
 import {
   recordStoredOrderPayment,
@@ -796,6 +797,7 @@ export default function QuickSale() {
   const [productSearchQuery, setProductSearchQuery] = useState("");
   const [selectedProductCategory, setSelectedProductCategory] = useState("");
   const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
   const [quickSalePaymentMethod, setQuickSalePaymentMethod] = useState("Cash");
   const [notes, setNotes] = useState("");
   const [showQuickSaleCheckout, setShowQuickSaleCheckout] = useState(false);
@@ -1066,6 +1068,7 @@ export default function QuickSale() {
     setSelectedTransactionIds([]);
     setTransactionMessage("");
     setCustomerName(customer.name || "");
+    setCustomerPhone(customer.phone || "");
     setLinkedCustomerId(customer.source === "saved" ? customer.id : "");
     setLinkedCustomerName(customer.name || "");
     setActiveMode((currentMode) => (currentMode === "quick-sale" ? "payment" : currentMode));
@@ -1103,8 +1106,12 @@ export default function QuickSale() {
   async function handleCreateCustomer(event) {
     event.preventDefault();
 
-    if (!createCustomerForm.name.trim()) {
-      setCreateCustomerError("Customer name is required.");
+    const identityValidation = validateCustomerIdentity({
+      name: createCustomerForm.name,
+      phone: createCustomerForm.phone,
+    });
+    if (!identityValidation.valid) {
+      setCreateCustomerError(identityValidation.message);
       return;
     }
 
@@ -1373,12 +1380,24 @@ export default function QuickSale() {
   function saveSale() {
     if (!cart.length) return;
 
+    const identityValidation = validateCustomerIdentity({
+      customer_name: customerName,
+      customer_phone: customerPhone,
+    });
+    if (!identityValidation.valid) {
+      alert(identityValidation.message);
+      return;
+    }
+
     let sale;
 
     try {
       sale = createStoredQuickSale({
         customer_id: linkedCustomerId,
-        customer_name: customerName.trim() || "Walk-in Customer",
+        customer_first_name: identityValidation.identity.firstName,
+        customer_last_name: identityValidation.identity.lastName,
+        customer_name: identityValidation.identity.displayName,
+        customer_phone: identityValidation.identity.phone,
         payment_method: quickSalePaymentMethod,
         payment_status: quickSalePaymentMethod === "Pay Later" ? "Unpaid" : "Paid",
         amount_paid: quickSalePaymentMethod === "Pay Later" ? 0 : total,
@@ -3042,9 +3061,17 @@ export default function QuickSale() {
                             <input
                               value={customerName}
                               onChange={(event) => updateCustomerName(event.target.value)}
-                              placeholder="Walk-in Customer"
+                              placeholder="Customer first and last name"
                               style={{ ...touchFieldStyle, minHeight: "48px", fontSize: "16px" }}
                               aria-label="Customer Name"
+                            />
+                            <input
+                              type="tel"
+                              value={customerPhone}
+                              onChange={(event) => setCustomerPhone(event.target.value)}
+                              placeholder="Customer phone number"
+                              style={{ ...touchFieldStyle, minHeight: "48px", fontSize: "16px" }}
+                              aria-label="Customer Phone"
                             />
                             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                               {quickSalePaymentMethods.map((option) => {

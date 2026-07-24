@@ -1883,7 +1883,7 @@ export default function QuoteDetail() {
                 eyebrow="Original Request"
                 title="Request details"
                 description="Original customer and order context remain preserved for historical reference."
-                summary={`${formatValue(order.customer_name, "Walk-in Customer")} • ${formatValue(order.garment, "Custom garment")} • ${formatValue(order.qty, "0")} pcs`}
+                summary={`${formatValue(order.customer_name, "Customer identity unavailable")} • ${formatValue(order.garment, "Custom garment")} • ${formatValue(order.qty, "0")} pcs`}
                 background="#fcfcfb"
               >
                 <div
@@ -1893,7 +1893,7 @@ export default function QuoteDetail() {
                     gap: "14px",
                   }}
                 >
-                  <DetailItem label="Customer" value={formatValue(order.customer_name, "Walk-in Customer")} />
+                  <DetailItem label="Customer" value={formatValue(order.customer_name, "Customer identity unavailable")} />
                   <DetailItem label="Company" value={formatValue(order.customer_company)} />
                   <DetailItem label="Source" value={formatValue(order.source)} />
                   <DetailItem label="Due Date" value={formatValue(order.due_date)} />
@@ -2419,7 +2419,7 @@ export default function QuoteDetail() {
               gap: "14px",
             }}
           >
-            <DetailItem label="Customer" value={formatValue(order.customer_name, "Walk-in Customer")} />
+            <DetailItem label="Customer" value={formatValue(order.customer_name, "Customer identity unavailable")} />
             <DetailItem label="Garment" value={formatValue(order.garment, "Custom garment")} />
             <DetailItem label="Decoration Type" value={formatValue(order.decoration_type)} />
             <DetailItem label="Quantity" value={formatValue(order.qty, "0")} />

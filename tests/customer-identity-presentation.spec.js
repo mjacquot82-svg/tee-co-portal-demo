@@ -3,6 +3,11 @@ import {
   getCustomerDisplayName,
   looksLikeEmailAddress,
 } from "../src/lib/customerRecordMatching";
+import {
+  requireCustomerIdentity,
+  resolveCustomerIdentity,
+  validateCustomerIdentity,
+} from "../src/lib/customerIdentity";
 
 test.describe("customer identity presentation", () => {
   test("uses the canonical customer name instead of an email-shaped legacy name", () => {
@@ -41,8 +46,50 @@ test.describe("customer identity presentation", () => {
       getCustomerDisplayName(
         { customer_name: "customer@example.com", customer_email: "customer@example.com" },
         [],
-        "Walk-in Customer"
+        "Customer identity unavailable"
       )
-    ).toBe("Walk-in Customer");
+    ).toBe("Customer identity unavailable");
+  });
+
+  [
+    [{ customer_name: "Morgan Lee", customer_phone: "555-0100" }, []],
+    [{ customer_name: "Morgan", customer_phone: "555-0100" }, ["Last Name"]],
+    [{ customer_last_name: "Lee", customer_phone: "555-0100" }, ["First Name"]],
+    [{ customer_name: "Morgan Lee" }, ["Phone Number"]],
+  ].forEach(([input, missingFields]) => {
+    test(`requires order identity fields; missing: ${missingFields.join(", ") || "none"}`, () => {
+      const validation = validateCustomerIdentity(input);
+
+      expect(validation.missingFields).toEqual(missingFields);
+      expect(validation.valid).toBe(missingFields.length === 0);
+    });
+  });
+
+  test("normalizes explicit identity fields without mixing in Order Source", () => {
+    expect(
+      resolveCustomerIdentity({
+        customer_first_name: "Morgan",
+        customer_last_name: "Lee",
+        customer_phone: "555-0100",
+        source: "Walk-in",
+      })
+    ).toEqual({
+      firstName: "Morgan",
+      lastName: "Lee",
+      phone: "555-0100",
+      displayName: "Morgan Lee",
+    });
+  });
+
+  test("rejects anonymous order identity with a clear persistence error", () => {
+    expect(() =>
+      requireCustomerIdentity({
+        customer_name: "",
+        customer_phone: "",
+        source: "Walk-in",
+      })
+    ).toThrow(
+      "Customer identity is required. Enter First Name, Last Name, Phone Number before submitting the order."
+    );
   });
 });

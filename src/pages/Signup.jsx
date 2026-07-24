@@ -84,8 +84,14 @@ export default function Signup() {
     if (submitting) return;
 
     const normalizedEmail = form.email.trim();
-    if (!form.firstName.trim() || !form.lastName.trim() || !normalizedEmail || !form.password) {
-      setErrorMessage("Complete all required fields.");
+    if (
+      !form.firstName.trim() ||
+      !form.lastName.trim() ||
+      !form.phone.trim() ||
+      !normalizedEmail ||
+      !form.password
+    ) {
+      setErrorMessage("First Name, Last Name, Phone Number, Email, and Password are required.");
       return;
     }
 
@@ -247,7 +253,8 @@ export default function Signup() {
               type="tel"
               value={form.phone}
               onChange={(event) => updateField("phone", event.target.value)}
-              placeholder="Optional"
+              placeholder="Phone number"
+              required
               style={fieldStyle}
             />
           </div>

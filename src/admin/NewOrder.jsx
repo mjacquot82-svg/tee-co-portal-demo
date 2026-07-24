@@ -20,6 +20,7 @@ import { createStoredOrder } from "../lib/ordersStore";
 import { useStoredProducts } from "../lib/productsStore";
 import { generateQuoteSnapshot } from "../lib/quoteEngine";
 import { uploadCustomerArtwork } from "../services/customerArtworkService";
+import { resolveCustomerIdentity, validateCustomerIdentity } from "../lib/customerIdentity";
 import "./NewOrder.css";
 
 const fallbackSizeKeys = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"];
@@ -139,6 +140,7 @@ export default function NewOrder() {
   const navigate = useNavigate();
   const artworkInputRef = useRef(null);
   const customerNameInputRef = useRef(null);
+  const customerPhoneInputRef = useRef(null);
   const productSelectRef = useRef(null);
   const sizeSectionRef = useRef(null);
   const depositDecisionRef = useRef(null);
@@ -265,10 +267,21 @@ export default function NewOrder() {
     const fields = {};
     let firstInvalidRef = null;
 
-    if (!String(form.customer_name || "").trim()) {
-      messages.push("Enter the customer name before saving the quote.");
+    const identityValidation = validateCustomerIdentity(form);
+    if (identityValidation.missingFields.includes("First Name")) {
+      messages.push("Enter the customer's first name before saving the quote.");
       fields.customer_name = true;
       firstInvalidRef ||= customerNameInputRef;
+    }
+    if (identityValidation.missingFields.includes("Last Name")) {
+      messages.push("Enter the customer's last name before saving the quote.");
+      fields.customer_name = true;
+      firstInvalidRef ||= customerNameInputRef;
+    }
+    if (identityValidation.missingFields.includes("Phone Number")) {
+      messages.push("Enter the customer's phone number before saving the quote.");
+      fields.customer_phone = true;
+      firstInvalidRef ||= customerPhoneInputRef;
     }
 
     if (!selectedProductId || !String(form.garment || "").trim()) {
@@ -448,10 +461,11 @@ export default function NewOrder() {
     const matchingCustomer = findMatchingCustomer(customers, form);
     if (matchingCustomer) return matchingCustomer.id;
 
+    const identity = resolveCustomerIdentity(form);
     const customer = await createStoredCustomer({
-      name: form.customer_name,
+      name: identity.displayName,
       company: form.customer_company,
-      phone: form.customer_phone,
+      phone: identity.phone,
       email: form.customer_email,
       notes: "Auto-created from staff order entry.",
     });
@@ -650,7 +664,7 @@ export default function NewOrder() {
             </label>
 
             <label style={{ ...labelStyle, position: "relative" }}>
-              Customer Name
+              Customer Name (First and Last)
               <input
                 data-testid="new-order-customer-name-input"
                 ref={customerNameInputRef}
@@ -710,7 +724,19 @@ export default function NewOrder() {
 
             <label style={labelStyle}>
               Phone
-              <input name="customer_phone" value={form.customer_phone} onChange={updateField} placeholder="(555) 123-4567" style={fieldStyle} />
+              <input
+                data-testid="new-order-customer-phone-input"
+                ref={customerPhoneInputRef}
+                name="customer_phone"
+                value={form.customer_phone}
+                onChange={updateField}
+                required
+                placeholder="(555) 123-4567"
+                style={{
+                  ...fieldStyle,
+                  borderColor: validationFields.customer_phone ? "#dc2626" : "#cbd5e1",
+                }}
+              />
             </label>
 
             <label style={labelStyle}>

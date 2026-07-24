@@ -101,7 +101,7 @@ function StaffAssignmentColumn({ title, description, orders = [], emptyMessage }
                 <strong>{order.order_number}</strong>
                 <span style={{ color: "#475569", fontWeight: 700, fontSize: "13px" }}>{order.status}</span>
               </div>
-              <span style={{ fontWeight: 700 }}>{order.customer_name || "Walk-in Customer"}</span>
+              <span style={{ fontWeight: 700 }}>{order.customer_name || "Customer identity unavailable"}</span>
               <span style={{ color: "#64748b", fontSize: "14px" }}>
                 {order.garment || order.item || "Custom garment"} • Due {order.due_date ? formatShortDate(order.due_date) : "TBD"}
               </span>
