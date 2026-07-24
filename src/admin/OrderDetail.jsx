@@ -115,6 +115,24 @@ export default function OrderDetail() {
         : [],
     });
   }, [order, quoteSnapshot]);
+
+  useEffect(() => {
+    if (
+      activeWorkspace !== "financial" ||
+      window.location.hash !== "#owner-payment-request-form" ||
+      !normalizedOrder
+    ) {
+      return undefined;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      document
+        .getElementById("owner-payment-request-form")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [activeWorkspace, normalizedOrder]);
   const productionReadiness = useMemo(
     () => (order ? buildProductionReadinessSummary(order) : null),
     [order]
