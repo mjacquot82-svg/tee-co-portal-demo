@@ -43,6 +43,7 @@ import PaymentRequestDetail from "./admin/PaymentRequestDetail";
 import PaymentReconciliation from "./admin/PaymentReconciliation";
 import FinancialHistory from "./admin/FinancialHistory";
 import NotificationTemplates from "./admin/NotificationTemplates";
+import NotificationPolicies from "./admin/NotificationPolicies";
 import NotificationActivity from "./admin/NotificationActivity";
 import StaffNotifications from "./admin/StaffNotifications";
 import TemporaryOrderExport from "./admin/TemporaryOrderExport";
@@ -111,6 +112,10 @@ export default function App() {
             <Route
               path="admin/settings/notifications/activity"
               element={<NotificationActivity />}
+            />
+            <Route
+              path="admin/settings/notifications/policy"
+              element={<NotificationPolicies />}
             />
             <Route
               path="admin/settings/order-export"

@@ -136,6 +136,20 @@ const ADMIN_ROUTE_PERMISSION_RULES = [
   },
   {
     type: "exact",
+    value: "/admin/settings/notifications/policy",
+    permissions: [PERMISSIONS.settingsManage],
+    classification: "protected-management",
+    ownerOnly: true,
+  },
+  {
+    type: "exact",
+    value: "/admin/settings/notifications/activity",
+    permissions: [PERMISSIONS.settingsManage],
+    classification: "protected-management",
+    ownerOnly: true,
+  },
+  {
+    type: "exact",
     value: "/admin/settings/order-export",
     permissions: [PERMISSIONS.settingsManage],
     classification: "protected-management",

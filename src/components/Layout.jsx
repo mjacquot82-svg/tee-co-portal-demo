@@ -250,6 +250,11 @@ function getAdminSections(staffUser) {
       defaultCollapsed: true,
       links: [
         {
+          to: "/admin/settings/notifications/policy",
+          label: "Notification Policy",
+          navKey: "notificationPolicy",
+        },
+        {
           to: "/admin/settings/notifications",
           label: "Notification Templates",
           navKey: "notificationTemplates",
@@ -276,6 +281,7 @@ function getActiveSidebarLink(pathname, staffUser) {
   if (pathname.startsWith("/admin/customers")) return "customers";
   if (pathname.startsWith("/admin/staff-users")) return "staffUsers";
   if (pathname.startsWith("/admin/settings/notifications/activity")) return "notificationActivity";
+  if (pathname.startsWith("/admin/settings/notifications/policy")) return "notificationPolicy";
   if (pathname.startsWith("/admin/settings/notifications")) return "notificationTemplates";
   if (pathname.startsWith("/admin/settings/order-export")) return "orderExport";
   if (pathname === "/admin/records/canceled") return "canceledOrders";

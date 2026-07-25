@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
   NOTIFICATION_TYPES,
   NOTIFICATION_TYPE_LABELS,
@@ -47,64 +48,6 @@ const sectionHeadingStyle = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
 };
-
-function ToggleSwitch({ checked, onChange, label, id }) {
-  return (
-    <label
-      htmlFor={id}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "10px",
-        cursor: "pointer",
-        userSelect: "none",
-      }}
-    >
-      <span
-        style={{
-          position: "relative",
-          display: "inline-block",
-          width: "36px",
-          height: "20px",
-          flexShrink: 0,
-        }}
-      >
-        <input
-          id={id}
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
-          style={{ opacity: 0, width: 0, height: 0, position: "absolute" }}
-        />
-        <span
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: "999px",
-            background: checked ? "#0f766e" : "#d6d3d1",
-            transition: "background 0.15s",
-          }}
-        />
-        <span
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            top: "3px",
-            left: checked ? "19px" : "3px",
-            width: "14px",
-            height: "14px",
-            borderRadius: "999px",
-            background: "#ffffff",
-            transition: "left 0.15s",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-          }}
-        />
-      </span>
-      <span style={{ fontSize: "14px", color: "#374151" }}>{label}</span>
-    </label>
-  );
-}
 
 function MergeFieldChips({ onInsert }) {
   const [copiedKey, setCopiedKey] = useState(null);
@@ -258,10 +201,7 @@ function TemplateEditor({ template, onSave, onReset, saving }) {
     draft.name !== template.name ||
     draft.emailSubject !== template.emailSubject ||
     draft.emailBody !== template.emailBody ||
-    draft.smsMessage !== template.smsMessage ||
-    draft.emailEnabled !== template.emailEnabled ||
-    draft.smsEnabled !== template.smsEnabled ||
-    draft.staffNotificationEnabled !== template.staffNotificationEnabled;
+    draft.smsMessage !== template.smsMessage;
 
   function setField(field, value) {
     setDraft((prev) => ({ ...prev, [field]: value }));
@@ -363,12 +303,6 @@ function TemplateEditor({ template, onSave, onReset, saving }) {
                   style={{ ...textareaStyle, minHeight: "180px" }}
                 />
               </div>
-              <ToggleSwitch
-                id={`emailEnabled-${template.type}`}
-                checked={draft.emailEnabled}
-                onChange={(val) => setField("emailEnabled", val)}
-                label="Email Enabled"
-              />
             </div>
           </div>
 
@@ -389,23 +323,7 @@ function TemplateEditor({ template, onSave, onReset, saving }) {
                   {draft.smsMessage.length} characters
                 </p>
               </div>
-              <ToggleSwitch
-                id={`smsEnabled-${template.type}`}
-                checked={draft.smsEnabled}
-                onChange={(val) => setField("smsEnabled", val)}
-                label="SMS Enabled"
-              />
             </div>
-          </div>
-
-          <div>
-            <p style={sectionHeadingStyle}>Staff Notifications</p>
-            <ToggleSwitch
-              id={`staffNotificationEnabled-${template.type}`}
-              checked={draft.staffNotificationEnabled}
-              onChange={(val) => setField("staffNotificationEnabled", val)}
-              label="Staff Notification Enabled"
-            />
           </div>
 
           <MergeFieldChips onInsert={handleInsertMergeField} />
@@ -591,10 +509,14 @@ export default function NotificationTemplates() {
           Notification Templates
         </h1>
         <p style={{ margin: 0, color: "#57534e", fontSize: "14px", lineHeight: 1.55 }}>
-          Manage the email and SMS templates used for customer and staff notifications.
+          Manage the message content used for customer and staff notifications.
           Templates are stored in Supabase and synchronized across devices on page load. Use merge
           fields to personalize each message.
         </p>
+        <nav style={{ display: "flex", gap: "12px", marginTop: "14px" }}>
+          <Link to="/admin/settings/notifications/policy">Notification Policy</Link>
+          <Link to="/admin/settings/notifications/activity">Activity</Link>
+        </nav>
       </div>
 
       <div
@@ -607,9 +529,8 @@ export default function NotificationTemplates() {
         }}
       >
         <p style={{ margin: 0, fontSize: "13px", color: "#9a3412", lineHeight: 1.5 }}>
-          <strong>Preview only.</strong> These templates define future notification content.
-          Actual email and SMS sending is not yet connected. Enable/disable toggles are saved
-          for planning purposes.
+          <strong>Content only.</strong> Configure enablement, audiences, automatic delivery,
+          channels, and template assignments in Notification Policy.
         </p>
       </div>
 
@@ -618,12 +539,6 @@ export default function NotificationTemplates() {
           const template = templates[type];
           const label = NOTIFICATION_TYPE_LABELS[type];
           const isExpanded = expandedType === type;
-          const channelBadges = [
-            template.emailEnabled && "Email",
-            template.smsEnabled && "SMS",
-            template.staffNotificationEnabled && "Staff",
-          ].filter(Boolean);
-
           return (
             <div
               key={type}
@@ -656,39 +571,7 @@ export default function NotificationTemplates() {
                   <strong style={{ fontSize: "15px", color: "#171717" }}>
                     {template.name || label}
                   </strong>
-                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                    {channelBadges.map((badge) => (
-                      <span
-                        key={badge}
-                        style={{
-                          padding: "3px 8px",
-                          borderRadius: "999px",
-                          background: "#dcfce7",
-                          color: "#166534",
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          border: "1px solid #bbf7d0",
-                        }}
-                      >
-                        {badge}
-                      </span>
-                    ))}
-                    {channelBadges.length === 0 && (
-                      <span
-                        style={{
-                          padding: "3px 8px",
-                          borderRadius: "999px",
-                          background: "#f5f5f4",
-                          color: "#78716c",
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          border: "1px solid #e7e5e4",
-                        }}
-                      >
-                        Disabled
-                      </span>
-                    )}
-                  </div>
+                  <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 700 }}>Message content</span>
                 </div>
                 <span
                   aria-hidden="true"
