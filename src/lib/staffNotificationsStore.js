@@ -76,6 +76,10 @@ function normalizeStaffNotification(record = {}) {
     linkTo: String(record.linkTo || ""),
     read: Boolean(record.read),
     createdAt: String(record.createdAt || new Date().toISOString()),
+    businessEventId: String(record.businessEventId || ""),
+    notificationId: String(record.notificationId || ""),
+    deliveryId: String(record.deliveryId || ""),
+    deliveryAttemptId: String(record.deliveryAttemptId || ""),
   };
 }
 
@@ -96,7 +100,7 @@ function readStoredNotifications() {
 // --- Supabase persistence helpers ---
 
 function buildStaffNotificationRow(record) {
-  return {
+  const row = {
     id: record.id,
     type: record.type,
     order_number: record.orderNumber,
@@ -107,6 +111,13 @@ function buildStaffNotificationRow(record) {
     read: record.read,
     created_at: record.createdAt,
   };
+  if (record.deliveryId) {
+    row.business_event_id = record.businessEventId;
+    row.notification_id = record.notificationId;
+    row.delivery_id = record.deliveryId;
+    row.delivery_attempt_id = record.deliveryAttemptId;
+  }
+  return row;
 }
 
 function mapStaffNotificationRow(row) {
@@ -269,6 +280,74 @@ export function createStaffNotification(input = {}) {
   const current = readStoredNotifications();
   saveStoredNotifications([record, ...current]);
   insertStaffNotificationToSupabase(record);
+  return record;
+}
+
+export async function createStaffNotificationFromAdapter(
+  input = {},
+  client = supabase
+) {
+  const typeStr = String(input.type || "").trim();
+  if (!typeStr || !Object.values(STAFF_NOTIFICATION_TYPES).includes(typeStr)) {
+    throw new Error("Staff adapter requires a supported notification type.");
+  }
+
+  const orderNumber = String(input.orderNumber || "").trim();
+  const deliveryId = String(input.deliveryId || "").trim();
+  const deliveryAttemptId = String(input.deliveryAttemptId || "").trim();
+  if (!orderNumber || !deliveryId || !deliveryAttemptId) {
+    throw new Error(
+      "Staff adapter requires order, Delivery, and Delivery Attempt identities."
+    );
+  }
+
+  const id = String(input.id || `staff-notif:${deliveryId}`).trim();
+  const current = readStoredNotifications();
+  const existing = current.find((record) => record.id === id);
+  const record = normalizeStaffNotification(
+    existing
+      ? {
+          ...existing,
+          businessEventId: input.businessEventId,
+          notificationId: input.notificationId,
+          deliveryId,
+          deliveryAttemptId,
+        }
+      : {
+          id,
+          type: typeStr,
+          orderNumber,
+          assignedToStaffId: input.assignedToStaffId || "",
+          assignedToStaffName: input.assignedToStaffName || "",
+          description:
+            String(input.description || "").trim() ||
+            STAFF_NOTIFICATION_TYPE_LABELS[typeStr] ||
+            typeStr,
+          linkTo: String(input.linkTo || `/admin/orders/${orderNumber}`).trim(),
+          read: false,
+          createdAt: input.createdAt || new Date().toISOString(),
+          businessEventId: input.businessEventId,
+          notificationId: input.notificationId,
+          deliveryId,
+          deliveryAttemptId,
+        }
+  );
+
+  if (existing) {
+    saveStoredNotifications(
+      current.map((candidate) => (candidate.id === id ? record : candidate))
+    );
+  } else {
+    saveStoredNotifications([record, ...current]);
+  }
+
+  if (client?.from) {
+    const { error } = await client
+      .from(SUPABASE_TABLE)
+      .upsert(buildStaffNotificationRow(record), { onConflict: "id" });
+    if (error) throw error;
+  }
+
   return record;
 }
 

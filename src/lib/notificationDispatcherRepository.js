@@ -4,6 +4,8 @@ export const NOTIFICATION_DISPATCHER_RPCS = Object.freeze({
   claimObservation: "claim_notification_deliveries_observation",
   recoverAbandoned: "recover_abandoned_notification_delivery_claims",
   completeObservation: "complete_notification_delivery_observation",
+  claimStaffObservation: "claim_staff_notification_deliveries_observation",
+  completeStaffObservation: "complete_staff_internal_delivery_observation",
 });
 
 function resolveClient(client) {
@@ -62,6 +64,48 @@ export function completeObservationDelivery(
       p_claim_token: claimToken,
       p_attempt_id: attemptId,
       p_attempt_number: attemptNumber,
+      p_started_at: startedAt,
+      p_completed_at: completedAt,
+    },
+    client
+  );
+}
+
+export function claimStaffObservationDeliveries(
+  { workerId, limit = 25, leaseSeconds = 60 },
+  client
+) {
+  return callRpc(
+    NOTIFICATION_DISPATCHER_RPCS.claimStaffObservation,
+    {
+      p_worker_id: workerId,
+      p_limit: limit,
+      p_lease_seconds: leaseSeconds,
+    },
+    client
+  );
+}
+
+export function completeStaffObservationDelivery(
+  {
+    deliveryId,
+    claimToken,
+    attemptId,
+    attemptNumber,
+    staffNotificationId,
+    startedAt,
+    completedAt,
+  },
+  client
+) {
+  return callRpc(
+    NOTIFICATION_DISPATCHER_RPCS.completeStaffObservation,
+    {
+      p_delivery_id: deliveryId,
+      p_claim_token: claimToken,
+      p_attempt_id: attemptId,
+      p_attempt_number: attemptNumber,
+      p_staff_notification_id: staffNotificationId,
       p_started_at: startedAt,
       p_completed_at: completedAt,
     },
