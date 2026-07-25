@@ -543,6 +543,22 @@ async function processSquareWebhookEventWithAdapter(webhookEvent = {}, options =
       orderNumber: paymentRequest?.order_number || getRequestMetadataMatch(payment).orderNumber,
       depositAmount: getSquarePaymentAmount(payment),
       paymentLink: paymentRequest?.provider_checkout_url || "",
+      businessEvent: {
+        subjectType: "payment",
+        subjectId: recordedPayment?.id || paymentId,
+        occurrenceId: squareEventId || `${squareEventType}:${paymentId}:${eventTimestamp}`,
+        correlationId: paymentRequest?.order_number
+          ? `order:${paymentRequest.order_number}`
+          : "",
+        occurredAt: eventTimestamp,
+        source: "square_webhook",
+        payload: {
+          squareEventId,
+          squareEventType,
+          squarePaymentId: paymentId,
+          paymentStatus: statusMapping.paymentStatus,
+        },
+      },
     });
   }
 

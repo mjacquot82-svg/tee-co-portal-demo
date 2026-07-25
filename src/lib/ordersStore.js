@@ -97,7 +97,8 @@ function isApprovedState(value) {
   );
 }
 
-function buildOrderNotificationContext(order, source = "orders_store") {
+function buildOrderNotificationContext(eventType, order, source = "orders_store") {
+  const occurredAt = order?.updated_at || order?.created_at || "";
   return {
     order,
     source,
@@ -109,12 +110,31 @@ function buildOrderNotificationContext(order, source = "orders_store") {
     depositAmount: order?.deposit_amount || order?.deposit?.amount,
     balanceDue: order?.balance_due,
     pickupDate: order?.pickup_date || order?.due_date || "",
+    businessEvent: {
+      subjectType: "order",
+      subjectId: order?.id || order?.order_number || "",
+      occurrenceId: `${eventType}:${occurredAt || order?.order_number || "unknown"}`,
+      correlationId: order?.order_number ? `order:${order.order_number}` : "",
+      occurredAt,
+      source,
+      payload: {
+        orderNumber: order?.order_number || "",
+        orderStatus: order?.status || "",
+        quoteStatus: order?.quote_status || "",
+        approvalStatus: order?.approval_status || "",
+        artworkApprovalStatus: order?.artwork_approval_status || "",
+        depositWorkflowStatus: order?.deposit_workflow_status || "",
+      },
+    },
   };
 }
 
 function triggerOrderNotification(eventType, order, source = "orders_store") {
   if (!order) return;
-  triggerNotificationEvent(eventType, buildOrderNotificationContext(order, source));
+  triggerNotificationEvent(
+    eventType,
+    buildOrderNotificationContext(eventType, order, source)
+  );
 }
 
 function normalizePlacements(order = {}) {

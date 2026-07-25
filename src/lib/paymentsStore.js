@@ -542,6 +542,20 @@ function notifyPaymentRequestCreated(paymentRequest) {
     orderNumber: paymentRequest.order_number,
     depositAmount: paymentRequest.amount_requested,
     paymentLink: paymentRequest.provider_checkout_url,
+    businessEvent: {
+      subjectType: "payment_request",
+      subjectId: paymentRequest.id,
+      occurrenceId: `payment_request_created:${paymentRequest.id}`,
+      correlationId: paymentRequest.order_number
+        ? `order:${paymentRequest.order_number}`
+        : "",
+      occurredAt: paymentRequest.created_at,
+      source: "payments_store",
+      payload: {
+        paymentRequestId: paymentRequest.id,
+        requestType: paymentRequest.request_type,
+      },
+    },
   });
 
   if (String(paymentRequest.request_type || "").trim().toLowerCase() === "deposit") {
@@ -552,6 +566,20 @@ function notifyPaymentRequestCreated(paymentRequest) {
       orderNumber: paymentRequest.order_number,
       depositAmount: paymentRequest.amount_requested,
       paymentLink: paymentRequest.provider_checkout_url,
+      businessEvent: {
+        subjectType: "payment_request",
+        subjectId: paymentRequest.id,
+        occurrenceId: `deposit_requested:${paymentRequest.id}`,
+        correlationId: paymentRequest.order_number
+          ? `order:${paymentRequest.order_number}`
+          : "",
+        occurredAt: paymentRequest.created_at,
+        source: "payments_store",
+        payload: {
+          paymentRequestId: paymentRequest.id,
+          requestType: paymentRequest.request_type,
+        },
+      },
     });
   }
 }
@@ -764,6 +792,21 @@ export function recordPayment(input = {}) {
       source: "payments_store",
       orderNumber: payment.order_number,
       depositAmount: payment.amount,
+      businessEvent: {
+        subjectType: "payment",
+        subjectId: payment.id,
+        occurrenceId: `payment_received:${
+          payment.idempotency_key || payment.provider_payment_id || payment.id
+        }`,
+        correlationId: payment.order_number ? `order:${payment.order_number}` : "",
+        occurredAt: payment.created_at,
+        source: "payments_store",
+        payload: {
+          paymentId: payment.id,
+          paymentRequestId: payment.payment_request_id || "",
+          status: payment.status,
+        },
+      },
     });
   }
 

@@ -6,6 +6,7 @@ import {
   renderNotificationTemplatePreview,
 } from "./notificationTemplatesStore";
 import { supabase } from "./supabaseClient";
+import { observeLegacyNotificationEvent } from "./notificationEnginePhase2B";
 
 const STORAGE_KEY = "teeCoNotificationActivity";
 const SUPABASE_TABLE = "notification_activity";
@@ -19,6 +20,7 @@ const memoryStore = {
 };
 
 let activityHydrationPromise = null;
+const pendingPhase2BObservations = new Set();
 
 function nowIso() {
   return new Date().toISOString();
@@ -266,6 +268,20 @@ function buildNotificationRecord({
   };
 }
 
+function queuePhase2BObservation(eventType, context, template) {
+  const observation = observeLegacyNotificationEvent({
+    eventType,
+    context,
+    legacyTemplate: template,
+  })
+    .catch((error) => {
+      console.error("[notificationDeliveryService] Phase 2B shadow observation failed", error);
+      return null;
+    })
+    .finally(() => pendingPhase2BObservations.delete(observation));
+  pendingPhase2BObservations.add(observation);
+}
+
 export const NOTIFICATION_EVENT_TEMPLATE_MAP = Object.freeze({
   [NOTIFICATION_TYPES.newCustomerRequest]: NOTIFICATION_TYPES.newCustomerRequest,
   [NOTIFICATION_TYPES.quoteReadyForApproval]: NOTIFICATION_TYPES.quoteReadyForApproval,
@@ -362,7 +378,12 @@ export function triggerNotificationEvent(eventType, context = {}) {
 
   saveNotificationActivity([...records, ...readNotificationActivity()]);
   insertActivityRecordsToSupabase(records);
+  queuePhase2BObservation(eventType, context, template);
   return records;
+}
+
+export async function flushNotificationEnginePhase2BForTests() {
+  await Promise.all([...pendingPhase2BObservations]);
 }
 
 export function resetNotificationActivityForTests() {
