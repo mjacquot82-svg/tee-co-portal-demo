@@ -10,8 +10,10 @@ import {
   getRouteAccessUser,
   getOperationalOrdersForStaff,
   hasOperationalSession,
+  isSupabaseAuthenticatedOwner,
   isAdminWorkspaceView,
   isStaffWorkspaceView,
+  requiresSupabaseOwnerAuthorization,
   requiresProtectedManagementAccess,
   resolveOperationalRole,
 } from "../admin/adminRoleView";
@@ -1308,6 +1310,8 @@ export default function Layout() {
   }
   usePaymentReconciliationRefresh(isAdmin);
   const requiresManagementAccess = requiresProtectedManagementAccess(location.pathname);
+  const requiresSupabaseOwner =
+    requiresSupabaseOwnerAuthorization(location.pathname);
   const requiresCustomerSession = location.pathname === "/my-orders";
   const [authenticatedOperationalUser, setAuthenticatedOperationalUser] = useState(() =>
     getOperationalAuthUser()
@@ -1406,6 +1410,20 @@ export default function Layout() {
         ? "allowed"
         : "blocked",
     });
+
+    if (
+      requiresSupabaseOwner &&
+      !isSupabaseAuthenticatedOwner(authenticatedOperationalUser)
+    ) {
+      logAdminRouteGuard("redirect", adminRouteGuardSnapshot, {
+        redirectReason: "supabase-owner-session-required",
+      });
+      navigate(
+        `/login?redirectTo=${encodeURIComponent(location.pathname + location.search)}&auth=owner`,
+        { replace: true }
+      );
+      return;
+    }
 
     if (!hasOperationalSession(routeAccessUser)) {
       logAdminRouteGuard("redirect", adminRouteGuardSnapshot, {
@@ -1511,6 +1529,7 @@ export default function Layout() {
     operationalAuthLoading,
     routeAccessUser,
     requiresManagementAccess,
+    requiresSupabaseOwner,
   ]);
 
   useEffect(() => {

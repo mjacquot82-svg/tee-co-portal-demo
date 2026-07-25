@@ -25,9 +25,7 @@ function emitOperationalAuthUpdated() {
 function normalizeOperationalRole(user) {
   const metadataRole =
     user?.app_metadata?.operational_role ||
-    user?.app_metadata?.role ||
-    user?.user_metadata?.operational_role ||
-    user?.user_metadata?.role;
+    user?.app_metadata?.role;
   return normalizePermissionRole(metadataRole);
 }
 

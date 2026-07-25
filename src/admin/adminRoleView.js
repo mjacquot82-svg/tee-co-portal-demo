@@ -13,6 +13,12 @@ const OPERATIONAL_ROLE_RANK = {
   [OPERATIONAL_ROLES.owner]: 3,
 };
 
+const SUPABASE_OWNER_AUTHORIZATION_PATHS = new Set([
+  "/admin/settings/notifications",
+  "/admin/settings/notifications/policy",
+  "/admin/settings/notifications/activity",
+]);
+
 export const MANAGEMENT_EXACT_PATHS = [
   "/admin/customers",
   "/admin/financial",
@@ -212,6 +218,21 @@ export function isAdminWorkspaceView(staffUser = getActiveStaffUser()) {
 
 export function isOwnerView(staffUser = getActiveStaffUser()) {
   return resolveOperationalRole(staffUser) === OPERATIONAL_ROLES.owner;
+}
+
+export function requiresSupabaseOwnerAuthorization(pathname = "") {
+  return SUPABASE_OWNER_AUTHORIZATION_PATHS.has(
+    normalizeRoutePathname(pathname)
+  );
+}
+
+export function isSupabaseAuthenticatedOwner(user = null) {
+  return Boolean(
+    user?.id &&
+    user?.isSupabaseAuthSession === true &&
+    user?.authMode === "supabase-session" &&
+    isOwnerView(user)
+  );
 }
 
 export function isStaffWorkspaceView(staffUser = getActiveStaffUser()) {

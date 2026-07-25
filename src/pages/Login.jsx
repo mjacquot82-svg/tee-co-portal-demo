@@ -4,6 +4,8 @@ import {
   canAccessOperationalWorkspace,
   canAccessProtectedManagementRoute,
   getRouteAccessUser,
+  isSupabaseAuthenticatedOwner,
+  requiresSupabaseOwnerAuthorization,
   requiresProtectedManagementAccess,
 } from "../admin/adminRoleView";
 import { pushAuthDiagnostic } from "../lib/authDiagnostics";
@@ -110,6 +112,9 @@ export default function Login() {
     resolvedRedirectTarget.startsWith("/portal");
   const targetNeedsManagement =
     targetIsAdminRoute && requiresProtectedManagementAccess(resolvedRedirectTarget);
+  const targetRequiresSupabaseOwner =
+    targetIsAdminRoute &&
+    requiresSupabaseOwnerAuthorization(resolvedRedirectTarget);
   const routeAccessUser = getRouteAccessUser({
     authenticatedUser: activeOperationalUser,
     activeStaffUser,
@@ -176,6 +181,13 @@ export default function Login() {
     if (passwordRecovery) return;
 
     if (targetNeedsManagement) {
+      if (targetRequiresSupabaseOwner) {
+        if (isSupabaseAuthenticatedOwner(activeOperationalUser)) {
+          navigate(resolvedRedirectTarget, { replace: true });
+        }
+        return;
+      }
+
       if (canAccessProtectedManagementRoute(resolvedRedirectTarget, routeAccessUser)) {
         navigate(resolvedRedirectTarget, { replace: true });
         return;
@@ -225,6 +237,7 @@ export default function Login() {
     targetIsAdminRoute,
     targetIsCustomerRoute,
     targetNeedsManagement,
+    targetRequiresSupabaseOwner,
   ]);
 
   async function handleStaffLogin(event) {
@@ -254,7 +267,9 @@ export default function Login() {
       return;
     }
 
-    const nextTarget = canAccessOperationalWorkspace(resolvedRedirectTarget, loginResult.user)
+    const nextTarget = targetRequiresSupabaseOwner
+      ? "/admin"
+      : canAccessOperationalWorkspace(resolvedRedirectTarget, loginResult.user)
       ? resolvedRedirectTarget
       : "/admin";
 
@@ -307,6 +322,10 @@ export default function Login() {
             ? "/portal/orders"
             : resolvedRedirectTarget
           : "/portal/orders"
+        : targetRequiresSupabaseOwner
+            ? isSupabaseAuthenticatedOwner(loginResult.user)
+              ? resolvedRedirectTarget
+              : "/admin"
         : canAccessProtectedManagementRoute(resolvedRedirectTarget, postLoginAccessUser)
           ? resolvedRedirectTarget
           : targetIsAdminRoute &&
@@ -411,7 +430,9 @@ export default function Login() {
               letterSpacing: "-0.03em",
             }}
           >
-            Choose how you work today.
+            {targetRequiresSupabaseOwner
+              ? "Owner authentication required."
+              : "Choose how you work today."}
           </h1>
           <p
             style={{
@@ -421,8 +442,9 @@ export default function Login() {
               lineHeight: 1.6,
             }}
           >
-            Customers sign in to the portal for approvals, invoices, payments, and order updates.
-            Staff use a PIN for fast access at the counter, in production, or at dispatch.
+            {targetRequiresSupabaseOwner
+              ? "Notification settings require the Owner email and password. A Staff PIN does not authorize protected database access."
+              : "Customers sign in to the portal for approvals, invoices, payments, and order updates. Staff use a PIN for fast access at the counter, in production, or at dispatch."}
           </p>
         </div>
 
@@ -456,7 +478,7 @@ export default function Login() {
                   textTransform: "uppercase",
                 }}
               >
-                Customer Portal
+                {targetRequiresSupabaseOwner ? "Protected Owner Settings" : "Customer Portal"}
               </p>
               <h2
                 style={{
@@ -467,11 +489,12 @@ export default function Login() {
                   letterSpacing: "-0.02em",
                 }}
               >
-                Customer Sign In
+                {targetRequiresSupabaseOwner ? "Owner Sign In" : "Customer Sign In"}
               </h2>
               <p style={{ margin: 0, color: "#475569", fontSize: "14px", lineHeight: 1.6 }}>
-                Open your portal to review quotes, check invoices, make payments, and follow order
-                progress.
+                {targetRequiresSupabaseOwner
+                  ? "Use the Owner Supabase Auth account. Its immutable app metadata must include operational_role: owner."
+                  : "Open your portal to review quotes, check invoices, make payments, and follow order progress."}
               </p>
             </div>
 
@@ -579,7 +602,9 @@ export default function Login() {
                     : "Signing In..."
                   : passwordRecovery
                     ? "Update Password"
-                    : "Open Portal"}
+                    : targetRequiresSupabaseOwner
+                      ? "Open Owner Settings"
+                      : "Open Portal"}
               </button>
 
               {!passwordRecovery ? (
