@@ -4,6 +4,7 @@ import {
   updateStoredCustomer,
 } from "./customersStore";
 import { normalizeCustomerId } from "./customerIds";
+import { looksLikeEmailAddress } from "./customerRecordMatching";
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
@@ -11,6 +12,25 @@ function normalizeEmail(value) {
 
 function normalizeText(value) {
   return String(value || "").trim();
+}
+
+export function resolveCustomerProfileIdentity(session = {}, existingCustomer = {}) {
+  const fullName = normalizeText(
+    [session.firstName, session.lastName].filter(Boolean).join(" ")
+  );
+  const displayName = normalizeText(session.displayName);
+  const existingName = normalizeText(existingCustomer.name);
+  const sessionName =
+    fullName || (!looksLikeEmailAddress(displayName) ? displayName : "");
+
+  return {
+    name:
+      sessionName ||
+      (!looksLikeEmailAddress(existingName) ? existingName : "") ||
+      "Customer Account",
+    email: normalizeText(session.email) || normalizeText(existingCustomer.email),
+    phone: normalizeText(session.phone) || normalizeText(existingCustomer.phone),
+  };
 }
 
 export async function ensureCustomerProfile(session = {}) {
@@ -22,15 +42,11 @@ export async function ensureCustomerProfile(session = {}) {
     (customer) => normalizeEmail(customer.email) === email
   );
 
-  const name = normalizeText(
-    session.displayName ||
-      [session.firstName, session.lastName].filter(Boolean).join(" ")
-  );
-
   if (existingCustomer) {
-    const nextName = name || existingCustomer.name || "Customer Account";
-    const nextEmail = session.email || existingCustomer.email || "";
-    const nextPhone = session.phone || existingCustomer.phone || "";
+    const identity = resolveCustomerProfileIdentity(session, existingCustomer);
+    const nextName = identity.name;
+    const nextEmail = identity.email;
+    const nextPhone = identity.phone;
     const nextAuthUserId = session.id || existingCustomer.auth_user_id || "";
     const nextExternalReference = session.id || existingCustomer.external_reference || "";
     const isUnchanged =
@@ -54,10 +70,11 @@ export async function ensureCustomerProfile(session = {}) {
     });
   }
 
+  const identity = resolveCustomerProfileIdentity(session);
   return createStoredCustomer({
-    name: name || session.email || "Customer Account",
-    email: session.email || "",
-    phone: session.phone || "",
+    name: identity.name,
+    email: identity.email,
+    phone: identity.phone,
     auth_user_id: session.id || "",
     external_reference: session.id || "",
   });

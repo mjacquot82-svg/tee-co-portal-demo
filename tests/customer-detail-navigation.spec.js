@@ -89,3 +89,19 @@ test("browser Back returns from customer detail to the customer list", async ({ 
 
   await expectCustomersList(page);
 });
+
+test("Edit Customer opens the existing editor and allows phone changes", async ({ page }) => {
+  await openCustomerDetailFromList(page);
+
+  await page.getByRole("button", { name: "Edit Customer" }).click();
+
+  const editor = page.getByRole("heading", { name: "Edit Customer" }).locator("..").locator("..");
+  await expect(editor).toBeInViewport();
+
+  const phone = page.getByRole("textbox", { name: "Phone" });
+  await expect(phone).toBeVisible();
+  await phone.fill("+15550199");
+  await page.getByRole("button", { name: "Save Changes" }).click();
+
+  await expect(page.getByText("+15550199")).toBeVisible();
+});

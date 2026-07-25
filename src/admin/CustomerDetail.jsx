@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { customerIdsEqual, normalizeCustomerId } from "../lib/customerIds";
 import { updateStoredCustomer, useStoredCustomers } from "../lib/customersStore";
 import { duplicateStoredOrder, getStoredOrders } from "../lib/ordersStore";
@@ -139,6 +139,7 @@ export default function CustomerDetail() {
   const [mergeWarnings, setMergeWarnings] = useState([]);
   const [mergeConfirmationText, setMergeConfirmationText] = useState("");
   const [timelineExpanded, setTimelineExpanded] = useState(false);
+  const editorRef = useRef(null);
   const canManageMerges = canManageCustomerMerges();
 
   const customer = useMemo(
@@ -174,6 +175,12 @@ export default function CustomerDetail() {
 
   const timelineEvents = useCustomerTimeline(customer?.id || "");
   const latestTimelineEvent = timelineEvents[0] || null;
+
+  useEffect(() => {
+    if (isEditing) {
+      editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [isEditing]);
 
   const quoteRecords = useMemo(
     () =>
@@ -1302,7 +1309,7 @@ export default function CustomerDetail() {
         )}
 
         {isEditing ? (
-          <section style={sectionCardStyle}>
+          <section ref={editorRef} style={sectionCardStyle}>
             <div
               style={{
                 display: "flex",

@@ -69,8 +69,8 @@ function matchesSavedCustomer(customer, record) {
   const customerEmail = normalize(customer.email);
   const customerPhone = normalizePhone(customer.phone);
   const recordName = normalize(record.customer_name || record.name);
-  const recordEmail = normalize(record.email);
-  const recordPhone = normalizePhone(record.phone);
+  const recordEmail = normalize(record.customer_email || record.email);
+  const recordPhone = normalizePhone(record.customer_phone || record.phone);
   const linkedOrders = new Set(customer.order_numbers || []);
 
   if (record.order_number && linkedOrders.has(record.order_number)) {

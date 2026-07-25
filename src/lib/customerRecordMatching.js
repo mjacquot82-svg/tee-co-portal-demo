@@ -36,7 +36,7 @@ export function matchesCustomerRecord(customer, record) {
   const customerPhone = normalizePhone(customer.phone);
   const recordName = normalize(record.customer_name || record.name);
   const recordEmail = normalize(record.customer_email || record.email);
-  const recordPhone = normalizePhone(record.phone);
+  const recordPhone = normalizePhone(record.customer_phone || record.phone);
   const linkedNumbers = new Set(customer.order_numbers || []);
 
   if (record.order_number && linkedNumbers.has(record.order_number)) {

@@ -36,6 +36,8 @@ import {
   shouldOfferPendingDraftRecovery,
   shouldRedirectRequestOrderToStorefront,
 } from "./customerPortalStartOrderRoute";
+import { resolveRequestContactDefaults } from "./requestContactDefaults";
+import { useCustomerPortalData } from "./useCustomerPortalData";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -92,6 +94,7 @@ export default function CustomerPortalRequestOrder() {
   const location = useLocation();
   const navigate = useNavigate();
   const { customerSession } = useOutletContext();
+  const { profile } = useCustomerPortalData(customerSession);
   const products = useStoredProducts();
   const productsReady = areStoredProductsReady();
   const lookups = useCatalogLookups();
@@ -145,6 +148,8 @@ export default function CustomerPortalRequestOrder() {
   const [draftRecoveryBusy, setDraftRecoveryBusy] = useState(false);
   const appliedPendingRequestRef = useRef("");
   const initializedLineItemsRef = useRef(false);
+  const contactNameEditedRef = useRef(false);
+  const contactPhoneEditedRef = useRef(false);
 
   const resolvedColor = availableColors.includes(selectedColor) ? selectedColor : availableColors[0] || "";
   const resolvedSize = availableSizes.includes(selectedSize) ? selectedSize : availableSizes[0] || "";
@@ -155,6 +160,17 @@ export default function CustomerPortalRequestOrder() {
     pendingRequest &&
       (draftRecoveryState === "choose" || location.state?.draftRecoveryRequested)
   );
+
+  useEffect(() => {
+    const defaults = resolveRequestContactDefaults(customerSession, profile);
+
+    if (!contactNameEditedRef.current && defaults.name) {
+      setContactName(defaults.name);
+    }
+    if (!contactPhoneEditedRef.current && defaults.phone) {
+      setContactPhone(defaults.phone);
+    }
+  }, [customerSession, profile]);
 
   useEffect(() => {
     if (!selectedProduct || draftRecoveryRequired || initializedLineItemsRef.current) return;
@@ -728,7 +744,10 @@ export default function CustomerPortalRequestOrder() {
                 <input
                   type="text"
                   value={contactName}
-                  onChange={(event) => setContactName(event.target.value)}
+                  onChange={(event) => {
+                    contactNameEditedRef.current = true;
+                    setContactName(event.target.value);
+                  }}
                   required
                   style={fieldStyle()}
                 />
@@ -739,7 +758,10 @@ export default function CustomerPortalRequestOrder() {
                 <input
                   type="tel"
                   value={contactPhone}
-                  onChange={(event) => setContactPhone(event.target.value)}
+                  onChange={(event) => {
+                    contactPhoneEditedRef.current = true;
+                    setContactPhone(event.target.value);
+                  }}
                   required
                   placeholder="Best number for questions about this request"
                   style={fieldStyle()}

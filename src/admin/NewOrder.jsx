@@ -21,6 +21,7 @@ import { useStoredProducts } from "../lib/productsStore";
 import { generateQuoteSnapshot } from "../lib/quoteEngine";
 import { uploadCustomerArtwork } from "../services/customerArtworkService";
 import { resolveCustomerIdentity, validateCustomerIdentity } from "../lib/customerIdentity";
+import { getCustomerDisplayName } from "../lib/customerRecordMatching";
 import "./NewOrder.css";
 
 const fallbackSizeKeys = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"];
@@ -314,6 +315,7 @@ export default function NewOrder() {
   function selectCustomerById(customerId) {
     const customer = customers.find((item) => customerIdsEqual(item.id, customerId));
     if (!customer) return;
+    const customerName = getCustomerDisplayName(customer, customers, "Customer identity unavailable");
 
     setSelectedCustomerId(customer.id);
     setCustomerSearchResults([]);
@@ -322,7 +324,7 @@ export default function NewOrder() {
     setForm((current) => ({
       ...current,
       customer_id: customer.id,
-      customer_name: customer.name || "",
+      customer_name: customerName,
       customer_phone: customer.phone || "",
       customer_email: customer.email || "",
       customer_company: customer.company || "",
@@ -657,7 +659,8 @@ export default function NewOrder() {
                 <option value="">New customer / type manually...</option>
                 {customers.map((customer) => (
                   <option key={customer.id} value={customer.id}>
-                    {customer.name}{customer.company ? ` - ${customer.company}` : ""}
+                    {getCustomerDisplayName(customer, customers, "Customer identity unavailable")}
+                    {customer.company ? ` - ${customer.company}` : ""}
                   </option>
                 ))}
               </select>
@@ -711,7 +714,9 @@ export default function NewOrder() {
                         color: "#292524",
                       }}
                     >
-                      <strong>{customer.name}</strong>
+                      <strong>
+                        {getCustomerDisplayName(customer, customers, "Customer identity unavailable")}
+                      </strong>
                       {customer.company ? ` — ${customer.company}` : ""}
                       <span style={{ display: "block", marginTop: "3px", color: "#64748b", fontSize: "13px" }}>
                         {[customer.phone, customer.email].filter(Boolean).join(" • ") || "Saved customer"}

@@ -4,6 +4,7 @@ import { useStoredProducts } from "../lib/productsStore";
 import { createStoredQuickSale } from "../lib/salesStore";
 import { validateCustomerIdentity } from "../lib/customerIdentity";
 import { createStoredCustomer, getStoredCustomers } from "../lib/customersStore";
+import { getCustomerDisplayName } from "../lib/customerRecordMatching";
 import {
   recordStoredOrderPayment,
   updateStoredOrder,
@@ -316,10 +317,15 @@ function buildCustomerDirectory(customers, orders) {
 
   customers.forEach((customer) => {
     const key = customer.id || `saved-${normalize(customer.name)}`;
+    const customerName = getCustomerDisplayName(
+      customer,
+      customers,
+      "Customer identity unavailable"
+    );
     directory.set(key, {
       id: customer.id || key,
       source: "saved",
-      name: customer.name || "Unnamed Customer",
+      name: customerName,
       company: customer.company || "",
       email: customer.email || "",
       phone: customer.phone || "",

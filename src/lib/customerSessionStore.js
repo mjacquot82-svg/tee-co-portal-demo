@@ -13,19 +13,28 @@ import {
 const STORAGE_KEY = "teeCoActiveCustomerSession";
 const CUSTOMER_SESSION_UPDATED_EVENT = "tee-co-customer-session-updated";
 
+function looksLikeEmailAddress(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
 function emitCustomerSessionUpdated() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent(CUSTOMER_SESSION_UPDATED_EVENT));
 }
 
-function normalizeCustomerSession(session = {}) {
+export function normalizeCustomerSession(session = {}) {
   const id = String(session.id || session.userId || "").trim();
   const firstName = String(session.firstName || "").trim();
   const lastName = String(session.lastName || "").trim();
   const email = String(session.email || "").trim();
   const phone = String(session.phone || "").trim();
   const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
-  const displayName = fullName || firstName || email || "Customer Account";
+  const providedDisplayName = String(session.displayName || "").trim();
+  const displayName =
+    fullName ||
+    firstName ||
+    (!looksLikeEmailAddress(providedDisplayName) ? providedDisplayName : "") ||
+    "Customer Account";
 
   return {
     id,

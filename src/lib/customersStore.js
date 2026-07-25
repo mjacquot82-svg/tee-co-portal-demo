@@ -22,6 +22,7 @@ const REQUIRED_SUPABASE_SELECT_FIELDS = [
   "phone",
   "company",
   "notes",
+  "auth_user_id",
   "created_at",
   "updated_at",
 ];
@@ -259,6 +260,8 @@ function mapSupabaseRowToCustomer(row, localCustomer) {
     phone: row?.phone ?? localCustomer?.phone,
     email: row?.email ?? localCustomer?.email,
     notes: row?.notes ?? localCustomer?.notes,
+    auth_user_id: row?.auth_user_id ?? localCustomer?.auth_user_id,
+    external_reference: row?.external_reference ?? localCustomer?.external_reference,
     archived: row?.archived ?? localCustomer?.archived,
     archived_at: row?.archived_at ?? localCustomer?.archived_at,
     created_at: row?.created_at || localCustomer?.created_at,
