@@ -4,6 +4,9 @@ import {
   completeResendObservationDelivery,
   recoverAbandonedObservationClaims,
 } from "../../../src/lib/notificationDispatcherRepository.js";
+import {
+  resolveNotificationRetryPolicy,
+} from "../../../src/lib/notificationDeliveryLifecycle.js";
 
 function normalizeText(value) {
   return String(value ?? "").trim();
@@ -72,6 +75,7 @@ export async function runResendEmailAdapterObservation({
   leaseSeconds = 60,
   recoveryLimit = 100,
   dispatcherClient,
+  retryPolicy,
   now = () => new Date(),
 }) {
   if (!normalizeText(workerId)) {
@@ -92,6 +96,7 @@ export async function runResendEmailAdapterObservation({
       dispatcherClient
     )) || [];
   const results = [];
+  const resolvedRetryPolicy = resolveNotificationRetryPolicy(retryPolicy);
 
   for (const envelope of claimed) {
     const request = buildResendAdapterRequest({
@@ -114,6 +119,7 @@ export async function runResendEmailAdapterObservation({
         failureCode: result.failureCode,
         failureReason: result.failureReason,
         providerMetadata: result.providerMetadata,
+        retryPolicy: resolvedRetryPolicy,
         startedAt,
         completedAt,
       },
@@ -129,6 +135,7 @@ export async function runResendEmailAdapterObservation({
   return {
     observationOnly: true,
     providerKey: "resend",
+    retryPolicy: resolvedRetryPolicy,
     recoveredCount: recovered.length,
     claimedCount: claimed.length,
     completedCount: results.length,

@@ -142,6 +142,7 @@ export function completeResendObservationDelivery(
     failureCode,
     failureReason,
     providerMetadata,
+    retryPolicy,
     startedAt,
     completedAt,
   },
@@ -160,8 +161,42 @@ export function completeResendObservationDelivery(
       p_failure_code: failureCode,
       p_failure_reason: failureReason,
       p_provider_metadata: providerMetadata,
+      p_max_attempts: retryPolicy?.maxAttempts,
+      p_base_delay_seconds: retryPolicy?.baseDelaySeconds,
+      p_max_delay_seconds: retryPolicy?.maxDelaySeconds,
       p_started_at: startedAt,
       p_completed_at: completedAt,
+    },
+    client
+  );
+}
+
+export function markNotificationDeliveryDelivered(
+  { deliveryId, providerMessageId, occurredAt, providerMetadata = {} },
+  client
+) {
+  return callRpc(
+    "mark_notification_delivery_delivered",
+    {
+      p_delivery_id: deliveryId,
+      p_provider_message_id: providerMessageId,
+      p_occurred_at: occurredAt,
+      p_provider_metadata: providerMetadata,
+    },
+    client
+  );
+}
+
+export function cancelNotificationDelivery(
+  { deliveryId, reason, occurredAt },
+  client
+) {
+  return callRpc(
+    "cancel_notification_delivery",
+    {
+      p_delivery_id: deliveryId,
+      p_reason: reason,
+      p_occurred_at: occurredAt,
     },
     client
   );
