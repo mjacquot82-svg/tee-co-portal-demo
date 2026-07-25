@@ -18,6 +18,12 @@ export const NOTIFICATION_DISPATCHER_RPCS = Object.freeze({
     "recover_abandoned_notification_delivery_claims_authoritative",
   startDispatchRun: "start_notification_dispatch_run",
   completeDispatchRun: "complete_notification_dispatch_run",
+  claimTwilioAuthoritative: "claim_twilio_sms_deliveries_authoritative",
+  recoverTwilioAuthoritative:
+    "recover_abandoned_twilio_sms_claims_authoritative",
+  completeTwilioAuthoritative:
+    "complete_twilio_sms_delivery_authoritative",
+  startTwilioDispatchRun: "start_twilio_sms_dispatch_run",
 });
 
 function resolveClient(client) {
@@ -343,6 +349,88 @@ export function completeNotificationDispatchRun(
       p_completed_count: completedCount,
       p_failed_count: failedCount,
       p_error_summary: errorSummary,
+      p_metadata: metadata,
+    },
+    client
+  );
+}
+
+export function claimTwilioAuthoritativeDeliveries(
+  { workerId, limit = 25, leaseSeconds = 60 },
+  client
+) {
+  return callRpc(
+    NOTIFICATION_DISPATCHER_RPCS.claimTwilioAuthoritative,
+    {
+      p_worker_id: workerId,
+      p_limit: limit,
+      p_lease_seconds: leaseSeconds,
+    },
+    client
+  );
+}
+
+export function recoverAbandonedTwilioAuthoritativeClaims(
+  { limit = 100 } = {},
+  client
+) {
+  return callRpc(
+    NOTIFICATION_DISPATCHER_RPCS.recoverTwilioAuthoritative,
+    { p_limit: limit },
+    client
+  );
+}
+
+export function completeTwilioAuthoritativeDelivery(
+  {
+    deliveryId,
+    claimToken,
+    attemptId,
+    attemptNumber,
+    outcome,
+    retryability,
+    providerMessageId,
+    failureCode,
+    failureReason,
+    providerMetadata,
+    retryPolicy,
+    startedAt,
+    completedAt,
+  },
+  client
+) {
+  return callRpc(
+    NOTIFICATION_DISPATCHER_RPCS.completeTwilioAuthoritative,
+    {
+      p_delivery_id: deliveryId,
+      p_claim_token: claimToken,
+      p_attempt_id: attemptId,
+      p_attempt_number: attemptNumber,
+      p_outcome: outcome,
+      p_retryability: retryability,
+      p_provider_message_id: providerMessageId,
+      p_failure_code: failureCode,
+      p_failure_reason: failureReason,
+      p_provider_metadata: providerMetadata,
+      p_max_attempts: retryPolicy?.maxAttempts,
+      p_base_delay_seconds: retryPolicy?.baseDelaySeconds,
+      p_max_delay_seconds: retryPolicy?.maxDelaySeconds,
+      p_started_at: startedAt,
+      p_completed_at: completedAt,
+    },
+    client
+  );
+}
+
+export function startTwilioSmsDispatchRun(
+  { runId, workerId, metadata = {} },
+  client
+) {
+  return callRpc(
+    NOTIFICATION_DISPATCHER_RPCS.startTwilioDispatchRun,
+    {
+      p_run_id: runId,
+      p_worker_id: workerId,
       p_metadata: metadata,
     },
     client
