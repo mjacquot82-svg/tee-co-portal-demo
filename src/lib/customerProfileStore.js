@@ -5,6 +5,7 @@ import {
 } from "./customersStore";
 import { normalizeCustomerId } from "./customerIds";
 import { looksLikeEmailAddress } from "./customerRecordMatching";
+import { findCustomerProfileForSession } from "./customerProfileMatching";
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
@@ -38,9 +39,7 @@ export async function ensureCustomerProfile(session = {}) {
   if (!email) return null;
 
   const customers = getStoredCustomers();
-  const existingCustomer = customers.find(
-    (customer) => normalizeEmail(customer.email) === email
-  );
+  const existingCustomer = findCustomerProfileForSession(session, customers);
 
   if (existingCustomer) {
     const identity = resolveCustomerProfileIdentity(session, existingCustomer);

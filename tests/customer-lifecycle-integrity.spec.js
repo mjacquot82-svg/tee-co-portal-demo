@@ -6,6 +6,7 @@ import {
 } from "../src/lib/customerRecordMatching";
 import { normalizeCustomerSession } from "../src/lib/customerSessionStore";
 import { resolveRequestContactDefaults } from "../src/customer-portal/requestContactDefaults";
+import { findCustomerProfileForSession } from "../src/lib/customerProfileMatching";
 
 test.describe("customer lifecycle identity integrity", () => {
   test("session serialization preserves an explicit full display name", () => {
@@ -103,6 +104,36 @@ test.describe("customer lifecycle identity integrity", () => {
       )
     ).toEqual({
       name: "Profile Name",
+      phone: "+15198816869",
+    });
+  });
+
+  test("profile lookup prefers auth linkage over a newer email-only duplicate", () => {
+    const profile = findCustomerProfileForSession(
+      {
+        id: "auth-user-1",
+        displayName: "Michael Jacquot",
+        email: "michael@example.com",
+      },
+      [
+        {
+          id: "newer-email-duplicate",
+          name: "michael@example.com",
+          email: "michael@example.com",
+          phone: "",
+        },
+        {
+          id: "authenticated-profile",
+          name: "Michael Jacquot",
+          email: "michael@example.com",
+          phone: "+15198816869",
+          external_reference: "auth-user-1",
+        },
+      ]
+    );
+
+    expect(profile).toMatchObject({
+      id: "authenticated-profile",
       phone: "+15198816869",
     });
   });

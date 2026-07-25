@@ -3,6 +3,9 @@ import {
   isCompletedOperationalStatus,
 } from "../orders/orderWorkflow";
 import { customerIdsEqual, normalizeCustomerId } from "./customerIds";
+import { findCustomerProfileForSession } from "./customerProfileMatching";
+
+export { findCustomerProfileForSession } from "./customerProfileMatching";
 
 const EMPTY_PORTAL_RECORDS = Object.freeze([]);
 export const EMPTY_PORTAL_SUMMARY = Object.freeze({
@@ -21,10 +24,6 @@ function normalizeEmail(value) {
   return normalizeText(value).toLowerCase();
 }
 
-function normalizeName(value) {
-  return normalizeText(value).replace(/\s+/g, " ").toLowerCase();
-}
-
 function sortByRecentActivity(records = []) {
   if (!Array.isArray(records) || records.length === 0) {
     return EMPTY_PORTAL_RECORDS;
@@ -36,38 +35,6 @@ function sortByRecentActivity(records = []) {
 
     return rightTimestamp - leftTimestamp;
   });
-}
-
-export function findCustomerProfileForSession(session, customers = []) {
-  if (!session) return null;
-
-  const normalizedSessionId = normalizeText(session.id);
-  const normalizedSessionEmail = normalizeEmail(session.email);
-  const normalizedSessionName = normalizeName(session.displayName);
-
-  return (
-    customers.find((customer) => {
-      const customerExternalReference = normalizeText(customer.external_reference);
-      const customerAuthId = normalizeText(customer.auth_user_id);
-      const customerEmail = normalizeEmail(customer.email);
-      const customerName = normalizeName(customer.name);
-
-      if (normalizedSessionId) {
-        if (
-          customerAuthId === normalizedSessionId ||
-          customerExternalReference === normalizedSessionId
-        ) {
-          return true;
-        }
-      }
-
-      if (normalizedSessionEmail && customerEmail === normalizedSessionEmail) {
-        return true;
-      }
-
-      return Boolean(normalizedSessionName) && customerName === normalizedSessionName;
-    }) || null
-  );
 }
 
 export function getCustomerScopedOrders({
