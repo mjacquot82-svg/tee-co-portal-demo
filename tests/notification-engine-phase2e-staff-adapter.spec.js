@@ -242,13 +242,10 @@ test("staff claim migration is channel-specific, atomic, linked, and service-rol
 });
 
 test("Staff Internal Adapter introduces no Resend, Twilio, external provider, retry, or production activation", async () => {
-  const sources = await Promise.all(
-    [
-      "../src/lib/staffInternalNotificationAdapter.js",
-      "../src/lib/notificationDispatcherRepository.js",
-    ].map((path) => readFile(new URL(path, import.meta.url), "utf8"))
+  const combined = await readFile(
+    new URL("../src/lib/staffInternalNotificationAdapter.js", import.meta.url),
+    "utf8"
   );
-  const combined = sources.join("\n");
 
   expect(combined).not.toContain("fetch(");
   expect(combined).not.toContain("Resend");

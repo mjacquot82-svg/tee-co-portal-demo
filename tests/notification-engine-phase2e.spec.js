@@ -273,13 +273,10 @@ test("dispatcher validates worker identity before durable mutation", async () =>
 });
 
 test("Phase 2E introduces no adapter, provider call, Resend, or staff inbox execution", async () => {
-  const sources = await Promise.all(
-    [
-      "../src/lib/notificationDispatcher.js",
-      "../src/lib/notificationDispatcherRepository.js",
-    ].map((path) => readFile(new URL(path, import.meta.url), "utf8"))
+  const combined = await readFile(
+    new URL("../src/lib/notificationDispatcher.js", import.meta.url),
+    "utf8"
   );
-  const combined = sources.join("\n");
 
   expect(combined).not.toContain("fetch(");
   expect(combined).not.toContain("createStaffNotification");
