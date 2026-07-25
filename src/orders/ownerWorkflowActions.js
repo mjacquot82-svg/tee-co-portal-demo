@@ -279,6 +279,15 @@ export function deriveOwnerQuoteNextAction(order = {}, productionReadiness = nul
 
 export function deriveOwnerPaymentRequestNextAction(paymentRequest = {}, relatedOrder = null) {
   const status = normalizeLower(paymentRequest.status);
+  const checkoutUrl = String(paymentRequest.provider_checkout_url || "").trim();
+  const paymentLinkId = String(paymentRequest.provider_payment_link_id || "").trim();
+  const providerOrderId = String(paymentRequest.provider_order_id || "").trim();
+  const linkMode = normalizeLower(paymentRequest.metadata?.square_payment_link?.metadata?.mode);
+  const hasUsableCheckoutLink =
+    /^https?:\/\//i.test(checkoutUrl) &&
+    !paymentLinkId.startsWith("local-") &&
+    !providerOrderId.startsWith("local-order-") &&
+    linkMode !== "local_fallback";
   const remaining = Math.max(
     0,
     Number(paymentRequest.amount_requested || 0) - Number(paymentRequest.amount_paid || 0)
@@ -299,10 +308,12 @@ export function deriveOwnerPaymentRequestNextAction(paymentRequest = {}, related
     });
   }
 
-  if (!paymentRequest.sent_at && status !== "sent") {
+  if ((!paymentRequest.sent_at && status !== "sent") || !hasUsableCheckoutLink) {
     return buildAction({
-      label: "Send now",
-      detail: "The request exists, but customer outreach is not marked complete.",
+      label: hasUsableCheckoutLink ? "Send now" : "Create checkout link",
+      detail: hasUsableCheckoutLink
+        ? "The request exists, but customer outreach is not marked complete."
+        : "The request does not have a valid provider checkout link.",
       tone: "warning",
       actionKey: "mark_payment_request_sent",
       actionLabel: "Send Now",

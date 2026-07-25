@@ -472,7 +472,7 @@ export default function NotificationTemplates() {
   const handleSave = useCallback(async (type, updates) => {
     setSaving(true);
     try {
-      const updated = updateNotificationTemplate(type, updates);
+      const updated = await updateNotificationTemplate(type, updates);
       setTemplates((prev) => ({ ...prev, [type]: updated }));
     } finally {
       setSaving(false);
@@ -482,7 +482,7 @@ export default function NotificationTemplates() {
   const handleReset = useCallback(async (type) => {
     setSaving(true);
     try {
-      const reset = resetNotificationTemplate(type);
+      const reset = await resetNotificationTemplate(type);
       setTemplates((prev) => ({ ...prev, [type]: reset }));
       return reset;
     } finally {

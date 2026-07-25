@@ -49,14 +49,17 @@ test("the Production Queue keeps only daily controls visible by default", async 
   const source = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/admin/Orders.jsx", import.meta.url), "utf8"));
   const dailyFilters = source.slice(source.indexOf("const DAILY_STATUS_FILTERS"), source.indexOf("const ATTENTION_FILTERS"));
 
-  ["All Active", "Ready to Start", "In Production", "QC / Finishing", "Ready for Pickup"].forEach((label) => {
+  ["All Active", "Ready to Start", "In Progress", "QC / Finishing", "Ready for Pickup"].forEach((label) => {
     expect(dailyFilters).toContain(label);
   });
   ["Today", "Completed", "Canceled", "DTF", "Embroidery", "Screen Print"].forEach((label) => {
     expect(dailyFilters).not.toContain(label);
   });
-  expect(source).toContain("Advanced Filters");
-  expect(source).toContain("PRODUCTION_METHOD_FILTERS.map");
-  expect(source).toContain("PRODUCTION_DATE_FILTERS.map");
+  expect(source).toContain("Due Soon / Overdue");
+  expect(source).toContain("Search active jobs");
+  expect(source).not.toContain("Advanced Filters");
+  expect(source).not.toContain("PRODUCTION_METHOD_FILTERS.map");
+  expect(source).not.toContain("PRODUCTION_DATE_FILTERS.map");
+  expect(source).not.toContain("Reset Filters");
   expect(source).not.toContain("SECONDARY_VISIBLE_STATUS_FILTERS");
 });

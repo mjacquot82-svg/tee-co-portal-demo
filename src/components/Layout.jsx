@@ -1,4 +1,4 @@
-import { Component, useEffect, useState } from "react";
+import { Component, useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useStoredOrders } from "../lib/ordersStore";
 import { formatShortDate } from "../lib/dateFormatting";
@@ -49,6 +49,12 @@ import {
   signOutOperationalWorkspace,
   subscribeToOperationalAuth,
 } from "../lib/operationalAuthStore";
+import { getPendingCustomerRequest } from "../lib/pendingCustomerRequestStore";
+import OrderCart from "./OrderCart";
+import {
+  PORTAL_REQUEST_ORDER_PATH,
+  PUBLIC_GARMENT_FLOW_SOURCE,
+} from "../customer-portal/customerPortalStartOrderRoute";
 
 const ADMIN_LOGO_SRC = "/tee&co512x512.png";
 const FACEBOOK_URL =
@@ -155,12 +161,6 @@ function getAdminSections(staffUser) {
             badgeKey: "assignments",
           },
           { to: "/admin/sales/new", label: "Front Counter", navKey: "frontCounter" },
-          {
-            to: "/admin/quotes",
-            label: "Order Requests",
-            navKey: "quotes",
-            badgeKey: "orderRequests",
-          },
           {
             to: "/admin/orders",
             label: "Production",
@@ -1033,9 +1033,38 @@ function PublicHeader() {
 
 function AdminWorkspaceHeader({ staffUser }) {
   const navigate = useNavigate();
+  const accountMenuRef = useRef(null);
+  const accountTriggerRef = useRef(null);
+  const firstMenuItemRef = useRef(null);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const initials = getUserInitials(staffUser?.name);
   const displayName = staffUser?.name || "Operations";
   const displayRole = staffUser?.role || "Workspace";
+
+  useEffect(() => {
+    if (!accountMenuOpen) return undefined;
+
+    function handlePointerDown(event) {
+      if (accountMenuRef.current?.contains(event.target)) return;
+      setAccountMenuOpen(false);
+    }
+
+    function handleKeyDown(event) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setAccountMenuOpen(false);
+      accountTriggerRef.current?.focus();
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    firstMenuItemRef.current?.focus();
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [accountMenuOpen]);
 
   async function handleLockWorkstation() {
     await signOutOperationalWorkspace();
@@ -1049,117 +1078,114 @@ function AdminWorkspaceHeader({ staffUser }) {
     navigate("/login", { replace: true });
   }
 
+  function handleAccountTriggerKeyDown(event) {
+    if (event.key !== "ArrowDown") return;
+    event.preventDefault();
+    setAccountMenuOpen(true);
+  }
+
+  function handleMenuKeyDown(event) {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+
+    const menuItems = Array.from(
+      accountMenuRef.current?.querySelectorAll('[role="menuitem"]') || []
+    );
+    if (!menuItems.length) return;
+
+    event.preventDefault();
+    const currentIndex = menuItems.indexOf(document.activeElement);
+    let nextIndex = currentIndex;
+
+    if (event.key === "Home") nextIndex = 0;
+    if (event.key === "End") nextIndex = menuItems.length - 1;
+    if (event.key === "ArrowDown") nextIndex = (currentIndex + 1) % menuItems.length;
+    if (event.key === "ArrowUp") {
+      nextIndex = (currentIndex - 1 + menuItems.length) % menuItems.length;
+    }
+
+    menuItems[nextIndex]?.focus();
+  }
+
+  async function handleAccountSessionAction() {
+    setAccountMenuOpen(false);
+    await handleLockWorkstation();
+  }
+
   return (
     <header
-      style={{
-        display: "flex",
-        justifyContent: "flex-end",
-        padding: "18px 24px 0",
-        boxSizing: "border-box",
-      }}
+      className="admin-application-header"
+      data-testid="admin-application-header"
     >
       <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          maxWidth: "100%",
-        }}
+        className="admin-application-header__controls"
+        aria-label="Current session"
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "12px",
-            flexWrap: "wrap",
-            background: "#ffffff",
-            border: "1px solid #e2e8f0",
-            borderRadius: "14px",
-            padding: "10px 12px",
-            boxShadow: "0 6px 20px rgba(15, 23, 42, 0.06)",
-            maxWidth: "100%",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              minWidth: 0,
-              flex: "1 1 240px",
-            }}
+        <div className="admin-application-header__account" ref={accountMenuRef}>
+          <button
+            type="button"
+            className="admin-application-header__identity"
+            title={`${displayName} (${displayRole})`}
+            aria-label={`Account for ${displayName}, ${displayRole}`}
+            aria-expanded={accountMenuOpen}
+            aria-haspopup="menu"
+            aria-controls="admin-account-menu"
+            ref={accountTriggerRef}
+            onClick={() => setAccountMenuOpen((open) => !open)}
+            onKeyDown={handleAccountTriggerKeyDown}
           >
-            <div
+            <span
+              className="admin-application-header__avatar"
               aria-hidden="true"
-              style={{
-                width: "38px",
-                height: "38px",
-                borderRadius: "999px",
-                background: "#171717",
-                color: "#ffffff",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 900,
-                fontSize: "13px",
-                flexShrink: 0,
-              }}
             >
               {initials}
-            </div>
+            </span>
 
-            <div style={{ display: "grid", gap: "2px", minWidth: 0 }}>
-              <span
-                style={{
-                  color: "#64748b",
-                  fontSize: "11px",
-                  fontWeight: 900,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                }}
-              >
-                Signed In
-              </span>
-              <p
-                style={{
-                  margin: 0,
-                  color: "#171717",
-                  fontSize: "14px",
-                  fontWeight: 800,
-                  lineHeight: 1.25,
-                  wordBreak: "break-word",
-                }}
-              >
-                {displayName}
-                <span style={{ color: "#64748b", fontWeight: 700 }}>
-                  {" "}
-                  ({displayRole})
-                </span>
-              </p>
-            </div>
-          </div>
+            <span className="admin-application-header__identity-copy">
+              <span className="admin-application-header__name">{displayName}</span>
+              <span className="admin-application-header__role">{displayRole}</span>
+            </span>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-            {staffUser ? (
+            <span
+              className="admin-application-header__menu-indicator"
+              aria-hidden="true"
+            >
+              ▾
+            </span>
+          </button>
+
+          {accountMenuOpen ? (
+            <div
+              id="admin-account-menu"
+              className="admin-account-menu"
+              role="menu"
+              aria-label="Account"
+              onKeyDown={handleMenuKeyDown}
+            >
               <button
                 type="button"
-                onClick={handleLockWorkstation}
-                style={{
-                  background: "#171717",
-                  color: "#ffffff",
-                  border: "none",
-                  borderRadius: "12px",
-                  padding: "10px 14px",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                  flexShrink: 0,
-                }}
+                className="admin-account-menu__item"
+                role="menuitem"
+                ref={firstMenuItemRef}
+                onClick={handleAccountSessionAction}
               >
-                Lock Workstation
+                <span aria-hidden="true">🔒</span>
+                <span>Lock Workstation</span>
               </button>
-            ) : null}
-          </div>
+
+              <div className="admin-account-menu__separator" role="separator" />
+
+              <button
+                type="button"
+                className="admin-account-menu__item"
+                role="menuitem"
+                onClick={handleAccountSessionAction}
+              >
+                Sign Out
+              </button>
+            </div>
+          ) : null}
         </div>
+
       </div>
     </header>
   );
@@ -1262,6 +1288,24 @@ export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const isAdmin = location.pathname.startsWith("/admin");
+  const isCustomerCatalogueRoute =
+    location.pathname === "/" ||
+    location.pathname.startsWith("/category/") ||
+    location.pathname.startsWith("/garment/") ||
+    location.pathname === "/order-preview";
+  const pendingOrderDraft = !isAdmin ? getPendingCustomerRequest() : null;
+
+  function handleReviewCurrentRequest() {
+    if (activeCustomerSession) {
+      navigate(PORTAL_REQUEST_ORDER_PATH, {
+        state: { pendingRequestSource: PUBLIC_GARMENT_FLOW_SOURCE },
+      });
+      return;
+    }
+    navigate(`/login?redirectTo=${encodeURIComponent(PORTAL_REQUEST_ORDER_PATH)}`, {
+      state: { pendingRequestSource: PUBLIC_GARMENT_FLOW_SOURCE },
+    });
+  }
   usePaymentReconciliationRefresh(isAdmin);
   const requiresManagementAccess = requiresProtectedManagementAccess(location.pathname);
   const requiresCustomerSession = location.pathname === "/my-orders";
@@ -1626,6 +1670,13 @@ export default function Layout() {
       ) : (
         <>
           <PublicHeader />
+
+          {isCustomerCatalogueRoute ? (
+            <OrderCart
+              lineItems={pendingOrderDraft?.lineItems || []}
+              onReviewRequest={handleReviewCurrentRequest}
+            />
+          ) : null}
 
           <main>
             <Outlet />

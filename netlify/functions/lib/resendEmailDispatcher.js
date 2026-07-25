@@ -2,6 +2,8 @@ import { buildDeliveryAttemptIdentity } from "../../../src/lib/notificationEngin
 import {
   claimResendObservationDeliveries,
   completeResendObservationDelivery,
+  claimResendCutoverDelivery,
+  completeResendCutoverDelivery,
   recoverAbandonedObservationClaims,
 } from "../../../src/lib/notificationDispatcherRepository.js";
 import {
@@ -16,6 +18,7 @@ export function buildResendAdapterRequest({
   delivery,
   notification,
   businessEvent,
+  allowAuthoritative = false,
 }) {
   if (
     delivery?.channel !== "email" ||
@@ -28,7 +31,10 @@ export function buildResendAdapterRequest({
   if (
     delivery.status !== "processing" ||
     !normalizeText(delivery.claim_token) ||
-    delivery.destination_snapshot?.observationOnly !== true
+    (!allowAuthoritative &&
+      delivery.destination_snapshot?.observationOnly !== true) ||
+    (allowAuthoritative &&
+      delivery.destination_snapshot?.observationOnly === true)
   ) {
     throw new Error(
       "Phase 2F Resend adapter requires a claimed observation Delivery."
@@ -64,8 +70,85 @@ export function buildResendAdapterRequest({
       notificationId: notification.id,
       deliveryId: delivery.id,
       eventType: notification.event_type,
-      observationOnly: true,
+      observationOnly: !allowAuthoritative,
     },
+  };
+}
+
+export async function runResendEmailDeliveryCutover({
+  deliveryId,
+  workerId,
+  adapter,
+  leaseSeconds = 60,
+  dispatcherClient,
+  retryPolicy,
+  now = () => new Date(),
+}) {
+  if (!normalizeText(deliveryId) || !normalizeText(workerId)) {
+    throw new Error("Resend cutover Delivery and worker identities are required.");
+  }
+  if (adapter?.key !== "resend" || typeof adapter.send !== "function") {
+    throw new Error("A configured Resend email adapter is required.");
+  }
+  const claimedRows = await claimResendCutoverDelivery(
+    { deliveryId, workerId, leaseSeconds },
+    dispatcherClient
+  );
+  const envelope = Array.isArray(claimedRows) ? claimedRows[0] : claimedRows;
+  if (!envelope?.delivery) {
+    return { authoritative: true, claimed: false, deliveryId };
+  }
+  return runClaimedResendEmailDeliveryAuthoritative({
+    envelope,
+    adapter,
+    dispatcherClient,
+    retryPolicy,
+    now,
+  });
+}
+
+export async function runClaimedResendEmailDeliveryAuthoritative({
+  envelope,
+  adapter,
+  dispatcherClient,
+  retryPolicy,
+  now = () => new Date(),
+}) {
+  if (adapter?.key !== "resend" || typeof adapter.send !== "function") {
+    throw new Error("A configured Resend email adapter is required.");
+  }
+  const request = buildResendAdapterRequest({
+    delivery: envelope.delivery,
+    notification: envelope.notification,
+    businessEvent: envelope.business_event,
+    allowAuthoritative: true,
+  });
+  const result = await adapter.send(request);
+  const completedAt = now().toISOString();
+  const delivery = await completeResendCutoverDelivery(
+    {
+      deliveryId: request.deliveryId,
+      claimToken: request.claimToken,
+      attemptId: request.attemptId,
+      attemptNumber: request.attemptNumber,
+      outcome: result.status,
+      retryability: result.retryability,
+      providerMessageId: result.providerMessageId,
+      failureCode: result.failureCode,
+      failureReason: result.failureReason,
+      providerMetadata: result.providerMetadata,
+      retryPolicy: resolveNotificationRetryPolicy(retryPolicy),
+      startedAt: envelope.delivery.claimed_at,
+      completedAt,
+    },
+    dispatcherClient
+  );
+  return {
+    authoritative: true,
+    claimed: true,
+    delivery,
+    attemptId: request.attemptId,
+    providerResult: result,
   };
 }
 export async function runResendEmailAdapterObservation({

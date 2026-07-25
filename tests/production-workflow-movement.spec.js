@@ -60,7 +60,13 @@ async function waitForQueuePage(page) {
 
 async function focusQueueOnOrder(page, orderNumber, filterKey) {
   await waitForQueuePage(page);
-  await page.getByTestId(`production-status-filter-${filterKey}`).click();
+  const visibleStatusControl = page.getByTestId(`production-status-filter-${filterKey}`);
+  if (await visibleStatusControl.count()) {
+    await visibleStatusControl.click();
+  } else {
+    await page.goto(`/admin/orders?status=${encodeURIComponent(filterKey)}`);
+    await waitForQueuePage(page);
+  }
   await page.getByTestId("production-queue-search").fill(orderNumber);
 }
 

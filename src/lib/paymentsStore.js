@@ -530,12 +530,15 @@ export function saveStoredPaymentEvents(paymentEvents) {
   saveStoredList(PAYMENT_EVENTS_STORAGE_KEY, "paymentEvents", paymentEvents);
 }
 
-function notifyPaymentRequestCreated(paymentRequest) {
+async function notifyPaymentRequestCreated(paymentRequest) {
   if (paymentRequest.metadata?.source === "legacy_order_payment_history") {
     return;
   }
 
-  triggerNotificationEvent(NOTIFICATION_TYPES.paymentRequestCreated, {
+  const pendingAcceptances = [];
+  const paymentRequestResult = triggerNotificationEvent(
+    NOTIFICATION_TYPES.paymentRequestCreated,
+    {
     paymentRequest,
     source: "payments_store",
     customerName: paymentRequest.metadata?.customer_name || "",
@@ -556,10 +559,16 @@ function notifyPaymentRequestCreated(paymentRequest) {
         requestType: paymentRequest.request_type,
       },
     },
-  });
+    }
+  );
+  if (paymentRequestResult && typeof paymentRequestResult.then === "function") {
+    pendingAcceptances.push(paymentRequestResult);
+  }
 
   if (String(paymentRequest.request_type || "").trim().toLowerCase() === "deposit") {
-    triggerNotificationEvent(NOTIFICATION_TYPES.depositRequested, {
+    const depositResult = triggerNotificationEvent(
+      NOTIFICATION_TYPES.depositRequested,
+      {
       paymentRequest,
       source: "payments_store",
       customerName: paymentRequest.metadata?.customer_name || "",
@@ -580,8 +589,14 @@ function notifyPaymentRequestCreated(paymentRequest) {
           requestType: paymentRequest.request_type,
         },
       },
-    });
+      }
+    );
+    if (depositResult && typeof depositResult.then === "function") {
+      pendingAcceptances.push(depositResult);
+    }
   }
+
+  await Promise.all(pendingAcceptances);
 }
 
 export function createPaymentRequest(input = {}) {
@@ -609,7 +624,7 @@ export function createPaymentRequest(input = {}) {
     created_at: paymentRequest.created_at,
   });
 
-  notifyPaymentRequestCreated(paymentRequest);
+  void notifyPaymentRequestCreated(paymentRequest);
 
   return paymentRequest;
 }
@@ -640,7 +655,7 @@ export async function createPaymentRequestPersisted(input = {}) {
     payload: { paymentRequest },
     created_at: paymentRequest.created_at,
   });
-  notifyPaymentRequestCreated(paymentRequest);
+  await notifyPaymentRequestCreated(paymentRequest);
 
   return getPaymentRequestById(paymentRequest.id) || paymentRequest;
 }
@@ -754,7 +769,38 @@ export function syncPaymentRequestTotals(identifier) {
   return getPaymentRequestById(syncedRequest.id);
 }
 
-export function recordPayment(input = {}) {
+async function notifyPaymentReceived(payment) {
+  if (
+    payment.metadata?.source === "legacy_order_payment_history" ||
+    !isSuccessfulPaymentStatus(payment.status)
+  ) {
+    return;
+  }
+
+  await triggerNotificationEvent(NOTIFICATION_TYPES.paymentReceived, {
+    payment,
+    source: "payments_store",
+    orderNumber: payment.order_number,
+    depositAmount: payment.amount,
+    businessEvent: {
+      subjectType: "payment",
+      subjectId: payment.id,
+      occurrenceId: `payment_received:${
+        payment.idempotency_key || payment.provider_payment_id || payment.id
+      }`,
+      correlationId: payment.order_number ? `order:${payment.order_number}` : "",
+      occurredAt: payment.created_at,
+      source: "payments_store",
+      payload: {
+        paymentId: payment.id,
+        paymentRequestId: payment.payment_request_id || "",
+        status: payment.status,
+      },
+    },
+  });
+}
+
+export function recordPayment(input = {}, options = {}) {
   const payment = normalizePayment(input);
   const current = getStoredPayments();
   const existing = payment.idempotency_key
@@ -786,30 +832,16 @@ export function recordPayment(input = {}) {
     created_at: payment.created_at,
   });
 
-  if (payment.metadata?.source !== "legacy_order_payment_history" && isSuccessfulPaymentStatus(payment.status)) {
-    triggerNotificationEvent(NOTIFICATION_TYPES.paymentReceived, {
-      payment,
-      source: "payments_store",
-      orderNumber: payment.order_number,
-      depositAmount: payment.amount,
-      businessEvent: {
-        subjectType: "payment",
-        subjectId: payment.id,
-        occurrenceId: `payment_received:${
-          payment.idempotency_key || payment.provider_payment_id || payment.id
-        }`,
-        correlationId: payment.order_number ? `order:${payment.order_number}` : "",
-        occurredAt: payment.created_at,
-        source: "payments_store",
-        payload: {
-          paymentId: payment.id,
-          paymentRequestId: payment.payment_request_id || "",
-          status: payment.status,
-        },
-      },
-    });
+  if (!options.suppressNotification) {
+    void notifyPaymentReceived(payment);
   }
 
+  return payment;
+}
+
+export async function recordPaymentWithDurableNotification(input = {}) {
+  const payment = recordPayment(input, { suppressNotification: true });
+  await notifyPaymentReceived(payment);
   return payment;
 }
 

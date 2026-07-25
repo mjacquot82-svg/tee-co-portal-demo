@@ -125,7 +125,7 @@ export async function listPublishedTemplateAssignments(client) {
   }));
 }
 
-export async function saveNotificationPolicyVersion(policy, { updatedBy = "", client } = {}) {
+export async function saveNotificationPolicyVersion(policy, { client } = {}) {
   const templates = listNotificationTemplates();
   const normalized = normalizeNotificationPolicyDraft(policy);
   const errors = validateNotificationPolicyDraft(normalized, templates);
@@ -144,7 +144,6 @@ export async function saveNotificationPolicyVersion(policy, { updatedBy = "", cl
     p_staff_audience_enabled: normalized.staff_audience_enabled,
     p_owner_audience_enabled: normalized.owner_audience_enabled,
     p_channel_template_assignments: normalized.channel_template_assignments,
-    p_updated_by: String(updatedBy || "").trim(),
   });
   if (error) throw error;
   return normalizeNotificationPolicyDraft(Array.isArray(data) ? data[0] : data);

@@ -24,6 +24,7 @@ import {
 } from "../src/orders/depositRequests.js";
 import { isDepositRequirementSatisfied } from "../src/orders/workflowGating.js";
 import { requestQuoteDeposit } from "../src/admin/quoteDepositRequestAction.js";
+import { deriveOwnerPaymentRequestNextAction } from "../src/orders/ownerWorkflowActions.js";
 
 test.beforeEach(() => {
   resetStoredPaymentsForTests();
@@ -119,6 +120,28 @@ test("Square payment link response can resolve provider order id from related re
     provider_payment_link_id: "LNK-SQUARE-RELATED",
     provider_order_id: "ORD-SQUARE-RELATED",
   });
+});
+
+test("provider failures do not manufacture customer-facing Square URLs", async () => {
+  const request = createPaymentRequest({
+    id: "payment-request-provider-failure",
+    request_number: "PR-SQUARE-FAILURE",
+    order_number: "TC-SQ-FAILURE",
+    request_type: "deposit",
+    status: "open",
+    amount_requested: 25,
+  });
+
+  await expect(
+    createSquarePaymentLink(request, {
+      endpoint: "/missing-square-function",
+      fetcher: async () => ({
+        ok: false,
+        status: 404,
+        json: async () => ({ message: "Square payment link request failed with 404." }),
+      }),
+    })
+  ).rejects.toThrow("Square payment link request failed with 404.");
 });
 
 test("Square provider metadata persists on the payment request without satisfying production gating", async () => {
@@ -416,6 +439,35 @@ test("customer portal Pay Now eligibility requires a valid provider checkout URL
 
   expect(hasProviderCheckoutUrl({ payment_provider: "manual", provider_checkout_url: "" })).toBe(false);
   expect(hasProviderCheckoutUrl({ payment_provider: "square", provider_checkout_url: "/not-external" })).toBe(false);
+  expect(
+    hasProviderCheckoutUrl({
+      payment_provider: "square",
+      provider_checkout_url: "https://square.link/u/payment-request-id",
+      provider_payment_link_id: "local-payment-request-id",
+      provider_order_id: "local-order-payment-request-id",
+      metadata: { square_payment_link: { metadata: { mode: "local_fallback" } } },
+    })
+  ).toBe(false);
+});
+
+test("invalid local fallback requests can be resent to create a real checkout link", () => {
+  const action = deriveOwnerPaymentRequestNextAction({
+    id: "payment-request-local-fallback",
+    status: "sent",
+    sent_at: "2026-07-18T15:19:06.048Z",
+    amount_requested: 25,
+    amount_paid: 0,
+    provider_checkout_url: "https://square.link/u/payment-request-local-fallback",
+    provider_payment_link_id: "local-payment-request-local-fallback",
+    provider_order_id: "local-order-payment-request-local-fallback",
+    metadata: { square_payment_link: { metadata: { mode: "local_fallback" } } },
+  });
+
+  expect(action).toMatchObject({
+    label: "Create checkout link",
+    actionKey: "mark_payment_request_sent",
+    actionLabel: "Send Now",
+  });
 });
 
 test("Square payload preserves legacy compatibility by using remaining balance only", () => {

@@ -6,14 +6,16 @@ import {
   renderNotificationTemplatePreview,
 } from "./notificationTemplatesStore";
 import { supabase } from "./supabaseClient";
-import { observeLegacyNotificationEvent } from "./notificationEnginePhase2B";
-import { prepareNotificationContentPhase2C } from "./notificationEnginePhase2C";
-import { createShadowNotificationDeliveriesPhase2D } from "./notificationEnginePhase2D";
+import {
+  processNotificationEventThroughEngine,
+  resolveNotificationEngineCutover,
+} from "./notificationEngineCutover";
 
 const STORAGE_KEY = "teeCoNotificationActivity";
 const SUPABASE_TABLE = "notification_activity";
 const MIGRATION_SENTINEL_KEY = "teeCoNotificationActivityMigratedToSupabase";
 const COMPANY_NAME = "Tee & Co";
+const DEFAULT_DELIVERY_ENDPOINT = "/.netlify/functions/customer-notification";
 
 const notificationListeners = new Set();
 
@@ -22,7 +24,6 @@ const memoryStore = {
 };
 
 let activityHydrationPromise = null;
-const pendingPhase2BObservations = new Set();
 
 function nowIso() {
   return new Date().toISOString();
@@ -249,8 +250,14 @@ function buildNotificationRecord({
   context,
 }) {
   const timestamp = context.timestamp || nowIso();
+  const idempotencyKey = normalizeText(
+    context.idempotencyKey,
+    `${eventType}:${mergeFields.order_number || "unknown"}:${recipientType}`
+  );
   return {
-    id: generateNotificationId(),
+    id: idempotencyKey
+      ? `notification-${idempotencyKey}-${recipientType}`.replace(/[^a-zA-Z0-9:_-]/g, "-")
+      : generateNotificationId(),
     eventType,
     recipientType,
     recipient,
@@ -265,37 +272,48 @@ function buildNotificationRecord({
       orderNumber: mergeFields.order_number || "",
       customerName: mergeFields.customer_name || "",
       createdBy: normalizeText(context.source, "system"),
+      idempotencyKey,
     },
     created_at: timestamp,
   };
 }
 
+function getDeliveryEndpoint() {
+  return normalizeText(import.meta.env?.VITE_CUSTOMER_NOTIFICATION_ENDPOINT, DEFAULT_DELIVERY_ENDPOINT);
+}
+
+async function deliverCustomerEmail(record) {
+  if (!record?.channels?.email || !record?.recipient?.email) return null;
+
+  const response = await fetch(getDeliveryEndpoint(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      idempotencyKey: record.metadata?.idempotencyKey,
+      eventType: record.eventType,
+      orderNumber: record.metadata?.orderNumber,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Customer notification delivery failed with ${response.status}.`);
+  }
+
+  return response.json().catch(() => ({}));
+}
+
+function queueCustomerEmailDelivery(record) {
+  void deliverCustomerEmail(record).catch((error) => {
+    console.error("[notificationDeliveryService] Customer email delivery failed", error);
+  });
+}
+
 function queuePhase2BObservation(eventType, context, template) {
-  const observation = observeLegacyNotificationEvent({
+  return processNotificationEventThroughEngine({
     eventType,
     context,
     legacyTemplate: template,
-  })
-    .then(async (phase2BResult) => {
-      const phase2CResult = await prepareNotificationContentPhase2C({
-        phase2BResult,
-        eventType,
-        context,
-        legacyTemplate: template,
-      });
-      await createShadowNotificationDeliveriesPhase2D({
-        phase2BResult,
-        phase2CResult,
-        context,
-      });
-      return phase2BResult;
-    })
-    .catch((error) => {
-      console.error("[notificationDeliveryService] Phase 2B shadow observation failed", error);
-      return null;
-    })
-    .finally(() => pendingPhase2BObservations.delete(observation));
-  pendingPhase2BObservations.add(observation);
+  });
 }
 
 export const NOTIFICATION_EVENT_TEMPLATE_MAP = Object.freeze({
@@ -354,8 +372,28 @@ export function triggerNotificationEvent(eventType, context = {}) {
   if (!template) {
     return [];
   }
+  const cutover = resolveNotificationEngineCutover(eventType, context);
+  if (!cutover.runLegacy) {
+    return queuePhase2BObservation(eventType, context, template).then(() => []);
+  }
 
   const mergeFields = buildDefaultMergeFields(context);
+  const idempotencyKey = normalizeText(
+    context.idempotencyKey,
+    `${eventType}:${mergeFields.order_number || "unknown"}:customer`
+  );
+  const existingRecords = readNotificationActivity().filter(
+    (record) => record.metadata?.idempotencyKey === idempotencyKey
+  );
+  if (existingRecords.length) {
+    if (cutover.runEngine) {
+      return queuePhase2BObservation(eventType, context, template).then(
+        () => existingRecords
+      );
+    }
+    return existingRecords;
+  }
+
   const renderedContent = renderNotificationTemplatePreview(template, mergeFields);
   const customerRecipient = resolveCustomerRecipient(context);
   const records = [
@@ -370,7 +408,7 @@ export function triggerNotificationEvent(eventType, context = {}) {
         sms: template.smsEnabled,
       },
       mergeFields,
-      context,
+      context: { ...context, idempotencyKey },
     }),
   ];
 
@@ -394,12 +432,27 @@ export function triggerNotificationEvent(eventType, context = {}) {
 
   saveNotificationActivity([...records, ...readNotificationActivity()]);
   insertActivityRecordsToSupabase(records);
-  queuePhase2BObservation(eventType, context, template);
+  if (eventType === NOTIFICATION_TYPES.quoteApproved) {
+    queueCustomerEmailDelivery(records[0]);
+  }
+  if (cutover.runEngine) {
+    return queuePhase2BObservation(eventType, context, template).then(
+      () => records
+    );
+  }
   return records;
 }
 
+export async function flushNotificationDeliveriesForTests() {
+  for (let index = 0; index < 12; index += 1) {
+    await Promise.resolve();
+  }
+}
+
 export async function flushNotificationEnginePhase2BForTests() {
-  await Promise.all([...pendingPhase2BObservations]);
+  for (let index = 0; index < 24; index += 1) {
+    await Promise.resolve();
+  }
 }
 
 export function resetNotificationActivityForTests() {

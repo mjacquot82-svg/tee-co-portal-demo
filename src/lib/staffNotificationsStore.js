@@ -13,6 +13,8 @@ const memoryStore = {
 };
 
 let staffNotificationsHydrationPromise = null;
+let cachedNotificationRecords = null;
+let cachedNotificationSnapshot = [];
 
 export const STAFF_NOTIFICATION_TYPES = Object.freeze({
   newWorkAssigned: "new_work_assigned",
@@ -198,7 +200,14 @@ function emitNotificationsUpdated() {
 }
 
 export function listStaffNotifications() {
-  return [...readStoredNotifications()]
+  const records = readStoredNotifications();
+
+  if (records === cachedNotificationRecords) {
+    return cachedNotificationSnapshot;
+  }
+
+  cachedNotificationRecords = records;
+  cachedNotificationSnapshot = [...records]
     .map(normalizeStaffNotification)
     .sort((a, b) => {
       const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -207,6 +216,8 @@ export function listStaffNotifications() {
       const bValid = Number.isFinite(bTime) ? bTime : 0;
       return bValid - aValid;
     });
+
+  return cachedNotificationSnapshot;
 }
 
 export function getUnreadStaffNotificationCount() {

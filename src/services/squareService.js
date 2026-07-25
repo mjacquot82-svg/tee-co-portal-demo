@@ -27,8 +27,7 @@ function getPaymentLinkEndpoint() {
 
 function canUseLocalFallback(options = {}) {
   if (options.useLocalFallback) return true;
-  if (getEnvValue("VITE_SQUARE_ALLOW_LOCAL_FALLBACK").toLowerCase() === "true") return true;
-  return Boolean(import.meta.env?.DEV);
+  return getEnvValue("VITE_SQUARE_ALLOW_LOCAL_FALLBACK").toLowerCase() === "true";
 }
 
 function safeSlug(value) {
@@ -110,7 +109,15 @@ function normalizeSquarePaymentLinkResponse(response = {}, paymentRequest = {}) 
 
 export function hasProviderCheckoutUrl(paymentRequest = {}) {
   const checkoutUrl = normalizeText(paymentRequest.provider_checkout_url);
-  return /^https?:\/\//i.test(checkoutUrl);
+  const paymentLinkId = normalizeText(paymentRequest.provider_payment_link_id);
+  const providerOrderId = normalizeText(paymentRequest.provider_order_id);
+  const linkMode = normalizeText(paymentRequest.metadata?.square_payment_link?.metadata?.mode);
+  const isLocalFallback =
+    paymentLinkId.startsWith("local-") ||
+    providerOrderId.startsWith("local-order-") ||
+    linkMode === "local_fallback";
+
+  return /^https?:\/\//i.test(checkoutUrl) && !isLocalFallback;
 }
 
 export function buildSquarePaymentLinkPayload(paymentRequest = {}) {

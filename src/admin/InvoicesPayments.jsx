@@ -386,8 +386,8 @@ export default function InvoicesPayments() {
       </div>
 
       <SectionCard
-        title="Financial Records and Review"
-        description="Open completed payment history or investigate payment-matching exceptions."
+        title="Financial Tools"
+        description="Open completed payment history or investigate unusual payment situations that need owner attention, such as duplicates, failures, mismatches, or manual review cases."
       >
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <Link
@@ -418,7 +418,7 @@ export default function InvoicesPayments() {
               background: "#ffffff",
             }}
           >
-            Review Payment Matching
+            Payment Exceptions
           </Link>
         </div>
       </SectionCard>

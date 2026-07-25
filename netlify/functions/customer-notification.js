@@ -3,6 +3,7 @@ import {
   createResendEmailAdapter,
   getConfiguredResendSender,
 } from "./lib/resendEmailAdapter.js";
+import { runResendEmailDeliveryCutover } from "./lib/resendEmailDispatcher.js";
 
 function json(statusCode, body) {
   return {
@@ -14,6 +15,26 @@ function json(statusCode, body) {
       "Access-Control-Allow-Methods": "POST, OPTIONS",
     },
     body: JSON.stringify(body),
+  };
+}
+
+function buildServiceRoleDispatcherClient({ supabaseUrl, serviceRoleKey }) {
+  return {
+    async rpc(name, parameters) {
+      const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${name}`, {
+        method: "POST",
+        headers: {
+          apikey: serviceRoleKey,
+          Authorization: `Bearer ${serviceRoleKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(parameters),
+      });
+      const data = await response.json().catch(() => null);
+      return response.ok
+        ? { data, error: null }
+        : { data: null, error: new Error(data?.message || `Dispatcher RPC ${name} failed.`) };
+    },
   };
 }
 
@@ -36,8 +57,49 @@ export async function handler(event) {
   }
 
   const eventType = String(payload.eventType || "").trim();
+  const deliveryId = String(payload.deliveryId || "").trim();
   const orderNumber = String(payload.orderNumber || "").trim();
   const idempotencyKey = String(payload.idempotencyKey || "").trim();
+  if (deliveryId) {
+    const cutoverEnabled =
+      String(process.env.NOTIFICATION_ENGINE_ORDER_APPROVED_CUTOVER || "")
+        .trim()
+        .toLowerCase() === "true";
+    if (!cutoverEnabled || eventType !== "quote_approved" || !idempotencyKey) {
+      return json(409, { error: "Notification Engine cutover is not enabled for this event." });
+    }
+    const adapter = createResendEmailAdapter({
+      apiKey,
+      from: getConfiguredResendSender(),
+    });
+    const result = await runResendEmailDeliveryCutover({
+      deliveryId,
+      workerId: `order-approved:${deliveryId}`,
+      adapter,
+      dispatcherClient: buildServiceRoleDispatcherClient({
+        supabaseUrl,
+        serviceRoleKey,
+      }),
+    });
+    if (!result.claimed) {
+      return json(200, {
+        delivered: false,
+        duplicateOrAlreadyProcessed: true,
+        deliveryId,
+      });
+    }
+    if (!result.providerResult.ok) {
+      return json(result.providerResult.httpStatus, {
+        error: result.providerResult.failureReason,
+        deliveryId,
+      });
+    }
+    return json(200, {
+      delivered: true,
+      deliveryId,
+      providerMessageId: result.providerResult.providerMessageId,
+    });
+  }
   if (eventType !== "quote_approved" || !orderNumber || !idempotencyKey) {
     return json(400, { error: "A supported event, order number, and idempotency key are required." });
   }

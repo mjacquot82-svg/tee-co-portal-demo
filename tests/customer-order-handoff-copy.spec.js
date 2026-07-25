@@ -10,8 +10,8 @@ function readSource(relativePath) {
 test("public preview describes a handoff instead of a completed submission", () => {
   const source = readSource("src/pages/OrderPreview.jsx");
 
-  expect(source).toContain("Save Garment & Continue to Review");
-  expect(source).toContain("Save Garment & Add Another Garment");
+  expect(source).toContain('"Save Garment"');
+  expect(source).toContain("Continue Shopping");
   expect(source).toContain("Your request is not submitted yet.");
   expect(source).toContain("Selection Summary");
   expect(source).toContain("Estimated Total");
@@ -110,4 +110,21 @@ test("garment summary reflects the hierarchical size breakdown instead of a sing
   expect(summarySource).toContain("Size Breakdown");
   expect(summarySource).toContain("Object.entries(sizeBreakdown)");
   expect(configurationSource).not.toContain("Selected Options");
+});
+
+test("a persistent order cart communicates the request while customers keep shopping", () => {
+  const layoutSource = readSource("src/components/Layout.jsx");
+  const cartSource = readSource("src/components/OrderCart.jsx");
+  const configurationSource = readSource("src/pages/OrderPreview.jsx");
+  const reviewSource = readSource("src/customer-portal/CustomerPortalRequestOrder.jsx");
+
+  expect(layoutSource).toContain("<OrderCart");
+  expect(layoutSource).toContain('location.pathname === "/order-preview"');
+  expect(cartSource).toContain("Current Order");
+  expect(cartSource).toContain("Total Pieces");
+  expect(cartSource).toContain("Estimated Starting Price");
+  expect(cartSource).toContain("Review Request");
+  expect(configurationSource).toContain('"Save Garment"');
+  expect(configurationSource).toContain("Continue Shopping");
+  expect(reviewSource).toContain("Add Another Garment");
 });

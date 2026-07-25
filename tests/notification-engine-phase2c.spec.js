@@ -6,6 +6,7 @@ import {
   validateNotificationMergeContext,
 } from "../src/lib/notificationMergeContext.js";
 import { prepareNotificationContentPhase2C } from "../src/lib/notificationEnginePhase2C.js";
+import { createShadowNotificationDeliveriesPhase2D } from "../src/lib/notificationEnginePhase2D.js";
 import { resolvePublishedNotificationTemplates } from "../src/lib/notificationTemplateResolution.js";
 
 function createPhase2CClient({ versions = [] } = {}) {
@@ -283,6 +284,65 @@ test("policy no-delivery decisions skip content preparation", async () => {
   );
 });
 
+test("approval-required decisions preserve the audit decision and create no dispatchable work", async () => {
+  const { client, tables } = createPhase2CClient({
+    versions: [templateVersion()],
+  });
+  const base = phase2BResult();
+  const policySnapshot = {
+    ...base.notification.policy_snapshot,
+    delivery_mode: "approval_required",
+  };
+  const result = await prepareNotificationContentPhase2C({
+    phase2BResult: phase2BResult({
+      policy: {
+        ...base.policy,
+        delivery_mode: "approval_required",
+      },
+      decision: {
+        deliveryMode: "approval_required",
+        status: "pending_approval",
+        noDeliveryReason: "",
+      },
+      notification: {
+        ...base.notification,
+        policy_snapshot: policySnapshot,
+        delivery_mode: "approval_required",
+        status: "pending_approval",
+      },
+    }),
+    eventType: "quote_approved",
+    context: {},
+    client,
+  });
+
+  expect(result).toMatchObject({
+    prepared: false,
+    reason: "policy_decision_skipped",
+    deliveriesCreated: 0,
+    notification: {
+      status: "pending_approval",
+      delivery_mode: "approval_required",
+      policy_snapshot: policySnapshot,
+    },
+  });
+  expect(result.notification.engine_metadata.phase2C).toEqual({
+    status: "skipped_policy_decision",
+    deliveriesCreated: 0,
+  });
+  const deliveryResult = await createShadowNotificationDeliveriesPhase2D({
+    phase2BResult: phase2BResult(),
+    phase2CResult: result,
+    client,
+  });
+  expect(deliveryResult).toEqual({
+    created: false,
+    reason: "policy_decision_skipped",
+    deliveries: [],
+  });
+  expect(tables.get("notification_deliveries") || []).toHaveLength(0);
+});
+
 test("Phase 2C does not contain Phase 2D or provider functionality", async () => {
   const sources = await Promise.all(
     [
@@ -301,4 +361,3 @@ test("Phase 2C does not contain Phase 2D or provider functionality", async () =>
   expect(combined).not.toContain("Twilio");
   expect(combined).not.toContain("retry");
 });
-

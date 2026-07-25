@@ -3,6 +3,7 @@ import { getJsonStorageItem, hasBrowserStorage, setJsonStorageItem } from "./bro
 import { supabase } from "./supabaseClient";
 
 const STORAGE_KEY = "teeCoNotificationTemplates";
+const VERSION_STORAGE_KEY = "teeCoNotificationTemplateVersions";
 const SUPABASE_TABLE = "notification_templates";
 const MIGRATION_SENTINEL_KEY = "teeCoNotificationTemplatesMigratedToSupabase";
 
@@ -11,6 +12,7 @@ let cachedTemplatesMap = null;
 const templateListeners = new Set();
 
 let templatesHydrationPromise = null;
+let localTemplateVersions = [];
 
 function shouldUseSupabase() {
   return Boolean(supabase?.from);
@@ -138,23 +140,19 @@ The {{company_name}} Team`,
   },
   [NOTIFICATION_TYPES.quoteApproved]: {
     type: NOTIFICATION_TYPES.quoteApproved,
-    name: "Quote Approved",
-    emailSubject: "Quote approved — {{order_number}}",
+    name: "Order Approved",
+    emailSubject: "Your order has been approved",
     emailBody: `Hi {{customer_name}},
 
-Great news! Your quote for order {{order_number}} has been approved and we're ready to move forward.
+Your order {{order_number}} has been reviewed and approved by Tee & Co.
 
-Quote Total: {{quote_total}}
-Deposit Due: {{deposit_amount}}
+No action is required from you at this time.
 
-To get started, please submit your deposit using the link below:
-{{payment_link}}
-
-We look forward to creating something great for you!
+We are preparing your order for the next stage and will notify you if anything is required or when your order is ready.
 
 Thanks,
 The {{company_name}} Team`,
-    smsMessage: "Hi {{customer_name}}, your quote {{order_number}} is approved! Deposit due: {{deposit_amount}}. Pay here: {{payment_link}}",
+    smsMessage: "Hi {{customer_name}}, your order {{order_number}} has been approved. No action is required right now.",
     emailEnabled: true,
     smsEnabled: false,
     staffNotificationEnabled: true,
@@ -505,6 +503,81 @@ export function saveNotificationTemplates(templates) {
   return localSaved || shouldUseSupabase();
 }
 
+function buildVersionRpcParameters(template, status, requiredMergeFields) {
+  return {
+    p_template_type: template.type,
+    p_name: template.name || "",
+    p_email_subject: template.emailSubject || "",
+    p_email_body: template.emailBody || "",
+    p_sms_message: template.smsMessage || "",
+    p_status: status,
+    p_required_merge_fields: Array.isArray(requiredMergeFields)
+      ? requiredMergeFields
+      : [],
+  };
+}
+
+function saveLocalTemplateVersion(template, status, requiredMergeFields) {
+  const storedVersions = hasBrowserStorage()
+    ? getJsonStorageItem(VERSION_STORAGE_KEY, [])
+    : localTemplateVersions;
+  const versions = Array.isArray(storedVersions) ? storedVersions : [];
+  const version =
+    versions
+      .filter((entry) => entry.template_type === template.type)
+      .reduce((highest, entry) => Math.max(highest, Number(entry.version) || 0), 0) + 1;
+  const timestamp = new Date().toISOString();
+  const row = {
+    id: `${template.type}:v${version}`,
+    template_type: template.type,
+    version,
+    name: template.name || "",
+    email_subject: template.emailSubject || "",
+    email_body: template.emailBody || "",
+    sms_message: template.smsMessage || "",
+    required_merge_fields: Array.isArray(requiredMergeFields)
+      ? [...requiredMergeFields]
+      : [],
+    status,
+    published_at: status === "published" ? timestamp : null,
+    published_by: status === "published" ? "local_editor" : "",
+    created_at: timestamp,
+  };
+  localTemplateVersions = [...versions, row];
+  if (hasBrowserStorage()) {
+    setJsonStorageItem(VERSION_STORAGE_KEY, localTemplateVersions);
+  }
+  return row;
+}
+
+export async function saveNotificationTemplateVersion(
+  template,
+  { status = "published", requiredMergeFields = [], client } = {}
+) {
+  const normalizedStatus = String(status || "published").trim().toLowerCase();
+  if (!["draft", "published"].includes(normalizedStatus)) {
+    throw new Error("Template status must be draft or published.");
+  }
+  const resolvedClient = client || supabase;
+  if (!resolvedClient?.rpc) {
+    return saveLocalTemplateVersion(
+      template,
+      normalizedStatus,
+      requiredMergeFields
+    );
+  }
+  const { data, error } = await resolvedClient.rpc(
+    "save_notification_template_version",
+    buildVersionRpcParameters(
+      template,
+      normalizedStatus,
+      requiredMergeFields
+    )
+  );
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+}
+
 // --- Supabase hydration + localStorage migration ---
 
 async function hydrateNotificationTemplatesFromSupabase() {
@@ -582,7 +655,7 @@ export function useNotificationTemplates() {
   );
 }
 
-export function updateNotificationTemplate(type, updates = {}) {
+export async function updateNotificationTemplate(type, updates = {}, options = {}) {
   const current = getNotificationTemplates();
   const normalizedType = String(type || "").trim();
 
@@ -590,33 +663,41 @@ export function updateNotificationTemplate(type, updates = {}) {
     throw new Error("A valid notification template type is required.");
   }
 
-  const next = {
-    ...current,
-    [normalizedType]: normalizeTemplate(
-      { ...current[normalizedType], ...updates },
-      DEFAULT_TEMPLATES[normalizedType]
-    ),
-  };
+  const updatedTemplate = normalizeTemplate(
+    { ...current[normalizedType], ...updates },
+    DEFAULT_TEMPLATES[normalizedType]
+  );
+  await saveNotificationTemplateVersion(updatedTemplate, options);
 
-  if (!saveNotificationTemplates(next)) {
-    throw new Error("Unable to save notification template.");
+  if (String(options.status || "published").toLowerCase() === "draft") {
+    return updatedTemplate;
   }
 
-  return next[normalizedType];
+  const next = { ...current, [normalizedType]: updatedTemplate };
+  setCachedTemplatesMap(next);
+  emitTemplatesUpdated();
+  if (hasBrowserStorage()) {
+    setJsonStorageItem(STORAGE_KEY, next);
+  }
+  return updatedTemplate;
 }
 
-export function resetNotificationTemplate(type) {
+export async function resetNotificationTemplate(type, options = {}) {
   const normalizedType = String(type || "").trim();
   if (!normalizedType || !DEFAULT_TEMPLATES[normalizedType]) {
     throw new Error("A valid notification template type is required.");
   }
-  return updateNotificationTemplate(normalizedType, DEFAULT_TEMPLATES[normalizedType]);
+  return updateNotificationTemplate(
+    normalizedType,
+    DEFAULT_TEMPLATES[normalizedType],
+    options
+  );
 }
 
-export function resetNotificationTemplatesToDefaults() {
-  Object.values(NOTIFICATION_TYPES).forEach((type) => {
-    updateNotificationTemplate(type, DEFAULT_TEMPLATES[type]);
-  });
+export async function resetNotificationTemplatesToDefaults() {
+  for (const type of Object.values(NOTIFICATION_TYPES)) {
+    await updateNotificationTemplate(type, DEFAULT_TEMPLATES[type]);
+  }
   return listNotificationTemplates();
 }
 

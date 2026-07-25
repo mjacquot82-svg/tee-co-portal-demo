@@ -61,6 +61,7 @@ function normalizeLineItem(item = {}, index = 0) {
     )),
     size_breakdown: sizeBreakdown,
     quantity: Object.values(sizeBreakdown).reduce((total, value) => total + value, 0) || quantity,
+    estimatedStartingPrice: Math.max(0, Number(item.estimatedStartingPrice || 0)) || 0,
     placement: normalizeText(item.placement),
     placements: normalizePlacements(item.placements, item.placement),
     decorationType: normalizeText(item.decorationType || item.decoration_type),

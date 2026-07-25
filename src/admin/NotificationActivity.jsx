@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { formatDateTime } from "../lib/dateFormatting";
-import { listDeliveryAwareNotificationActivity } from "../lib/notificationActivityRepository";
+import { loadDeliveryAwareNotificationActivity } from "../lib/notificationActivityRepository";
 
 function label(value = "") {
   return String(value || "").split("_").map((part) => part ? `${part[0].toUpperCase()}${part.slice(1)}` : "").join(" ");
@@ -54,12 +54,16 @@ function Delivery({ delivery }) {
 export default function NotificationActivity() {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [durableActivityError, setDurableActivityError] = useState("");
 
   useEffect(() => {
     let active = true;
-    listDeliveryAwareNotificationActivity().then((rows) => {
+    loadDeliveryAwareNotificationActivity().then((result) => {
       if (active) {
-        setRecords(rows);
+        setRecords(result.records);
+        setDurableActivityError(
+          result.durableActivityAvailable ? "" : result.durableActivityError
+        );
         setLoading(false);
       }
     });
@@ -79,6 +83,27 @@ export default function NotificationActivity() {
       </header>
 
       {loading ? <p>Loading notification activity…</p> : null}
+      {!loading && durableActivityError ? (
+        <section
+          role="alert"
+          style={{
+            border: "1px solid #f59e0b",
+            borderRadius: "12px",
+            background: "#fffbeb",
+            color: "#78350f",
+            padding: "12px 14px",
+          }}
+        >
+          <strong>Durable Notification Engine activity is unavailable.</strong>
+          <div>
+            Legacy history is shown below. Engine Delivery and Attempt status
+            must not be treated as verified until durable activity is restored.
+          </div>
+          <div style={{ fontSize: "12px", marginTop: "4px" }}>
+            {durableActivityError}
+          </div>
+        </section>
+      ) : null}
       {!loading && !records.length ? <section style={{ border: "1px dashed #d6dbe4", borderRadius: "20px", padding: "28px 22px" }}><strong>No notification activity yet.</strong></section> : null}
       <section style={{ display: "grid", gap: "12px" }}>
         {records.map((record) => (

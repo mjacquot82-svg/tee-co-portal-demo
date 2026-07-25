@@ -1,3 +1,4 @@
+
 export function buildSidebarAssignmentBadge(count = 0) {
   return {
     visible: Number(count) > 0,
@@ -8,3 +9,4 @@ export function buildSidebarAssignmentBadge(count = 0) {
         : `${Number(count || 0)} orders waiting`,
   };
 }
+2

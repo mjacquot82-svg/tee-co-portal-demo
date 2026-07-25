@@ -1,6 +1,8 @@
 import { buildDeliveryAttemptIdentity } from "./notificationEngineFoundation";
 import {
   claimStaffObservationDeliveries,
+  claimStaffAuthoritativeDelivery,
+  completeStaffAuthoritativeDelivery,
   completeStaffObservationDelivery,
   recoverAbandonedObservationClaims,
 } from "./notificationDispatcherRepository";
@@ -49,7 +51,7 @@ function resolveOrderNumber(businessEvent = {}, notification = {}) {
   );
 }
 
-function validateClaimedStaffDelivery(delivery = {}) {
+function validateClaimedStaffDelivery(delivery = {}, allowAuthoritative = false) {
   if (delivery.channel !== "staff") {
     throw new Error("Staff adapter accepts only staff-channel Deliveries.");
   }
@@ -59,7 +61,12 @@ function validateClaimedStaffDelivery(delivery = {}) {
   ) {
     throw new Error("Staff adapter requires a currently claimed Delivery.");
   }
-  if (delivery.destination_snapshot?.observationOnly !== true) {
+  if (
+    (!allowAuthoritative &&
+      delivery.destination_snapshot?.observationOnly !== true) ||
+    (allowAuthoritative &&
+      delivery.destination_snapshot?.observationOnly === true)
+  ) {
     throw new Error("Staff adapter is restricted to observation-only Deliveries.");
   }
 }
@@ -68,8 +75,9 @@ export function buildStaffInboxAdapterRequest({
   delivery,
   notification,
   businessEvent,
+  allowAuthoritative = false,
 }) {
-  validateClaimedStaffDelivery(delivery);
+  validateClaimedStaffDelivery(delivery, allowAuthoritative);
   if (
     !notification?.id ||
     delivery.notification_id !== notification.id ||
@@ -108,6 +116,78 @@ export function buildStaffInboxAdapterRequest({
   };
 }
 
+async function completeClaimedStaffDelivery({
+  envelope,
+  staffInboxClient,
+  dispatcherClient,
+  authoritative = false,
+  now = () => new Date(),
+}) {
+  const delivery = envelope.delivery;
+  const request = buildStaffInboxAdapterRequest({
+    delivery,
+    notification: envelope.notification,
+    businessEvent: envelope.business_event,
+    allowAuthoritative: authoritative,
+  });
+  const completedAt = now().toISOString();
+  const staffNotification = await createStaffNotificationFromAdapter(
+    { ...request, createdAt: completedAt },
+    staffInboxClient
+  );
+  const complete = authoritative
+    ? completeStaffAuthoritativeDelivery
+    : completeStaffObservationDelivery;
+  const completedDelivery = await complete(
+    {
+      deliveryId: delivery.id,
+      claimToken: delivery.claim_token,
+      attemptId: request.attemptId,
+      attemptNumber: request.attemptNumber,
+      staffNotificationId: staffNotification.id,
+      startedAt: delivery.claimed_at,
+      completedAt,
+    },
+    dispatcherClient
+  );
+  return {
+    delivery: completedDelivery,
+    attemptId: request.attemptId,
+    staffNotification,
+  };
+}
+
+export async function runStaffInternalAdapterAuthoritative({
+  deliveryId,
+  workerId,
+  leaseSeconds = 60,
+  dispatcherClient,
+  staffInboxClient,
+  now = () => new Date(),
+}) {
+  if (!normalizeText(deliveryId) || !normalizeText(workerId)) {
+    throw new Error(
+      "Authoritative Staff Delivery and worker identities are required."
+    );
+  }
+  const claimedRows = await claimStaffAuthoritativeDelivery(
+    { deliveryId, workerId, leaseSeconds },
+    dispatcherClient
+  );
+  const envelope = Array.isArray(claimedRows) ? claimedRows[0] : claimedRows;
+  if (!envelope?.delivery) {
+    return { authoritative: true, claimed: false, deliveryId };
+  }
+  const result = await completeClaimedStaffDelivery({
+    envelope,
+    staffInboxClient,
+    dispatcherClient,
+    authoritative: true,
+    now,
+  });
+  return { authoritative: true, claimed: true, ...result };
+}
+
 export async function runStaffInternalAdapterObservation({
   workerId,
   limit = 25,
@@ -134,40 +214,14 @@ export async function runStaffInternalAdapterObservation({
   const results = [];
 
   for (const envelope of claimed) {
-    const delivery = envelope.delivery;
-    const notification = envelope.notification;
-    const businessEvent = envelope.business_event;
-    const request = buildStaffInboxAdapterRequest({
-      delivery,
-      notification,
-      businessEvent,
-    });
-    const startedAt = delivery.claimed_at;
-    const completedAt = now().toISOString();
-    const staffNotification = await createStaffNotificationFromAdapter(
-      {
-        ...request,
-        createdAt: completedAt,
-      },
-      staffInboxClient
+    results.push(
+      await completeClaimedStaffDelivery({
+        envelope,
+        staffInboxClient,
+        dispatcherClient,
+        now,
+      })
     );
-    const completedDelivery = await completeStaffObservationDelivery(
-      {
-        deliveryId: delivery.id,
-        claimToken: delivery.claim_token,
-        attemptId: request.attemptId,
-        attemptNumber: request.attemptNumber,
-        staffNotificationId: staffNotification.id,
-        startedAt,
-        completedAt,
-      },
-      dispatcherClient
-    );
-    results.push({
-      delivery: completedDelivery,
-      attemptId: request.attemptId,
-      staffNotification,
-    });
   }
 
   return {

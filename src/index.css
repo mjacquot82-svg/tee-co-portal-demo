@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 html, body, #root {
   margin: 0;
   min-height: 100%;
@@ -24,6 +28,7 @@ img {
   position: fixed;
   inset: 0;
   z-index: 999;
+  pointer-events: none;
   display: grid;
   place-items: center;
   padding: 24px;
@@ -96,6 +101,159 @@ aside img:not(.tee-co-logo) {
   width: auto !important;
   height: auto !important;
   contain: layout paint size;
+}
+
+.admin-application-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  min-height: 46px;
+  border-bottom: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.96);
+  box-sizing: border-box;
+  backdrop-filter: blur(10px);
+}
+
+.admin-application-header__controls {
+  min-height: 45px;
+  padding: 5px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  box-sizing: border-box;
+}
+
+.admin-application-header__identity {
+  min-width: 0;
+  padding: 1px 3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #0f172a;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-application-header__account {
+  position: relative;
+  min-width: 0;
+}
+
+.admin-application-header__identity:hover {
+  background: #f5f5f4;
+}
+
+.admin-application-header__identity:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.admin-application-header__avatar {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #171717;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.admin-application-header__identity-copy {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  line-height: 1.2;
+}
+
+.admin-application-header__name {
+  max-width: 180px;
+  overflow: hidden;
+  color: #171717;
+  font-size: 13px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-application-header__role {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-application-header__menu-indicator {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.admin-account-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  width: 184px;
+  padding: 5px;
+  border: 1px solid #d6d3d1;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+}
+
+.admin-account-menu__item {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #171717;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-account-menu__item:hover,
+.admin-account-menu__item:focus-visible {
+  background: #f5f5f4;
+  outline: none;
+}
+
+.admin-account-menu__separator {
+  height: 1px;
+  margin: 4px;
+  background: #e7e5e4;
+}
+
+@media (max-width: 640px) {
+  .admin-application-header__controls {
+    padding-inline: 10px;
+    gap: 8px;
+  }
+
+  .admin-application-header__name {
+    max-width: 52px;
+  }
+
+  .admin-application-header__role,
+  .admin-application-header__menu-indicator {
+    display: none;
+  }
+
 }
 
 .home-main-content {
@@ -1335,7 +1493,7 @@ aside img:not(.tee-co-logo) {
 
 .owner-attention-card {
   display: grid;
-  gap: 14px;
+  gap: 10px;
   min-width: 0;
   border-radius: 8px;
   box-sizing: border-box;
@@ -1351,8 +1509,8 @@ aside img:not(.tee-co-logo) {
 }
 
 .owner-attention-card--primary {
-  min-height: 176px;
-  padding: 26px 30px;
+  min-height: 142px;
+  padding: 20px 23px;
   background: var(--owner-warm);
   border: 1px solid #e5b764;
   box-shadow: 0 16px 34px rgba(78, 52, 20, 0.08);
@@ -1360,8 +1518,8 @@ aside img:not(.tee-co-logo) {
 
 .owner-attention-card--secondary,
 .owner-attention-card--quiet {
-  min-height: 176px;
-  padding: 22px;
+  min-height: 138px;
+  padding: 17px;
 }
 
 .owner-attention-card--secondary {
@@ -1380,13 +1538,13 @@ aside img:not(.tee-co-logo) {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 22px;
+  gap: 17px;
 }
 
 .owner-attention-card__kicker {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   color: var(--owner-warm-strong);
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1395,34 +1553,35 @@ aside img:not(.tee-co-logo) {
 .owner-attention-card__title {
   margin: 0;
   color: var(--owner-ink);
-  font-size: 21px;
+  font-size: 18px;
   line-height: 1.12;
 }
 
 .owner-attention-card--primary .owner-attention-card__title {
   max-width: 560px;
-  font-size: 32px;
-  line-height: 1.04;
+  font-size: 26px;
+  line-height: 1.08;
 }
 
 .owner-attention-card__detail {
-  margin: 10px 0 0;
+  margin: 7px 0 0;
   color: #675d54;
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 1.38;
 }
 
 .owner-attention-card--primary .owner-attention-card__detail {
   max-width: 620px;
-  margin-top: 10px;
-  font-size: 15px;
-  line-height: 1.42;
+  margin-top: 7px;
+  font-size: 13px;
+  line-height: 1.38;
 }
 
 .owner-attention-card__count {
   color: #b7aca2;
-  font-size: 42px;
-  line-height: 0.92;
+  font-size: 16px;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .owner-attention-card--active .owner-attention-card__count {
@@ -1430,18 +1589,18 @@ aside img:not(.tee-co-logo) {
 }
 
 .owner-attention-card--primary .owner-attention-card__count {
-  font-size: 76px;
-  line-height: 0.86;
+  font-size: 20px;
+  line-height: 1.1;
 }
 
 .owner-attention-card__action {
   justify-self: start;
   align-self: end;
   border-radius: 999px;
-  padding: 10px 14px;
+  padding: 8px 12px;
   background: #efeae3;
   color: #6f665f;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 850;
 }
 
@@ -1465,9 +1624,9 @@ aside img:not(.tee-co-logo) {
 .owner-activity-timeline::before {
   content: "";
   position: absolute;
-  top: 14px;
-  bottom: 14px;
-  left: 137px;
+  top: 11px;
+  bottom: 11px;
+  left: 116px;
   width: 1px;
   background: #e7dfd5;
 }
@@ -1475,14 +1634,14 @@ aside img:not(.tee-co-logo) {
 .owner-activity-row {
   position: relative;
   display: grid;
-  grid-template-columns: 118px minmax(0, 1fr);
-  gap: 28px;
-  padding: 13px 0 15px;
+  grid-template-columns: 99px minmax(0, 1fr);
+  gap: 23px;
+  padding: 10px 0 12px;
 }
 
 .owner-activity-row__time {
   color: #817568;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 750;
   line-height: 1.35;
 }
@@ -1495,9 +1654,9 @@ aside img:not(.tee-co-logo) {
 .owner-activity-row__dot {
   position: absolute;
   top: 4px;
-  left: -34px;
-  width: 9px;
-  height: 9px;
+  left: -28px;
+  width: 7px;
+  height: 7px;
   border: 2px solid #fbfaf7;
   border-radius: 999px;
   background: #9b6230;
@@ -1507,15 +1666,15 @@ aside img:not(.tee-co-logo) {
 .owner-activity-row__summary {
   display: block;
   color: #29231f;
-  font-size: 14px;
-  line-height: 1.42;
+  font-size: 13px;
+  line-height: 1.38;
 }
 
 .owner-activity-row__meta {
   display: block;
-  margin-top: 4px;
+  margin-top: 3px;
   color: #7a7067;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.35;
 }
 
@@ -1525,16 +1684,16 @@ aside img:not(.tee-co-logo) {
   }
 
   .owner-attention-card--primary {
-    min-height: 176px;
-    padding: 24px;
+    min-height: 142px;
+    padding: 19px;
   }
 
   .owner-attention-card--primary .owner-attention-card__title {
-    font-size: 28px;
+    font-size: 24px;
   }
 
   .owner-attention-card--primary .owner-attention-card__count {
-    font-size: 66px;
+    font-size: 19px;
   }
 }
 
@@ -1546,7 +1705,7 @@ aside img:not(.tee-co-logo) {
   .owner-attention-card--primary,
   .owner-attention-card--secondary,
   .owner-attention-card--quiet {
-    padding: 18px;
+    padding: 15px;
   }
 
   .owner-activity-timeline::before {

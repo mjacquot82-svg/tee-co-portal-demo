@@ -14,13 +14,19 @@ export async function findPublishedNotificationTemplateVersion({
   templateType,
   client,
 }) {
+  const assignedTemplateType = String(templateVersionId || "")
+    .trim()
+    .replace(/:v\d+$/, "");
   let query = resolveClient(client)
     .from(NOTIFICATION_ENGINE_TABLES.templateVersions)
     .select("*")
     .eq("status", "published");
 
   if (templateVersionId) {
-    query = query.eq("id", templateVersionId);
+    query = query
+      .eq("template_type", assignedTemplateType)
+      .order("version", { ascending: false })
+      .limit(1);
   } else {
     query = query
       .eq("template_type", String(templateType || "").trim())
@@ -32,4 +38,3 @@ export async function findPublishedNotificationTemplateVersion({
   if (error) throw error;
   return data || null;
 }
-

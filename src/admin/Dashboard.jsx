@@ -30,14 +30,14 @@ import { useOperationalEvents } from "../lib/operationalEventsStore";
 const pageShellStyle = {
   width: "100%",
   boxSizing: "border-box",
-  padding: "26px 18px 34px",
+  padding: "21px 16px 28px",
   background: "#fbfaf7",
   minHeight: "100%",
 };
 
 const workspaceStyle = {
   display: "grid",
-  gap: "34px",
+  gap: "27px",
   maxWidth: "1420px",
   margin: "0 auto",
 };
@@ -45,7 +45,7 @@ const workspaceStyle = {
 const sectionHeaderStyle = {
   display: "flex",
   justifyContent: "space-between",
-  gap: "18px",
+  gap: "14px",
   alignItems: "flex-end",
   flexWrap: "wrap",
 };
@@ -53,24 +53,24 @@ const sectionHeaderStyle = {
 const eyebrowStyle = {
   margin: 0,
   color: "#817568",
-  fontSize: "12px",
+  fontSize: "11px",
   fontWeight: 850,
   letterSpacing: "0.08em",
   textTransform: "uppercase",
 };
 
 const sectionTitleStyle = {
-  margin: "4px 0 0",
+  margin: "3px 0 0",
   color: "#1f1d1b",
-  fontSize: "28px",
+  fontSize: "23px",
   lineHeight: 1.08,
 };
 
 const sectionDescriptionStyle = {
-  margin: "6px 0 0",
+  margin: "4px 0 0",
   color: "#6f665f",
-  fontSize: "14px",
-  lineHeight: 1.45,
+  fontSize: "13px",
+  lineHeight: 1.4,
   maxWidth: "680px",
 };
 
@@ -282,7 +282,7 @@ export function buildOwnerWorkspaceModel(orders = [], operationalEvents = []) {
 
 function WorkspaceSection({ eyebrow, title, description, children, action }) {
   return (
-    <section style={{ display: "grid", gap: "14px" }}>
+    <section style={{ display: "grid", gap: "11px" }}>
       <div style={sectionHeaderStyle}>
         <div>
           {eyebrow ? <p style={eyebrowStyle}>{eyebrow}</p> : null}
@@ -335,16 +335,16 @@ function WaitingItem({ item }) {
       style={{
         display: "flex",
         justifyContent: "space-between",
-        gap: "16px",
+        gap: "13px",
         alignItems: "center",
-        padding: "16px 0",
+        padding: "12px 0",
         color: "#27211d",
         textDecoration: "none",
         borderTop: "1px solid #e8e0d6",
       }}
     >
-      <span style={{ fontWeight: 850, fontSize: "17px" }}>{item.label}</span>
-      <strong style={{ fontSize: "22px", color: "#8a4b12" }}>
+      <span style={{ fontWeight: 850, fontSize: "15px" }}>{item.label}</span>
+      <strong style={{ fontSize: "15px", color: "#8a4b12" }}>
         {formatCount(item.count, item.countSingular)}
       </strong>
     </Link>
@@ -358,9 +358,9 @@ function ReadyWorkCard({ item }) {
       style={{
         display: "grid",
         gridTemplateColumns: "auto 1fr",
-        gap: "18px",
+        gap: "13px",
         alignItems: "center",
-        padding: "20px",
+        padding: "15px",
         borderRadius: "8px",
         background: "#eef7f0",
         color: "#173321",
@@ -368,12 +368,12 @@ function ReadyWorkCard({ item }) {
         border: "1px solid #d5ead9",
       }}
     >
-      <strong style={{ fontSize: "34px", lineHeight: 1 }}>
+      <strong style={{ fontSize: "15px", lineHeight: 1 }}>
         {formatCount(item.count, item.countSingular)}
       </strong>
       <span>
-        <strong style={{ display: "block", fontSize: "19px" }}>{item.label}</strong>
-        <span style={{ display: "block", marginTop: "5px", color: "#52685a", lineHeight: 1.4, fontSize: "14px" }}>
+        <strong style={{ display: "block", fontSize: "17px" }}>{item.label}</strong>
+        <span style={{ display: "block", marginTop: "3px", color: "#52685a", lineHeight: 1.35, fontSize: "13px" }}>
           {item.detail}
         </span>
       </span>
@@ -411,8 +411,9 @@ function EmptyNote({ children }) {
     <p
       style={{
         margin: 0,
-        padding: "18px 0",
+        padding: "14px 0",
         color: "#7a7067",
+        fontSize: "13px",
         fontWeight: 750,
         borderTop: "1px solid #e8e0d6",
       }}
@@ -435,12 +436,12 @@ function OwnerDashboard({ orders, operationalEvents }) {
   return (
     <main className="owner-workspace-page" style={pageShellStyle}>
       <div style={workspaceStyle}>
-        <header style={{ display: "grid", gap: "10px" }}>
+        <header style={{ display: "grid", gap: "7px" }}>
           <p style={eyebrowStyle}>Tee & Co Morning Workspace</p>
-          <h1 style={{ margin: 0, color: "#1f1d1b", fontSize: "40px", lineHeight: 1.02 }}>
+          <h1 style={{ margin: 0, color: "#1f1d1b", fontSize: "34px", lineHeight: 1.04 }}>
             What should Teresa work on right now?
           </h1>
-          <p style={{ margin: 0, color: "#6f665f", maxWidth: "720px", lineHeight: 1.5, fontSize: "15px" }}>
+          <p style={{ margin: 0, color: "#6f665f", maxWidth: "720px", lineHeight: 1.4, fontSize: "14px" }}>
             Start with work that needs an owner decision, then check customer-blocked jobs and staff-ready queues.
           </p>
         </header>
@@ -450,7 +451,7 @@ function OwnerDashboard({ orders, operationalEvents }) {
           title="Actionable work"
           description="These are the places where Teresa can move an order forward this morning."
           action={
-            <strong style={{ color: attentionTotal ? "#7c3f10" : "#817568", fontSize: "14px" }}>
+            <strong style={{ color: attentionTotal ? "#7c3f10" : "#817568", fontSize: "13px" }}>
               {formatCount(attentionTotal, "owner action")}
             </strong>
           }
@@ -459,7 +460,7 @@ function OwnerDashboard({ orders, operationalEvents }) {
             className="owner-attention-grid"
             style={{
               display: "grid",
-              gap: "16px",
+              gap: "12px",
             }}
           >
             {orderedAttentionItems.map((item) => {
@@ -484,7 +485,7 @@ function OwnerDashboard({ orders, operationalEvents }) {
             style={{
               display: "grid",
               gridTemplateColumns: "minmax(0, 1fr)",
-              padding: "4px 0 0",
+              padding: "2px 0 0",
             }}
           >
             {workspace.waitingItems.map((item) => (
@@ -502,7 +503,7 @@ function OwnerDashboard({ orders, operationalEvents }) {
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
-              gap: "12px",
+              gap: "10px",
             }}
           >
             {workspace.readyItems.map((item) => (
@@ -515,7 +516,7 @@ function OwnerDashboard({ orders, operationalEvents }) {
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))",
-            gap: "28px",
+            gap: "22px",
             alignItems: "start",
           }}
         >
@@ -540,21 +541,21 @@ function OwnerDashboard({ orders, operationalEvents }) {
             title="Business overview"
             description="Reference only. These should not compete with today's work."
           >
-            <div style={{ display: "grid", gap: "10px", paddingTop: "4px" }}>
+            <div style={{ display: "grid", gap: "7px", paddingTop: "2px" }}>
               {workspace.snapshotItems.map((item) => (
                 <div
                   key={item.label}
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
-                    gap: "16px",
+                    gap: "13px",
                     alignItems: "baseline",
-                    padding: "10px 0",
+                    padding: "7px 0",
                     borderTop: "1px solid #ebe5dd",
                   }}
                 >
-                  <span style={{ color: "#6f665f", fontSize: "13px", fontWeight: 800 }}>{item.label}</span>
-                  <strong style={{ color: "#29231f", fontSize: "18px" }}>{item.value}</strong>
+                  <span style={{ color: "#6f665f", fontSize: "12px", fontWeight: 800 }}>{item.label}</span>
+                  <strong style={{ color: "#29231f", fontSize: "16px" }}>{item.value}</strong>
                 </div>
               ))}
             </div>

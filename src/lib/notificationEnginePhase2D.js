@@ -91,6 +91,7 @@ export async function createShadowNotificationDeliveriesPhase2D({
     staffUsers,
   });
   const deliveries = [];
+  const observationOnly = context.notificationEngineObservationOnly !== false;
 
   for (const [channel, recipients] of Object.entries(recipientCollections)) {
     const templateSnapshot = phase2CResult.templateSnapshots[channel];
@@ -106,7 +107,10 @@ export async function createShadowNotificationDeliveriesPhase2D({
           audience: recipient.audience,
         },
         destinationKey: recipient.destinationKey,
-        destinationSnapshot: recipient.destinationSnapshot,
+        destinationSnapshot: {
+          ...recipient.destinationSnapshot,
+          observationOnly,
+        },
         templateType: templateSnapshot.templateType,
         templateVersionId: templateSnapshot.templateVersionId,
         templateVersion: templateSnapshot.templateVersion,
@@ -141,9 +145,9 @@ export async function createShadowNotificationDeliveriesPhase2D({
       engine_metadata: {
         ...(existingNotification.engine_metadata || {}),
         phase2D: {
-          status: "shadow_deliveries_created",
-          observationOnly: true,
-          dispatcherEligible: false,
+          status: observationOnly ? "shadow_deliveries_created" : "deliveries_created",
+          observationOnly,
+          dispatcherEligible: !observationOnly,
           deliveryCount: deliveries.length,
           deliveryStatusCounts: aggregate.counts,
         },
@@ -154,7 +158,7 @@ export async function createShadowNotificationDeliveriesPhase2D({
 
   return {
     created: true,
-    observationOnly: true,
+    observationOnly,
     recipientCollections,
     deliveries,
     aggregate,

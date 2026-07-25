@@ -24,7 +24,10 @@ import { getRawStorageItem, hasBrowserStorage, setRawStorageItem } from "./brows
 import { formatShortDate, toIsoTimestamp } from "./dateFormatting";
 import { getArtworkDisplayName, getOrderArtworkFiles } from "./orderArtwork";
 import { createOperationalEvent } from "./operationalEventsStore";
-import { backfillOrderPaymentsToPayments, recordPayment } from "./paymentsStore";
+import {
+  backfillOrderPaymentsToPayments,
+  recordPaymentWithDurableNotification,
+} from "./paymentsStore";
 import { normalizeCustomerId } from "./customerIds";
 import { addCustomerTimelineEvent } from "./customerTimelineStore";
 import { getCustomerDisplayName, resolveCustomerForRecord } from "./customerRecordMatching";
@@ -129,9 +132,9 @@ function buildOrderNotificationContext(eventType, order, source = "orders_store"
   };
 }
 
-function triggerOrderNotification(eventType, order, source = "orders_store") {
+async function triggerOrderNotification(eventType, order, source = "orders_store") {
   if (!order) return;
-  triggerNotificationEvent(
+  await triggerNotificationEvent(
     eventType,
     buildOrderNotificationContext(eventType, order, source)
   );
@@ -1493,7 +1496,7 @@ export async function createStoredOrder(orderInput) {
     createdAt
   );
 
-  triggerOrderNotification(NOTIFICATION_TYPES.newCustomerRequest, persistedOrder);
+  await triggerOrderNotification(NOTIFICATION_TYPES.newCustomerRequest, persistedOrder);
 
   if (persistedOrder.customer_artwork_id) {
     if (persistedOrder.operational_visible === false || persistedOrder.quote_status !== "Ready For Production") {
@@ -1613,21 +1616,21 @@ export async function updateStoredOrder(orderNumber, updates) {
     const orderPath = `/admin/orders/${updatedOrder.order_number}`;
 
     if (previousQuoteStatus !== nextQuoteStatus && nextQuoteStatus === "Awaiting Approval") {
-      triggerOrderNotification(NOTIFICATION_TYPES.quoteReadyForApproval, updatedOrder);
+      await triggerOrderNotification(NOTIFICATION_TYPES.quoteReadyForApproval, updatedOrder);
     }
 
     if (
       (!isApprovedState(previousApprovalStatus) && isApprovedState(nextApprovalStatus)) ||
       (previousQuoteStatus !== "Approved" && nextQuoteStatus === "Approved")
     ) {
-      triggerOrderNotification(NOTIFICATION_TYPES.quoteApproved, updatedOrder);
+      await triggerOrderNotification(NOTIFICATION_TYPES.quoteApproved, updatedOrder);
     }
 
     if (
       previousArtworkStatus !== nextArtworkStatus &&
       nextArtworkStatus === "Needs Revision"
     ) {
-      triggerOrderNotification(NOTIFICATION_TYPES.artworkRevisionRequested, updatedOrder);
+      await triggerOrderNotification(NOTIFICATION_TYPES.artworkRevisionRequested, updatedOrder);
       createStaffNotification({
         type: STAFF_NOTIFICATION_TYPES.artworkRequired,
         orderNumber: updatedOrder.order_number,
@@ -1642,14 +1645,14 @@ export async function updateStoredOrder(orderNumber, updates) {
       previousArtworkStatus !== nextArtworkStatus &&
       nextArtworkStatus === "Approved"
     ) {
-      triggerOrderNotification(NOTIFICATION_TYPES.artworkApproved, updatedOrder);
+      await triggerOrderNotification(NOTIFICATION_TYPES.artworkApproved, updatedOrder);
     }
 
     if (
       previousDepositStatus !== nextDepositStatus &&
       nextDepositStatus === "Deposit Requested"
     ) {
-      triggerOrderNotification(NOTIFICATION_TYPES.depositRequested, updatedOrder);
+      await triggerOrderNotification(NOTIFICATION_TYPES.depositRequested, updatedOrder);
       createStaffNotification({
         type: STAFF_NOTIFICATION_TYPES.paymentHold,
         orderNumber: updatedOrder.order_number,
@@ -1679,7 +1682,7 @@ export async function updateStoredOrder(orderNumber, updates) {
       !["Ready For Production", "Printing", "Embroidery"].includes(previousStatus) &&
       ["Ready For Production", "Printing", "Embroidery"].includes(nextStatus)
     ) {
-      triggerOrderNotification(NOTIFICATION_TYPES.orderInProduction, updatedOrder);
+      await triggerOrderNotification(NOTIFICATION_TYPES.orderInProduction, updatedOrder);
     }
 
     if (previousStatus !== "Ready For Production" && nextStatus === "Ready For Production") {
@@ -1708,7 +1711,7 @@ export async function updateStoredOrder(orderNumber, updates) {
     }
 
     if (previousStatus !== "Ready For Pickup" && nextStatus === "Ready For Pickup") {
-      triggerOrderNotification(NOTIFICATION_TYPES.orderReadyForPickup, updatedOrder);
+      await triggerOrderNotification(NOTIFICATION_TYPES.orderReadyForPickup, updatedOrder);
       createStaffNotification({
         type: STAFF_NOTIFICATION_TYPES.readyForPickup,
         orderNumber: updatedOrder.order_number,
@@ -1720,7 +1723,7 @@ export async function updateStoredOrder(orderNumber, updates) {
     }
 
     if (previousStatus !== "Completed" && nextStatus === "Completed") {
-      triggerOrderNotification(NOTIFICATION_TYPES.orderCompleted, updatedOrder);
+      await triggerOrderNotification(NOTIFICATION_TYPES.orderCompleted, updatedOrder);
       createStaffNotification({
         type: STAFF_NOTIFICATION_TYPES.orderCompleted,
         orderNumber: updatedOrder.order_number,
@@ -1850,7 +1853,7 @@ export async function recordStoredOrderPayment(orderNumber, paymentInput = {}, o
       : Number(order.deposit_paid_amount || 0) || 0;
   const prePaymentDepositOutstanding = Number(normalizedOrder.deposit_outstanding || 0);
 
-  recordPayment({
+  await recordPaymentWithDurableNotification({
     customer_id: order.customer_id,
     order_id: order.id || "",
     order_number: order.order_number,

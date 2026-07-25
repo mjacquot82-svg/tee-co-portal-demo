@@ -17,6 +17,7 @@ function resolutionFailure(code, details = {}) {
 function shouldSkipPolicyDecision(decision = {}) {
   return (
     decision.status === NOTIFICATION_STATUSES.noDelivery ||
+    decision.status === NOTIFICATION_STATUSES.pendingApproval ||
     decision.deliveryMode === "disabled"
   );
 }
@@ -159,4 +160,3 @@ export async function prepareNotificationContentPhase2C({
     };
   }
 }
-

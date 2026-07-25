@@ -4,7 +4,7 @@ import {
   listPaymentEvents,
   listPaymentRequests,
   listPayments,
-  recordPayment,
+  recordPaymentWithDurableNotification,
   recordPaymentEvent,
   updatePayment,
   updatePaymentRequest,
@@ -438,7 +438,7 @@ function buildDefaultAdapter() {
     listPaymentEvents,
     listPayments,
     updatePaymentRequest,
-    recordPayment,
+    recordPayment: recordPaymentWithDurableNotification,
     updatePayment,
     recordPaymentEvent,
     triggerNotificationEvent,
@@ -536,7 +536,7 @@ async function processSquareWebhookEventWithAdapter(webhookEvent = {}, options =
   });
 
   if (statusMapping.failed && adapter.triggerNotificationEvent && options.triggerNotifications !== false) {
-    adapter.triggerNotificationEvent(NOTIFICATION_TYPES.paymentFailed, {
+    await adapter.triggerNotificationEvent(NOTIFICATION_TYPES.paymentFailed, {
       payment: recordedPayment,
       paymentRequest: updatedPaymentRequest || paymentRequest || {},
       source: "square_webhook",

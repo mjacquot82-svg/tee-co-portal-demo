@@ -214,6 +214,7 @@ export default function OrderPreview() {
       decorationType,
       artworkId: selectedArtwork?.id || "",
       artworkName: selectedArtwork?.displayName || selectedArtwork?.name || "",
+      estimatedStartingPrice: Number.isFinite(Number(customerTotal)) ? Number(customerTotal) : 0,
     };
   }
 
@@ -745,12 +746,12 @@ export default function OrderPreview() {
                 fontSize: "14px",
               }}
             >
-              {editingLineItem ? "Save Garment Changes" : "Save Garment & Continue to Review"}
+              {editingLineItem ? "Save Garment Changes" : "Save Garment"}
             </button>
 
             {!editingLineItem ? (
               <button type="button" onClick={() => saveConfiguredGarment("catalogue")} style={{ border: "1px solid #171717", color: "#171717", padding: "12px 16px", borderRadius: "12px", background: "#ffffff", cursor: "pointer", fontWeight: 700 }}>
-                Save Garment & Add Another Garment
+                Continue Shopping
               </button>
             ) : null}
 

@@ -41,7 +41,7 @@ function mapOperationalRow(row = {}) {
   };
 }
 
-export async function listDeliveryAwareNotificationActivity({ client } = {}) {
+export async function loadDeliveryAwareNotificationActivity({ client } = {}) {
   const legacyRecords = listNotificationActivity().map(mapLegacyRecord);
   try {
     const { data, error } = await resolveClient(client)
@@ -52,10 +52,30 @@ export async function listDeliveryAwareNotificationActivity({ client } = {}) {
     if (error) throw error;
     const engineRecords = (Array.isArray(data) ? data : []).map(mapOperationalRow);
     const legacyIds = new Set(engineRecords.map((record) => record.id));
-    return [...engineRecords, ...legacyRecords.filter((record) => !legacyIds.has(record.id))]
-      .sort((left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0));
+    return {
+      records: [
+        ...engineRecords,
+        ...legacyRecords.filter((record) => !legacyIds.has(record.id)),
+      ].sort(
+        (left, right) =>
+          new Date(right.createdAt || 0) - new Date(left.createdAt || 0)
+      ),
+      durableActivityAvailable: true,
+      durableActivityError: "",
+    };
   } catch (error) {
     console.warn("[notificationActivityRepository] Durable activity unavailable; showing legacy history.", error);
-    return legacyRecords;
+    return {
+      records: legacyRecords,
+      durableActivityAvailable: false,
+      durableActivityError:
+        String(error?.message || "").trim() ||
+        "Durable Notification Engine activity could not be loaded.",
+    };
   }
+}
+
+export async function listDeliveryAwareNotificationActivity(options = {}) {
+  const result = await loadDeliveryAwareNotificationActivity(options);
+  return result.records;
 }

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getActiveStaffUser } from "../lib/staffUsersStore";
 import { listNotificationTemplates } from "../lib/notificationTemplatesStore";
 import {
   listCurrentNotificationPolicies,
@@ -77,10 +76,7 @@ export default function NotificationPolicies() {
     }
     setStatus({ kind: "saving", message: `Saving ${policy.event_label}…` });
     try {
-      const actor = getActiveStaffUser();
-      const saved = await saveNotificationPolicyVersion(policy, {
-        updatedBy: actor?.id || actor?.name || "owner",
-      });
+      const saved = await saveNotificationPolicyVersion(policy);
       setPolicies((current) => current.map((item) => (
         item.event_type === policy.event_type
           ? { ...item, ...saved, persisted: true }

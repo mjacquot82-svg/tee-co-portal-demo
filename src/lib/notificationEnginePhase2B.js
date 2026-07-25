@@ -9,8 +9,8 @@ import {
 } from "./notificationPolicyService";
 import {
   persistNotification,
-  persistNotificationBusinessEvent,
 } from "./notificationEngineRepository";
+import { acceptNotificationBusinessEventDurably } from "./notificationBusinessEventAcceptance";
 
 function normalizeFlag(value) {
   return String(value ?? "").trim().toLowerCase() === "true";
@@ -34,9 +34,10 @@ export async function observeLegacyNotificationEvent({
   }
 
   const businessEventRow = buildNotificationBusinessEventRow(eventType, context);
-  const businessEvent = await persistNotificationBusinessEvent(
+  const observationOnly = context.notificationEngineObservationOnly !== false;
+  const businessEvent = await acceptNotificationBusinessEventDurably(
     businessEventRow,
-    client
+    { client }
   );
   const policy = await resolveNotificationPolicy({
     eventType,
@@ -58,8 +59,11 @@ export async function observeLegacyNotificationEvent({
     status: decision.status,
     noDeliveryReason: decision.noDeliveryReason,
     engineMetadata: {
-      observationOnly: true,
-      legacyRuntimeAuthoritative: true,
+      observationOnly,
+      legacyRuntimeAuthoritative: observationOnly,
+      ...(context.notificationEngineCutoverMode
+        ? { cutoverMode: context.notificationEngineCutoverMode }
+        : {}),
       deliveriesDeferredUntilPhase2C: true,
     },
   });
@@ -74,4 +78,3 @@ export async function observeLegacyNotificationEvent({
     deliveriesCreated: 0,
   };
 }
-

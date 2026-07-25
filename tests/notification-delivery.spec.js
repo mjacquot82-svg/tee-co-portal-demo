@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  flushNotificationDeliveriesForTests,
   listNotificationActivity,
   resetNotificationActivityForTests,
   triggerNotificationEvent,
@@ -7,9 +8,22 @@ import {
 import { NOTIFICATION_TYPES } from "../src/lib/notificationTemplatesStore";
 import { createPaymentRequest, recordPayment, resetStoredPaymentsForTests } from "../src/lib/paymentsStore";
 
+const originalFetch = globalThis.fetch;
+let deliveryRequests = [];
+
 test.beforeEach(() => {
+  deliveryRequests = [];
+  globalThis.fetch = async (url, options = {}) => {
+    deliveryRequests.push({ url, options });
+    return { ok: true, status: 200, json: async () => ({ delivered: true }) };
+  };
   resetNotificationActivityForTests();
   resetStoredPaymentsForTests();
+});
+
+test.afterEach(async () => {
+  await flushNotificationDeliveriesForTests();
+  globalThis.fetch = originalFetch;
 });
 
 test("triggerNotificationEvent resolves template content and stores activity records", () => {
@@ -29,12 +43,38 @@ test("triggerNotificationEvent resolves template content and stores activity rec
     recipientType: "customer",
     templateType: NOTIFICATION_TYPES.quoteApproved,
   });
-  expect(records[0].generatedContent.emailSubject).toContain("TC-4401");
+  expect(records[0].generatedContent.emailSubject).toBe("Your order has been approved");
   expect(records[0].generatedContent.emailBody).toContain("Taylor Chen");
 
   const storedRecords = listNotificationActivity();
   expect(storedRecords).toHaveLength(2);
   expect(storedRecords.some((record) => record.recipientType === "staff")).toBe(true);
+});
+
+test("order approval delivery is idempotent across refresh, reopen, and repeated event evaluation", async () => {
+  const context = {
+    order: {
+      order_number: "TC-APPROVED-1001",
+      customer_name: "Morgan Lee",
+      customer_email: "morgan@example.com",
+      approval_status: "Approved",
+    },
+  };
+
+  const initial = triggerNotificationEvent(NOTIFICATION_TYPES.quoteApproved, context);
+  const afterRefresh = triggerNotificationEvent(NOTIFICATION_TYPES.quoteApproved, context);
+  const afterReopen = triggerNotificationEvent(NOTIFICATION_TYPES.quoteApproved, context);
+  await flushNotificationDeliveriesForTests();
+
+  expect(initial[0].metadata.idempotencyKey).toBe("quote_approved:TC-APPROVED-1001:customer");
+  expect(afterRefresh[0].id).toBe(initial[0].id);
+  expect(afterReopen[0].id).toBe(initial[0].id);
+  expect(deliveryRequests).toHaveLength(1);
+  expect(JSON.parse(deliveryRequests[0].options.body)).toMatchObject({
+    eventType: "quote_approved",
+    orderNumber: "TC-APPROVED-1001",
+    idempotencyKey: "quote_approved:TC-APPROVED-1001:customer",
+  });
 });
 
 test("createPaymentRequest records payment request notification activity", () => {

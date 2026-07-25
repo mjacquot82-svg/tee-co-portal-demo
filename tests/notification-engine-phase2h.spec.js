@@ -79,13 +79,12 @@ test("Phase 2H saves through the atomic policy-version RPC without changing runt
       return { data: single, error: null };
     };
     await expect(saveNotificationPolicyVersion(policy(), {
-      updatedBy: "owner-1",
       client: { from() {}, rpc },
     })).resolves.toMatchObject({ version: 2 });
     expect(calls[0]).toEqual(["save_notification_policy_version", expect.objectContaining({
       p_event_type: "deposit_requested",
-      p_updated_by: "owner-1",
     })]);
+    expect(calls[0][1]).not.toHaveProperty("p_updated_by");
 });
 
 test("Phase 2H keeps template editing content-only and adds delivery-aware activity", async () => {
