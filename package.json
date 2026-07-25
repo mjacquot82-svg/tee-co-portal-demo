@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "test": "vitest run",
+    "test:vitest": "vitest run",
+    "test:playwright": "playwright test",
     "test:watch": "vitest",
+    "verify": "npm run test:vitest && npm run test:playwright",
     "build": "vite build",
     "type-check": "tsc --noEmit",
     "lint": "eslint .",
