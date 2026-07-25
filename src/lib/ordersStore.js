@@ -100,6 +100,22 @@ function isApprovedState(value) {
   );
 }
 
+export function didOrderEnterQuoteApprovedState(previousOrder = {}, nextOrder = {}) {
+  const previousApprovalStatus = normalizeStatusText(previousOrder.approval_status);
+  const nextApprovalStatus = normalizeStatusText(nextOrder.approval_status);
+  const previousQuoteStatus = normalizeStatusText(previousOrder.quote_status);
+  const nextQuoteStatus = normalizeStatusText(nextOrder.quote_status);
+
+  return (
+    (!isApprovedState(previousApprovalStatus) && isApprovedState(nextApprovalStatus)) ||
+    (previousQuoteStatus !== "Approved" && nextQuoteStatus === "Approved") ||
+    (
+      previousQuoteStatus !== "Ready For Production" &&
+      nextQuoteStatus === "Ready For Production"
+    )
+  );
+}
+
 function buildOrderNotificationContext(eventType, order, source = "orders_store") {
   const occurredAt = order?.updated_at || order?.created_at || "";
   return {
@@ -1602,8 +1618,6 @@ export async function updateStoredOrder(orderNumber, updates) {
   if (updatedOrder && previousOrder) {
     const previousQuoteStatus = normalizeStatusText(previousOrder.quote_status);
     const nextQuoteStatus = normalizeStatusText(updatedOrder.quote_status);
-    const previousApprovalStatus = normalizeStatusText(previousOrder.approval_status);
-    const nextApprovalStatus = normalizeStatusText(updatedOrder.approval_status);
     const previousArtworkStatus = normalizeStatusText(previousOrder.artwork_approval_status);
     const nextArtworkStatus = normalizeStatusText(updatedOrder.artwork_approval_status);
     const previousDepositStatus = normalizeStatusText(previousOrder.deposit_workflow_status);
@@ -1619,10 +1633,7 @@ export async function updateStoredOrder(orderNumber, updates) {
       await triggerOrderNotification(NOTIFICATION_TYPES.quoteReadyForApproval, updatedOrder);
     }
 
-    if (
-      (!isApprovedState(previousApprovalStatus) && isApprovedState(nextApprovalStatus)) ||
-      (previousQuoteStatus !== "Approved" && nextQuoteStatus === "Approved")
-    ) {
+    if (didOrderEnterQuoteApprovedState(previousOrder, updatedOrder)) {
       await triggerOrderNotification(NOTIFICATION_TYPES.quoteApproved, updatedOrder);
     }
 

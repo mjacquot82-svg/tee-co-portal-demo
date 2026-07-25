@@ -1,6 +1,7 @@
 // @ts-check
 import { expect, test } from "@playwright/test";
 import { handler } from "../netlify/functions/customer-notification.js";
+import { didOrderEnterQuoteApprovedState } from "../src/lib/ordersStore.js";
 
 test("approval delivery verifies persisted approval and sends the customer email", async () => {
   const originalFetch = globalThis.fetch;
@@ -83,4 +84,32 @@ test("approval notification remains attached to the persisted approval transitio
 
   expect(source).toContain("!isApprovedState(previousApprovalStatus) && isApprovedState(nextApprovalStatus)");
   expect(source).toContain("triggerOrderNotification(NOTIFICATION_TYPES.quoteApproved, updatedOrder)");
+});
+
+test("release to production emits Quote Approved when approval_status remains pending review", () => {
+  expect(didOrderEnterQuoteApprovedState(
+    {
+      order_number: "TC-467720",
+      quote_status: "Draft",
+      approval_status: "Pending Review",
+    },
+    {
+      order_number: "TC-467720",
+      quote_status: "Ready For Production",
+      approval_status: "Pending Review",
+    }
+  )).toBe(true);
+
+  expect(didOrderEnterQuoteApprovedState(
+    {
+      order_number: "TC-467720",
+      quote_status: "Ready For Production",
+      approval_status: "Pending Review",
+    },
+    {
+      order_number: "TC-467720",
+      quote_status: "Ready For Production",
+      approval_status: "Pending Review",
+    }
+  )).toBe(false);
 });
