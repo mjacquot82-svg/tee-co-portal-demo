@@ -8,6 +8,7 @@ import {
 import { supabase } from "./supabaseClient";
 import { observeLegacyNotificationEvent } from "./notificationEnginePhase2B";
 import { prepareNotificationContentPhase2C } from "./notificationEnginePhase2C";
+import { createShadowNotificationDeliveriesPhase2D } from "./notificationEnginePhase2D";
 
 const STORAGE_KEY = "teeCoNotificationActivity";
 const SUPABASE_TABLE = "notification_activity";
@@ -276,11 +277,16 @@ function queuePhase2BObservation(eventType, context, template) {
     legacyTemplate: template,
   })
     .then(async (phase2BResult) => {
-      await prepareNotificationContentPhase2C({
+      const phase2CResult = await prepareNotificationContentPhase2C({
         phase2BResult,
         eventType,
         context,
         legacyTemplate: template,
+      });
+      await createShadowNotificationDeliveriesPhase2D({
+        phase2BResult,
+        phase2CResult,
+        context,
       });
       return phase2BResult;
     })
