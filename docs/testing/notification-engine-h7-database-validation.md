@@ -201,6 +201,7 @@ Apply these files exactly in this order:
 12. `supabase/notification-engine-c6-verification-evidence.sql`
 13. `supabase/notification-engine-h1-scheduled-dispatcher.sql`
 14. `supabase/notification-engine-h2-authoritative-staff-adapter.sql`
+15. `supabase/notification-engine-c7-policy-administration-authorization.sql`
 
 There are no separate Phase 2B, 2C, or 2D SQL files in the repository. Their
 runtime implementation uses the Phase 2A durable schema.
