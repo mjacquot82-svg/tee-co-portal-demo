@@ -4,6 +4,7 @@ import {
 } from "../orders/orderWorkflow";
 import { customerIdsEqual, normalizeCustomerId } from "./customerIds";
 import { findCustomerProfileForSession } from "./customerProfileMatching";
+import { isValidCustomerName, normalizeCustomerName } from "./customerName";
 
 export { findCustomerProfileForSession } from "./customerProfileMatching";
 
@@ -35,6 +36,23 @@ function sortByRecentActivity(records = []) {
 
     return rightTimestamp - leftTimestamp;
   });
+}
+
+export function resolveCustomerPortalProfile(profile, scopedOrders = []) {
+  if (!profile) return null;
+
+  const profileName = normalizeCustomerName(profile.name);
+  const orderName = scopedOrders
+    .map((order) => normalizeCustomerName(order.customer_name))
+    .find(isValidCustomerName);
+
+  return {
+    ...profile,
+    name:
+      (isValidCustomerName(profileName) && profileName) ||
+      orderName ||
+      profileName,
+  };
 }
 
 export function getCustomerScopedOrders({

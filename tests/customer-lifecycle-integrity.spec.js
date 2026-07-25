@@ -7,6 +7,7 @@ import {
 import { normalizeCustomerSession } from "../src/lib/customerSessionStore";
 import { resolveRequestContactDefaults } from "../src/customer-portal/requestContactDefaults";
 import { findCustomerProfileForSession } from "../src/lib/customerProfileMatching";
+import { resolveCustomerPortalProfile } from "../src/lib/customerPortalData";
 
 test.describe("customer lifecycle identity integrity", () => {
   test("session serialization preserves an explicit full display name", () => {
@@ -70,6 +71,25 @@ test.describe("customer lifecycle identity integrity", () => {
     expect(
       getCustomerDisplayName(customer, [customer], "Customer identity unavailable")
     ).toBe("Customer identity unavailable");
+  });
+
+  test("order identity keeps a valid recorded name over a generic customer profile label", () => {
+    const customer = {
+      id: "generic-profile",
+      name: "Customer Account",
+      email: "marc@example.com",
+    };
+
+    expect(
+      getCustomerDisplayName(
+        {
+          customer_id: "generic-profile",
+          customer_name: "Marc Jacquot",
+          customer_email: "marc@example.com",
+        },
+        [customer]
+      )
+    ).toBe("Marc Jacquot");
   });
 
   test("customer lookup uses explicit order email and phone snapshot fields", () => {
@@ -185,6 +205,29 @@ test.describe("customer lifecycle identity integrity", () => {
 
     expect(profile).toMatchObject({
       id: "named-profile",
+      name: "Marc Jacquot",
+      phone: "+15198816869",
+    });
+  });
+
+  test("portal profile uses a valid linked-order name when the stored label is generic", () => {
+    expect(
+      resolveCustomerPortalProfile(
+        {
+          id: "customer-1",
+          name: "Customer Account",
+          phone: "+15198816869",
+        },
+        [
+          {
+            customer_id: "customer-1",
+            customer_name: "Marc Jacquot",
+            customer_phone: "+15198816869",
+          },
+        ]
+      )
+    ).toMatchObject({
+      id: "customer-1",
       name: "Marc Jacquot",
       phone: "+15198816869",
     });

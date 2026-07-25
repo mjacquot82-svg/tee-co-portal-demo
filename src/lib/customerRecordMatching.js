@@ -1,5 +1,6 @@
 import { getStoredCustomers } from "./customersStore";
 import { customerIdsEqual } from "./customerIds";
+import { isValidCustomerName } from "./customerName";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -19,8 +20,8 @@ export function getCustomerDisplayName(record = {}, customers = getStoredCustome
   const canonicalName = String(matchedCustomer?.name || "").trim();
   const recordName = String(record.customer_name || record.name || "").trim();
 
-  if (canonicalName && !looksLikeEmailAddress(canonicalName)) return canonicalName;
-  if (recordName && !looksLikeEmailAddress(recordName)) return recordName;
+  if (isValidCustomerName(canonicalName)) return canonicalName;
+  if (isValidCustomerName(recordName)) return recordName;
   return fallback;
 }
 

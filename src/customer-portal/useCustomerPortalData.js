@@ -8,6 +8,7 @@ import {
   getCustomerInvoices,
   getCustomerQuotes,
   getCustomerScopedOrders,
+  resolveCustomerPortalProfile,
 } from "../lib/customerPortalData";
 import { usePaymentsSnapshot } from "../lib/paymentsStore";
 import { useStoredCustomers } from "../lib/customersStore";
@@ -57,6 +58,7 @@ export function useCustomerPortalData(session) {
       orders,
       customers,
     });
+    const resolvedProfile = resolveCustomerPortalProfile(profile, scopedOrders);
     const activeOrders = getCustomerActiveOrders(scopedOrders);
     const archivedOrders = getCustomerArchivedOrders(scopedOrders);
     const quotes = getCustomerQuotes(scopedOrders);
@@ -65,8 +67,8 @@ export function useCustomerPortalData(session) {
     const customerIds = Array.from(
       new Set(
         [
-          profile?.id,
-          profile?.customer_id,
+          resolvedProfile?.id,
+          resolvedProfile?.customer_id,
           ...scopedOrders.map((order) => order.customer_id),
         ].filter(Boolean)
       )
@@ -90,11 +92,11 @@ export function useCustomerPortalData(session) {
       paymentRequestCount: portalPayments.paymentRequests.length,
       paymentCount: portalPayments.payments.length,
       summary,
-      profileId: profile?.id || "",
+      profileId: resolvedProfile?.id || "",
     });
 
     return {
-      profile,
+      profile: resolvedProfile,
       orders: activeOrders,
       activeOrders,
       archivedOrders,
