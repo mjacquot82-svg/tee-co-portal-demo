@@ -18,10 +18,9 @@ import { isStaffWorkspaceView } from "./adminRoleView";
 
 const taxRate = 0.13;
 const counterPaymentMethods = PAYMENT_METHOD_OPTIONS.filter((option) =>
-  ["Cash", "Debit", "Credit", "E-Transfer", "Cheque", "Other"].includes(option)
+  ["Cash", "Debit", "Credit", "E-Transfer", "Cheque"].includes(option)
 );
-const quickSalePaymentMethods = [...counterPaymentMethods, "Pay Later"];
-const splitPaymentMethods = ["Cash", "Debit", "Credit", "E-Transfer", "Cheque", "Other"];
+const splitPaymentMethods = ["Cash", "Debit", "Credit", "E-Transfer", "Cheque"];
 const paymentWorkflowActions = [
   {
     id: "card",
@@ -214,58 +213,6 @@ function getModeButtonStyle(active) {
     fontWeight: 800,
     cursor: "pointer",
   };
-}
-
-function getActiveCounterAction(mode) {
-  return frontCounterActions.find((action) => action.id === mode) || frontCounterActions[0];
-}
-
-function FrontCounterActionCard({ action, active, onSelect }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(action.id)}
-      aria-pressed={active}
-      style={{
-        minHeight: "44px",
-        border: active ? `2px solid ${action.accent}` : `1px solid ${action.border}`,
-        background: active ? action.background : "#ffffff",
-        color: "#0f172a",
-        borderRadius: "14px",
-        padding: "8px 10px",
-        textAlign: "left",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        gap: "10px",
-        boxShadow: active ? "0 18px 34px rgba(15, 23, 42, 0.10)" : "0 1px 3px rgba(15, 23, 42, 0.06)",
-      }}
-    >
-      <span
-        style={{
-          width: "28px",
-          height: "28px",
-          borderRadius: "10px",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: action.accent,
-          color: "#ffffff",
-            fontSize: "14px",
-          fontWeight: 900,
-        }}
-        aria-hidden="true"
-      >
-        {action.title.charAt(0)}
-      </span>
-      <span style={{ display: "grid", gap: "6px" }}>
-        <strong style={{ fontSize: "15px", lineHeight: 1.1 }}>{action.title}</strong>
-        <span style={{ display: "none", color: "#475569", fontSize: "12px", lineHeight: 1.25 }}>
-          {action.description}
-        </span>
-      </span>
-    </button>
-  );
 }
 
 function WorkflowStepStrip({ action }) {
@@ -800,7 +747,7 @@ export default function QuickSale() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [quickSalePaymentMethod, setQuickSalePaymentMethod] = useState("Cash");
   const [notes, setNotes] = useState("");
-  const [showQuickSaleCheckout, setShowQuickSaleCheckout] = useState(false);
+  const [showQuickSaleNote, setShowQuickSaleNote] = useState(false);
   const [lineItem, setLineItem] = useState({
     name: "",
     color: "",
@@ -874,7 +821,6 @@ export default function QuickSale() {
   }, [activeMode, selectableItems]);
   const activeWorkspaceMode =
     transactionWorkspaceModes[activeMode] || transactionWorkspaceModes.payment;
-  const activeCounterAction = getActiveCounterAction(activeMode);
   const canOfferCustomerCreate =
     activeMode !== "quick-sale" &&
     lookupQuery.trim().length >= 2 &&
@@ -1206,13 +1152,11 @@ export default function QuickSale() {
 
   function resetProductSelection() {
     setSelectedProductId("");
-    setProductSearchQuery("");
     setLineItem({ name: "", color: "", size: "", qty: "1", unit_price: "" });
   }
 
   function selectProduct(product) {
     setSelectedProductId(product.id);
-    setProductSearchQuery(product.name || "");
 
     setLineItem((current) => ({
       ...current,
@@ -1327,7 +1271,6 @@ export default function QuickSale() {
     });
 
     setSelectedProductId("");
-    setProductSearchQuery("");
     setLineItem({ name: "", color: "", size: "", qty: "1", unit_price: "" });
     setTimeout(() => productSelectRef.current?.focus(), 0);
   }
@@ -1368,13 +1311,7 @@ export default function QuickSale() {
   }
 
   function removeCartItem(itemId) {
-    setCart((current) => {
-      const nextCart = current.filter((item) => item.id !== itemId);
-      if (!nextCart.length) {
-        setShowQuickSaleCheckout(false);
-      }
-      return nextCart;
-    });
+    setCart((current) => current.filter((item) => item.id !== itemId));
   }
 
   function saveSale() {
@@ -1399,9 +1336,9 @@ export default function QuickSale() {
         customer_name: identityValidation.identity.displayName,
         customer_phone: identityValidation.identity.phone,
         payment_method: quickSalePaymentMethod,
-        payment_status: quickSalePaymentMethod === "Pay Later" ? "Unpaid" : "Paid",
-        amount_paid: quickSalePaymentMethod === "Pay Later" ? 0 : total,
-        balance_due: quickSalePaymentMethod === "Pay Later" ? total : 0,
+        payment_status: "Paid",
+        amount_paid: total,
+        balance_due: 0,
         items: cart,
         subtotal,
         tax_rate: taxRate,
@@ -1673,66 +1610,68 @@ export default function QuickSale() {
           style={{
             background: "#ffffff",
             border: "1px solid #e2e8f0",
-            borderRadius: "18px",
-            padding: "10px",
-            display: "grid",
-            gap: "8px",
+            borderRadius: "14px",
+            padding: "8px 10px",
+            display: "flex",
+            gap: "12px",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
             boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
-            <div style={{ maxWidth: "820px" }}>
-              <p
-                style={{
-                  margin: 0,
-                  color: "#64748b",
-                  fontSize: "12px",
-                  fontWeight: 900,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                }}
-              >
-                Front Counter
-              </p>
-              <h1 style={{ margin: "2px 0 0", fontSize: "22px", color: "#0f172a", letterSpacing: 0 }}>
-                What would you like to do?
-              </h1>
-            </div>
-            <div
-              style={{
-                minWidth: "170px",
-                borderRadius: "16px",
-                background: activeCounterAction.background,
-                border: `1px solid ${activeCounterAction.border}`,
-                padding: "8px 10px",
-                display: "grid",
-                gap: "4px",
-              }}
-            >
-              <span style={{ color: activeCounterAction.accent, fontSize: "12px", fontWeight: 900 }}>
-                Active Workflow
-              </span>
-              <strong style={{ color: "#0f172a", fontSize: "16px" }}>{activeCounterAction.title}</strong>
-            </div>
+          <div>
+            <p style={{ margin: 0, color: "#64748b", fontSize: "11px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              Front Counter
+            </p>
+            <h1 style={{ margin: "1px 0 0", fontSize: "18px", color: "#0f172a" }}>
+              Current transaction
+            </h1>
           </div>
 
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-              gap: "10px",
+              display: "flex",
+              gap: "6px",
+              flexWrap: "wrap",
             }}
+            aria-label="Transaction type"
           >
             {frontCounterActions.map((action) => (
-              <FrontCounterActionCard
+              <button
                 key={action.id}
-                action={action}
-                active={activeMode === action.id}
-                onSelect={activateWorkspaceMode}
-              />
+                type="button"
+                aria-pressed={activeMode === action.id}
+                onClick={() => activateWorkspaceMode(action.id)}
+                style={{
+                  minHeight: "38px",
+                  border: activeMode === action.id ? `2px solid ${action.accent}` : "1px solid #cbd5e1",
+                  background: activeMode === action.id ? action.background : "#ffffff",
+                  color: activeMode === action.id ? action.accent : "#334155",
+                  borderRadius: "10px",
+                  padding: "7px 12px",
+                  fontWeight: 900,
+                  cursor: "pointer",
+                }}
+              >
+                {action.title}
+              </button>
             ))}
           </div>
-
+          <button
+            type="button"
+            onClick={() => navigate("/admin")}
+            style={{
+              border: "none",
+              background: "transparent",
+              color: "#64748b",
+              padding: "8px",
+              cursor: "pointer",
+              fontWeight: 700,
+            }}
+          >
+            Cancel transaction
+          </button>
         </section>
 
         {activeMode !== "quick-sale" ? (
@@ -1758,7 +1697,7 @@ export default function QuickSale() {
                 gridTemplateColumns: "minmax(230px, 0.75fr) minmax(300px, 1fr) minmax(280px, 0.9fr)",
                 gap: "12px",
                 alignItems: "start",
-                height: "calc(100vh - 332px)",
+                height: "calc(100vh - 238px)",
                 minHeight: "398px",
                 overflow: "hidden",
               }}
@@ -2539,10 +2478,11 @@ export default function QuickSale() {
                   id="quick-sale-workflow"
                   style={{
                     ...sectionCardStyle,
-                    padding: "16px",
-                    gap: "12px",
-                    height: "calc(100vh - 332px)",
-                    minHeight: "398px",
+                    padding: "12px",
+                    gap: "10px",
+                    height: "calc(100vh - 238px)",
+                    minHeight: "482px",
+                    gridTemplateRows: "auto minmax(0, 1fr)",
                     overflow: "hidden",
                   }}
                 >
@@ -2570,13 +2510,11 @@ export default function QuickSale() {
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: cart.length
-                        ? "minmax(320px, 0.82fr) minmax(420px, 1.18fr)"
-                        : "minmax(0, 1fr)",
-                      gap: "14px",
+                      gridTemplateColumns: "minmax(440px, 1.55fr) minmax(380px, 0.95fr)",
+                      gap: "12px",
                       alignItems: "stretch",
                       minHeight: 0,
-                      height: "100%",
+                      height: "auto",
                     }}
                   >
                     <section
@@ -2674,8 +2612,8 @@ export default function QuickSale() {
                           {!productSearchQuery.trim() && productCategories.length ? (
                             <div style={{ display: "grid", gap: "8px" }}>
                               <strong style={{ color: "#0f172a", fontSize: "16px" }}>Browse Categories</strong>
-                              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                                {productCategories.map((category) => (
+                              <div style={{ display: "flex", gap: "8px", flexWrap: "nowrap", overflow: "hidden" }}>
+                                {productCategories.slice(0, 5).map((category) => (
                                   <button
                                     key={category}
                                     type="button"
@@ -2697,6 +2635,27 @@ export default function QuickSale() {
                                     {category}
                                   </button>
                                 ))}
+                                {productCategories.length > 5 ? (
+                                  <select
+                                    value={productCategories.slice(5).includes(selectedProductCategory) ? selectedProductCategory : ""}
+                                    onChange={(event) => setSelectedProductCategory(event.target.value)}
+                                    aria-label="More product categories"
+                                    style={{
+                                      minHeight: "48px",
+                                      borderRadius: "12px",
+                                      border: "1px solid #cbd5e1",
+                                      background: "#ffffff",
+                                      color: "#0f172a",
+                                      padding: "10px 12px",
+                                      fontWeight: 900,
+                                    }}
+                                  >
+                                    <option value="">More</option>
+                                    {productCategories.slice(5).map((category) => (
+                                      <option key={category} value={category}>{category}</option>
+                                    ))}
+                                  </select>
+                                ) : null}
                               </div>
                             </div>
                           ) : null}
@@ -2923,19 +2882,18 @@ export default function QuickSale() {
                       ) : null}
                     </section>
 
-                    {cart.length ? (
-                      <aside
+                    <aside
                         style={{
                           border: "1px solid #e2e8f0",
                           borderRadius: "16px",
-                          padding: "14px",
+                          padding: "10px",
                           background: "#ffffff",
-                          display: "grid",
-                          gap: "10px",
-                          alignContent: "start",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "6px",
                           minHeight: 0,
                           overflowX: "hidden",
-                          overflowY: "auto",
+                          overflowY: "hidden",
                           boxShadow: "0 12px 28px rgba(15, 23, 42, 0.08)",
                         }}
                       >
@@ -2946,31 +2904,20 @@ export default function QuickSale() {
                             </span>
                             <h3 style={{ margin: "3px 0 0", fontSize: "24px" }}>Cart</h3>
                           </div>
-                          <div style={{ display: "grid", gap: "8px", justifyItems: "end" }}>
+                          <div style={{ display: "grid", gap: "4px", justifyItems: "end" }}>
                             <strong style={{ color: "#0f172a", fontSize: "24px" }}>{currency(total)}</strong>
-                            {showQuickSaleCheckout ? (
-                              <button
-                                type="submit"
-                                disabled={!canCompleteSale}
-                                style={{
-                                  background: canCompleteSale ? "#171717" : "#a8a29e",
-                                  color: "#ffffff",
-                                  border: "none",
-                                  borderRadius: "12px",
-                                  padding: "10px 14px",
-                                  minHeight: "42px",
-                                  cursor: canCompleteSale ? "pointer" : "not-allowed",
-                                  fontSize: "14px",
-                                  fontWeight: 900,
-                                }}
-                              >
-                                Complete Sale
-                              </button>
-                            ) : null}
+                            <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
+                              {cart.length} {cart.length === 1 ? "item" : "items"}
+                            </span>
                           </div>
                         </div>
 
-                        <div style={{ display: "grid", gap: "8px", paddingRight: "2px" }}>
+                        <div style={{ display: "grid", gap: "8px", paddingRight: "2px", overflowY: "auto", alignContent: "start", minHeight: 0, flex: "1 1 72px" }}>
+                          {!cart.length ? (
+                            <div style={{ border: "1px dashed #cbd5e1", borderRadius: "12px", padding: "14px", color: "#64748b", textAlign: "center" }}>
+                              Add a product to begin the sale.
+                            </div>
+                          ) : null}
                           {cart.map((item) => (
                             <div key={item.id} style={{ border: "1px solid #e7e5e4", borderRadius: "12px", padding: "9px" }}>
                               <div style={{ display: "flex", justifyContent: "space-between", gap: "10px" }}>
@@ -3021,7 +2968,7 @@ export default function QuickSale() {
                           ))}
                         </div>
 
-                        <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "10px", display: "grid", gap: "6px" }}>
+                        <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "6px", display: "grid", gap: "4px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between" }}>
                             <span>Subtotal</span>
                             <strong>{currency(subtotal)}</strong>
@@ -3036,114 +2983,91 @@ export default function QuickSale() {
                           </div>
                         </div>
 
-                        {!showQuickSaleCheckout ? (
-                          <button
-                            type="button"
-                            data-testid="pos-checkout-button"
-                            onClick={() => setShowQuickSaleCheckout(true)}
-                            style={{
-                              width: "100%",
-                              minHeight: "56px",
-                              border: "none",
-                              borderRadius: "14px",
-                              background: "#171717",
-                              color: "#ffffff",
-                              cursor: "pointer",
-                              fontSize: "17px",
-                              fontWeight: 900,
-                            }}
-                          >
-                            Checkout
-                          </button>
-                        ) : (
-                          <div style={{ display: "grid", gap: "10px", borderTop: "1px solid #e2e8f0", paddingTop: "10px" }}>
-                            <h3 style={{ margin: 0, fontSize: "20px" }}>Payment</h3>
+                        <div style={{ display: "grid", gap: "8px", borderTop: "1px solid #e2e8f0", paddingTop: "8px" }}>
+                          <strong style={{ color: "#0f172a", fontSize: "14px" }}>Customer</strong>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 0.8fr", gap: "8px" }}>
                             <input
                               value={customerName}
                               onChange={(event) => updateCustomerName(event.target.value)}
                               placeholder="Customer first and last name"
-                              style={{ ...touchFieldStyle, minHeight: "48px", fontSize: "16px" }}
+                              style={{ ...compactFieldStyle, minHeight: "42px", fontSize: "14px" }}
                               aria-label="Customer Name"
                             />
                             <input
                               type="tel"
                               value={customerPhone}
                               onChange={(event) => setCustomerPhone(event.target.value)}
-                              placeholder="Customer phone number"
-                              style={{ ...touchFieldStyle, minHeight: "48px", fontSize: "16px" }}
+                              placeholder="Phone number"
+                              style={{ ...compactFieldStyle, minHeight: "42px", fontSize: "14px" }}
                               aria-label="Customer Phone"
                             />
-                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                              {quickSalePaymentMethods.map((option) => {
-                                const active = quickSalePaymentMethod === option;
-                                return (
-                                  <button
-                                    key={option}
-                                    type="button"
-                                    onClick={() => setQuickSalePaymentMethod(option)}
-                                    style={{
-                                      minHeight: "44px",
-                                      border: active ? "2px solid #0f172a" : "1px solid #cbd5e1",
-                                      background: active ? "#0f172a" : "#ffffff",
-                                      color: active ? "#ffffff" : "#0f172a",
-                                      borderRadius: "12px",
-                                      padding: "10px 12px",
-                                      fontSize: "14px",
-                                      fontWeight: 900,
-                                      cursor: "pointer",
-                                    }}
-                                  >
-                                    {option}
-                                  </button>
-                                );
-                              })}
-                            </div>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", alignItems: "center" }}>
+                            <strong style={{ color: "#0f172a", fontSize: "14px" }}>Payment</strong>
+                            <button
+                              type="button"
+                              onClick={() => setShowQuickSaleNote((current) => !current)}
+                              aria-expanded={showQuickSaleNote}
+                              style={{ border: "none", background: "transparent", color: "#475569", cursor: "pointer", fontWeight: 800 }}
+                            >
+                              {showQuickSaleNote ? "Hide note" : "Add note"}
+                            </button>
+                          </div>
+                          <div style={{ display: "flex", gap: "6px", flexWrap: "nowrap" }}>
+                            {counterPaymentMethods.map((option) => {
+                              const active = quickSalePaymentMethod === option;
+                              return (
+                                <button
+                                  key={option}
+                                  type="button"
+                                  onClick={() => setQuickSalePaymentMethod(option)}
+                                  style={{
+                                    minHeight: "38px",
+                                    flex: "1 1 auto",
+                                    border: active ? "2px solid #0f172a" : "1px solid #cbd5e1",
+                                    background: active ? "#0f172a" : "#ffffff",
+                                    color: active ? "#ffffff" : "#0f172a",
+                                    borderRadius: "10px",
+                                    padding: "7px 8px",
+                                    fontSize: "12px",
+                                    fontWeight: 900,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  {option}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {showQuickSaleNote ? (
                             <textarea
                               value={notes}
                               onChange={(event) => setNotes(event.target.value)}
                               placeholder="Optional sale note or payment reference."
-                              style={{ ...fieldStyle, minHeight: "54px", resize: "none" }}
+                              style={{ ...fieldStyle, minHeight: "48px", resize: "none" }}
                               aria-label="Notes"
                             />
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                              <button
-                                type="button"
-                                onClick={() => navigate("/admin")}
-                                style={{
-                                  background: "#ffffff",
-                                  border: "1px solid #cbd5e1",
-                                  borderRadius: "14px",
-                                  padding: "13px 16px",
-                                  minHeight: "52px",
-                                  cursor: "pointer",
-                                  fontSize: "15px",
-                                  fontWeight: 800,
-                                }}
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                type="submit"
-                                disabled={!canCompleteSale}
-                                style={{
-                                  background: canCompleteSale ? "#171717" : "#a8a29e",
-                                  color: "#ffffff",
-                                  border: "none",
-                                  borderRadius: "14px",
-                                  padding: "13px 16px",
-                                  minHeight: "52px",
-                                  cursor: canCompleteSale ? "pointer" : "not-allowed",
-                                  fontSize: "15px",
-                                  fontWeight: 900,
-                                }}
-                              >
-                                Complete Sale
-                              </button>
-                            </div>
-                          </div>
-                        )}
+                          ) : null}
+                        </div>
+
+                          <button
+                            type="submit"
+                            disabled={!canCompleteSale}
+                            style={{
+                              width: "100%",
+                              minHeight: "44px",
+                              border: "none",
+                              borderRadius: "12px",
+                              background: canCompleteSale ? "#171717" : "#a8a29e",
+                              color: "#ffffff",
+                              cursor: canCompleteSale ? "pointer" : "not-allowed",
+                              fontSize: "16px",
+                              fontWeight: 900,
+                            }}
+                          >
+                            Complete Sale · {currency(total)}
+                          </button>
                       </aside>
-                    ) : null}
                   </div>
                 </section>
               </form>
