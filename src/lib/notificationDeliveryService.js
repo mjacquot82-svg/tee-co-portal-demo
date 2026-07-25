@@ -7,6 +7,7 @@ import {
 } from "./notificationTemplatesStore";
 import { supabase } from "./supabaseClient";
 import { observeLegacyNotificationEvent } from "./notificationEnginePhase2B";
+import { prepareNotificationContentPhase2C } from "./notificationEnginePhase2C";
 
 const STORAGE_KEY = "teeCoNotificationActivity";
 const SUPABASE_TABLE = "notification_activity";
@@ -274,6 +275,15 @@ function queuePhase2BObservation(eventType, context, template) {
     context,
     legacyTemplate: template,
   })
+    .then(async (phase2BResult) => {
+      await prepareNotificationContentPhase2C({
+        phase2BResult,
+        eventType,
+        context,
+        legacyTemplate: template,
+      });
+      return phase2BResult;
+    })
     .catch((error) => {
       console.error("[notificationDeliveryService] Phase 2B shadow observation failed", error);
       return null;
