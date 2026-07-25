@@ -108,6 +108,26 @@ test.describe("customer lifecycle identity integrity", () => {
     });
   });
 
+  test("request contact defaults reject generic profile and session labels", () => {
+    expect(
+      resolveRequestContactDefaults(
+        {
+          firstName: "Marc",
+          lastName: "Jacquot",
+          displayName: "Customer Account",
+          phone: "",
+        },
+        {
+          name: "Customer Account",
+          phone: "+15198816869",
+        }
+      )
+    ).toEqual({
+      name: "Marc Jacquot",
+      phone: "+15198816869",
+    });
+  });
+
   test("profile lookup prefers auth linkage over a newer email-only duplicate", () => {
     const profile = findCustomerProfileForSession(
       {
@@ -134,6 +154,38 @@ test.describe("customer lifecycle identity integrity", () => {
 
     expect(profile).toMatchObject({
       id: "authenticated-profile",
+      phone: "+15198816869",
+    });
+  });
+
+  test("profile lookup prefers a valid saved name over a generic label", () => {
+    const profile = findCustomerProfileForSession(
+      {
+        id: "auth-user-1",
+        displayName: "Customer Account",
+        email: "marc@example.com",
+      },
+      [
+        {
+          id: "generic-profile",
+          name: "Customer Account",
+          email: "marc@example.com",
+          phone: "+15198816869",
+          external_reference: "auth-user-1",
+        },
+        {
+          id: "named-profile",
+          name: "Marc Jacquot",
+          email: "marc@example.com",
+          phone: "+15198816869",
+          external_reference: "auth-user-1",
+        },
+      ]
+    );
+
+    expect(profile).toMatchObject({
+      id: "named-profile",
+      name: "Marc Jacquot",
       phone: "+15198816869",
     });
   });

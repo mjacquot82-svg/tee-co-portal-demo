@@ -15,16 +15,15 @@ function hasPhone(customer) {
 }
 
 function hasRealName(customer) {
-  const name = normalizeText(customer?.name);
-  return Boolean(name) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(name);
+  return isValidCustomerName(customer?.name);
 }
 
 function findPreferredCustomer(customers, predicate) {
   const matches = customers.filter(predicate);
   return (
     matches.find((customer) => hasPhone(customer) && hasRealName(customer)) ||
-    matches.find(hasPhone) ||
     matches.find(hasRealName) ||
+    matches.find(hasPhone) ||
     matches[0] ||
     null
   );
@@ -63,3 +62,4 @@ export function findCustomerProfileForSession(session, customers = []) {
 
   return null;
 }
+import { isValidCustomerName } from "./customerName";

@@ -4,8 +4,11 @@ import {
   updateStoredCustomer,
 } from "./customersStore";
 import { normalizeCustomerId } from "./customerIds";
-import { looksLikeEmailAddress } from "./customerRecordMatching";
 import { findCustomerProfileForSession } from "./customerProfileMatching";
+import {
+  isValidCustomerName,
+  normalizeCustomerName,
+} from "./customerName";
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
@@ -16,18 +19,20 @@ function normalizeText(value) {
 }
 
 export function resolveCustomerProfileIdentity(session = {}, existingCustomer = {}) {
-  const fullName = normalizeText(
+  const fullName = normalizeCustomerName(
     [session.firstName, session.lastName].filter(Boolean).join(" ")
   );
-  const displayName = normalizeText(session.displayName);
-  const existingName = normalizeText(existingCustomer.name);
+  const displayName = normalizeCustomerName(session.displayName);
+  const existingName = normalizeCustomerName(existingCustomer.name);
   const sessionName =
-    fullName || (!looksLikeEmailAddress(displayName) ? displayName : "");
+    (isValidCustomerName(fullName) && fullName) ||
+    (isValidCustomerName(displayName) && displayName) ||
+    "";
 
   return {
     name:
+      (isValidCustomerName(existingName) && existingName) ||
       sessionName ||
-      (!looksLikeEmailAddress(existingName) ? existingName : "") ||
       "Customer Account",
     email: normalizeText(session.email) || normalizeText(existingCustomer.email),
     phone: normalizeText(session.phone) || normalizeText(existingCustomer.phone),
