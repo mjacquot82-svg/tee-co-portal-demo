@@ -143,6 +143,19 @@ If a baseline table has no stable `id` or `type` column in the
 production-equivalent schema, use its real primary key and record that
 substitution. Do not alter the table for this rehearsal.
 
+### 4.3 Canonical template defaults
+
+After `supabase/notifications-migration.sql` creates the baseline persistence
+tables, apply `supabase/notification-templates-defaults-seed.sql`. This
+repository-owned seed inserts any missing canonical template types and leaves
+all existing rows unchanged. Browser localStorage migration remains a
+compatibility path for legacy customizations, not a deployment prerequisite.
+
+Before Phase 2A, confirm `notification_templates` contains one row for every
+supported notification type. Phase 2A snapshots these rows into immutable
+template version 1 records and uses their channel flags to seed policy version
+1 records.
+
 ## 5. Backup and rollback preparation
 
 Before the first migration:
@@ -174,18 +187,20 @@ Required evidence:
 
 Apply these files exactly in this order:
 
-1. `supabase/notification-engine-phase2a-foundation.sql`
-2. `supabase/notification-engine-phase2e-dispatcher.sql`
-3. `supabase/notification-engine-phase2e-staff-adapter.sql`
-4. `supabase/notification-engine-phase2f-resend-adapter.sql`
-5. `supabase/notification-engine-phase2g-delivery-lifecycle.sql`
-6. `supabase/notification-engine-phase2h-owner-administration.sql`
-7. `supabase/notification-engine-phase2i-cutover.sql`
-8. `supabase/notification-engine-c4-authorization.sql`
-9. `supabase/notification-engine-c5-template-version-publishing.sql`
-10. `supabase/notification-engine-c6-verification-evidence.sql`
-11. `supabase/notification-engine-h1-scheduled-dispatcher.sql`
-12. `supabase/notification-engine-h2-authoritative-staff-adapter.sql`
+1. `supabase/notifications-migration.sql`
+2. `supabase/notification-templates-defaults-seed.sql`
+3. `supabase/notification-engine-phase2a-foundation.sql`
+4. `supabase/notification-engine-phase2e-dispatcher.sql`
+5. `supabase/notification-engine-phase2e-staff-adapter.sql`
+6. `supabase/notification-engine-phase2f-resend-adapter.sql`
+7. `supabase/notification-engine-phase2g-delivery-lifecycle.sql`
+8. `supabase/notification-engine-phase2h-owner-administration.sql`
+9. `supabase/notification-engine-phase2i-cutover.sql`
+10. `supabase/notification-engine-c4-authorization.sql`
+11. `supabase/notification-engine-c5-template-version-publishing.sql`
+12. `supabase/notification-engine-c6-verification-evidence.sql`
+13. `supabase/notification-engine-h1-scheduled-dispatcher.sql`
+14. `supabase/notification-engine-h2-authoritative-staff-adapter.sql`
 
 There are no separate Phase 2B, 2C, or 2D SQL files in the repository. Their
 runtime implementation uses the Phase 2A durable schema.
