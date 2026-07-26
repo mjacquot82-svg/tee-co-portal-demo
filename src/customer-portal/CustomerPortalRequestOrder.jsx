@@ -32,9 +32,8 @@ import { uploadCustomerArtwork } from "../services/customerArtworkService";
 import { PortalPage, SectionCard } from "./CustomerPortalShared";
 import {
   PORTAL_ORDER_SUBMITTED_PATH,
-  PUBLIC_STOREFRONT_PATH,
+  PORTAL_ORDER_CATALOG_PATH,
   shouldOfferPendingDraftRecovery,
-  shouldRedirectRequestOrderToStorefront,
 } from "./customerPortalStartOrderRoute";
 import { resolveRequestContactDefaults } from "./requestContactDefaults";
 import { useCustomerPortalData } from "./useCustomerPortalData";
@@ -240,19 +239,6 @@ export default function CustomerPortalRequestOrder() {
   }
 
   useEffect(() => {
-    if (!shouldRedirectRequestOrderToStorefront({ pendingRequest, pendingRequestSource })) {
-      return;
-    }
-
-    navigate(PUBLIC_STOREFRONT_PATH, {
-      replace: true,
-      state: {
-        portalOrderStart: true,
-      },
-    });
-  }, [navigate, pendingRequest, pendingRequestSource]);
-
-  useEffect(() => {
     if (!pendingRequest || !storefrontProducts.length) return;
     if (draftRecoveryRequired) return;
 
@@ -338,7 +324,7 @@ export default function CustomerPortalRequestOrder() {
     }
 
     setPendingRequest(null);
-    navigate(PUBLIC_STOREFRONT_PATH, {
+    navigate(PORTAL_ORDER_CATALOG_PATH, {
       replace: true,
       state: { portalOrderStart: true },
     });
@@ -624,7 +610,7 @@ export default function CustomerPortalRequestOrder() {
                 color: "#475569",
               }}
             >
-              Your selected product is not currently available. Return to the storefront to update the selection.
+              Your selected product is not currently available. Return to the order catalog to update the selection.
             </div>
           ) : null}
 
@@ -635,7 +621,7 @@ export default function CustomerPortalRequestOrder() {
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
                   <strong>Line Item {index + 1}: {product?.name || lineItem.garment || "Custom garment"}</strong>
                   <div style={{ display: "flex", gap: "8px" }}>
-                    <button type="button" onClick={() => { const editItem = { ...pendingRequest.lineItems[index], productId: lineItem.product_id, artworkId: lineItem.artwork_id, artworkName: lineItem.artwork_name }; navigate("/order-preview", { state: { ...editItem, lineItem: editItem } }); }}>Edit Garment</button>
+                    <button type="button" onClick={() => { const editItem = { ...pendingRequest.lineItems[index], productId: lineItem.product_id, artworkId: lineItem.artwork_id, artworkName: lineItem.artwork_name }; navigate(`${PORTAL_ORDER_CATALOG_PATH}/order-preview`, { state: { ...editItem, lineItem: editItem } }); }}>Edit Garment</button>
                     {lineItems.length > 1 ? <button type="button" onClick={() => removeReviewedGarment(lineItem.id)}>Remove Garment</button> : null}
                   </div>
                 </div>
@@ -650,7 +636,7 @@ export default function CustomerPortalRequestOrder() {
               </article>
             );
           })}
-          <button type="button" onClick={() => navigate(PUBLIC_STOREFRONT_PATH, { state: { addingAnotherGarment: true } })}>Add Another Garment</button>
+          <button type="button" onClick={() => navigate(PORTAL_ORDER_CATALOG_PATH, { state: { addingAnotherGarment: true } })}>Add Another Garment</button>
           <div style={{ marginTop: "16px", borderRadius: "16px", background: "#f8fafc", border: "1px solid #e2e8f0", padding: "14px 16px" }}>
             <ReviewItem label="Order Summary" value={`${lineItems.length} garment line ${lineItems.length === 1 ? "item" : "items"} · ${orderQuantity} total pieces`} />
             <ReviewItem label="Estimated Pricing" value={estimatedOrderQuote?.total !== null && estimatedOrderQuote?.total !== undefined ? `${formatMoney(estimatedOrderQuote.total)} estimated total` : "Pricing confirmed after review"} />

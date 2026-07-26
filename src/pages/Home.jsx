@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useMemo } from "react";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import { useCatalogLookups } from "../lib/catalogLookupsStore";
@@ -11,6 +11,7 @@ import {
   resolveStorefrontProductImage,
 } from "../lib/storefrontCatalog";
 import { areStoredProductsReady, resolveProductBasePrice, useStoredProducts } from "../lib/productsStore";
+import { getOrderingWorkflowPaths } from "../customer-portal/customerPortalStartOrderRoute";
 
 function buildStorefrontRenderIdentity(product, index) {
   const normalizedId = String(product?.id || "").trim();
@@ -62,6 +63,8 @@ function formatOptionCount(values = [], label) {
 }
 
 export default function Home() {
+  const location = useLocation();
+  const orderingPaths = getOrderingWorkflowPaths(location.pathname);
   const storedProducts = useStoredProducts();
   const productsReady = areStoredProductsReady();
   const lookups = useCatalogLookups();
@@ -112,10 +115,10 @@ export default function Home() {
     ? getStorefrontProductCategoryLabel(heroProduct, storefrontCategoryLookups)
     : heroCollection?.name || "Uncategorized";
   const heroLink = heroProduct
-    ? `/garment/${heroProduct.id}`
+    ? orderingPaths.garment(heroProduct.id)
     : heroCollection
-      ? `/category/${heroCollection.id}`
-      : "/";
+      ? orderingPaths.category(heroCollection.id)
+      : orderingPaths.catalog;
   const heroImage = resolveStorefrontProductImage(heroProduct, {
     alt: heroProduct?.name || "Featured product",
     size: "medium",
@@ -134,7 +137,7 @@ export default function Home() {
             {storefrontCategories.map((category) => (
               <Link
                 key={category.id}
-                to={`/category/${category.id}`}
+                to={orderingPaths.category(category.id)}
                 className="storefront-rail-link"
               >
                 <span>{category.name}</span>
@@ -163,7 +166,7 @@ export default function Home() {
                 {collectionHighlights.slice(0, 3).map((category) => (
                   <Link
                     key={category.id}
-                    to={`/category/${category.id}`}
+                    to={orderingPaths.category(category.id)}
                     className="storefront-chip-link"
                   >
                     {category.name}
@@ -241,7 +244,7 @@ export default function Home() {
               {storefrontCategories.map((category) => (
                 <Link
                   key={category.id}
-                  to={`/category/${category.id}`}
+                  to={orderingPaths.category(category.id)}
                   className="storefront-mobile-category-link"
                 >
                   <span>{category.name}</span>
@@ -277,7 +280,7 @@ export default function Home() {
                   return (
                     <Link
                       key={renderIdentity.key}
-                      to={`/garment/${product.id}`}
+                      to={orderingPaths.garment(product.id)}
                       className="storefront-featured-card storefront-featured-card-vertical"
                     >
                       <div className="storefront-featured-image-shell storefront-featured-image-shell-large">
@@ -349,7 +352,7 @@ export default function Home() {
               {collectionHighlights.map((category) => (
                 <Link
                   key={category.id}
-                  to={`/category/${category.id}`}
+                  to={orderingPaths.category(category.id)}
                   className="storefront-collection-card storefront-collection-card-highlighted"
                 >
                   <div className="storefront-collection-cover storefront-collection-cover-highlighted">
@@ -412,7 +415,7 @@ export default function Home() {
                       <p className="storefront-category-row-copy">{category.description}</p>
                     </div>
                     <Link
-                      to={`/category/${category.id}`}
+                      to={orderingPaths.category(category.id)}
                       className="storefront-category-row-link"
                     >
                       Shop collection
@@ -429,7 +432,7 @@ export default function Home() {
                       return (
                         <Link
                           key={renderIdentity.key}
-                          to={`/garment/${product.id}`}
+                          to={orderingPaths.garment(product.id)}
                           className="storefront-featured-card"
                         >
                           <div className="storefront-featured-image-shell">

@@ -71,7 +71,7 @@ export default function CustomerPortalQuotes() {
             title="No order requests yet"
             description="Start a request from the portal and Tee & Co will review it before production."
             actionLabel="Start New Order"
-            actionTo="/portal/request-order"
+            actionTo="/portal/order"
           />
         )}
       </SectionCard>

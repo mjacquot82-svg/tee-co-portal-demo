@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { useEffect, useMemo } from "react";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import {
@@ -13,6 +13,7 @@ import {
   getStorefrontProductsByCategory,
   resolveStorefrontProductImage,
 } from "../lib/storefrontCatalog";
+import { getOrderingWorkflowPaths } from "../customer-portal/customerPortalStartOrderRoute";
 
 function buildCategoryProductRenderIdentity(product, index) {
   const normalizedId = String(product?.id || "").trim();
@@ -56,6 +57,8 @@ function getProductDetailValue(product = {}, keys = []) {
 
 export default function CategoryView() {
   const { categoryId } = useParams();
+  const location = useLocation();
+  const orderingPaths = getOrderingWorkflowPaths(location.pathname);
   const storedProducts = useStoredProducts();
   const productsReady = areStoredProductsReady();
   const lookups = useCatalogLookups();
@@ -149,7 +152,7 @@ export default function CategoryView() {
       >
         <h1 style={{ marginTop: 0 }}>Category not found</h1>
 
-        <Link to="/" className="storefront-back-link">
+        <Link to={orderingPaths.catalog} className="storefront-back-link">
           ← Back to Home
         </Link>
       </div>
@@ -167,7 +170,7 @@ export default function CategoryView() {
       }}
     >
       <div style={{ marginBottom: "18px" }}>
-        <Link to="/" className="storefront-back-link">
+        <Link to={orderingPaths.catalog} className="storefront-back-link">
           ← Back to categories
         </Link>
       </div>
@@ -248,7 +251,7 @@ export default function CategoryView() {
           return (
             <Link
               key={renderIdentity.key}
-              to={`/garment/${item.id}`}
+              to={orderingPaths.garment(item.id)}
               className="storefront-category-product-card"
               style={{
                 textDecoration: "none",

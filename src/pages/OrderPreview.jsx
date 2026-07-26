@@ -23,6 +23,7 @@ import {
 import { generateQuoteSnapshot } from "../lib/quoteEngine";
 import { useStoredProducts } from "../lib/productsStore";
 import {
+  getOrderingWorkflowPaths,
   PORTAL_REQUEST_ORDER_PATH,
   PUBLIC_GARMENT_FLOW_SOURCE,
 } from "../customer-portal/customerPortalStartOrderRoute";
@@ -39,6 +40,7 @@ function formatPrice(value, isAvailable = true) {
 export default function OrderPreview() {
   const navigate = useNavigate();
   const location = useLocation();
+  const orderingPaths = getOrderingWorkflowPaths(location.pathname);
   const fileInputRef = useRef(null);
 
   const passedState = useMemo(() => location.state || {}, [location.state]);
@@ -262,7 +264,7 @@ export default function OrderPreview() {
     }
 
     if (destination === "catalogue") {
-      navigate("/", { state: { addingAnotherGarment: true } });
+      navigate(orderingPaths.catalog, { state: { addingAnotherGarment: true } });
       return;
     }
 
@@ -311,7 +313,7 @@ export default function OrderPreview() {
         }}
       >
         <Link
-          to="/"
+          to={orderingPaths.catalog}
           style={{
             color: "#57534e",
             textDecoration: "none",
