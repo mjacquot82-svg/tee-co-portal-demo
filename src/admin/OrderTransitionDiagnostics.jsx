@@ -24,7 +24,7 @@ export default function OrderTransitionDiagnostics() {
   }
 
   function clear() {
-    window.sessionStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(STORAGE_KEY);
     window.__TEE_CO_ORDER_TRANSITION_DIAGNOSTICS__ = [];
     setEntries([]);
     setCopyStatus("Diagnostics cleared.");
