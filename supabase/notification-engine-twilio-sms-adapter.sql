@@ -153,47 +153,51 @@ begin
 
   return query
   with eligible as (
-    select delivery.id
-    from public.notification_deliveries delivery
-    join public.notifications notification
-      on notification.id = delivery.notification_id
-    where delivery.channel = 'sms'
-      and notification.delivery_mode = 'automatic'
+    select delivery_row.id
+    from public.notification_deliveries delivery_row
+    join public.notifications notification_row
+      on notification_row.id = delivery_row.notification_id
+    where delivery_row.channel = 'sms'
+      and notification_row.delivery_mode = 'automatic'
       and coalesce(
-        (notification.policy_snapshot ->> 'sms_enabled')::boolean,
+        (notification_row.policy_snapshot ->> 'sms_enabled')::boolean,
         false
       )
       and (
-        delivery.status = 'queued'
+        delivery_row.status = 'queued'
         or (
-          delivery.status = 'retry_scheduled'
-          and delivery.next_retry_at is not null
-          and delivery.next_retry_at <= clock_timestamp()
+          delivery_row.status = 'retry_scheduled'
+          and delivery_row.next_retry_at is not null
+          and delivery_row.next_retry_at <= clock_timestamp()
         )
       )
       and not coalesce(
-        (notification.engine_metadata ->> 'observationOnly')::boolean,
+        (notification_row.engine_metadata ->> 'observationOnly')::boolean,
         true
       )
       and coalesce(
         (
-          notification.engine_metadata
+          notification_row.engine_metadata
             #>> '{phase2D,dispatcherEligible}'
         )::boolean,
         false
       )
       and not coalesce(
-        (delivery.destination_snapshot ->> 'observationOnly')::boolean,
+        (delivery_row.destination_snapshot ->> 'observationOnly')::boolean,
         true
       )
     order by
-      coalesce(delivery.next_retry_at, delivery.queued_at, delivery.created_at),
-      delivery.id
-    for update of delivery skip locked
+      coalesce(
+        delivery_row.next_retry_at,
+        delivery_row.queued_at,
+        delivery_row.created_at
+      ),
+      delivery_row.id
+    for update of delivery_row skip locked
     limit p_limit
   ),
   claimed as (
-    update public.notification_deliveries delivery
+    update public.notification_deliveries delivery_row
     set
       status = 'processing',
       claim_token = v_claim_token,
@@ -203,18 +207,18 @@ begin
       processing_at = clock_timestamp(),
       next_retry_at = null
     from eligible
-    where delivery.id = eligible.id
-    returning delivery.*
+    where delivery_row.id = eligible.id
+    returning delivery_row.*
   )
   select
     to_jsonb(claimed),
-    to_jsonb(notification),
+    to_jsonb(notification_row),
     to_jsonb(event)
   from claimed
-  join public.notifications notification
-    on notification.id = claimed.notification_id
+  join public.notifications notification_row
+    on notification_row.id = claimed.notification_id
   join public.notification_business_events event
-    on event.id = notification.business_event_id;
+    on event.id = notification_row.business_event_id;
 end;
 $$;
 

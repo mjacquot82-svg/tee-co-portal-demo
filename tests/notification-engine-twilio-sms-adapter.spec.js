@@ -625,8 +625,8 @@ test("Twilio migration is service-only and reuses approved lifecycle semantics",
       "utf8"
     ),
   ]);
-  expect(sql).toContain("delivery.channel = 'sms'");
-  expect(sql).toContain("notification.delivery_mode = 'automatic'");
+  expect(sql).toContain("delivery_row.channel = 'sms'");
+  expect(sql).toContain("notification_row.delivery_mode = 'automatic'");
   expect(sql).toContain("'sms_enabled'");
   expect(sql).toContain("'{phase2D,dispatcherEligible}'");
   expect(sql).toContain("for update of delivery skip locked");
@@ -641,6 +641,28 @@ test("Twilio migration is service-only and reuses approved lifecycle semantics",
   expect(adapterSource).toContain("TWILIO_FROM_NUMBER");
   expect(scheduled).not.toContain("RESEND_API_KEY");
   expect(emailScheduled).not.toContain("TWILIO");
+});
+
+test("Twilio claim RPC does not collide with its notification output column", async () => {
+  const sql = await readFile(
+    "supabase/notification-engine-twilio-sms-adapter.sql",
+    "utf8"
+  );
+  const claimRpc = sql.match(
+    /create or replace function public\.claim_twilio_sms_deliveries_authoritative[\s\S]*?\nend;\n\$\$;/
+  )?.[0];
+
+  expect(claimRpc).toBeTruthy();
+  expect(claimRpc).toContain(
+    "from public.notification_deliveries delivery_row"
+  );
+  expect(claimRpc).toContain("join public.notifications notification_row");
+  expect(claimRpc).toContain("to_jsonb(notification_row)");
+  expect(claimRpc).not.toContain(
+    "from public.notification_deliveries delivery\n"
+  );
+  expect(claimRpc).not.toContain("join public.notifications notification\n");
+  expect(claimRpc).not.toContain("to_jsonb(notification)");
 });
 
 test("stored SMS Delivery request never reads mutable template or customer records", () => {
