@@ -15,6 +15,16 @@ test.beforeEach(() => {
   deliveryRequests = [];
   globalThis.fetch = async (url, options = {}) => {
     deliveryRequests.push({ url, options });
+    if (url === "/.netlify/functions/notification-event-accept") {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          accepted: true,
+          businessEvent: JSON.parse(options.body).businessEvent,
+        }),
+      };
+    }
     return { ok: true, status: 200, json: async () => ({ delivered: true }) };
   };
   resetNotificationActivityForTests();
@@ -26,8 +36,8 @@ test.afterEach(async () => {
   globalThis.fetch = originalFetch;
 });
 
-test("triggerNotificationEvent resolves template content and stores activity records", () => {
-  const records = triggerNotificationEvent(NOTIFICATION_TYPES.quoteApproved, {
+test("triggerNotificationEvent resolves template content and stores activity records", async () => {
+  const records = await triggerNotificationEvent(NOTIFICATION_TYPES.quoteApproved, {
     customerName: "Taylor Chen",
     customerEmail: "taylor@example.com",
     staffName: "Nina Staff",
@@ -61,16 +71,19 @@ test("order approval delivery is idempotent across refresh, reopen, and repeated
     },
   };
 
-  const initial = triggerNotificationEvent(NOTIFICATION_TYPES.quoteApproved, context);
-  const afterRefresh = triggerNotificationEvent(NOTIFICATION_TYPES.quoteApproved, context);
-  const afterReopen = triggerNotificationEvent(NOTIFICATION_TYPES.quoteApproved, context);
+  const initial = await triggerNotificationEvent(NOTIFICATION_TYPES.quoteApproved, context);
+  const afterRefresh = await triggerNotificationEvent(NOTIFICATION_TYPES.quoteApproved, context);
+  const afterReopen = await triggerNotificationEvent(NOTIFICATION_TYPES.quoteApproved, context);
   await flushNotificationDeliveriesForTests();
 
   expect(initial[0].metadata.idempotencyKey).toBe("quote_approved:TC-APPROVED-1001:customer");
   expect(afterRefresh[0].id).toBe(initial[0].id);
   expect(afterReopen[0].id).toBe(initial[0].id);
-  expect(deliveryRequests).toHaveLength(1);
-  expect(JSON.parse(deliveryRequests[0].options.body)).toMatchObject({
+  const customerDeliveryRequests = deliveryRequests.filter(
+    ({ url }) => url === "/.netlify/functions/customer-notification"
+  );
+  expect(customerDeliveryRequests).toHaveLength(1);
+  expect(JSON.parse(customerDeliveryRequests[0].options.body)).toMatchObject({
     eventType: "quote_approved",
     orderNumber: "TC-APPROVED-1001",
     idempotencyKey: "quote_approved:TC-APPROVED-1001:customer",

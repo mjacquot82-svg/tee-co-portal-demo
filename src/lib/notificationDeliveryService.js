@@ -10,6 +10,8 @@ import {
   processNotificationEventThroughEngine,
   resolveNotificationEngineCutover,
 } from "./notificationEngineCutover";
+import { buildNotificationBusinessEventRow } from "./notificationBusinessEvents";
+import { acceptNotificationBusinessEventDurably } from "./notificationBusinessEventAcceptance";
 
 const STORAGE_KEY = "teeCoNotificationActivity";
 const SUPABASE_TABLE = "notification_activity";
@@ -316,6 +318,40 @@ function queuePhase2BObservation(eventType, context, template) {
   });
 }
 
+function acceptRequiredBusinessEvent(eventType, context, cutover) {
+  if (
+    eventType !== NOTIFICATION_TYPES.quoteApproved ||
+    cutover.runEngine
+  ) {
+    return null;
+  }
+
+  const orderNumber = normalizeText(
+    context.orderNumber || context.order?.order_number,
+    "unknown"
+  );
+  const occurredAt = normalizeText(
+    context.businessEvent?.occurredAt ||
+      context.timestamp ||
+      context.order?.updated_at ||
+      context.order?.created_at,
+    nowIso()
+  );
+  return acceptNotificationBusinessEventDurably(
+    buildNotificationBusinessEventRow(eventType, {
+      ...context,
+      businessEvent: {
+        ...(context.businessEvent || {}),
+        occurredAt,
+        occurrenceId: normalizeText(
+          context.businessEvent?.occurrenceId,
+          `${eventType}:${orderNumber}`
+        ),
+      },
+    })
+  );
+}
+
 export const NOTIFICATION_EVENT_TEMPLATE_MAP = Object.freeze({
   [NOTIFICATION_TYPES.newCustomerRequest]: NOTIFICATION_TYPES.newCustomerRequest,
   [NOTIFICATION_TYPES.quoteReadyForApproval]: NOTIFICATION_TYPES.quoteReadyForApproval,
@@ -373,6 +409,11 @@ export function triggerNotificationEvent(eventType, context = {}) {
     return [];
   }
   const cutover = resolveNotificationEngineCutover(eventType, context);
+  const requiredBusinessEventAcceptance = acceptRequiredBusinessEvent(
+    eventType,
+    context,
+    cutover
+  );
   if (!cutover.runLegacy) {
     return queuePhase2BObservation(eventType, context, template).then(() => []);
   }
@@ -390,6 +431,9 @@ export function triggerNotificationEvent(eventType, context = {}) {
       return queuePhase2BObservation(eventType, context, template).then(
         () => existingRecords
       );
+    }
+    if (requiredBusinessEventAcceptance) {
+      return requiredBusinessEventAcceptance.then(() => existingRecords);
     }
     return existingRecords;
   }
@@ -439,6 +483,9 @@ export function triggerNotificationEvent(eventType, context = {}) {
     return queuePhase2BObservation(eventType, context, template).then(
       () => records
     );
+  }
+  if (requiredBusinessEventAcceptance) {
+    return requiredBusinessEventAcceptance.then(() => records);
   }
   return records;
 }

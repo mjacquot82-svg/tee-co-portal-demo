@@ -2,6 +2,11 @@ import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { handler } from "../netlify/functions/notification-event-accept.js";
 import { acceptNotificationBusinessEventDurably } from "../src/lib/notificationBusinessEventAcceptance.js";
+import {
+  resetNotificationActivityForTests,
+  triggerNotificationEvent,
+} from "../src/lib/notificationDeliveryService.js";
+import { NOTIFICATION_TYPES } from "../src/lib/notificationTemplatesStore.js";
 
 const businessEvent = {
   id: "business-event:c2-1",
@@ -16,6 +21,70 @@ const businessEvent = {
   payload: { orderNumber: "TC-C2-1" },
   occurred_at: "2026-07-25T12:00:00.000Z",
 };
+
+test("quote approval trigger durably inserts its business event in legacy cutover mode", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalUrl = process.env.SUPABASE_URL;
+  const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const persistedBusinessEvents = [];
+
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+  resetNotificationActivityForTests();
+  globalThis.fetch = async (url, options = {}) => {
+    if (String(url) === "/.netlify/functions/notification-event-accept") {
+      const response = await handler({
+        httpMethod: "POST",
+        body: options.body,
+      });
+      return {
+        ok: response.statusCode === 200,
+        status: response.statusCode,
+        json: async () => JSON.parse(response.body),
+      };
+    }
+    if (String(url).includes("/rest/v1/notification_business_events")) {
+      const row = JSON.parse(options.body);
+      persistedBusinessEvents.push(row);
+      return {
+        ok: true,
+        status: 201,
+        json: async () => [row],
+      };
+    }
+    return { ok: true, status: 200, json: async () => ({ delivered: true }) };
+  };
+
+  try {
+    await triggerNotificationEvent(NOTIFICATION_TYPES.quoteApproved, {
+      notificationEngineCutoverMode: "legacy",
+      phase2BShadowEnabled: false,
+      order: {
+        id: "order-c2-trigger",
+        order_number: "TC-C2-TRIGGER",
+        updated_at: "2026-07-26T04:00:00.000Z",
+        customer_email: "customer@example.com",
+      },
+      orderNumber: "TC-C2-TRIGGER",
+      customerEmail: "customer@example.com",
+      source: "orders_store",
+    });
+
+    expect(persistedBusinessEvents).toHaveLength(1);
+    expect(persistedBusinessEvents[0]).toMatchObject({
+      event_type: "quote_approved",
+      subject_type: "order",
+      subject_id: "order-c2-trigger",
+      correlation_id: "order:TC-C2-TRIGGER",
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = originalUrl;
+    if (originalKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = originalKey;
+  }
+});
 
 test("browser acceptance uses a navigation-safe request and waits for durable identity", async () => {
   const requests = [];
