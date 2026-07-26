@@ -61,6 +61,9 @@ test("quote approval trigger durably inserts its business event in legacy cutove
       };
     }
     if (String(url).includes("/rest/v1/notification_business_events")) {
+      if (options.method === "PATCH") {
+        return { ok: true, status: 204, json: async () => [] };
+      }
       const row = JSON.parse(options.body);
       persistedBusinessEvents.push(row);
       return {
@@ -165,6 +168,18 @@ test("durable ingress accepts through service-role persistence without mutating 
         },
       };
     }
+    if (
+      String(url).includes("/notification_business_events") &&
+      options.method === "PATCH"
+    ) {
+      return {
+        ok: true,
+        status: 204,
+        async json() {
+          return [];
+        },
+      };
+    }
     if (String(url).includes("/notification_business_events")) {
       return {
         ok: true,
@@ -212,18 +227,45 @@ test("durable ingress accepts through service-role persistence without mutating 
     });
     expect(response.statusCode).toBe(200);
     expect(JSON.parse(response.body).businessEvent).toEqual(businessEvent);
-    expect(calls).toHaveLength(4);
     expect(calls[0].options.headers.Prefer).toContain(
       "resolution=ignore-duplicates"
     );
     expect(calls[1].url).toContain("occurrence_id=eq.");
-    expect(calls[2].url).toContain("/notification_policies?");
-    expect(calls[3].url).toContain("/notifications?on_conflict=");
-    expect(JSON.parse(calls[3].options.body)).toMatchObject({
+    const policyCall = calls.find(({ url }) =>
+      url.includes("/notification_policies?")
+    );
+    const notificationCall = calls.find(({ url }) =>
+      url.includes("/notifications?on_conflict=")
+    );
+    expect(policyCall).toBeTruthy();
+    expect(notificationCall).toBeTruthy();
+    expect(JSON.parse(notificationCall.options.body)).toMatchObject({
       business_event_id: businessEvent.id,
       correlation_id: businessEvent.correlation_id,
       status: "evaluated",
     });
+    const diagnosticStages = calls
+      .filter(
+        ({ url, options }) =>
+          url.includes("/notification_business_events?id=eq.") &&
+          options.method === "PATCH"
+      )
+      .map(({ options }) => {
+        const entries = JSON.parse(options.body).payload
+          .temporary_notification_acceptance_diagnostics;
+        return entries.at(-1).stage;
+      });
+    expect(diagnosticStages).toEqual([
+      "notification_event_accept:entered",
+      "business_event:accepted",
+      "policy_resolution:started",
+      "policy_resolution:returned",
+      "policy_evaluation:completed",
+      "persist_notification:called",
+      "persist_notification:returned",
+      "persist_notification:durable_identity",
+      "notification_event_accept:completed",
+    ]);
     expect(calls[0].options.headers.Authorization).toBe("Bearer service-role");
   } finally {
     globalThis.fetch = originalFetch;

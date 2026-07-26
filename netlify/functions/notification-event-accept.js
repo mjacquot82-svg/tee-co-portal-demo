@@ -43,6 +43,61 @@ async function readJson(response) {
   return response.json().catch(() => []);
 }
 
+function diagnosticValue(value) {
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: value.message,
+      stack: value.stack || "",
+    };
+  }
+  if (value && typeof value === "object") return value;
+  return { value: String(value ?? "") };
+}
+
+function createAcceptanceDiagnostics({
+  businessEvent,
+  supabaseUrl,
+  serviceRoleKey,
+}) {
+  const entries = [];
+  const eventId = businessEvent.id;
+  const originalPayload =
+    businessEvent.payload && typeof businessEvent.payload === "object"
+      ? businessEvent.payload
+      : {};
+
+  return async function record(stage, details = {}) {
+    entries.push({
+      sequence: entries.length + 1,
+      stage,
+      details: diagnosticValue(details),
+      recorded_at: new Date().toISOString(),
+    });
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/notification_business_events?id=eq.${encodeURIComponent(eventId)}`,
+      {
+        method: "PATCH",
+        headers: restHeaders(serviceRoleKey, "return=minimal"),
+        body: JSON.stringify({
+          payload: {
+            ...originalPayload,
+            temporary_notification_acceptance_diagnostics: entries,
+          },
+        }),
+      }
+    );
+    if (!response.ok) {
+      const failure = await readJson(response);
+      console.error("[notification-event-accept] diagnostic persistence failed", {
+        businessEventId: eventId,
+        stage,
+        failure,
+      });
+    }
+  };
+}
+
 function notificationDecision(policy) {
   if (!policy.enabled || policy.delivery_mode === "disabled") {
     return {
@@ -76,7 +131,12 @@ async function generateNotificationForAcceptedEvent({
   accepted,
   supabaseUrl,
   serviceRoleKey,
+  recordDiagnostic,
 }) {
+  await recordDiagnostic("policy_resolution:started", {
+    event_type: accepted.event_type,
+    occurred_at: accepted.occurred_at,
+  });
   const policyQuery = new URLSearchParams({
     select: "*",
     event_type: `eq.${accepted.event_type}`,
@@ -90,6 +150,12 @@ async function generateNotificationForAcceptedEvent({
     { headers: restHeaders(serviceRoleKey) }
   );
   const policies = await readJson(policyResponse);
+  await recordDiagnostic("policy_resolution:returned", {
+    http_status: policyResponse.status,
+    ok: policyResponse.ok,
+    row_count: Array.isArray(policies) ? policies.length : Number(Boolean(policies)),
+    error: policyResponse.ok ? null : policies,
+  });
   if (!policyResponse.ok) {
     throw new Error(
       policies?.message || "Unable to resolve Notification Policy."
@@ -97,12 +163,25 @@ async function generateNotificationForAcceptedEvent({
   }
   const policy = Array.isArray(policies) ? policies[0] : policies;
   if (!policy?.id) {
+    await recordDiagnostic("policy_resolution:no_policy", {
+      event_type: accepted.event_type,
+    });
     throw new Error(
       `No Notification Policy exists for ${accepted.event_type}.`
     );
   }
 
   const decision = notificationDecision(policy);
+  await recordDiagnostic("policy_evaluation:completed", {
+    policy_id: policy.id,
+    policy_version: policy.version,
+    enabled: policy.enabled,
+    delivery_mode: policy.delivery_mode,
+    email_enabled: policy.email_enabled,
+    sms_enabled: policy.sms_enabled,
+    staff_notification_enabled: policy.staff_notification_enabled,
+    result: decision,
+  });
   const notification = {
     id: `notification:${accepted.id}:${policy.id}:v${policy.version}`,
     business_event_id: accepted.id,
@@ -138,6 +217,13 @@ async function generateNotificationForAcceptedEvent({
       deliveriesDeferredUntilPhase2C: true,
     },
   };
+  await recordDiagnostic("persist_notification:called", {
+    notification_id: notification.id,
+    business_event_id: notification.business_event_id,
+    policy_id: notification.policy_id,
+    policy_version: notification.policy_version,
+    status: notification.status,
+  });
   const notificationResponse = await fetch(
     `${supabaseUrl}/rest/v1/notifications?on_conflict=business_event_id,policy_id,policy_version`,
     {
@@ -150,6 +236,11 @@ async function generateNotificationForAcceptedEvent({
     }
   );
   const notifications = await readJson(notificationResponse);
+  await recordDiagnostic("persist_notification:returned", {
+    http_status: notificationResponse.status,
+    ok: notificationResponse.ok,
+    result: notifications,
+  });
   if (!notificationResponse.ok) {
     throw new Error(
       notifications?.message || "Unable to persist Notification."
@@ -161,6 +252,9 @@ async function generateNotificationForAcceptedEvent({
   if (!persisted?.id) {
     throw new Error("Notification persistence returned no durable identity.");
   }
+  await recordDiagnostic("persist_notification:durable_identity", {
+    notification_id: persisted.id,
+  });
   return persisted;
 }
 
@@ -266,19 +360,38 @@ export async function handler(event) {
   if (!accepted?.id) {
     return json(502, { error: "Business Event acceptance returned no durable identity." });
   }
+  const recordDiagnostic = createAcceptanceDiagnostics({
+    businessEvent: accepted,
+    supabaseUrl,
+    serviceRoleKey,
+  });
+  await recordDiagnostic("notification_event_accept:entered", {
+    business_event_id: accepted.id,
+    event_type: accepted.event_type,
+    correlation_id: accepted.correlation_id,
+  });
+  await recordDiagnostic("business_event:accepted", {
+    business_event_id: accepted.id,
+  });
   let notification;
   try {
     notification = await generateNotificationForAcceptedEvent({
       accepted,
       supabaseUrl,
       serviceRoleKey,
+      recordDiagnostic,
     });
   } catch (error) {
+    await recordDiagnostic("notification_generation:threw", error);
     return json(502, {
       error: error?.message || "Unable to generate Notification.",
       businessEvent: accepted,
     });
   }
+  await recordDiagnostic("notification_event_accept:completed", {
+    business_event_id: accepted.id,
+    notification_id: notification.id,
+  });
   return json(200, {
     accepted: true,
     businessEvent: accepted,
