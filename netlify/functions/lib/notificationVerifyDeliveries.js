@@ -47,9 +47,16 @@ function render(value, mergeContext) {
 
 function enabledChannels(policy) {
   return CHANNELS.filter((channel) => {
-    if (channel === "email") return policy.email_enabled;
-    if (channel === "sms") return policy.sms_enabled;
-    return policy.staff_notification_enabled;
+    if (channel === "email") {
+      return policy.email_enabled && policy.customer_audience_enabled;
+    }
+    if (channel === "sms") {
+      return policy.sms_enabled && policy.customer_audience_enabled;
+    }
+    return (
+      policy.staff_notification_enabled &&
+      (policy.staff_audience_enabled || policy.owner_audience_enabled)
+    );
   });
 }
 
