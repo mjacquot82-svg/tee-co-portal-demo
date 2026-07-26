@@ -1,6 +1,5 @@
--- Notification Engine Twilio SMS provider adapter.
--- Adds service-role-only authoritative SMS claiming, completion, recovery,
--- and durable scheduled-run creation. SMS eligibility remains policy-driven.
+-- Notification Engine Twilio SMS provider adapter migration.
+-- Provides authoritative SMS run, recovery, claim, and completion functions.
 
 create or replace function public.start_twilio_sms_dispatch_run(
   p_run_id text,
