@@ -1,0 +1,2 @@
+[functions."notification-sms-dispatcher-scheduled"]
+  schedule = "* * * * *"
