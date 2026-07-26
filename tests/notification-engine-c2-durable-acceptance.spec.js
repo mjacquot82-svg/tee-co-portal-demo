@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { handler } from "../netlify/functions/notification-event-accept.js";
+import { createVerifyDeliveriesForAcceptedNotification } from "../netlify/functions/lib/notificationVerifyDeliveries.js";
 import { acceptNotificationBusinessEventDurably } from "../src/lib/notificationBusinessEventAcceptance.js";
 import {
   resetNotificationActivityForTests,
@@ -479,6 +480,217 @@ test("verify ingress creates exactly the policy-enabled idempotent shadow delive
     } else {
       process.env.VITE_NOTIFICATION_ENGINE_CUTOVER_MODE = originalMode;
     }
+  }
+});
+
+test("authoritative quote approval creates exactly three idempotent dispatcher-eligible deliveries", async () => {
+  const originalFetch = globalThis.fetch;
+  const deliveries = new Map();
+  let finalizedNotification = null;
+  const accepted = {
+    ...businessEvent,
+    subject_id: "order-c2-authoritative",
+    payload: {
+      legacyNotificationContext: {
+        orderNumber: "TC-C2-AUTHORITATIVE",
+        customerReference: "customer-authoritative",
+      },
+    },
+  };
+  const notification = {
+    id: "notification:c2-authoritative",
+    event_type: "quote_approved",
+    status: "evaluated",
+    engine_metadata: {
+      observationOnly: true,
+      cutoverMode: "legacy",
+      deliveriesDeferredUntilPhase2C: true,
+    },
+  };
+  const policy = {
+    email_enabled: true,
+    sms_enabled: true,
+    staff_notification_enabled: true,
+    customer_audience_enabled: true,
+    staff_audience_enabled: true,
+    owner_audience_enabled: false,
+    channel_template_assignments: {
+      email: "quote_approved:v7",
+      sms: "quote_approved:v7",
+      staff: "quote_approved:v7",
+    },
+  };
+  const template = {
+    id: "quote_approved:v7",
+    template_type: "quote_approved",
+    version: 7,
+    status: "published",
+    email_subject: "Approved: {{order_number}}",
+    email_body:
+      "Hi {{customer_name}}, {{order_number}} is approved by {{company_name}}.",
+    sms_message: "{{order_number}} approved for {{customer_name}}.",
+  };
+
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url);
+    if (requestUrl.includes("/orders?")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [{
+          id: "order-c2-authoritative",
+          order_number: "TC-C2-AUTHORITATIVE",
+          customer_id: "customer-authoritative",
+          customer_name: "Taylor Authoritative",
+          customer_email: "fallback@example.com",
+          customer_phone: "+1 555 000 1111",
+          assigned_to_staff_user_id: "staff-authoritative",
+        }],
+      };
+    }
+    if (requestUrl.includes("/customers?")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [{
+          id: "customer-authoritative",
+          name: "Taylor Authoritative",
+          email: "taylor.authoritative@example.com",
+          phone: "+1 (555) 010-3000",
+        }],
+      };
+    }
+    if (requestUrl.includes("/staff_users?")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [{
+          id: "staff-authoritative",
+          name: "Alex Staff",
+          role: "Staff",
+          active: true,
+        }],
+      };
+    }
+    if (requestUrl.includes("/notification_template_versions?")) {
+      return { ok: true, status: 200, json: async () => [template] };
+    }
+    if (
+      requestUrl.includes("/notification_deliveries?on_conflict=") &&
+      options.method === "POST"
+    ) {
+      const row = JSON.parse(options.body);
+      deliveries.set(row.idempotency_key, row);
+      return { ok: true, status: 201, json: async () => [row] };
+    }
+    if (
+      requestUrl.includes("/notifications?id=eq.") &&
+      options.method === "PATCH"
+    ) {
+      finalizedNotification = {
+        ...notification,
+        ...JSON.parse(options.body),
+      };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [finalizedNotification],
+      };
+    }
+    throw new Error(`Unexpected request: ${requestUrl}`);
+  };
+
+  try {
+    const input = {
+      accepted,
+      notification,
+      policy,
+      supabaseUrl: "https://example.supabase.co",
+      serviceRoleKey: "service-role",
+      cutoverMode: "authoritative",
+    };
+    const first = await createVerifyDeliveriesForAcceptedNotification(input);
+    const replay = await createVerifyDeliveriesForAcceptedNotification(input);
+
+    expect(first.created).toBe(true);
+    expect(replay.created).toBe(true);
+    expect(deliveries.size).toBe(3);
+    expect([...deliveries.values()].map(({ channel }) => channel)).toEqual([
+      "email",
+      "sms",
+      "staff",
+    ]);
+    for (const delivery of deliveries.values()) {
+      expect(delivery.destination_snapshot).toMatchObject({
+        observationOnly: false,
+        dispatcherEligible: true,
+      });
+      expect(delivery.idempotency_key).toBe(delivery.id);
+    }
+    expect(finalizedNotification.engine_metadata).toMatchObject({
+      observationOnly: false,
+      legacyRuntimeAuthoritative: false,
+      cutoverMode: "authoritative",
+      deliveriesDeferredUntilPhase2C: false,
+      phase2D: {
+        status: "deliveries_created",
+        observationOnly: false,
+        dispatcherEligible: true,
+        deliveryCount: 3,
+      },
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("delivery materialization rejects unsupported modes and authoritative events", async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    throw new Error("Rejected materialization must not query persistence.");
+  };
+  const input = {
+    accepted: businessEvent,
+    notification: {
+      id: "notification:c2-rejected",
+      status: "evaluated",
+    },
+    policy: {},
+    supabaseUrl: "https://example.supabase.co",
+    serviceRoleKey: "service-role",
+  };
+
+  try {
+    const unsupportedMode =
+      await createVerifyDeliveriesForAcceptedNotification({
+        ...input,
+        cutoverMode: "legacy",
+      });
+    const unsupportedEvent =
+      await createVerifyDeliveriesForAcceptedNotification({
+        ...input,
+        accepted: {
+          ...businessEvent,
+          event_type: "payment_received",
+        },
+        cutoverMode: "authoritative",
+      });
+
+    expect(unsupportedMode).toMatchObject({
+      created: false,
+      reason: "unsupported_cutover_mode",
+      deliveries: [],
+    });
+    expect(unsupportedEvent).toMatchObject({
+      created: false,
+      reason: "unsupported_event",
+      deliveries: [],
+    });
+    expect(fetchCalls).toBe(0);
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
 

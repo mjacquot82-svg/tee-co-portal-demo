@@ -1,4 +1,5 @@
 const CHANNELS = ["email", "sms", "staff"];
+const MATERIALIZATION_MODES = new Set(["verify", "authoritative"]);
 
 function normalizeText(value) {
   return String(value ?? "").trim();
@@ -279,6 +280,8 @@ async function persistDelivery({
   template,
   content,
   target,
+  observationOnly,
+  dispatcherEligible,
   supabaseUrl,
   serviceRoleKey,
 }) {
@@ -301,8 +304,8 @@ async function persistDelivery({
     destination_key: target.destinationKey,
     destination_snapshot: {
       ...target.destinationSnapshot,
-      observationOnly: true,
-      dispatcherEligible: false,
+      observationOnly,
+      dispatcherEligible,
     },
     template_type: template.template_type,
     template_version_id: template.id,
@@ -346,6 +349,9 @@ async function updateNotification({
   templateSnapshots,
   deliveries,
   mergeContext,
+  cutoverMode,
+  observationOnly,
+  dispatcherEligible,
   supabaseUrl,
   serviceRoleKey,
 }) {
@@ -369,9 +375,9 @@ async function updateNotification({
           : "no_deliverable_recipients",
         engine_metadata: {
           ...(notification.engine_metadata || {}),
-          observationOnly: true,
-          legacyRuntimeAuthoritative: true,
-          cutoverMode: "verify",
+          observationOnly,
+          legacyRuntimeAuthoritative: observationOnly,
+          cutoverMode,
           deliveriesDeferredUntilPhase2C: false,
           phase2C: {
             status: "prepared",
@@ -380,9 +386,11 @@ async function updateNotification({
             deliveriesCreated: deliveries.length,
           },
           phase2D: {
-            status: "shadow_deliveries_created",
-            observationOnly: true,
-            dispatcherEligible: false,
+            status: observationOnly
+              ? "shadow_deliveries_created"
+              : "deliveries_created",
+            observationOnly,
+            dispatcherEligible,
             deliveryCount: deliveries.length,
             deliveryStatusCounts: statusCounts,
           },
@@ -405,10 +413,11 @@ export async function createVerifyDeliveriesForAcceptedNotification({
   serviceRoleKey,
   cutoverMode = process.env.VITE_NOTIFICATION_ENGINE_CUTOVER_MODE,
 }) {
-  if (normalizeMode(cutoverMode) !== "verify") {
+  const validatedMode = normalizeMode(cutoverMode);
+  if (!MATERIALIZATION_MODES.has(validatedMode)) {
     return {
       created: false,
-      reason: "verify_mode_required",
+      reason: "unsupported_cutover_mode",
       notification,
       deliveries: [],
     };
@@ -421,6 +430,8 @@ export async function createVerifyDeliveriesForAcceptedNotification({
       deliveries: [],
     };
   }
+  const observationOnly = validatedMode === "verify";
+  const dispatcherEligible = validatedMode === "authoritative";
 
   const channels = enabledChannels(policy);
   if (!channels.length || notification.status !== "evaluated") {
@@ -498,6 +509,8 @@ export async function createVerifyDeliveriesForAcceptedNotification({
         template,
         content,
         target,
+        observationOnly,
+        dispatcherEligible,
         supabaseUrl,
         serviceRoleKey,
       })
@@ -509,6 +522,9 @@ export async function createVerifyDeliveriesForAcceptedNotification({
     templateSnapshots,
     deliveries,
     mergeContext,
+    cutoverMode: validatedMode,
+    observationOnly,
+    dispatcherEligible,
     supabaseUrl,
     serviceRoleKey,
   });
