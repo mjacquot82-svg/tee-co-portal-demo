@@ -8,6 +8,7 @@ import {
   buildTwilioSmsAdapterRequest,
   runScheduledTwilioSmsDispatcher,
 } from "../netlify/functions/lib/twilioSmsDispatcher.js";
+import { handler as scheduledSmsHandler } from "../netlify/functions/notification-sms-dispatcher-scheduled.js";
 import { decideDeliveryFailureTransition } from "../src/lib/notificationDeliveryLifecycle.js";
 import { NOTIFICATION_DISPATCHER_RPCS } from "../src/lib/notificationDispatcherRepository.js";
 
@@ -55,7 +56,10 @@ function smsEnvelope(id = "sms-1", overrides = {}) {
       event_type: "quote_approved",
       delivery_mode: "automatic",
       policy_snapshot: { sms_enabled: true },
-      engine_metadata: { observationOnly: false },
+      engine_metadata: {
+        observationOnly: false,
+        phase2D: { dispatcherEligible: true },
+      },
       ...overrides.notification,
     },
     business_event: {
@@ -78,6 +82,7 @@ function createTwilioLifecycleDatabase(envelopes) {
       item.notification.delivery_mode === "automatic" &&
       item.notification.policy_snapshot.sms_enabled === true &&
       item.notification.engine_metadata.observationOnly === false &&
+      item.notification.engine_metadata.phase2D?.dispatcherEligible === true &&
       item.delivery.destination_snapshot.observationOnly === false
     );
   }
@@ -360,6 +365,7 @@ test("SMS dispatcher persists SID and deterministic Delivery Attempt identity", 
   };
 
   const result = await runScheduledTwilioSmsDispatcher({
+    cutoverEnabled: true,
     runId: "twilio-run-1",
     workerId: "twilio-worker-1",
     adapter,
@@ -414,14 +420,24 @@ test("SMS dispatcher is policy-driven and ignores disabled, manual, and observat
     },
     notification: { engine_metadata: { observationOnly: true } },
   });
+  const dispatcherIneligible = smsEnvelope("dispatcher-ineligible", {
+    notification: {
+      engine_metadata: {
+        observationOnly: false,
+        phase2D: { dispatcherEligible: false },
+      },
+    },
+  });
   const database = createTwilioLifecycleDatabase([
     enabled,
     disabled,
     manual,
     observation,
+    dispatcherIneligible,
   ]);
   const requests = [];
   await runScheduledTwilioSmsDispatcher({
+    cutoverEnabled: true,
     runId: "policy-run",
     workerId: "policy-worker",
     adapter: {
@@ -445,6 +461,7 @@ test("SMS dispatcher is policy-driven and ignores disabled, manual, and observat
   expect(disabled.delivery.status).toBe("queued");
   expect(manual.delivery.status).toBe("queued");
   expect(observation.delivery.status).toBe("queued");
+  expect(dispatcherIneligible.delivery.status).toBe("queued");
 });
 
 test("Twilio retry reuses Delivery idempotency and creates a new immutable Attempt", async () => {
@@ -478,6 +495,7 @@ test("Twilio retry reuses Delivery idempotency and creates a new immutable Attem
   };
   const run = (runId) =>
     runScheduledTwilioSmsDispatcher({
+      cutoverEnabled: true,
       runId,
       workerId: `worker:${runId}`,
       adapter,
@@ -510,6 +528,55 @@ test("Twilio configuration uses server-only environment names", () => {
   ).toBe(FROM);
 });
 
+test("SMS cutover gate fails closed before runs, claims, or provider invocation", async () => {
+  const calls = [];
+  const disabled = await runScheduledTwilioSmsDispatcher({
+    cutoverEnabled: false,
+    runId: "disabled-run",
+    workerId: "disabled-worker",
+    adapter: {
+      key: "twilio",
+      async send() {
+        calls.push("provider");
+      },
+    },
+    dispatcherClient: {
+      async rpc() {
+        calls.push("rpc");
+        return { data: null, error: null };
+      },
+    },
+  });
+  expect(disabled).toMatchObject({
+    executed: false,
+    gateEnabled: false,
+    reason: "sms_cutover_disabled",
+    recoveredCount: 0,
+    claimedCount: 0,
+  });
+  expect(calls).toEqual([]);
+
+  const originalGate = process.env.NOTIFICATION_ENGINE_SMS_CUTOVER;
+  delete process.env.NOTIFICATION_ENGINE_SMS_CUTOVER;
+  try {
+    const response = await scheduledSmsHandler({
+      time: "2026-07-25T12:00:00.000Z",
+    });
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toEqual({
+      executed: false,
+      gateEnabled: false,
+      reason: "sms_cutover_disabled",
+    });
+  } finally {
+    if (originalGate === undefined) {
+      delete process.env.NOTIFICATION_ENGINE_SMS_CUTOVER;
+    } else {
+      process.env.NOTIFICATION_ENGINE_SMS_CUTOVER = originalGate;
+    }
+  }
+});
+
 test("Twilio migration is service-only and reuses approved lifecycle semantics", async () => {
   const [sql, scheduled, adapterSource, emailScheduled] = await Promise.all([
     readFile("supabase/notification-engine-twilio-sms-adapter.sql", "utf8"),
@@ -526,6 +593,7 @@ test("Twilio migration is service-only and reuses approved lifecycle semantics",
   expect(sql).toContain("delivery.channel = 'sms'");
   expect(sql).toContain("notification.delivery_mode = 'automatic'");
   expect(sql).toContain("'sms_enabled'");
+  expect(sql).toContain("'{phase2D,dispatcherEligible}'");
   expect(sql).toContain("for update of delivery skip locked");
   expect(sql).toContain("provider_key");
   expect(sql).toContain("'twilio'");
@@ -534,6 +602,7 @@ test("Twilio migration is service-only and reuses approved lifecycle semantics",
   expect(sql).toContain("from public, anon, authenticated");
   expect(scheduled).toContain("TWILIO_ACCOUNT_SID");
   expect(scheduled).toContain("TWILIO_AUTH_TOKEN");
+  expect(scheduled).toContain("NOTIFICATION_ENGINE_SMS_CUTOVER");
   expect(adapterSource).toContain("TWILIO_FROM_NUMBER");
   expect(scheduled).not.toContain("RESEND_API_KEY");
   expect(emailScheduled).not.toContain("TWILIO");

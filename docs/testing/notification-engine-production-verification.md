@@ -19,7 +19,12 @@ The supported notification event catalogue is:
 11. `order_ready_for_pickup`
 12. `order_completed`
 
-Only `quote_approved` is approved for authoritative external email cutover. All other events may be evaluated in Verify mode but must fall back to Legacy behavior if Authoritative mode is selected. SMS and Twilio are outside this plan.
+Only `quote_approved` is approved for authoritative external email cutover under
+this plan. All other events may be evaluated in Verify mode but must fall back
+to Legacy behavior if Authoritative mode is selected. Authoritative SMS is
+governed separately by the
+[Notification Engine SMS Authoritative Cutover](../operations/notification-engine-sms-authoritative-cutover.md)
+and remains disabled until that procedure's entry gates pass.
 
 ## Verification principles
 
@@ -314,6 +319,11 @@ Cut over only `quote_approved`.
 - [ ] Owner and stop authority approve cutover.
 
 ### Controlled activation
+
+For an approved SMS cutover, complete the separate
+[SMS Authoritative Cutover procedure](../operations/notification-engine-sms-authoritative-cutover.md).
+Its SMS server gate must be validated while this client remains in Verify mode
+before proceeding with the global Authoritative client switch.
 
 1. Pause controlled Order Approved workflow actions for the configuration transition.
 2. Keep the deployed client in Verify mode.

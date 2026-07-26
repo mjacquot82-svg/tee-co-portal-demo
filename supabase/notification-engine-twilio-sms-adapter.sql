@@ -79,6 +79,13 @@ begin
         (notification.engine_metadata ->> 'observationOnly')::boolean,
         true
       )
+      and coalesce(
+        (
+          notification.engine_metadata
+            #>> '{phase2D,dispatcherEligible}'
+        )::boolean,
+        false
+      )
       and not coalesce(
         (delivery.destination_snapshot ->> 'observationOnly')::boolean,
         true
@@ -168,6 +175,13 @@ begin
       and not coalesce(
         (notification.engine_metadata ->> 'observationOnly')::boolean,
         true
+      )
+      and coalesce(
+        (
+          notification.engine_metadata
+            #>> '{phase2D,dispatcherEligible}'
+        )::boolean,
+        false
       )
       and not coalesce(
         (delivery.destination_snapshot ->> 'observationOnly')::boolean,
@@ -297,6 +311,13 @@ begin
         and not coalesce(
           (notification.engine_metadata ->> 'observationOnly')::boolean,
           true
+        )
+        and coalesce(
+          (
+            notification.engine_metadata
+              #>> '{phase2D,dispatcherEligible}'
+          )::boolean,
+          false
         )
     )
     or coalesce(

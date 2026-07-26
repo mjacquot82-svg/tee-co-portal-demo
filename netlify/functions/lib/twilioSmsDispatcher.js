@@ -77,9 +77,19 @@ export async function runClaimedTwilioSmsDelivery({
   envelope,
   adapter,
   dispatcherClient,
+  cutoverEnabled = false,
   retryPolicy,
   now = () => new Date(),
 }) {
+  if (cutoverEnabled !== true) {
+    throw new Error("Authoritative SMS cutover is disabled.");
+  }
+  if (
+    envelope?.notification?.engine_metadata?.phase2D
+      ?.dispatcherEligible !== true
+  ) {
+    throw new Error("SMS Delivery is not dispatcher eligible.");
+  }
   if (adapter?.key !== "twilio" || typeof adapter.send !== "function") {
     throw new Error("A configured Twilio SMS adapter is required.");
   }
@@ -116,6 +126,7 @@ export async function runClaimedTwilioSmsDelivery({
 }
 
 export async function runScheduledTwilioSmsDispatcher({
+  cutoverEnabled = false,
   runId,
   workerId,
   adapter,
@@ -126,6 +137,19 @@ export async function runScheduledTwilioSmsDispatcher({
   retryPolicy,
   now = () => new Date(),
 }) {
+  if (cutoverEnabled !== true) {
+    return {
+      executed: false,
+      gateEnabled: false,
+      reason: "sms_cutover_disabled",
+      recoveredCount: 0,
+      claimedCount: 0,
+      completedCount: 0,
+      failedCount: 0,
+      errors: [],
+      results: [],
+    };
+  }
   const resolvedRunId = normalizeText(runId);
   const resolvedWorkerId = normalizeText(workerId);
   if (!resolvedRunId || !resolvedWorkerId) {
@@ -169,6 +193,7 @@ export async function runScheduledTwilioSmsDispatcher({
       try {
         completed.push(
           await runClaimedTwilioSmsDelivery({
+            cutoverEnabled,
             envelope,
             adapter,
             dispatcherClient,

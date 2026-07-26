@@ -17,6 +17,10 @@ function json(statusCode, body) {
   };
 }
 
+function enabled(value) {
+  return String(value ?? "").trim().toLowerCase() === "true";
+}
+
 function buildServiceRoleClient({ supabaseUrl, serviceRoleKey }) {
   return {
     async rpc(name, parameters) {
@@ -43,6 +47,17 @@ function buildServiceRoleClient({ supabaseUrl, serviceRoleKey }) {
 }
 
 export async function handler(event = {}) {
+  const cutoverEnabled = enabled(
+    process.env.NOTIFICATION_ENGINE_SMS_CUTOVER
+  );
+  if (!cutoverEnabled) {
+    return json(200, {
+      executed: false,
+      gateEnabled: false,
+      reason: "sms_cutover_disabled",
+    });
+  }
+
   const accountSid = String(process.env.TWILIO_ACCOUNT_SID || "").trim();
   const authToken = String(process.env.TWILIO_AUTH_TOKEN || "").trim();
   const from = getConfiguredTwilioFromNumber();
@@ -75,6 +90,7 @@ export async function handler(event = {}) {
 
   try {
     const result = await runScheduledTwilioSmsDispatcher({
+      cutoverEnabled,
       runId,
       workerId,
       adapter: createTwilioSmsAdapter({
