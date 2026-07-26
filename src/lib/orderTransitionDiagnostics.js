@@ -7,8 +7,6 @@ export function recordOrderTransitionDiagnostic(stage, details = {}) {
     recorded_at: new Date().toISOString(),
   };
 
-  console.info("[order-transition-diagnostic]", entry);
-
   if (typeof window === "undefined") return entry;
 
   const current = Array.isArray(window.__TEE_CO_ORDER_TRANSITION_DIAGNOSTICS__)
@@ -19,8 +17,8 @@ export function recordOrderTransitionDiagnostic(stage, details = {}) {
 
   try {
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  } catch (error) {
-    console.info("[order-transition-diagnostic] session cache unavailable", error);
+  } catch {
+    // Temporary diagnostics are best-effort and must not affect the workflow.
   }
 
   return entry;

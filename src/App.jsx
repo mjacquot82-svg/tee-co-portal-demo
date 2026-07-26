@@ -47,6 +47,7 @@ import NotificationPolicies from "./admin/NotificationPolicies";
 import NotificationActivity from "./admin/NotificationActivity";
 import StaffNotifications from "./admin/StaffNotifications";
 import TemporaryOrderExport from "./admin/TemporaryOrderExport";
+import OrderTransitionDiagnostics from "./admin/OrderTransitionDiagnostics";
 import AppSplash from "./components/AppSplash";
 import ScrollToTop from "./components/ScrollToTop";
 
@@ -120,6 +121,10 @@ export default function App() {
             <Route
               path="admin/settings/order-export"
               element={<TemporaryOrderExport />}
+            />
+            <Route
+              path="admin/order-transition-diagnostics"
+              element={<OrderTransitionDiagnostics />}
             />
             <Route
               path="admin/notifications"
