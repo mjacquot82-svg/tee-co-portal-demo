@@ -389,7 +389,14 @@ function publishOrdersSnapshot(orders, options = {}) {
   cachedOrdersRaw = JSON.stringify(normalizedOrders);
 
   if (writeStorage && hasBrowserStorage()) {
-    setRawStorageItem(STORAGE_KEY, cachedOrdersRaw);
+    const snapshotWasStored = setRawStorageItem(STORAGE_KEY, cachedOrdersRaw);
+
+    if (!snapshotWasStored) {
+      // Supabase is authoritative. If the browser cache is over quota, keep the
+      // freshly published in-memory snapshot instead of letting the next read
+      // replace it with the older localStorage value.
+      cachedOrdersRaw = getRawStorageItem(STORAGE_KEY) || "";
+    }
   }
 
   if (emit) {
