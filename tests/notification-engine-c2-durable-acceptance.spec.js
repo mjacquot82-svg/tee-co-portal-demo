@@ -27,6 +27,23 @@ test("quote approval trigger durably inserts its business event in legacy cutove
   const originalUrl = process.env.SUPABASE_URL;
   const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const persistedBusinessEvents = [];
+  const persistedNotifications = [];
+  const policy = {
+    id: "policy:quote_approved:v1",
+    event_type: "quote_approved",
+    version: 1,
+    enabled: true,
+    delivery_mode: "automatic",
+    email_enabled: true,
+    sms_enabled: true,
+    staff_notification_enabled: false,
+    customer_audience_enabled: true,
+    staff_audience_enabled: false,
+    owner_audience_enabled: false,
+    channel_template_assignments: {},
+    effective_from: "2026-01-01T00:00:00.000Z",
+    effective_to: null,
+  };
 
   process.env.SUPABASE_URL = "https://example.supabase.co";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
@@ -52,6 +69,14 @@ test("quote approval trigger durably inserts its business event in legacy cutove
         json: async () => [row],
       };
     }
+    if (String(url).includes("/rest/v1/notification_policies")) {
+      return { ok: true, status: 200, json: async () => [policy] };
+    }
+    if (String(url).includes("/rest/v1/notifications")) {
+      const row = JSON.parse(options.body);
+      persistedNotifications.push(row);
+      return { ok: true, status: 201, json: async () => [row] };
+    }
     return { ok: true, status: 200, json: async () => ({ delivered: true }) };
   };
 
@@ -76,6 +101,14 @@ test("quote approval trigger durably inserts its business event in legacy cutove
       subject_type: "order",
       subject_id: "order-c2-trigger",
       correlation_id: "order:TC-C2-TRIGGER",
+    });
+    expect(persistedNotifications).toHaveLength(1);
+    expect(persistedNotifications[0]).toMatchObject({
+      business_event_id: persistedBusinessEvents[0].id,
+      event_type: "quote_approved",
+      correlation_id: "order:TC-C2-TRIGGER",
+      policy_id: policy.id,
+      status: "evaluated",
     });
   } finally {
     globalThis.fetch = originalFetch;
@@ -121,7 +154,10 @@ test("durable ingress accepts through service-role persistence without mutating 
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
   globalThis.fetch = async (url, options = {}) => {
     calls.push({ url: String(url), options });
-    if (options.method === "POST") {
+    if (
+      String(url).includes("/notification_business_events") &&
+      options.method === "POST"
+    ) {
       return {
         ok: true,
         async json() {
@@ -129,10 +165,42 @@ test("durable ingress accepts through service-role persistence without mutating 
         },
       };
     }
+    if (String(url).includes("/notification_business_events")) {
+      return {
+        ok: true,
+        async json() {
+          return [businessEvent];
+        },
+      };
+    }
+    if (String(url).includes("/notification_policies")) {
+      return {
+        ok: true,
+        async json() {
+          return [{
+            id: "policy:quote_approved:v1",
+            event_type: "quote_approved",
+            version: 1,
+            enabled: true,
+            delivery_mode: "automatic",
+            email_enabled: true,
+            sms_enabled: false,
+            staff_notification_enabled: false,
+            customer_audience_enabled: true,
+            staff_audience_enabled: false,
+            owner_audience_enabled: false,
+            channel_template_assignments: {},
+            effective_from: "2026-01-01T00:00:00.000Z",
+            effective_to: null,
+          }];
+        },
+      };
+    }
     return {
       ok: true,
       async json() {
-        return [businessEvent];
+        const notification = JSON.parse(options.body);
+        return [notification];
       },
     };
   };
@@ -144,11 +212,18 @@ test("durable ingress accepts through service-role persistence without mutating 
     });
     expect(response.statusCode).toBe(200);
     expect(JSON.parse(response.body).businessEvent).toEqual(businessEvent);
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(4);
     expect(calls[0].options.headers.Prefer).toContain(
       "resolution=ignore-duplicates"
     );
     expect(calls[1].url).toContain("occurrence_id=eq.");
+    expect(calls[2].url).toContain("/notification_policies?");
+    expect(calls[3].url).toContain("/notifications?on_conflict=");
+    expect(JSON.parse(calls[3].options.body)).toMatchObject({
+      business_event_id: businessEvent.id,
+      correlation_id: businessEvent.correlation_id,
+      status: "evaluated",
+    });
     expect(calls[0].options.headers.Authorization).toBe("Bearer service-role");
   } finally {
     globalThis.fetch = originalFetch;

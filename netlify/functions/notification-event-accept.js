@@ -39,6 +39,131 @@ function restHeaders(serviceRoleKey, prefer = "") {
   };
 }
 
+async function readJson(response) {
+  return response.json().catch(() => []);
+}
+
+function notificationDecision(policy) {
+  if (!policy.enabled || policy.delivery_mode === "disabled") {
+    return {
+      status: "no_delivery",
+      noDeliveryReason: "policy_disabled",
+    };
+  }
+  if (policy.delivery_mode === "approval_required") {
+    return {
+      status: "pending_approval",
+      noDeliveryReason: "",
+    };
+  }
+  if (
+    !policy.email_enabled &&
+    !policy.sms_enabled &&
+    !policy.staff_notification_enabled
+  ) {
+    return {
+      status: "no_delivery",
+      noDeliveryReason: "no_channels_enabled",
+    };
+  }
+  return {
+    status: "evaluated",
+    noDeliveryReason: "",
+  };
+}
+
+async function generateNotificationForAcceptedEvent({
+  accepted,
+  supabaseUrl,
+  serviceRoleKey,
+}) {
+  const policyQuery = new URLSearchParams({
+    select: "*",
+    event_type: `eq.${accepted.event_type}`,
+    effective_to: "is.null",
+    effective_from: `lte.${accepted.occurred_at}`,
+    order: "version.desc",
+    limit: "1",
+  });
+  const policyResponse = await fetch(
+    `${supabaseUrl}/rest/v1/notification_policies?${policyQuery}`,
+    { headers: restHeaders(serviceRoleKey) }
+  );
+  const policies = await readJson(policyResponse);
+  if (!policyResponse.ok) {
+    throw new Error(
+      policies?.message || "Unable to resolve Notification Policy."
+    );
+  }
+  const policy = Array.isArray(policies) ? policies[0] : policies;
+  if (!policy?.id) {
+    throw new Error(
+      `No Notification Policy exists for ${accepted.event_type}.`
+    );
+  }
+
+  const decision = notificationDecision(policy);
+  const notification = {
+    id: `notification:${accepted.id}:${policy.id}:v${policy.version}`,
+    business_event_id: accepted.id,
+    event_type: accepted.event_type,
+    subject_type: accepted.subject_type,
+    subject_id: accepted.subject_id,
+    correlation_id: accepted.correlation_id,
+    policy_id: policy.id,
+    policy_version: policy.version,
+    policy_snapshot: {
+      id: policy.id,
+      event_type: policy.event_type,
+      version: policy.version,
+      enabled: Boolean(policy.enabled),
+      delivery_mode: policy.delivery_mode,
+      email_enabled: Boolean(policy.email_enabled),
+      sms_enabled: Boolean(policy.sms_enabled),
+      staff_notification_enabled: Boolean(policy.staff_notification_enabled),
+      customer_audience_enabled: Boolean(policy.customer_audience_enabled),
+      staff_audience_enabled: Boolean(policy.staff_audience_enabled),
+      owner_audience_enabled: Boolean(policy.owner_audience_enabled),
+      channel_template_assignments: policy.channel_template_assignments || {},
+      effective_from: policy.effective_from,
+      effective_to: policy.effective_to,
+    },
+    delivery_mode: policy.delivery_mode,
+    status: decision.status,
+    no_delivery_reason: decision.noDeliveryReason,
+    engine_metadata: {
+      observationOnly: true,
+      legacyRuntimeAuthoritative: true,
+      cutoverMode: "legacy",
+      deliveriesDeferredUntilPhase2C: true,
+    },
+  };
+  const notificationResponse = await fetch(
+    `${supabaseUrl}/rest/v1/notifications?on_conflict=business_event_id,policy_id,policy_version`,
+    {
+      method: "POST",
+      headers: restHeaders(
+        serviceRoleKey,
+        "resolution=merge-duplicates,return=representation"
+      ),
+      body: JSON.stringify(notification),
+    }
+  );
+  const notifications = await readJson(notificationResponse);
+  if (!notificationResponse.ok) {
+    throw new Error(
+      notifications?.message || "Unable to persist Notification."
+    );
+  }
+  const persisted = Array.isArray(notifications)
+    ? notifications[0]
+    : notifications;
+  if (!persisted?.id) {
+    throw new Error("Notification persistence returned no durable identity.");
+  }
+  return persisted;
+}
+
 function validateBusinessEvent(value = {}) {
   const row = {
     id: normalizeText(value.id),
@@ -141,5 +266,22 @@ export async function handler(event) {
   if (!accepted?.id) {
     return json(502, { error: "Business Event acceptance returned no durable identity." });
   }
-  return json(200, { accepted: true, businessEvent: accepted });
+  let notification;
+  try {
+    notification = await generateNotificationForAcceptedEvent({
+      accepted,
+      supabaseUrl,
+      serviceRoleKey,
+    });
+  } catch (error) {
+    return json(502, {
+      error: error?.message || "Unable to generate Notification.",
+      businessEvent: accepted,
+    });
+  }
+  return json(200, {
+    accepted: true,
+    businessEvent: accepted,
+    notification,
+  });
 }
