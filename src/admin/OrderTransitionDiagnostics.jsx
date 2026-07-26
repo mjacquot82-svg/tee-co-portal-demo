@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
-import { restoreOrderTransitionDiagnostics } from "../lib/orderTransitionDiagnostics";
-
-const STORAGE_KEY = "teeCoOrderTransitionDiagnostics";
+import { useEffect, useMemo, useState } from "react";
+import {
+  clearOrderTransitionDiagnostics,
+  restoreOrderTransitionDiagnostics,
+} from "../lib/orderTransitionDiagnostics";
 
 export default function OrderTransitionDiagnostics() {
-  const [entries, setEntries] = useState(() => restoreOrderTransitionDiagnostics());
+  const [entries, setEntries] = useState([]);
   const [orderNumber, setOrderNumber] = useState("");
   const [copyStatus, setCopyStatus] = useState("");
   const filteredEntries = useMemo(() => {
@@ -18,14 +19,17 @@ export default function OrderTransitionDiagnostics() {
   }, [entries, orderNumber]);
   const output = JSON.stringify(filteredEntries, null, 2);
 
-  function refresh() {
-    setEntries([...restoreOrderTransitionDiagnostics()]);
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  async function refresh() {
+    setEntries([...(await restoreOrderTransitionDiagnostics())]);
     setCopyStatus("");
   }
 
-  function clear() {
-    window.localStorage.removeItem(STORAGE_KEY);
-    window.__TEE_CO_ORDER_TRANSITION_DIAGNOSTICS__ = [];
+  async function clear() {
+    await clearOrderTransitionDiagnostics();
     setEntries([]);
     setCopyStatus("Diagnostics cleared.");
   }
@@ -45,7 +49,7 @@ export default function OrderTransitionDiagnostics() {
         <p style={{ margin: 0, color: "#64748b", fontWeight: 800 }}>Temporary Diagnostics</p>
         <h1 style={{ margin: "6px 0" }}>Order Transition Trace</h1>
         <p style={{ margin: 0, color: "#475569" }}>
-          This page displays diagnostics captured in this browser tab for the Ready For Production workflow.
+          This page displays diagnostics captured in this browser for the Ready For Production workflow.
         </p>
       </header>
 
