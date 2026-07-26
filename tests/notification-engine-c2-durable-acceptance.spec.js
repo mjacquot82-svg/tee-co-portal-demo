@@ -284,6 +284,7 @@ test("verify ingress creates exactly the policy-enabled idempotent shadow delive
   const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const originalMode = process.env.VITE_NOTIFICATION_ENGINE_CUTOVER_MODE;
   const deliveries = new Map();
+  const staffQueries = [];
   let notification = null;
   const acceptedEvent = {
     ...businessEvent,
@@ -388,6 +389,7 @@ test("verify ingress creates exactly the policy-enabled idempotent shadow delive
       };
     }
     if (requestUrl.includes("/staff_users?")) {
+      staffQueries.push(requestUrl);
       return {
         ok: true,
         status: 200,
@@ -395,7 +397,7 @@ test("verify ingress creates exactly the policy-enabled idempotent shadow delive
           id: "staff-verify",
           name: "Sam Staff",
           role: "Staff",
-          status: "Active",
+          active: true,
         }],
       };
     }
@@ -443,6 +445,13 @@ test("verify ingress creates exactly the policy-enabled idempotent shadow delive
     }
     expect([...deliveries.values()].map((delivery) => delivery.provider_key))
       .toEqual(["resend", "twilio", "staff_internal"]);
+    expect(staffQueries).toHaveLength(2);
+    expect(staffQueries.every((url) => url.includes("active"))).toBe(true);
+    expect(staffQueries.every((url) => !url.includes("status"))).toBe(true);
+    expect(
+      [...deliveries.values()].find((delivery) => delivery.channel === "staff")
+        .recipient_snapshot.status
+    ).toBe("Active");
     expect(deliveries.get([...deliveries.keys()][0]).destination_snapshot.email)
       .toBe("taylor@example.com");
     expect(

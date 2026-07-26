@@ -118,16 +118,16 @@ async function resolveStaff({
     order?.assigned_to_staff_user_id || order?.assigned_to_staff_id
   );
   const query = new URLSearchParams({
-    select: "id,name,role,status",
+    select: "id,name,role,active",
     limit: "1",
   });
   if (assignedId) {
     query.set("id", `eq.${assignedId}`);
   } else if (policy.owner_audience_enabled && !policy.staff_audience_enabled) {
     query.set("role", "eq.Owner");
-    query.set("status", "neq.Inactive");
+    query.set("active", "eq.true");
   } else {
-    query.set("status", "neq.Inactive");
+    query.set("active", "eq.true");
     query.set("order", "created_at.asc");
   }
   return selectOne({
@@ -249,7 +249,12 @@ function deliveryTarget({ channel, accepted, order, customer, staff }) {
       id: staffId,
       name: normalizeText(staff?.name),
       role: normalizeText(staff?.role),
-      status: normalizeText(staff?.status),
+      status:
+        typeof staff?.active === "boolean"
+          ? staff.active
+            ? "Active"
+            : "Inactive"
+          : normalizeText(staff?.status),
       audience,
     },
     destinationKey:
