@@ -8,7 +8,10 @@ import {
   buildTwilioSmsAdapterRequest,
   runScheduledTwilioSmsDispatcher,
 } from "../netlify/functions/lib/twilioSmsDispatcher.js";
-import { handler as scheduledSmsHandler } from "../netlify/functions/notification-sms-dispatcher-scheduled.js";
+import scheduledSmsDispatcher, {
+  config as scheduledSmsConfig,
+  handler as scheduledSmsHandler,
+} from "../netlify/functions/notification-sms-dispatcher-scheduled.js";
 import { decideDeliveryFailureTransition } from "../src/lib/notificationDeliveryLifecycle.js";
 import { NOTIFICATION_DISPATCHER_RPCS } from "../src/lib/notificationDispatcherRepository.js";
 
@@ -564,6 +567,38 @@ test("SMS cutover gate fails closed before runs, claims, or provider invocation"
     });
     expect(response.statusCode).toBe(200);
     expect(JSON.parse(response.body)).toEqual({
+      executed: false,
+      gateEnabled: false,
+      reason: "sms_cutover_disabled",
+    });
+  } finally {
+    if (originalGate === undefined) {
+      delete process.env.NOTIFICATION_ENGINE_SMS_CUTOVER;
+    } else {
+      process.env.NOTIFICATION_ENGINE_SMS_CUTOVER = originalGate;
+    }
+  }
+});
+
+test("SMS dispatcher uses Netlify's canonical scheduled-function entrypoint", async () => {
+  expect(scheduledSmsConfig).toEqual({ schedule: "* * * * *" });
+
+  const originalGate = process.env.NOTIFICATION_ENGINE_SMS_CUTOVER;
+  delete process.env.NOTIFICATION_ENGINE_SMS_CUTOVER;
+  try {
+    const response = await scheduledSmsDispatcher(
+      new Request(
+        "https://example.netlify.app/.netlify/functions/notification-sms-dispatcher-scheduled",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            next_run: "2026-07-25T12:01:00.000Z",
+          }),
+        }
+      )
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
       executed: false,
       gateEnabled: false,
       reason: "sms_cutover_disabled",
