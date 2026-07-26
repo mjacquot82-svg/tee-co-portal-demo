@@ -264,6 +264,8 @@ test("durable ingress accepts through service-role persistence without mutating 
       "persist_notification:called",
       "persist_notification:returned",
       "persist_notification:durable_identity",
+      "phase2c_phase2d:started",
+      "phase2c_phase2d:completed",
       "notification_event_accept:completed",
     ]);
     expect(calls[0].options.headers.Authorization).toBe("Bearer service-role");
@@ -273,6 +275,201 @@ test("durable ingress accepts through service-role persistence without mutating 
     else process.env.SUPABASE_URL = originalUrl;
     if (originalKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     else process.env.SUPABASE_SERVICE_ROLE_KEY = originalKey;
+  }
+});
+
+test("verify ingress creates exactly the policy-enabled idempotent shadow deliveries", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalUrl = process.env.SUPABASE_URL;
+  const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const originalMode = process.env.VITE_NOTIFICATION_ENGINE_CUTOVER_MODE;
+  const deliveries = new Map();
+  let notification = null;
+  const acceptedEvent = {
+    ...businessEvent,
+    subject_id: "order-c2-verify",
+    payload: {
+      legacyNotificationContext: {
+        orderNumber: "TC-C2-VERIFY",
+        customerReference: "customer-verify",
+      },
+    },
+  };
+  const policy = {
+    id: "policy:quote_approved:v3",
+    event_type: "quote_approved",
+    version: 3,
+    enabled: true,
+    delivery_mode: "automatic",
+    email_enabled: true,
+    sms_enabled: true,
+    staff_notification_enabled: true,
+    customer_audience_enabled: true,
+    staff_audience_enabled: true,
+    owner_audience_enabled: false,
+    channel_template_assignments: {
+      email: "quote_approved:v7",
+      sms: "quote_approved:v7",
+      staff: "quote_approved:v7",
+    },
+    effective_from: "2026-01-01T00:00:00.000Z",
+    effective_to: null,
+  };
+  const template = {
+    id: "quote_approved:v7",
+    template_type: "quote_approved",
+    version: 7,
+    status: "published",
+    email_subject: "Approved: {{order_number}}",
+    email_body:
+      "Hi {{customer_name}}, {{order_number}} is approved by {{company_name}}.",
+    sms_message: "{{order_number}} approved for {{customer_name}}.",
+  };
+
+  process.env.SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+  process.env.VITE_NOTIFICATION_ENGINE_CUTOVER_MODE = "verify";
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url);
+    if (
+      requestUrl.includes("/notification_business_events") &&
+      options.method === "PATCH"
+    ) {
+      return { ok: true, status: 204, json: async () => [] };
+    }
+    if (
+      requestUrl.includes("/notification_business_events") &&
+      options.method === "POST"
+    ) {
+      return { ok: true, status: 201, json: async () => [acceptedEvent] };
+    }
+    if (requestUrl.includes("/notification_policies")) {
+      return { ok: true, status: 200, json: async () => [policy] };
+    }
+    if (
+      requestUrl.includes("/notifications?on_conflict=") &&
+      options.method === "POST"
+    ) {
+      notification = JSON.parse(options.body);
+      return { ok: true, status: 201, json: async () => [notification] };
+    }
+    if (
+      requestUrl.includes("/notifications?id=eq.") &&
+      options.method === "PATCH"
+    ) {
+      notification = { ...notification, ...JSON.parse(options.body) };
+      return { ok: true, status: 200, json: async () => [notification] };
+    }
+    if (requestUrl.includes("/orders?")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [{
+          id: "order-c2-verify",
+          order_number: "TC-C2-VERIFY",
+          customer_id: "customer-verify",
+          customer_name: "Taylor Verify",
+          customer_email: "fallback@example.com",
+          customer_phone: "+1 555 000 1111",
+          assigned_to_staff_user_id: "staff-verify",
+        }],
+      };
+    }
+    if (requestUrl.includes("/customers?")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [{
+          id: "customer-verify",
+          name: "Taylor Verify",
+          email: "taylor@example.com",
+          phone: "+1 (555) 010-2000",
+        }],
+      };
+    }
+    if (requestUrl.includes("/staff_users?")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [{
+          id: "staff-verify",
+          name: "Sam Staff",
+          role: "Staff",
+          status: "Active",
+        }],
+      };
+    }
+    if (requestUrl.includes("/notification_template_versions?")) {
+      return { ok: true, status: 200, json: async () => [template] };
+    }
+    if (
+      requestUrl.includes("/notification_deliveries?on_conflict=") &&
+      options.method === "POST"
+    ) {
+      const row = JSON.parse(options.body);
+      deliveries.set(row.idempotency_key, row);
+      return { ok: true, status: 201, json: async () => [row] };
+    }
+    throw new Error(`Unexpected request: ${requestUrl}`);
+  };
+
+  try {
+    const request = {
+      httpMethod: "POST",
+      body: JSON.stringify({ businessEvent: acceptedEvent }),
+    };
+    const first = await handler(request);
+    const second = await handler(request);
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    expect(deliveries.size).toBe(3);
+    expect([...deliveries.values()].map((delivery) => delivery.channel)).toEqual([
+      "email",
+      "sms",
+      "staff",
+    ]);
+    for (const delivery of deliveries.values()) {
+      expect(delivery).toMatchObject({
+        template_version_id: "quote_approved:v7",
+        template_version: 7,
+        attempt_count: 0,
+        provider_message_id: "",
+        destination_snapshot: {
+          observationOnly: true,
+          dispatcherEligible: false,
+        },
+      });
+      expect(delivery.idempotency_key).toBe(delivery.id);
+    }
+    expect([...deliveries.values()].map((delivery) => delivery.provider_key))
+      .toEqual(["resend", "twilio", "staff_internal"]);
+    expect(deliveries.get([...deliveries.keys()][0]).destination_snapshot.email)
+      .toBe("taylor@example.com");
+    expect(
+      [...deliveries.values()].find((delivery) => delivery.channel === "sms")
+        .destination_snapshot.normalizedPhone
+    ).toBe("15550102000");
+    expect(notification.engine_metadata).toMatchObject({
+      observationOnly: true,
+      cutoverMode: "verify",
+      deliveriesDeferredUntilPhase2C: false,
+      phase2D: {
+        observationOnly: true,
+        dispatcherEligible: false,
+        deliveryCount: 3,
+      },
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = originalUrl;
+    if (originalKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = originalKey;
+    if (originalMode === undefined) {
+      delete process.env.VITE_NOTIFICATION_ENGINE_CUTOVER_MODE;
+    } else {
+      process.env.VITE_NOTIFICATION_ENGINE_CUTOVER_MODE = originalMode;
+    }
   }
 });
 

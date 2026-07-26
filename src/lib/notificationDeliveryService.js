@@ -319,10 +319,7 @@ function queuePhase2BObservation(eventType, context, template) {
 }
 
 function acceptRequiredBusinessEvent(eventType, context, cutover) {
-  if (
-    eventType !== NOTIFICATION_TYPES.quoteApproved ||
-    cutover.runEngine
-  ) {
+  if (eventType !== NOTIFICATION_TYPES.quoteApproved) {
     return null;
   }
 
@@ -427,13 +424,13 @@ export function triggerNotificationEvent(eventType, context = {}) {
     (record) => record.metadata?.idempotencyKey === idempotencyKey
   );
   if (existingRecords.length) {
+    if (requiredBusinessEventAcceptance) {
+      return requiredBusinessEventAcceptance.then(() => existingRecords);
+    }
     if (cutover.runEngine) {
       return queuePhase2BObservation(eventType, context, template).then(
         () => existingRecords
       );
-    }
-    if (requiredBusinessEventAcceptance) {
-      return requiredBusinessEventAcceptance.then(() => existingRecords);
     }
     return existingRecords;
   }
@@ -479,13 +476,13 @@ export function triggerNotificationEvent(eventType, context = {}) {
   if (eventType === NOTIFICATION_TYPES.quoteApproved) {
     queueCustomerEmailDelivery(records[0]);
   }
+  if (requiredBusinessEventAcceptance) {
+    return requiredBusinessEventAcceptance.then(() => records);
+  }
   if (cutover.runEngine) {
     return queuePhase2BObservation(eventType, context, template).then(
       () => records
     );
-  }
-  if (requiredBusinessEventAcceptance) {
-    return requiredBusinessEventAcceptance.then(() => records);
   }
   return records;
 }
