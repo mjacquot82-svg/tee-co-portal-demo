@@ -9,6 +9,15 @@ export const config = {
   schedule: "* * * * *",
 };
 
+export default async function scheduledSmsDispatcher(request) {
+  const event = await request.json().catch(() => ({}));
+  const response = await handler(event);
+  return new Response(response.body, {
+    status: response.statusCode,
+    headers: response.headers,
+  });
+}
+
 function json(statusCode, body) {
   return {
     statusCode,
