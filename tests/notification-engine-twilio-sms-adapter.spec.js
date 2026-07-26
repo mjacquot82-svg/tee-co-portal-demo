@@ -14,6 +14,7 @@ import scheduledSmsDispatcher, {
 } from "../netlify/functions/notification-sms-dispatcher-scheduled.js";
 import { decideDeliveryFailureTransition } from "../src/lib/notificationDeliveryLifecycle.js";
 import { NOTIFICATION_DISPATCHER_RPCS } from "../src/lib/notificationDispatcherRepository.js";
+import { normalizeNorthAmericanPhoneE164 } from "../src/lib/phoneNormalization.js";
 
 const NOW = "2026-07-25T12:00:00.000Z";
 const ACCOUNT_SID = "AC11111111111111111111111111111111";
@@ -276,6 +277,48 @@ test("Twilio adapter sends stored destination and body and returns Message SID",
     idempotencyKey: "idempotency:sms-1",
     twilioStatus: "queued",
   });
+});
+
+test("North American SMS destinations persist and send as canonical E.164", async () => {
+  const formats = [
+    "519-881-6869",
+    "(519) 881-6869",
+    "1-519-881-6869",
+    "+1 519-881-6869",
+  ];
+
+  for (const phone of formats) {
+    const calls = [];
+    const normalizedPhone = normalizeNorthAmericanPhoneE164(phone);
+    const adapter = createTwilioSmsAdapter({
+      accountSid: ACCOUNT_SID,
+      authToken: AUTH_TOKEN,
+      from: FROM,
+      async fetchImpl(url, options) {
+        calls.push({ url, options });
+        return response(201, {
+          sid: MESSAGE_SID,
+          status: "queued",
+        });
+      },
+    });
+
+    expect(normalizedPhone).toBe("+15198816869");
+    await expect(
+      adapter.send({
+        deliveryId: `delivery:${phone}`,
+        idempotencyKey: `idempotency:${phone}`,
+        destination: { phone, normalizedPhone },
+        content: { body: "Canonical destination test." },
+      })
+    ).resolves.toMatchObject({
+      status: "sent",
+      providerMessageId: MESSAGE_SID,
+    });
+    expect(
+      new URLSearchParams(calls[0].options.body).get("To")
+    ).toBe("+15198816869");
+  }
 });
 
 test("Twilio adapter normalizes retryable, terminal, and indeterminate outcomes", async () => {

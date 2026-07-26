@@ -4,6 +4,7 @@ import {
   getStoredStaffUsers,
   isProtectedStaffUser,
 } from "./staffUsersStore";
+import { normalizeNorthAmericanPhoneE164 } from "./phoneNormalization.js";
 
 function normalizeText(value) {
   return String(value ?? "").trim();
@@ -145,7 +146,7 @@ function destinationFor(channel, candidate) {
 
   if (channel === "sms") {
     const phone = normalizeText(candidate.snapshot.phone);
-    const normalizedPhone = phone.replace(/\D/g, "");
+    const normalizedPhone = normalizeNorthAmericanPhoneE164(phone);
     return {
       destinationKey:
         normalizedPhone || `missing:phone:${candidate.recipientKey}`,
