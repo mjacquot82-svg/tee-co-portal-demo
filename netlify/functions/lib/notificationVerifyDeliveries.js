@@ -1,3 +1,5 @@
+import { normalizeNorthAmericanPhoneE164 } from "../../../src/lib/phoneNormalization.js";
+
 const CHANNELS = ["email", "sms", "staff"];
 const MATERIALIZATION_MODES = new Set(["verify", "authoritative"]);
 
@@ -216,7 +218,7 @@ function deliveryTarget({ channel, accepted, order, customer, staff }) {
   }
   if (channel === "sms") {
     const phone = normalizeText(customer?.phone || order?.customer_phone);
-    const normalizedPhone = phone.replace(/\D/g, "");
+    const normalizedPhone = normalizeNorthAmericanPhoneE164(phone);
     const recipientKey = normalizeText(
       customer?.id || order?.customer_id || `order:${accepted.subject_id}`
     );

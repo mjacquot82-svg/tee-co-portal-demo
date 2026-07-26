@@ -458,7 +458,7 @@ test("verify ingress creates exactly the policy-enabled idempotent shadow delive
     expect(
       [...deliveries.values()].find((delivery) => delivery.channel === "sms")
         .destination_snapshot.normalizedPhone
-    ).toBe("15550102000");
+    ).toBe("+15550102000");
     expect(notification.engine_metadata).toMatchObject({
       observationOnly: true,
       cutoverMode: "verify",
@@ -627,6 +627,10 @@ test("authoritative quote approval creates exactly three idempotent dispatcher-e
       });
       expect(delivery.idempotency_key).toBe(delivery.id);
     }
+    expect(
+      [...deliveries.values()].find((delivery) => delivery.channel === "sms")
+        .destination_snapshot.normalizedPhone
+    ).toBe("+15550103000");
     expect(finalizedNotification.engine_metadata).toMatchObject({
       observationOnly: false,
       legacyRuntimeAuthoritative: false,
