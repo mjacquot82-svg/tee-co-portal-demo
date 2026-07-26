@@ -13,6 +13,7 @@ import {
 } from "../lib/orderArtwork";
 import { getOrderLineItems } from "../lib/orderLineItems";
 import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
+import { recordOrderTransitionDiagnostic } from "../lib/orderTransitionDiagnostics";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
 import {
@@ -1498,6 +1499,10 @@ export default function QuoteDetail() {
 
   async function handleMarkDepositNotRequired() {
     if (archived || canceled) return;
+
+    recordOrderTransitionDiagnostic("handleMarkDepositNotRequired:executed", {
+      order_number: order.order_number,
+    });
 
     const depositUpdates = {
       deposit_required: false,

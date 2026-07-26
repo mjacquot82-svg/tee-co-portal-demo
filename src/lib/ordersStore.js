@@ -47,6 +47,7 @@ import {
 } from "./ordersRepository";
 import { canUseLocalPersistenceFallback } from "./persistenceMode";
 import { ensureTeeCoProductionProcess } from "../integrations/teeCoProductionProcess";
+import { recordOrderTransitionDiagnostic } from "./orderTransitionDiagnostics";
 
 const STORAGE_KEY = "teeCoStaffOrders";
 const orderListeners = new Set();
@@ -150,6 +151,12 @@ function buildOrderNotificationContext(eventType, order, source = "orders_store"
 
 async function triggerOrderNotification(eventType, order, source = "orders_store") {
   if (!order) return;
+  recordOrderTransitionDiagnostic("triggerOrderNotification:called", {
+    order_number: order.order_number || "",
+    event_type: eventType,
+    correlation_id: order.order_number ? `order:${order.order_number}` : "",
+    source,
+  });
   await triggerNotificationEvent(
     eventType,
     buildOrderNotificationContext(eventType, order, source)
@@ -1551,6 +1558,12 @@ export function findStoredOrder(orderNumber) {
 }
 
 export async function updateStoredOrder(orderNumber, updates) {
+  recordOrderTransitionDiagnostic("updateStoredOrder:executed", {
+    order_number: orderNumber,
+    requested_status: updates?.status || "",
+    requested_quote_status: updates?.quote_status || "",
+    activity_type: updates?.activity_type || "",
+  });
   const currentOrders = getStoredOrders();
   const now = new Date().toISOString();
   let updatedOrder = null;
@@ -1602,7 +1615,29 @@ export async function updateStoredOrder(orderNumber, updates) {
       order.order_number === persistedOrder.order_number ? persistedOrder : order
     )
   );
-  await ensureTeeCoProductionProcess(updatedOrder);
+  try {
+    recordOrderTransitionDiagnostic("ensureTeeCoProductionProcess:started", {
+      order_number: updatedOrder.order_number,
+      status: updatedOrder.status,
+      quote_status: updatedOrder.quote_status,
+      decoration_type: updatedOrder.decoration_type || updatedOrder.production_type || "",
+    });
+    await ensureTeeCoProductionProcess(updatedOrder);
+    recordOrderTransitionDiagnostic("ensureTeeCoProductionProcess:completed", {
+      order_number: updatedOrder.order_number,
+    });
+  } catch (error) {
+    recordOrderTransitionDiagnostic("ensureTeeCoProductionProcess:threw", {
+      order_number: updatedOrder.order_number,
+      error_name: error?.name || "",
+      error_message: error?.message || String(error),
+      error_code: error?.cause?.code || error?.details?.cause?.code || error?.code || "",
+    });
+    console.error("Unable to initialize the production process for the persisted order", {
+      orderNumber: updatedOrder.order_number,
+      error,
+    });
+  }
 
   emitOperationalEventsForOrderUpdate(previousOrder, updatedOrder, updates, now);
 
@@ -1640,7 +1675,19 @@ export async function updateStoredOrder(orderNumber, updates) {
       await triggerOrderNotification(NOTIFICATION_TYPES.quoteReadyForApproval, updatedOrder);
     }
 
-    if (didOrderEnterQuoteApprovedState(previousOrder, updatedOrder)) {
+    const enteredQuoteApprovedState = didOrderEnterQuoteApprovedState(previousOrder, updatedOrder);
+    recordOrderTransitionDiagnostic("didOrderEnterQuoteApprovedState:evaluated", {
+      order_number: updatedOrder.order_number,
+      result: enteredQuoteApprovedState,
+      previous_status: previousOrder.status || "",
+      next_status: updatedOrder.status || "",
+      previous_quote_status: previousOrder.quote_status || "",
+      next_quote_status: updatedOrder.quote_status || "",
+      previous_approval_status: previousOrder.approval_status || "",
+      next_approval_status: updatedOrder.approval_status || "",
+    });
+
+    if (enteredQuoteApprovedState) {
       await triggerOrderNotification(NOTIFICATION_TYPES.quoteApproved, updatedOrder);
     }
 

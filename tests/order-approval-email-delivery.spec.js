@@ -2,6 +2,7 @@
 import { expect, test } from "@playwright/test";
 import { handler } from "../netlify/functions/customer-notification.js";
 import { didOrderEnterQuoteApprovedState } from "../src/lib/ordersStore.js";
+import { buildProductionReadyWorkflowUpdates } from "../src/quotes/productionReadiness.js";
 
 test("approval delivery verifies persisted approval and sends the customer email", async () => {
   const originalFetch = globalThis.fetch;
@@ -112,4 +113,61 @@ test("release to production emits Quote Approved when approval_status remains pe
       approval_status: "Pending Review",
     }
   )).toBe(false);
+});
+
+test("DTF deposit-not-required readiness still reaches Quote Approved when process initialization fails", async () => {
+  const previousOrder = {
+    id: "b4a95874-9b0f-45d0-ac11-3098e02ce684",
+    order_number: "TC-114648",
+    decoration_type: "DTF",
+    status: "New",
+    quote_status: "Draft",
+    staff_review_status: "Approved",
+    approval_status: "Approved",
+    artwork_status: "Approved",
+    artwork_approval_status: "Approved",
+    deposit_required: null,
+    deposit_requirement: "undecided",
+    deposit_requirement_status: "Undecided",
+    deposit_workflow_status: "Pending Decision",
+  };
+  const depositUpdates = {
+    deposit_required: false,
+    deposit_requirement: "not_required",
+    deposit_requirement_status: "Not Required",
+    deposit_workflow_status: "Deposit Not Required",
+  };
+  const readinessUpdates = buildProductionReadyWorkflowUpdates(
+    { ...previousOrder, ...depositUpdates },
+    previousOrder
+  );
+  const persistedOrder = {
+    ...previousOrder,
+    ...depositUpdates,
+    ...readinessUpdates,
+  };
+
+  expect(readinessUpdates).toMatchObject({
+    status: "Ready For Production",
+    quote_status: "Ready For Production",
+    production_ready: true,
+  });
+  expect(didOrderEnterQuoteApprovedState(previousOrder, persistedOrder)).toBe(true);
+
+  const source = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/lib/ordersStore.js", import.meta.url), "utf8")
+  );
+  const processInitialization = source.indexOf(
+    "await ensureTeeCoProductionProcess(updatedOrder)"
+  );
+  const processFailureBoundary = source.indexOf(
+    "Unable to initialize the production process for the persisted order"
+  );
+  const quoteApprovedEmission = source.indexOf(
+    "triggerOrderNotification(NOTIFICATION_TYPES.quoteApproved, updatedOrder)"
+  );
+
+  expect(processInitialization).toBeGreaterThan(-1);
+  expect(processFailureBoundary).toBeGreaterThan(processInitialization);
+  expect(quoteApprovedEmission).toBeGreaterThan(processFailureBoundary);
 });
