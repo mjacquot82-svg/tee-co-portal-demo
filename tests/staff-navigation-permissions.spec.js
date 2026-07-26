@@ -46,3 +46,24 @@ test("hiding the Staff navigation entry does not change direct Order Requests ro
     canAccessOperationalWorkspace("/admin/quotes/TC-DIRECT-ACCESS", operationalUsers.staff)
   ).toBe(true);
 });
+
+test("temporary order transition diagnostics are accessible only to an authenticated Owner", () => {
+  expect(
+    canAccessOperationalWorkspace(
+      "/admin/order-transition-diagnostics",
+      operationalUsers.owner
+    )
+  ).toBe(true);
+  expect(
+    canAccessOperationalWorkspace(
+      "/admin/order-transition-diagnostics",
+      operationalUsers.manager
+    )
+  ).toBe(false);
+  expect(
+    canAccessOperationalWorkspace(
+      "/admin/order-transition-diagnostics",
+      operationalUsers.staff
+    )
+  ).toBe(false);
+});

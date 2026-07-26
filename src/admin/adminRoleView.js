@@ -163,6 +163,13 @@ const ADMIN_ROUTE_PERMISSION_RULES = [
   },
   {
     type: "exact",
+    value: "/admin/order-transition-diagnostics",
+    permissions: [PERMISSIONS.settingsManage],
+    classification: "operational",
+    ownerOnly: true,
+  },
+  {
+    type: "exact",
     value: "/admin/quotes/archived",
     permissions: [PERMISSIONS.quoteArchiveManage],
     classification: "protected-management",
