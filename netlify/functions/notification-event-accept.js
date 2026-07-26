@@ -1,3 +1,5 @@
+import { createVerifyDeliveriesForAcceptedNotification } from "./lib/notificationVerifyDeliveries.js";
+
 const SUPPORTED_EVENT_TYPES = new Set([
   "new_customer_request",
   "quote_ready_for_approval",
@@ -255,7 +257,7 @@ async function generateNotificationForAcceptedEvent({
   await recordDiagnostic("persist_notification:durable_identity", {
     notification_id: persisted.id,
   });
-  return persisted;
+  return { notification: persisted, policy };
 }
 
 function validateBusinessEvent(value = {}) {
@@ -374,12 +376,36 @@ export async function handler(event) {
     business_event_id: accepted.id,
   });
   let notification;
+  let deliveries = [];
   try {
-    notification = await generateNotificationForAcceptedEvent({
+    const generated = await generateNotificationForAcceptedEvent({
       accepted,
       supabaseUrl,
       serviceRoleKey,
       recordDiagnostic,
+    });
+    notification = generated.notification;
+    await recordDiagnostic("phase2c_phase2d:started", {
+      notification_id: notification.id,
+      cutover_mode: normalizeText(
+        process.env.VITE_NOTIFICATION_ENGINE_CUTOVER_MODE
+      ).toLowerCase(),
+    });
+    const deliveryResult =
+      await createVerifyDeliveriesForAcceptedNotification({
+        accepted,
+        notification,
+        policy: generated.policy,
+        supabaseUrl,
+        serviceRoleKey,
+      });
+    notification = deliveryResult.notification;
+    deliveries = deliveryResult.deliveries;
+    await recordDiagnostic("phase2c_phase2d:completed", {
+      created: deliveryResult.created,
+      reason: deliveryResult.reason || "",
+      delivery_count: deliveries.length,
+      delivery_ids: deliveries.map((delivery) => delivery.id),
     });
   } catch (error) {
     await recordDiagnostic("notification_generation:threw", error);
@@ -391,10 +417,12 @@ export async function handler(event) {
   await recordDiagnostic("notification_event_accept:completed", {
     business_event_id: accepted.id,
     notification_id: notification.id,
+    delivery_count: deliveries.length,
   });
   return json(200, {
     accepted: true,
     businessEvent: accepted,
     notification,
+    deliveries,
   });
 }
