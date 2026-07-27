@@ -77,7 +77,7 @@ export function buildIntakeWorkflowSummary(order = {}) {
     ? "Review the uploaded artwork."
     : requirements.includes("Deposit Decision")
     ? "Decide whether a deposit is required."
-    : "Complete Staff Review.";
+    : "Approve the request.";
 
   return [
     "Workflow state: Intake review in progress.",

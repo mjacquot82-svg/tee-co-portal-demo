@@ -1,4 +1,5 @@
 import { getUploadedOrderArtworkFiles } from "../lib/orderArtwork";
+import { canApproveIntakeRequest } from "../quotes/intakeApprovalGuard";
 
 function normalized(value) {
   return String(value || "").trim().toLowerCase();
@@ -59,7 +60,7 @@ export function getAvailableIntakeActions(order = {}) {
   const hasUploadedArtwork = getUploadedOrderArtworkFiles(order).length > 0;
 
   return {
-    approveRequest: !completed.approveRequest,
+    approveRequest: !completed.approveRequest && canApproveIntakeRequest(order),
     requestArtwork: !completed.requestArtwork && !artworkApproved && !hasUploadedArtwork,
     requestChanges: !completed.requestChanges,
     requireDeposit: !completed.requireDeposit,
@@ -79,8 +80,6 @@ export function getOutstandingIntakeRequirements(order = {}) {
   const depositRequirementStatus = normalized(order.deposit_requirement_status);
   const requestStatus = normalized(order.request_status);
 
-  if (staffReview !== "approved") requirements.push("Staff Review");
-
   if (artworkStatus === "missing") {
     requirements.push("Artwork Needed");
   } else if (!artworkStatus || artworkStatus === "pending review") {
@@ -96,6 +95,8 @@ export function getOutstandingIntakeRequirements(order = {}) {
   ) {
     requirements.push("Deposit Decision");
   }
+
+  if (staffReview !== "approved") requirements.push("Approve Request");
 
   if (requestStatus === "awaiting customer response") requirements.push("Customer Response");
 

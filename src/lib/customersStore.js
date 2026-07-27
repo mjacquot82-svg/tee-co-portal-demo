@@ -12,6 +12,7 @@ import {
   normalizeCustomerId,
 } from "./customerIds";
 import { supabase } from "./supabase";
+import { normalizeNorthAmericanPhoneE164 } from "./phoneNormalization";
 
 const STORAGE_KEY = "teeCoCustomers";
 const SUPABASE_TABLE = "customers";
@@ -77,13 +78,16 @@ function normalizeCustomer(customer = {}, fallbackTimestamp = new Date().toISOSt
     createdAt
   );
 
+  const rawPhone = String(customer.phone || "").trim();
+  const canonicalPhone = normalizeNorthAmericanPhoneE164(rawPhone);
+
   return {
     ...customer,
     id: canonicalCustomerId,
     customer_id: canonicalCustomerId,
     name: customer.name || "New Customer",
     company: customer.company || "",
-    phone: customer.phone || "",
+    phone: canonicalPhone || rawPhone,
     email: customer.email || "",
     auth_user_id: customer.auth_user_id || "",
     external_reference: customer.external_reference || "",

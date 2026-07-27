@@ -82,10 +82,10 @@ test("the intake screen renders workflow confirmations in its live region", asyn
 
   expect(source).toContain('data-testid="intake-workflow-confirmation"');
   expect(source).toContain('aria-live="polite"');
-  expect(source).toContain('whiteSpace: "pre-line"');
+  expect(source).toContain("aria-label={workflowSummary}");
   expect(source).toContain("buildIntakeWorkflowSummary(order)");
-  expect(source).toContain('"Intake Review Complete"');
-  expect(source).toContain("{workflowSummary}\n      </section>");
+  expect(source).toContain('"Intake complete · Ready for production"');
+  expect(source).toContain("{conciseWorkflowSummary}");
   expect(source).toContain('buildIntakeActionConfirmation("deposit_not_required", { ...order, ...updates })');
   expect(source).toContain('buildIntakeActionConfirmation("reject_request", { ...order, ...updates })');
 });

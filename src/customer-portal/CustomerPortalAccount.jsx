@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { isValidCustomerName } from "../lib/customerName";
 import { updateStoredCustomer } from "../lib/customersStore";
+import { formatNorthAmericanPhoneDisplay } from "../lib/phoneNormalization";
 import {
   DetailPair,
   EmptyState,
@@ -208,7 +209,11 @@ export default function CustomerPortalAccount() {
               <DetailPair label="Email" value={profile?.email || customerSession.email || "—"} />
               <DetailPair
                 label="Phone"
-                value={profile?.phone || customerSession.phone || "Not added yet"}
+                value={
+                  formatNorthAmericanPhoneDisplay(
+                    profile?.phone || customerSession.phone
+                  ) || "Not added yet"
+                }
               />
               <DetailPair label="Company" value={profile?.company || "Not added yet"} />
             </div>

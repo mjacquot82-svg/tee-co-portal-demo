@@ -5,7 +5,7 @@ import {
   getCompletedIntakeActions,
 } from "../src/admin/intakeActionPresentation.js";
 
-test("a new request keeps every non-terminal intake action available", () => {
+test("a new request begins with no completed intake actions", () => {
   expect(getCompletedIntakeActions({
     request_status: "Pending Staff Review",
     staff_review_status: "Pending",
@@ -100,11 +100,12 @@ test("the intake UI maps outstanding requirements to their resolving actions", a
 
   expect(source).toContain('data-testid="intake-completed-actions"');
   expect(source).toContain('data-testid="intake-workflow-guidance"');
-  expect(source).toContain("Outstanding Requirements");
+  expect(source).toContain('"Current Action"');
+  expect(source).toContain("currentActionCopy");
   expect(source).toContain("Completed Decisions");
   expect(source).not.toContain("Available Actions");
   expect(source).not.toContain("Pricing Review Needed");
-  expect(source).toContain("review the estimated total below");
+  expect(source).toContain("Approve the request after artwork and the deposit decision are complete.");
   expect(source).toContain('data-testid="intake-requirement-staff"');
   expect(source).toContain('data-testid="intake-requirement-artwork-upload"');
   expect(source).toContain('data-testid="intake-requirement-artwork-review"');

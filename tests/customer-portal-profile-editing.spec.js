@@ -73,8 +73,9 @@ test("authenticated customer edits canonical profile and order defaults consume 
 
   await expect(page.getByText("Marc A. Jacquot", { exact: true })).toBeVisible();
   await expect(page.getByText("Jacquot Studio", { exact: true })).toBeVisible();
-  await expect(page.getByText("519-881-6869", { exact: true })).toBeVisible();
+  await expect(page.getByText("(519) 881-6869", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Edit Profile" })).toBeVisible();
+  await expect.poll(() => persistedCustomer.phone).toBe("+15198816869");
 
   await page.evaluate(() => {
     window.sessionStorage.setItem(
@@ -91,10 +92,11 @@ test("authenticated customer edits canonical profile and order defaults consume 
   await page.goto("/portal/request-order");
   await page.getByRole("button", { name: /Resume Draft/ }).click();
 
-  await expect(page.getByRole("textbox", { name: "Contact name (First and Last)" })).toHaveValue(
-    "Marc A. Jacquot"
-  );
-  await expect(page.getByRole("textbox", { name: "Contact phone" })).toHaveValue(
-    "519-881-6869"
-  );
+  await expect(
+    page.getByRole("textbox", { name: "Contact name (First and Last)" })
+  ).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Contact phone" })).toHaveCount(0);
+  await expect(
+    page.getByText("This order will be associated with your Tee & Co. account.")
+  ).toBeVisible();
 });

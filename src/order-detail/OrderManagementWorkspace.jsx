@@ -6,11 +6,13 @@ import {
   isArtworkImage,
 } from "../lib/orderArtwork";
 import ActivityTimeline from "./ActivityTimeline";
+import { formatNorthAmericanPhoneDisplay } from "../lib/phoneNormalization";
 
 const cardStyle = {
   background: "#ffffff",
-  borderRadius: "20px",
-  padding: "24px",
+  borderRadius: "14px",
+  padding: "14px 16px",
+  border: "1px solid #e2e8f0",
   boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
 };
 
@@ -30,17 +32,31 @@ const valueStyle = {
   lineHeight: 1.45,
 };
 
-function ManagementSection({ eyebrow, title, description, children, testId }) {
-  return (
-    <section data-testid={testId} style={cardStyle}>
-      <p style={labelStyle}>{eyebrow}</p>
-      <h2 style={{ margin: "5px 0 0", color: "#0f172a" }}>{title}</h2>
+function ManagementSection({ eyebrow, title, description, children, testId, collapsedByDefault = false }) {
+  const content = (
+    <>
+      {collapsedByDefault ? null : <p style={labelStyle}>{eyebrow}</p>}
+      {collapsedByDefault ? null : <h2 style={{ margin: "3px 0 0", color: "#0f172a", fontSize: "18px" }}>{title}</h2>}
       {description ? (
-        <p style={{ margin: "8px 0 18px", color: "#64748b", lineHeight: 1.5 }}>
+        <p style={{ margin: "5px 0 10px", color: "#64748b", lineHeight: 1.4, fontSize: "13px" }}>
           {description}
         </p>
       ) : null}
       {children}
+    </>
+  );
+
+  return (
+    <section data-testid={testId} style={cardStyle}>
+      {collapsedByDefault ? (
+        <details>
+          <summary style={{ cursor: "pointer", color: "#0f172a", fontWeight: 850 }}>
+            <span style={{ color: "#64748b", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.06em" }}>{eyebrow} · </span>
+            {title}
+          </summary>
+          <div style={{ marginTop: "10px" }}>{content}</div>
+        </details>
+      ) : content}
     </section>
   );
 }
@@ -72,14 +88,14 @@ export default function OrderManagementWorkspace({
     <div
       data-testid="order-workspace-order-management"
       data-reference-role="secondary"
-      style={{ display: "grid", gap: "18px" }}
+      style={{ display: "grid", gap: "12px" }}
     >
       <header>
         <p style={labelStyle}>Owner Workspace</p>
-        <h2 style={{ margin: "5px 0 0", fontSize: "28px", color: "#0f172a" }}>
+        <h2 style={{ margin: "3px 0 0", fontSize: "22px", color: "#0f172a" }}>
           Manage this order
         </h2>
-        <p style={{ margin: "8px 0 0", color: "#64748b", lineHeight: 1.5 }}>
+        <p style={{ margin: "4px 0 0", color: "#64748b", lineHeight: 1.4, fontSize: "13px" }}>
           Coordinate customer decisions and clear requirements before production begins.
         </p>
       </header>
@@ -90,7 +106,7 @@ export default function OrderManagementWorkspace({
         description={readiness?.detail}
         testId="order-management-prerequisites"
       >
-        <div style={{ display: "grid", gap: "10px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "7px" }}>
           {prerequisiteChecks.map((check) => (
             <article
               key={check.key}
@@ -101,8 +117,8 @@ export default function OrderManagementWorkspace({
                 border: check.satisfied ? "1px solid #bbf7d0" : "1px solid #fed7aa",
                 background: check.satisfied ? "#f0fdf4" : "#fff7ed",
                 color: check.satisfied ? "#166534" : "#9a3412",
-                borderRadius: "14px",
-                padding: "12px 14px",
+                borderRadius: "9px",
+                padding: "8px 10px",
                 display: "flex",
                 justifyContent: "space-between",
                 gap: "12px",
@@ -136,19 +152,19 @@ export default function OrderManagementWorkspace({
         description="Artwork decisions belong with order management. Production uses only the approved files needed to make the job."
         testId="order-management-artwork"
       >
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "14px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "9px" }}>
           {artworkFiles.length ? artworkFiles.map((file) => {
             const artworkUrl = getArtworkAssetUrl(file);
             return (
               <article key={file.id || getArtworkDisplayName(file)} style={{ border: "1px solid #e2e8f0", borderRadius: "14px", overflow: "hidden" }}>
-                <div style={{ minHeight: "180px", display: "grid", placeItems: "center", background: "#f8fafc" }}>
+                <div style={{ minHeight: "100px", display: "grid", placeItems: "center", background: "#f8fafc" }}>
                   {artworkUrl && isArtworkImage(file) ? (
-                    <img src={artworkUrl} alt={getArtworkDisplayName(file)} style={{ width: "100%", height: "220px", objectFit: "contain", background: "#ffffff" }} />
+                    <img src={artworkUrl} alt={getArtworkDisplayName(file)} style={{ width: "100%", height: "120px", objectFit: "contain", background: "#ffffff" }} />
                   ) : (
                     <span style={{ padding: "18px", color: "#64748b", fontWeight: 700 }}>Preview unavailable</span>
                   )}
                 </div>
-                <div style={{ padding: "12px" }}>
+                <div style={{ padding: "8px 10px", fontSize: "13px" }}>
                   <strong>{getArtworkDisplayName(file)}</strong>
                   {artworkUrl ? <div style={{ marginTop: "8px" }}><a href={artworkUrl} target="_blank" rel="noreferrer">Open artwork</a></div> : null}
                 </div>
@@ -174,7 +190,12 @@ export default function OrderManagementWorkspace({
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px" }}>
           <Decision label="Customer" value={order.customer_name || "Customer identity unavailable"} />
           <Decision label="Email" value={order.customer_email || order.email} />
-          <Decision label="Phone" value={order.customer_phone || order.phone} />
+          <Decision
+            label="Phone"
+            value={formatNorthAmericanPhoneDisplay(
+              order.customer_phone || order.phone
+            )}
+          />
           <Decision label="Customer Status" value={order.customer_status_message || order.customer_order_status} />
         </div>
         {order.customer_id ? (
@@ -197,7 +218,7 @@ export default function OrderManagementWorkspace({
         </div>
       </ManagementSection>
 
-      <ManagementSection eyebrow="5 · Internal Notes" title="Owner and order notes" testId="order-management-notes">
+      <ManagementSection eyebrow="5 · Internal Notes" title="Owner and order notes" testId="order-management-notes" collapsedByDefault>
         <p style={{ ...valueStyle, whiteSpace: "pre-wrap" }}>
           {order.internal_note || "No internal notes recorded."}
         </p>
@@ -210,6 +231,7 @@ export default function OrderManagementWorkspace({
         title="Order record"
         description="Reference information and deliberate administrative actions for this order."
         testId="order-management-administration"
+        collapsedByDefault
       >
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px" }}>
           <Decision label="Placed" value={`${placedAt.date} at ${placedAt.time}`} />

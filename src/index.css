@@ -387,14 +387,73 @@ aside img:not(.tee-co-logo) {
 
 .customer-portal-layout {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  gap: 24px;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: clamp(20px, 2vw, 32px);
   align-items: start;
+}
+
+.customer-portal-header-inner,
+.customer-portal-workspace {
+  width: min(100%, 1600px);
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.customer-portal-header-inner {
+  padding: 16px clamp(20px, 2.4vw, 36px);
+}
+
+.customer-portal-workspace {
+  padding: 24px clamp(20px, 2.4vw, 36px) 52px;
 }
 
 .customer-portal-sidebar {
   position: sticky;
-  top: 108px;
+  top: 100px;
+}
+
+.customer-portal-content {
+  min-width: 0;
+  width: 100%;
+}
+
+.customer-portal-ordering .storefront-home {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0 0 32px;
+}
+
+.customer-portal-ordering .storefront-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.customer-portal-ordering .storefront-rail {
+  display: none;
+}
+
+.customer-portal-ordering .storefront-mobile-category-nav {
+  display: grid;
+}
+
+.customer-portal-ordering .storefront-featured-grid-wide,
+.customer-portal-ordering .storefront-category-row-grid,
+.customer-portal-ordering .storefront-category-product-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  justify-content: stretch;
+}
+
+.customer-portal-ordering .storefront-featured-card,
+.customer-portal-ordering .storefront-category-product-card {
+  max-width: none;
+}
+
+.customer-portal-ordering .storefront-category-page,
+.customer-portal-ordering .storefront-garment-page {
+  width: 100%;
+  max-width: none !important;
+  margin: 0 !important;
+  box-sizing: border-box;
 }
 
 @media (max-width: 560px) {
@@ -416,6 +475,41 @@ aside img:not(.tee-co-logo) {
 
   .customer-portal-sidebar {
     position: static;
+    display: flex !important;
+    align-items: center;
+    gap: 8px !important;
+    overflow-x: auto;
+    padding: 12px !important;
+    border-radius: 20px !important;
+    scrollbar-width: thin;
+  }
+
+  .customer-portal-sidebar > p {
+    display: none;
+  }
+
+  .customer-portal-primary-action,
+  .customer-portal-section-link {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .customer-portal-primary-action {
+    padding: 12px 16px !important;
+  }
+
+  .customer-portal-section-link {
+    padding: 11px 14px !important;
+  }
+
+  .customer-portal-workspace {
+    padding-top: 18px;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1180px) {
+  .customer-portal-layout {
+    grid-template-columns: 210px minmax(0, 1fr);
   }
 }
 

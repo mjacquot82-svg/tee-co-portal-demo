@@ -83,20 +83,18 @@ test("Production Queue Details opens the correct full order workspace", async ({
   await expect(page.getByTestId("job-identity-placement")).toContainText("Left Chest");
   await expect(page.getByTestId("job-identity-due-date")).toContainText("2026-07-31");
   await expect(page.getByTestId("job-identity-sizes")).toContainText("M: 5 · L: 7");
-  await expect(page.getByTestId("process-current-task")).toContainText("What should Teresa do next?");
-  await expect(page.getByTestId("process-current-task")).toContainText("Order Transfers");
-  await expect(page.getByTestId("process-current-task")).toContainText("Task State: Available");
-  await expect(page.getByTestId("process-current-task")).toContainText(
+  await expect(page.getByTestId("production-current-action")).toContainText("Order Transfers");
+  await expect(page.getByTestId("production-current-action")).toContainText("Task state: Available");
+  await expect(page.getByTestId("production-current-action")).toContainText(
     "This task is available because it has no incomplete prerequisites."
   );
-  await expect(page.getByTestId("process-next-task")).toContainText("Receive Transfers");
-  await expect(page.getByTestId("process-next-task")).toContainText("Waiting for Order Transfers.");
-  await expect(page.getByTestId("order-assignment-panel")).toContainText("Assigned Staff");
-  await expect(page.getByTestId("order-assignment-panel")).toContainText("Production Owner");
-  await expect(page.getByTestId("order-assignment-panel")).toContainText("Assign, Reassign, or Clear");
+  await expect(page.getByTestId("process-next-task")).toHaveCount(0);
+  await expect(page.getByTestId("production-header-assignment")).toContainText("Assigned Employee");
+  await expect(page.getByTestId("production-header-assignment")).toContainText("Production Owner");
+  await expect(page.getByTestId("production-header-assignment")).toContainText("Assign Employee");
   await expect(page.getByTestId("execution-prerequisite-summary")).toHaveCount(0);
   await expect(page.getByTestId("workflow-gate")).toHaveCount(0);
-  const assignmentText = await page.getByTestId("order-assignment-panel").innerText();
+  const assignmentText = await page.getByTestId("production-header-assignment").innerText();
   [
     "Artwork Approved",
     "Deposit Received",
@@ -110,7 +108,6 @@ test("Production Queue Details opens the correct full order workspace", async ({
 
   const visibleWorkstationText = await page.locator("body").innerText();
   [
-    "Ready For Production",
     "Current Status",
     "Final status reached",
     "Move To Production",
@@ -128,19 +125,20 @@ test("Production Queue Details opens the correct full order workspace", async ({
   await expect(page.getByText("Quote Snapshot", { exact: true })).toHaveCount(0);
   await expect(page.getByTestId("activity-timeline")).toHaveCount(0);
   await expect(page.getByText("Production Instructions", { exact: true })).toHaveCount(0);
-  await expect(page.getByTestId("production-artwork")).toBeVisible();
+  await expect(page.getByTestId("garment-production-artwork")).toBeVisible();
   await expect(page.getByTestId("production-notes")).toContainText("Match the approved artwork colors.");
-  await expect(page.getByTestId("production-files")).toBeVisible();
+  await expect(page.getByTestId("garment-production-file")).toBeVisible();
 
   const identityBox = await page.getByTestId("production-job-identity").boundingBox();
   const currentWorkBox = await page.getByTestId("production-current-action").boundingBox();
-  const artworkBox = await page.getByTestId("production-artwork").boundingBox();
+  const garmentBox = await page.getByTestId("garment-production-card").boundingBox();
+  const artworkBox = await page.getByTestId("garment-production-artwork").boundingBox();
   const notesBox = await page.getByTestId("production-notes").boundingBox();
-  const filesBox = await page.getByTestId("production-files").boundingBox();
   expect(identityBox?.y).toBeLessThan(currentWorkBox?.y || Number.POSITIVE_INFINITY);
-  expect(currentWorkBox?.y).toBeLessThan(artworkBox?.y || Number.POSITIVE_INFINITY);
-  expect(artworkBox?.y).toBeLessThan(notesBox?.y || Number.POSITIVE_INFINITY);
-  expect(notesBox?.y).toBeLessThan(filesBox?.y || Number.POSITIVE_INFINITY);
+  expect(currentWorkBox?.y).toBeLessThan(garmentBox?.y || Number.POSITIVE_INFINITY);
+  expect(artworkBox?.y).toBeGreaterThanOrEqual(garmentBox?.y || 0);
+  expect(garmentBox?.y).toBeLessThan(notesBox?.y || Number.POSITIVE_INFINITY);
+  expect(notesBox?.y).toBeLessThan(1000);
 
   await page.getByTestId("order-workspace-tab-financial").click();
   await expect(page).toHaveURL(/workspace=financial/);

@@ -45,28 +45,13 @@ import {
 import { ensureTeeCoProductionProcess } from "../integrations/teeCoProductionProcess";
 import { buildProcessInstanceProjection } from "../process-engine/processProjection";
 import OrderManagementWorkspace from "../order-detail/OrderManagementWorkspace";
+import ProductionWorkspaceConsole from "../order-detail/ProductionWorkspaceConsole";
 
 const cardStyle = {
   background: "#ffffff",
   borderRadius: "20px",
   padding: "24px",
   boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-};
-
-const sectionLabelStyle = {
-  margin: 0,
-  color: "#64748b",
-  fontSize: "12px",
-  fontWeight: 800,
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-};
-
-const sectionValueStyle = {
-  margin: "4px 0 0",
-  color: "#171717",
-  fontWeight: 700,
-  lineHeight: 1.45,
 };
 
 function money(value) {
@@ -466,7 +451,7 @@ export default function OrderDetail() {
       data-testid="order-detail-page"
       data-order-number={order.order_number || orderNumber}
       data-workflow-state={showLegacyProduction ? order.status || "" : ""}
-      style={{ maxWidth: "1280px", margin: "0 auto", padding: "24px" }}
+      style={{ width: "100%", boxSizing: "border-box", margin: "0 auto", padding: "14px 18px 24px" }}
     >
       <div
         data-testid="production-job-identity"
@@ -476,7 +461,7 @@ export default function OrderDetail() {
           alignItems: "flex-start",
           gap: "16px",
           flexWrap: "wrap",
-          marginBottom: "18px",
+          marginBottom: "10px",
         }}
       >
         <div>
@@ -493,14 +478,16 @@ export default function OrderDetail() {
             Current Job
           </p>
 
-          <h1 style={{ margin: "6px 0", fontSize: "38px", letterSpacing: "-0.02em" }}>
+          <h1 style={{ margin: "3px 0", fontSize: "30px", letterSpacing: "-0.02em" }}>
             Order {order.order_number || orderNumber}
           </h1>
 
-          <div data-testid="production-job-header" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "14px", marginTop: "16px", padding: "20px", borderRadius: "20px", border: "2px solid #0f172a", background: "#ffffff", maxWidth: "980px", boxShadow: "0 10px 30px rgba(15, 23, 42, 0.10)" }}>
-            <div data-testid="order-detail-current-status" data-workflow-state={order.status || ""}><p style={sectionLabelStyle}>Production Status</p><div style={{ marginTop: "6px", fontSize: "18px" }}><StatusBadge status={order.status} /></div></div>
-            <div><p style={sectionLabelStyle}>Due Date</p><p style={sectionValueStyle}>{order.due_date || "—"}</p></div>
-            <div><p style={sectionLabelStyle}>Priority</p><p style={{ ...sectionValueStyle, color: urgency.color }}>{urgency.label}</p></div>
+          <div data-testid="production-job-header" className="order-detail-title-meta">
+            <div data-testid="order-detail-current-status" data-workflow-state={order.status || ""}>
+              <StatusBadge status={order.status} />
+            </div>
+            <span>Needed {order.due_date || "—"}</span>
+            <span style={{ color: urgency.color }}>{urgency.label}</span>
           </div>
 
           {isCanceledOperationalStatus(order.status) ? (
@@ -553,31 +540,37 @@ export default function OrderDetail() {
       {workspaceNavigation}
 
       {activeWorkspace === "production" ? (
-        <div data-testid="order-workspace-production" style={{ display: "grid", gap: "18px" }}>
-          <section
-            data-testid="production-assignment"
-            style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "20px", padding: "18px" }}
-          >
-            <p style={sectionLabelStyle}>Production Assignment</p>
-            <div style={{ marginTop: "12px" }}>{assignmentPanel}</div>
-          </section>
-          <div id="production-handoff" style={{ scrollMarginTop: "24px" }}>
-          {hasProcessAuthority ? (
-            <ProcessCurrentActionPanel projection={processProjection} onPrint={handlePrintTicket} />
-          ) : showLegacyProduction ? (
-            <ProductionActionPanel order={order} actions={workflowActions} onRunAction={handleWorkflowAction} feedback={workflowFeedback} onPrint={handlePrintTicket} />
-          ) : (
-            <section
-              data-testid="production-authority-loading"
-              style={{ border: "1px solid #e2e8f0", borderRadius: "20px", padding: "18px", color: "#64748b", fontWeight: 700 }}
-            >
-              Resolving production authority…
-            </section>
-          )}
-          </div>
-
-          <GarmentProductionCards order={order} />
-          <ProductionInstructionsPanel order={order} showInternalNotes={false} />
+        <div data-testid="order-workspace-production">
+          <ProductionWorkspaceConsole
+            order={order}
+            normalizedOrder={normalizedOrder}
+            readiness={productionReadiness}
+            placedAt={placedAt}
+            assignment={
+              <div data-testid="production-assignment">
+                {assignmentPanel}
+              </div>
+            }
+            action={
+              <div id="production-handoff" className="order-detail-action-panel" style={{ scrollMarginTop: "16px" }}>
+            {hasProcessAuthority ? (
+              <ProcessCurrentActionPanel projection={processProjection} onPrint={handlePrintTicket} />
+            ) : showLegacyProduction ? (
+              <ProductionActionPanel order={order} actions={workflowActions} onRunAction={handleWorkflowAction} feedback={workflowFeedback} onPrint={handlePrintTicket} />
+            ) : (
+              <section
+                data-testid="production-authority-loading"
+                className="order-detail-compact-panel"
+                style={{ color: "#64748b", fontWeight: 700 }}
+              >
+                Resolving production authority…
+              </section>
+            )}
+              </div>
+            }
+            garments={<GarmentProductionCards order={order} />}
+            notes={<ProductionInstructionsPanel order={order} showInternalNotes={false} />}
+          />
         </div>
       ) : null}
 

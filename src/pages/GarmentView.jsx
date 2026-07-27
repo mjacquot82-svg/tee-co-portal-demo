@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import { garments } from "../data/garments";
@@ -19,6 +19,7 @@ import {
   resolveProductDisplayColors,
   useGarmentModelColors,
 } from "../lib/garmentModelColorsStore";
+import { getOrderingWorkflowPaths } from "../customer-portal/customerPortalStartOrderRoute";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -90,6 +91,8 @@ function buildFallbackColorRecords(colorNames = [], keyPrefix = "fallback") {
 
 export default function GarmentView() {
   const { garmentId } = useParams();
+  const location = useLocation();
+  const orderingPaths = getOrderingWorkflowPaths(location.pathname);
   const [selectedColor, setSelectedColor] = useState("");
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.innerWidth < 900 : false
@@ -225,7 +228,7 @@ export default function GarmentView() {
         }}
       >
         <h1 style={{ marginTop: 0 }}>Garment not found</h1>
-        <Link to="/" className="storefront-back-link">
+        <Link to={orderingPaths.catalog} className="storefront-back-link">
           ← Back to Home
         </Link>
       </div>
@@ -247,6 +250,7 @@ export default function GarmentView() {
 
   return (
     <div
+      className="storefront-garment-page"
       style={{
         maxWidth: "1100px",
         margin: "0 auto",
@@ -256,7 +260,7 @@ export default function GarmentView() {
       }}
     >
       <div style={{ marginBottom: isMobile ? "12px" : "14px" }}>
-        <Link to={`/category/${categorySlug}`} className="storefront-back-link">
+        <Link to={orderingPaths.category(categorySlug)} className="storefront-back-link">
           ← Back to {detailCategory}
         </Link>
       </div>
@@ -273,7 +277,7 @@ export default function GarmentView() {
         }}
       >
         <Link
-          to="/"
+          to={orderingPaths.catalog}
           style={{
             color: "#57534e",
             textDecoration: "none",
@@ -284,7 +288,7 @@ export default function GarmentView() {
         </Link>
         <span>/</span>
         <Link
-          to={`/category/${categorySlug}`}
+          to={orderingPaths.category(categorySlug)}
           style={{
             color: "#57534e",
             textDecoration: "none",
@@ -645,7 +649,7 @@ export default function GarmentView() {
             }}
           >
             <Link
-              to="/order-preview"
+              to={orderingPaths.preview}
               state={{
                 garmentId: garment?.garment_id || "",
                 productId: selectedProduct?.id || garment?.product_id || "",
@@ -672,7 +676,7 @@ export default function GarmentView() {
             </Link>
 
             <Link
-              to="/"
+              to={orderingPaths.catalog}
               className="storefront-back-link"
             >
               ← Back

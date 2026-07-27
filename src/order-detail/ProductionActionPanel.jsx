@@ -43,15 +43,15 @@ export default function ProductionActionPanel({
   return (
     <section
       data-testid="production-current-action"
-      style={{ background: "linear-gradient(135deg, #0f172a, #1e293b)", color: "#ffffff", border: "1px solid #0f172a", borderRadius: "20px", padding: "22px", boxShadow: "0 10px 28px rgba(15, 23, 42, 0.14)" }}
+      className="production-console-action-banner"
     >
-      <p style={{ margin: 0, color: "#93c5fd", fontSize: "12px", fontWeight: 900, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-        Next Action
-      </p>
-      <h2 style={{ margin: "6px 0 4px", fontSize: "30px" }}>
-        {primaryActionLabel || (order.status === "Completed" ? "Production complete" : "No production action available")}
-      </h2>
-      <p style={{ margin: "0 0 14px", color: "#cbd5e1" }}>{primaryAction ? "Continue this job through its active production stage." : `Current status: ${order.status || "—"}`}</p>
+      <div className="production-console-action-copy">
+        <span>What to do next</span>
+        <strong>
+          {primaryActionLabel || (order.status === "Completed" ? "Production complete" : "No production action available")}
+        </strong>
+        <p>{primaryAction ? "Continue this job through its active production stage." : `Current status: ${order.status || "—"}`}</p>
+      </div>
 
       {feedback ? (
         <div style={{ marginBottom: "12px", borderRadius: "12px", padding: "10px 12px", background: "#eff6ff", color: "#1d4ed8", fontWeight: 700 }}>
@@ -59,7 +59,7 @@ export default function ProductionActionPanel({
         </div>
       ) : null}
 
-      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+      <div className="production-console-action-buttons">
         {primaryAction ? (
           <button
             type="button"
