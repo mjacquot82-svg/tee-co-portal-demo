@@ -3,14 +3,19 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   configureOrdersPersistenceForTests,
   ensureOrdersHydrated,
+  getOrdersHydrationState,
   getStoredOrders,
-  mergeOrdersByFreshness,
   saveStoredOrders,
+  subscribeToStoredOrders,
   updateStoredOrder,
 } from "./ordersStore";
 import { getCustomerScopedOrders } from "./customerPortalData";
 import { isActiveQuoteWorkflowOrder } from "../quotes/quoteWorkflow";
 import { PERSISTENCE_MODES } from "./persistenceMode";
+import {
+  getPendingCustomerRequest,
+  savePendingCustomerRequest,
+} from "./pendingCustomerRequestStore";
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
@@ -24,6 +29,7 @@ function createDeferred<T>() {
 
 function installMemoryStorage() {
   const values = new Map<string, string>();
+  const listeners = new Map<string, Set<(event: { key: string | null }) => void>>();
   const storage = {
     getItem: vi.fn((key: string) => values.get(key) ?? null),
     setItem: vi.fn((key: string, value: string) => {
@@ -36,11 +42,24 @@ function installMemoryStorage() {
   vi.stubGlobal("window", {
     localStorage: storage,
     sessionStorage: storage,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
+    location: { origin: "https://production.example.test" },
+    addEventListener: vi.fn((type: string, listener: (event: { key: string | null }) => void) => {
+      const typeListeners = listeners.get(type) || new Set();
+      typeListeners.add(listener);
+      listeners.set(type, typeListeners);
+    }),
+    removeEventListener: vi.fn((type: string, listener: (event: { key: string | null }) => void) => {
+      listeners.get(type)?.delete(listener);
+    }),
     dispatchEvent: vi.fn(),
   });
-  return storage;
+  return {
+    storage,
+    values,
+    dispatchStorage(key: string | null) {
+      listeners.get("storage")?.forEach((listener) => listener({ key }));
+    },
+  };
 }
 
 function orderSnapshot(overrides = {}) {
@@ -120,7 +139,7 @@ describe("orders browser cache", () => {
       persistenceMode: PERSISTENCE_MODES.production,
     });
 
-    await ensureOrdersHydrated({ force: true });
+    await ensureOrdersHydrated();
 
     const visibleOrders = getStoredOrders();
     expect(storage.setItem).toHaveBeenCalledOnce();
@@ -141,52 +160,85 @@ describe("orders browser cache", () => {
     expect(adminOrderRequests.map((order) => order.order_number)).toEqual(["TC-838236"]);
   });
 
-  test("keeps the newer published order when hydration returns an older record", () => {
-    const current = orderSnapshot({
+  test("replaces cached approval state even when its client timestamp is later", async () => {
+    installMemoryStorage();
+    const cached = orderSnapshot({
       artwork_approval_status: "Approved",
       updated_at: "2026-07-27T00:00:02.000Z",
     });
-    const staleHydration = orderSnapshot({
+    const remote = orderSnapshot({
       artwork_approval_status: "Pending Review",
       updated_at: "2026-07-27T00:00:01.000Z",
     });
+    const query = {
+      select: vi.fn(() => query),
+      order: vi.fn(() => Promise.resolve({ data: [remote], error: null })),
+    };
+    configureOrdersPersistenceForTests({
+      supabaseClient: { from: vi.fn(() => query) },
+      supabaseConfigured: true,
+      persistenceMode: PERSISTENCE_MODES.production,
+    });
+    saveStoredOrders([cached]);
 
-    const [merged] = mergeOrdersByFreshness([current], [staleHydration]);
+    expect(getStoredOrders()[0].artwork_approval_status).toBe("Approved");
+    expect(getOrdersHydrationState()).toMatchObject({ source: "cache" });
 
-    expect(merged.artwork_approval_status).toBe("Approved");
-    expect(merged.updated_at).toBe("2026-07-27T00:00:02.000Z");
+    await ensureOrdersHydrated({ force: true });
+
+    expect(getStoredOrders()[0].artwork_approval_status).toBe("Pending Review");
+    expect(getStoredOrders()[0].updated_at).toBe("2026-07-27T00:00:01.000Z");
+    expect(getOrdersHydrationState()).toMatchObject({
+      status: "ready",
+      source: "server",
+    });
   });
 
-  test("accepts legitimate remote data that is newer than the published order", () => {
-    const current = orderSnapshot({
-      deposit_requirement_status: "Undecided",
-      updated_at: "2026-07-27T00:00:01.000Z",
+  test("adds server-only orders and removes cached-only submitted orders", async () => {
+    installMemoryStorage();
+    const cachedOnly = orderSnapshot({
+      id: "cached-only",
+      order_number: "TC-CACHED-ONLY",
     });
-    const newerRemote = orderSnapshot({
-      deposit_required: false,
-      deposit_requirement: "not_required",
-      deposit_requirement_status: "Not Required",
-      deposit_workflow_status: "Deposit Not Required",
-      updated_at: "2026-07-27T00:00:02.000Z",
+    const serverOnly = orderSnapshot({
+      id: "server-only",
+      order_number: "TC-SERVER-ONLY",
     });
+    const query = {
+      select: vi.fn(() => query),
+      order: vi.fn(() => Promise.resolve({ data: [serverOnly], error: null })),
+    };
+    configureOrdersPersistenceForTests({
+      supabaseClient: { from: vi.fn(() => query) },
+      supabaseConfigured: true,
+      persistenceMode: PERSISTENCE_MODES.production,
+    });
+    saveStoredOrders([cachedOnly]);
 
-    const [merged] = mergeOrdersByFreshness([current], [newerRemote]);
+    await ensureOrdersHydrated({ force: true });
 
-    expect(merged.deposit_requirement_status).toBe("Not Required");
-    expect(merged.updated_at).toBe("2026-07-27T00:00:02.000Z");
+    expect(getStoredOrders().map((order) => order.order_number)).toEqual([
+      "TC-SERVER-ONLY",
+    ]);
   });
 
   test("does not let hydration that began before a successful write regress workflow state", async () => {
     installMemoryStorage();
     const hydrationResult = createDeferred<{ data: unknown[]; error: null }>();
     let persistedPayload: Record<string, unknown> | null = null;
+    let hydrationCount = 0;
 
     const supabaseClient = {
       from: vi.fn(() => {
         let operation = "list";
         const query = {
           select: vi.fn(() => query),
-          order: vi.fn(() => hydrationResult.promise),
+          order: vi.fn(() => {
+            hydrationCount += 1;
+            return hydrationCount === 1
+              ? Promise.resolve({ data: [orderSnapshot()], error: null })
+              : hydrationResult.promise;
+          }),
           update: vi.fn((payload) => {
             operation = "update";
             persistedPayload = payload;
@@ -208,7 +260,7 @@ describe("orders browser cache", () => {
       supabaseConfigured: true,
       persistenceMode: PERSISTENCE_MODES.production,
     });
-    saveStoredOrders([orderSnapshot()]);
+    await ensureOrdersHydrated({ force: true });
 
     const hydration = ensureOrdersHydrated({ force: true });
     await updateStoredOrder("TC-RACE-1", {
@@ -244,7 +296,9 @@ describe("orders browser cache", () => {
           eq: vi.fn(() => query),
           select: vi.fn(() => query),
           single: vi.fn(() => Promise.resolve({ data: payload, error: null })),
-          order: vi.fn(() => Promise.resolve({ data: [], error: null })),
+          order: vi.fn(() =>
+            Promise.resolve({ data: [orderSnapshot()], error: null })
+          ),
         };
         return query;
       }),
@@ -254,7 +308,7 @@ describe("orders browser cache", () => {
       supabaseConfigured: true,
       persistenceMode: PERSISTENCE_MODES.production,
     });
-    saveStoredOrders([orderSnapshot()]);
+    await ensureOrdersHydrated({ force: true });
 
     const artworkUpdate = updateStoredOrder("TC-RACE-1", {
       artwork_approval_status: "Approved",
@@ -273,5 +327,146 @@ describe("orders browser cache", () => {
     expect(finalOrder.deposit_requirement_status).toBe("Not Required");
     expect(persistedPayloads).toHaveLength(2);
     expect(persistedPayloads[1].artwork_approval_status).toBe("Approved");
+  });
+
+  test("accepts a newer state from a subsequent successful server hydration", async () => {
+    installMemoryStorage();
+    let hydrationCount = 0;
+    const query = {
+      select: vi.fn(() => query),
+      order: vi.fn(() => {
+        hydrationCount += 1;
+        return Promise.resolve({
+          data: [
+            orderSnapshot({
+              artwork_approval_status:
+                hydrationCount === 1 ? "Pending Review" : "Approved",
+              artwork_status:
+                hydrationCount === 1 ? "Pending Review" : "Approved",
+            }),
+          ],
+          error: null,
+        });
+      }),
+    };
+    configureOrdersPersistenceForTests({
+      supabaseClient: { from: vi.fn(() => query) },
+      supabaseConfigured: true,
+      persistenceMode: PERSISTENCE_MODES.production,
+    });
+
+    await ensureOrdersHydrated({ force: true });
+    expect(getStoredOrders()[0].artwork_approval_status).toBe("Pending Review");
+
+    await ensureOrdersHydrated({ force: true });
+    expect(getStoredOrders()[0].artwork_approval_status).toBe("Approved");
+  });
+
+  test("ignores browser storage changes after server readiness", async () => {
+    const { storage, dispatchStorage } = installMemoryStorage();
+    const remote = orderSnapshot({
+      artwork_approval_status: "Pending Review",
+      artwork_status: "Pending Review",
+    });
+    const query = {
+      select: vi.fn(() => query),
+      order: vi.fn(() => Promise.resolve({ data: [remote], error: null })),
+    };
+    configureOrdersPersistenceForTests({
+      supabaseClient: { from: vi.fn(() => query) },
+      supabaseConfigured: true,
+      persistenceMode: PERSISTENCE_MODES.production,
+    });
+    const listener = vi.fn();
+    const unsubscribe = subscribeToStoredOrders(listener);
+    await ensureOrdersHydrated();
+
+    storage.setItem(
+      "teeCoStaffOrders",
+      JSON.stringify({
+        schemaVersion: 2,
+        scope: "production:https://production.example.test:anonymous",
+        serverConfirmed: false,
+        orders: [
+          orderSnapshot({
+            artwork_approval_status: "Approved",
+            artwork_status: "Approved",
+          }),
+        ],
+      })
+    );
+    const callsBeforeStorageEvent = listener.mock.calls.length;
+    dispatchStorage("teeCoStaffOrders");
+
+    expect(listener).toHaveBeenCalledTimes(callsBeforeStorageEvent);
+    expect(getStoredOrders()[0].artwork_approval_status).toBe("Pending Review");
+    unsubscribe();
+  });
+
+  test("rejects production workflow mutations while data is only provisional", async () => {
+    installMemoryStorage();
+    const update = vi.fn();
+    configureOrdersPersistenceForTests({
+      supabaseClient: { from: vi.fn(() => ({ update })) },
+      supabaseConfigured: true,
+      persistenceMode: PERSISTENCE_MODES.production,
+    });
+    saveStoredOrders([orderSnapshot()]);
+
+    await expect(
+      updateStoredOrder("TC-RACE-1", {
+        artwork_approval_status: "Approved",
+      })
+    ).rejects.toMatchObject({
+      code: "ORDERS_SERVER_HYDRATION_REQUIRED",
+    });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  test("rewrites incompatible legacy caches without affecting draft recovery", async () => {
+    const { storage } = installMemoryStorage();
+    storage.setItem(
+      "teeCoStaffOrders",
+      JSON.stringify([
+        orderSnapshot({
+          order_number: "TC-LEGACY",
+          artwork_approval_status: "Approved",
+        }),
+      ])
+    );
+    savePendingCustomerRequest({
+      contactName: "Draft Customer",
+      notes: "Preserve this draft",
+    });
+    const savedDraft = storage.getItem("teeCoPendingCustomerRequest");
+    const remote = orderSnapshot({ order_number: "TC-SERVER" });
+    const query = {
+      select: vi.fn(() => query),
+      order: vi.fn(() => Promise.resolve({ data: [remote], error: null })),
+    };
+    configureOrdersPersistenceForTests({
+      supabaseClient: { from: vi.fn(() => query) },
+      supabaseConfigured: true,
+      persistenceMode: PERSISTENCE_MODES.production,
+    });
+
+    expect(getStoredOrders()).toEqual([]);
+    await ensureOrdersHydrated({ force: true });
+
+    const rewrittenCache = JSON.parse(
+      storage.getItem("teeCoStaffOrders") || "{}"
+    );
+    expect(rewrittenCache).toMatchObject({
+      schemaVersion: 2,
+      scope: "production:https://production.example.test:anonymous",
+      serverConfirmed: true,
+    });
+    expect(rewrittenCache.orders.map((order) => order.order_number)).toEqual([
+      "TC-SERVER",
+    ]);
+    expect(storage.getItem("teeCoPendingCustomerRequest")).toBe(savedDraft);
+    expect(getPendingCustomerRequest()).toMatchObject({
+      notes: "Preserve this draft",
+    });
   });
 });

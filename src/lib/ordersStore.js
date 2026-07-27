@@ -45,12 +45,13 @@ import {
   updateOrderInSupabase,
   upsertOrdersInSupabase,
 } from "./ordersRepository";
-import { canUseLocalPersistenceFallback } from "./persistenceMode";
+import { canUseLocalPersistenceFallback, getPersistenceMode } from "./persistenceMode";
 import { ensureTeeCoProductionProcess } from "../integrations/teeCoProductionProcess";
 import { recordOrderTransitionDiagnostic } from "./orderTransitionDiagnostics";
 import { assertIntakeRequestApprovalAllowed } from "../quotes/intakeApprovalGuard";
 
 const STORAGE_KEY = "teeCoStaffOrders";
+const ORDERS_CACHE_SCHEMA_VERSION = 2;
 const orderListeners = new Set();
 const EMPTY_ORDERS = [];
 
@@ -62,14 +63,75 @@ let hasHydratedOrdersFromSupabase = false;
 let successfulOrderWriteSequence = 0;
 const latestSuccessfulWriteByOrder = new Map();
 const orderUpdateQueues = new Map();
+let ordersHydrationState = Object.freeze({
+  status: "idle",
+  source: "cache",
+  error: null,
+});
+let ordersPersistenceModeOverride = null;
+
+function canOrdersUseLocalPersistenceFallback() {
+  return canUseLocalPersistenceFallback(
+    ordersPersistenceModeOverride || getPersistenceMode()
+  );
+}
+
+function getOrdersCacheScope() {
+  const origin =
+    typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : "unknown-origin";
+  let actorScope = "anonymous";
+
+  if (typeof window !== "undefined" && window.sessionStorage) {
+    try {
+      const staffSession = JSON.parse(
+        window.sessionStorage.getItem("teeCoActiveStaffUser") || "null"
+      );
+      const customerSession = JSON.parse(
+        window.sessionStorage.getItem("teeCoActiveCustomerSession") || "null"
+      );
+      actorScope = staffSession?.id
+        ? `staff:${staffSession.id}`
+        : customerSession?.id || customerSession?.email
+        ? `customer:${customerSession.id || customerSession.email}`
+        : actorScope;
+    } catch {
+      actorScope = "invalid-session";
+    }
+  }
+
+  return `${
+    ordersPersistenceModeOverride || getPersistenceMode()
+  }:${origin}:${actorScope}`;
+}
+
+function buildOrdersCacheEnvelope(orders) {
+  return {
+    schemaVersion: ORDERS_CACHE_SCHEMA_VERSION,
+    scope: getOrdersCacheScope(),
+    serverConfirmed: hasHydratedOrdersFromSupabase,
+    orders,
+  };
+}
+
+function isCompatibleOrdersCache(value) {
+  return (
+    value &&
+    !Array.isArray(value) &&
+    value.schemaVersion === ORDERS_CACHE_SCHEMA_VERSION &&
+    value.scope === getOrdersCacheScope() &&
+    Array.isArray(value.orders)
+  );
+}
+
+function setOrdersHydrationState(status, source, error = null) {
+  ordersHydrationState = Object.freeze({ status, source, error });
+  emitOrdersUpdated();
+}
 
 function getOrderRecordKey(order = {}) {
   return String(order.order_number || order.id || "").trim();
-}
-
-function getOrderUpdatedAtTime(order = {}) {
-  const timestamp = new Date(order.updated_at || 0).getTime();
-  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function recordSuccessfulOrderWrite(order = {}) {
@@ -83,66 +145,33 @@ function recordSuccessfulOrderWrite(order = {}) {
   });
 }
 
-export function mergeOrdersByFreshness(
-  currentOrders = [],
-  incomingOrders = [],
-  options = {}
+function mergeHydrationWithConfirmedWrites(
+  remoteOrders = [],
+  hydrationStartWriteSequence = 0
 ) {
-  const {
-    preserveCurrentOnly = false,
-    hydrationStartWriteSequence = null,
-  } = options;
-  const currentByKey = new Map(
-    (Array.isArray(currentOrders) ? currentOrders : [])
-      .map((order) => [getOrderRecordKey(order), order])
-      .filter(([key]) => Boolean(key))
+  const confirmedWrites = new Map();
+
+  readStoredOrders().forEach((order) => {
+    const key = getOrderRecordKey(order);
+    const successfulWrite = latestSuccessfulWriteByOrder.get(key);
+    if (key && successfulWrite?.sequence > hydrationStartWriteSequence) {
+      confirmedWrites.set(key, order);
+    }
+  });
+
+  const synchronizedOrders = (Array.isArray(remoteOrders) ? remoteOrders : []).map(
+    (remoteOrder) => {
+      const key = getOrderRecordKey(remoteOrder);
+      const confirmedWrite = confirmedWrites.get(key);
+      if (confirmedWrite) {
+        confirmedWrites.delete(key);
+        return confirmedWrite;
+      }
+      return remoteOrder;
+    }
   );
-  const incomingKeys = new Set();
-  const mergedOrders = [];
 
-  (Array.isArray(incomingOrders) ? incomingOrders : []).forEach((incomingOrder) => {
-    const key = getOrderRecordKey(incomingOrder);
-    if (!key) {
-      mergedOrders.push(incomingOrder);
-      return;
-    }
-
-    incomingKeys.add(key);
-    const currentOrder = currentByKey.get(key);
-    if (!currentOrder) {
-      mergedOrders.push(incomingOrder);
-      return;
-    }
-
-    const successfulWrite = latestSuccessfulWriteByOrder.get(key);
-    const hydrationPredatesSuccessfulWrite =
-      Number.isFinite(hydrationStartWriteSequence) &&
-      successfulWrite?.sequence > hydrationStartWriteSequence;
-    const incomingIsOlder =
-      getOrderUpdatedAtTime(incomingOrder) < getOrderUpdatedAtTime(currentOrder);
-
-    mergedOrders.push(
-      hydrationPredatesSuccessfulWrite || incomingIsOlder
-        ? currentOrder
-        : incomingOrder
-    );
-  });
-
-  (Array.isArray(currentOrders) ? currentOrders : []).forEach((currentOrder) => {
-    const key = getOrderRecordKey(currentOrder);
-    if (!key || incomingKeys.has(key)) return;
-
-    const successfulWrite = latestSuccessfulWriteByOrder.get(key);
-    const hydrationPredatesSuccessfulWrite =
-      Number.isFinite(hydrationStartWriteSequence) &&
-      successfulWrite?.sequence > hydrationStartWriteSequence;
-
-    if (preserveCurrentOnly || hydrationPredatesSuccessfulWrite) {
-      mergedOrders.push(currentOrder);
-    }
-  });
-
-  return mergedOrders;
+  return [...synchronizedOrders, ...confirmedWrites.values()];
 }
 
 function persistArtworkRelationship(promise, context) {
@@ -479,7 +508,7 @@ function publishOrdersSnapshot(orders, options = {}) {
     : [];
 
   cachedOrdersSnapshot = normalizedOrders;
-  cachedOrdersRaw = JSON.stringify(normalizedOrders);
+  cachedOrdersRaw = JSON.stringify(buildOrdersCacheEnvelope(normalizedOrders));
 
   if (writeStorage && hasBrowserStorage()) {
     const snapshotWasStored = setRawStorageItem(STORAGE_KEY, cachedOrdersRaw);
@@ -521,6 +550,7 @@ function buildSeedOrder(order, index = 0) {
 }
 
 function readStoredOrders() {
+  if (hasHydratedOrdersFromSupabase) return cachedOrdersSnapshot;
   if (!hasBrowserStorage()) return cachedOrdersSnapshot;
 
   try {
@@ -531,11 +561,11 @@ function readStoredOrders() {
       return cachedOrdersSnapshot;
     }
 
-    const parsedOrders = rawOrders ? JSON.parse(rawOrders) : [];
+    const parsedCache = rawOrders ? JSON.parse(rawOrders) : null;
 
     cachedOrdersRaw = normalizedRawOrders;
-    cachedOrdersSnapshot = Array.isArray(parsedOrders)
-      ? parsedOrders.map((order) => normalizeStoredOrder(order))
+    cachedOrdersSnapshot = isCompatibleOrdersCache(parsedCache)
+      ? parsedCache.orders.map((order) => normalizeStoredOrder(order))
       : EMPTY_ORDERS;
 
     return cachedOrdersSnapshot;
@@ -1476,6 +1506,10 @@ export function saveStoredOrders(orders) {
   return true;
 }
 
+export function getOrdersHydrationState() {
+  return ordersHydrationState;
+}
+
 export async function ensureOrdersHydrated(options = {}) {
   const { force = false } = options;
 
@@ -1485,29 +1519,40 @@ export async function ensureOrdersHydrated(options = {}) {
 
   const hydrationStartWriteSequence = successfulOrderWriteSequence;
   ordersHydrationStarted = true;
+  setOrdersHydrationState(
+    "loading",
+    hasHydratedOrdersFromSupabase ? "server" : "cache"
+  );
   ordersHydrationPromise = fetchOrdersFromSupabase()
     .then((remoteOrders) => {
       if (Array.isArray(remoteOrders)) {
         hasHydratedOrdersFromSupabase = true;
-        const synchronizedOrders = mergeOrdersByFreshness(
-          readStoredOrders(),
+        const synchronizedOrders = mergeHydrationWithConfirmedWrites(
           remoteOrders,
-          { hydrationStartWriteSequence }
+          hydrationStartWriteSequence
         );
-        return publishOrdersSnapshot(synchronizedOrders, {
+        const publishedOrders = publishOrdersSnapshot(synchronizedOrders, {
           emit: true,
           writeStorage: true,
         });
+        setOrdersHydrationState("ready", "server");
+        return publishedOrders;
       }
 
       return readStoredOrders();
     })
     .catch((error) => {
-      if (!canUseLocalPersistenceFallback()) {
+      if (!canOrdersUseLocalPersistenceFallback()) {
+        setOrdersHydrationState(
+          "error",
+          hasHydratedOrdersFromSupabase ? "server" : "cache",
+          error
+        );
         throw error;
       }
 
       console.error("[ordersStore] Supabase orders hydration failed", error);
+      setOrdersHydrationState("offline", "cache", error);
       return readStoredOrders();
     })
     .finally(() => {
@@ -1532,7 +1577,11 @@ export function subscribeToStoredOrders(listener) {
   }
 
   const handleStorage = (event) => {
-    if (!event.key || event.key === STORAGE_KEY) {
+    if (
+      !hasHydratedOrdersFromSupabase &&
+      (!event.key || event.key === STORAGE_KEY)
+    ) {
+      cachedOrdersRaw = null;
       listener();
     }
   };
@@ -1654,6 +1703,17 @@ export function findStoredOrder(orderNumber) {
 }
 
 async function performStoredOrderUpdate(orderNumber, updates) {
+  if (
+    !hasHydratedOrdersFromSupabase &&
+    !canOrdersUseLocalPersistenceFallback()
+  ) {
+    const error = new Error(
+      "Order changes are unavailable until server hydration completes."
+    );
+    error.code = "ORDERS_SERVER_HYDRATION_REQUIRED";
+    throw error;
+  }
+
   recordOrderTransitionDiagnostic("updateStoredOrder:executed", {
     order_number: orderNumber,
     requested_status: updates?.status || "",
@@ -1714,10 +1774,16 @@ async function performStoredOrderUpdate(orderNumber, updates) {
   );
   updatedOrder = persistedOrder;
   recordSuccessfulOrderWrite(persistedOrder);
+  const publishedOrders = readStoredOrders();
+  const persistedOrderIndex = publishedOrders.findIndex(
+    (order) => getOrderRecordKey(order) === getOrderRecordKey(persistedOrder)
+  );
   saveStoredOrders(
-    mergeOrdersByFreshness(readStoredOrders(), [persistedOrder], {
-      preserveCurrentOnly: true,
-    })
+    persistedOrderIndex >= 0
+      ? publishedOrders.map((order, index) =>
+          index === persistedOrderIndex ? persistedOrder : order
+        )
+      : [persistedOrder, ...publishedOrders]
   );
   try {
     recordOrderTransitionDiagnostic("ensureTeeCoProductionProcess:started", {
@@ -2141,6 +2207,7 @@ export async function migrateStoredOrdersToSupabase(options = {}) {
 
 export function configureOrdersPersistenceForTests(options = {}) {
   configureOrdersRepositoryForTests(options);
+  ordersPersistenceModeOverride = options.persistenceMode || null;
   ordersHydrationStarted = false;
   ordersHydrationPromise = null;
   hasHydratedOrdersFromSupabase = false;
@@ -2149,4 +2216,9 @@ export function configureOrdersPersistenceForTests(options = {}) {
   successfulOrderWriteSequence = 0;
   latestSuccessfulWriteByOrder.clear();
   orderUpdateQueues.clear();
+  ordersHydrationState = Object.freeze({
+    status: "idle",
+    source: "cache",
+    error: null,
+  });
 }
