@@ -181,14 +181,16 @@ function buildSupabaseSelectFields(optionalFields = activeOptionalSupabaseFields
   return [...REQUIRED_SUPABASE_SELECT_FIELDS, ...optionalFields].join(", ");
 }
 
-function extractMissingSchemaColumn(error) {
+export function extractMissingSchemaColumn(error) {
   const message = String(error?.message || "");
   const missingQuotedColumn = message.match(/Could not find the '([^']+)' column/i)?.[1];
   if (missingQuotedColumn) {
     return missingQuotedColumn;
   }
 
-  const undefinedColumn = message.match(/column\s+["']?([a-z0-9_]+)["']?\s+does not exist/i)?.[1];
+  const undefinedColumn = message.match(
+    /column\s+(?:(?:["']?[a-z0-9_]+["']?)\.)?["']?([a-z0-9_]+)["']?\s+does not exist/i
+  )?.[1];
   return undefinedColumn || "";
 }
 

@@ -345,7 +345,11 @@ export default function CustomerPortalRequestOrder() {
     });
     if (!identityValidation.valid) {
       setSubmitState("error");
-      setSubmitMessage(identityValidation.message);
+      setSubmitMessage(
+        isAuthenticatedCustomer && identityValidation.missingFields.includes("Phone Number")
+          ? "Your Tee & Co. account is missing a contact phone number. Use Manage Account to add it before submitting this request."
+          : identityValidation.message
+      );
       return;
     }
 
