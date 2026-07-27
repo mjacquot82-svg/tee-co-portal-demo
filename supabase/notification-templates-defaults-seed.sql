@@ -200,9 +200,9 @@ We'll notify you when your order is ready for pickup.
 
 Thanks,
 The {{company_name}} Team$template$,
-    'Hi {{customer_name}}, your order {{order_number}} is now in production! We''ll let you know when it''s ready.',
+    'Hi {{customer_name}}, your order {{order_number}} has entered our production schedule. We''ll let you know when it''s ready.',
     true,
-    false,
+    true,
     false
   ),
   (

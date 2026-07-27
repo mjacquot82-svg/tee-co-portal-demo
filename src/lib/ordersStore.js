@@ -224,11 +224,20 @@ export function didOrderEnterQuoteApprovedState(previousOrder = {}, nextOrder = 
 
   return (
     (!isApprovedState(previousApprovalStatus) && isApprovedState(nextApprovalStatus)) ||
-    (previousQuoteStatus !== "Approved" && nextQuoteStatus === "Approved") ||
-    (
-      previousQuoteStatus !== "Ready For Production" &&
-      nextQuoteStatus === "Ready For Production"
-    )
+    (previousQuoteStatus !== "Approved" && nextQuoteStatus === "Approved")
+  );
+}
+
+export function didOrderEnterProductionNotificationState(
+  previousOrder = {},
+  nextOrder = {}
+) {
+  const previousStatus = normalizeStatusText(previousOrder.status);
+  const nextStatus = normalizeStatusText(nextOrder.status);
+
+  return (
+    !["Ready For Production", "Printing", "Embroidery"].includes(previousStatus) &&
+    ["Ready For Production", "Printing", "Embroidery"].includes(nextStatus)
   );
 }
 
@@ -1913,10 +1922,7 @@ async function performStoredOrderUpdate(orderNumber, updates) {
       });
     }
 
-    if (
-      !["Ready For Production", "Printing", "Embroidery"].includes(previousStatus) &&
-      ["Ready For Production", "Printing", "Embroidery"].includes(nextStatus)
-    ) {
+    if (didOrderEnterProductionNotificationState(previousOrder, updatedOrder)) {
       await triggerOrderNotification(NOTIFICATION_TYPES.orderInProduction, updatedOrder);
     }
 

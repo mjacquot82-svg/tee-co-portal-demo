@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import {
   NOTIFICATION_TEMPLATE_DEFINITIONS,
   buildDefaultNotificationTemplates,
@@ -52,4 +53,39 @@ test("renderNotificationTemplatePreview renders all template content fields", ()
     emailBody: "Hi Morgan, pick up on 2026-10-12.",
     smsMessage: "Pickup for TC-2500 on 2026-10-12",
   });
+});
+
+test("approval and production use distinct customer SMS templates", () => {
+  const templates = buildDefaultNotificationTemplates();
+  const approval = templates.find((template) => template.type === "quote_approved");
+  const production = templates.find((template) => template.type === "order_in_production");
+  const mergeFields = {
+    customer_name: "Morgan",
+    order_number: "TC-EVENT-MAPPING",
+  };
+
+  expect(approval).toBeTruthy();
+  expect(production).toMatchObject({
+    smsEnabled: true,
+  });
+
+  const approvalSms = renderTemplateContent(approval.smsMessage, mergeFields);
+  const productionSms = renderTemplateContent(production.smsMessage, mergeFields);
+
+  expect(approvalSms).toContain("has been approved");
+  expect(productionSms).toContain("has entered our production schedule");
+  expect(productionSms).not.toBe(approvalSms);
+});
+
+test("production migration enables the distinct production SMS for existing templates", async () => {
+  const migration = await readFile(
+    new URL("../supabase/order-in-production-notification-template.sql", import.meta.url),
+    "utf8"
+  );
+
+  expect(migration).toContain("update public.notification_templates");
+  expect(migration).toContain("where type = 'order_in_production'");
+  expect(migration).toContain("sms_enabled = true");
+  expect(migration).toContain("has entered our production schedule");
+  expect(migration).not.toContain("quote_approved");
 });

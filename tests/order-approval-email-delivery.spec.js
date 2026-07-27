@@ -1,7 +1,10 @@
 // @ts-check
 import { expect, test } from "@playwright/test";
 import { handler } from "../netlify/functions/customer-notification.js";
-import { didOrderEnterQuoteApprovedState } from "../src/lib/ordersStore.js";
+import {
+  didOrderEnterProductionNotificationState,
+  didOrderEnterQuoteApprovedState,
+} from "../src/lib/ordersStore.js";
 import { buildProductionReadyWorkflowUpdates } from "../src/quotes/productionReadiness.js";
 
 test("approval delivery verifies persisted approval and sends the customer email", async () => {
@@ -87,7 +90,7 @@ test("approval notification remains attached to the persisted approval transitio
   expect(source).toContain("triggerOrderNotification(NOTIFICATION_TYPES.quoteApproved, updatedOrder)");
 });
 
-test("release to production emits Quote Approved when approval_status remains pending review", () => {
+test("release to production does not emit Quote Approved without an approval transition", () => {
   expect(didOrderEnterQuoteApprovedState(
     {
       order_number: "TC-467720",
@@ -99,7 +102,7 @@ test("release to production emits Quote Approved when approval_status remains pe
       quote_status: "Ready For Production",
       approval_status: "Pending Review",
     }
-  )).toBe(true);
+  )).toBe(false);
 
   expect(didOrderEnterQuoteApprovedState(
     {
@@ -115,7 +118,43 @@ test("release to production emits Quote Approved when approval_status remains pe
   )).toBe(false);
 });
 
-test("DTF deposit-not-required readiness still reaches Quote Approved when process initialization fails", async () => {
+test("request approval and later production release emit distinct business events once", () => {
+  const pending = {
+    order_number: "TC-EVENT-MAPPING",
+    status: "New",
+    quote_status: "Awaiting Deposit",
+    approval_status: "Pending Review",
+  };
+  const approved = {
+    ...pending,
+    approval_status: "Approved",
+  };
+  const released = {
+    ...approved,
+    status: "Ready For Production",
+    quote_status: "Ready For Production",
+  };
+  const events = [];
+
+  if (didOrderEnterQuoteApprovedState(pending, approved)) {
+    events.push("quote_approved");
+  }
+  if (didOrderEnterProductionNotificationState(pending, approved)) {
+    events.push("order_in_production");
+  }
+  if (didOrderEnterQuoteApprovedState(approved, released)) {
+    events.push("quote_approved");
+  }
+  if (didOrderEnterProductionNotificationState(approved, released)) {
+    events.push("order_in_production");
+  }
+
+  expect(events).toEqual(["quote_approved", "order_in_production"]);
+  expect(events.filter((event) => event === "quote_approved")).toHaveLength(1);
+  expect(events.filter((event) => event === "order_in_production")).toHaveLength(1);
+});
+
+test("DTF deposit-not-required readiness does not reclassify an existing approval", async () => {
   const previousOrder = {
     id: "b4a95874-9b0f-45d0-ac11-3098e02ce684",
     order_number: "TC-114648",
@@ -152,7 +191,7 @@ test("DTF deposit-not-required readiness still reaches Quote Approved when proce
     quote_status: "Ready For Production",
     production_ready: true,
   });
-  expect(didOrderEnterQuoteApprovedState(previousOrder, persistedOrder)).toBe(true);
+  expect(didOrderEnterQuoteApprovedState(previousOrder, persistedOrder)).toBe(false);
 
   const source = await import("node:fs/promises").then((fs) =>
     fs.readFile(new URL("../src/lib/ordersStore.js", import.meta.url), "utf8")
@@ -163,11 +202,11 @@ test("DTF deposit-not-required readiness still reaches Quote Approved when proce
   const processFailureBoundary = source.indexOf(
     "Unable to initialize the production process for the persisted order"
   );
-  const quoteApprovedEmission = source.indexOf(
-    "triggerOrderNotification(NOTIFICATION_TYPES.quoteApproved, updatedOrder)"
+  const productionEmission = source.indexOf(
+    "triggerOrderNotification(NOTIFICATION_TYPES.orderInProduction, updatedOrder)"
   );
 
   expect(processInitialization).toBeGreaterThan(-1);
   expect(processFailureBoundary).toBeGreaterThan(processInitialization);
-  expect(quoteApprovedEmission).toBeGreaterThan(processFailureBoundary);
+  expect(productionEmission).toBeGreaterThan(processFailureBoundary);
 });
