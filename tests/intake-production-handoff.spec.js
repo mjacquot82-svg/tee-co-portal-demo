@@ -1,16 +1,18 @@
 // @ts-check
 import { expect, test } from "@playwright/test";
 
-test("completed intake points to the existing production workspace", async () => {
+test("completed intake distinguishes readiness from navigation to the production workspace", async () => {
   const source = await import("node:fs/promises").then((fs) =>
     fs.readFile(new URL("../src/admin/QuoteDetail.jsx", import.meta.url), "utf8")
   );
 
   expect(source).toContain('data-testid="intake-production-handoff"');
-  expect(source).toContain("Continue to production");
-  expect(source).toContain("This request is ready for the Production Queue.");
+  expect(source).toContain('eyebrow: "Production Ready"');
+  expect(source).toContain('eyebrow: "Waiting for Customer"');
+  expect(source).toContain("Production cannot begin until the required customer deposit is received.");
   expect(source).toContain('to={`/admin/orders/${order.order_number}#production-handoff`}');
-  expect(source).toContain("Continue to Production");
+  expect(source).toContain("Review Production Readiness");
+  expect(source).not.toContain("Continue to Production");
   expect(source).toContain("View Production Queue");
 });
 

@@ -633,6 +633,15 @@ function IntakeReviewScreen({
   const requiresArtworkUpload = attentionItems.includes("Artwork Needed");
   const requiresCustomerResponse = attentionItems.includes("Customer Response");
   const intakeComplete = attentionItems.length === 0;
+  const productionReady = Boolean(productionReadiness?.ready);
+  const depositReadinessCheck = productionReadiness?.checks?.find(
+    (check) => check.label === "Deposit"
+  );
+  const waitingForCustomerDeposit =
+    intakeComplete &&
+    !productionReady &&
+    order.deposit_required === true &&
+    depositReadinessCheck?.passed === false;
   const workflowSummary = buildIntakeWorkflowSummary(order);
   const artworkReviewComplete = isArtworkReviewComplete(order);
   const depositDecisionComplete = isDepositDecisionComplete(order);
@@ -688,8 +697,34 @@ function IntakeReviewScreen({
       detail: "Continue when the requested changes are returned.",
     },
   }[currentRequirement];
+  const postIntakePresentation = productionReady
+    ? {
+        eyebrow: "Production Ready",
+        title: "Production readiness confirmed",
+        detail: "All production requirements are complete. Review the production workspace and release the order when ready.",
+        summary: "Intake complete · Production ready",
+        status: "Production Ready",
+        tone: "success",
+      }
+    : waitingForCustomerDeposit
+      ? {
+          eyebrow: "Waiting for Customer",
+          title: "Waiting for customer deposit",
+          detail: "Intake is complete. Production cannot begin until the required customer deposit is received.",
+          summary: "Intake complete · Waiting for customer deposit",
+          status: "Waiting for Customer",
+          tone: "warning",
+        }
+      : {
+          eyebrow: "Production Readiness",
+          title: "Production requirements remain",
+          detail: "Intake is complete, but remaining production requirements must be resolved before release.",
+          summary: "Intake complete · Production requirements remain",
+          status: "Production Blocked",
+          tone: "warning",
+        };
   const conciseWorkflowSummary = intakeComplete
-    ? "Intake complete · Ready for production"
+    ? postIntakePresentation.summary
     : `${attentionItems.length} open · Next: ${currentActionCopy?.title || currentRequirement}`;
   const customerInitials = String(order.customer_name || "Customer")
     .split(/\s+/)
@@ -804,22 +839,22 @@ function IntakeReviewScreen({
       <section
         data-testid="intake-workflow-guidance"
         className={`production-console-action-banner intake-console-action ${
-          intakeComplete ? "is-complete" : ""
+          intakeComplete && productionReady ? "is-complete" : ""
         }`}
       >
         <div className="production-console-action-copy">
-          <p style={{ margin: 0, color: intakeComplete ? "#166534" : "#9a3412", fontSize: "12px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            {intakeComplete ? "Next Step" : "Current Action"}
+          <p style={{ margin: 0, color: intakeComplete && productionReady ? "#166534" : "#9a3412", fontSize: "12px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            {intakeComplete ? postIntakePresentation.eyebrow : "Current Action"}
           </p>
-          <h2 style={{ margin: "6px 0 0", color: intakeComplete ? "#14532d" : "#7c2d12" }}>
+          <h2 style={{ margin: "6px 0 0", color: intakeComplete && productionReady ? "#14532d" : "#7c2d12" }}>
             {attentionItems.length
               ? intakeStages[currentStageIndex]?.label
-              : "Continue to production"}
+              : postIntakePresentation.title}
           </h2>
-          <p style={{ margin: "8px 0 0", color: intakeComplete ? "#166534" : "#9a3412", lineHeight: 1.5 }}>
+          <p style={{ margin: "8px 0 0", color: intakeComplete && productionReady ? "#166534" : "#9a3412", lineHeight: 1.5 }}>
             {attentionItems.length
               ? currentActionCopy?.detail
-              : "This request is ready for the Production Queue."}
+              : postIntakePresentation.detail}
           </p>
         </div>
         {attentionItems.length ? (
@@ -919,7 +954,7 @@ function IntakeReviewScreen({
                 fontWeight: 800,
               }}
             >
-              Continue to Production
+              Review Production Readiness
             </Link>
             <Link
               to="/admin/orders"
@@ -935,7 +970,9 @@ function IntakeReviewScreen({
             >
               View Production Queue
             </Link>
-            <StatusPill tone="success">No open intake items</StatusPill>
+            <StatusPill tone={postIntakePresentation.tone}>
+              {postIntakePresentation.status}
+            </StatusPill>
           </div>
         )}
 
