@@ -20,6 +20,7 @@ import {
 } from "../lib/operationalWorkflow";
 import { canManageCustomerMerges, getAdminViewer } from "./adminRoleView";
 import PaymentRequestForm from "./PaymentRequestForm";
+import { formatNorthAmericanPhoneDisplay } from "../lib/phoneNormalization";
 
 function currency(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -866,7 +867,9 @@ export default function CustomerDetail() {
           </div>
           <div style={summaryCardStyle}>
             <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Phone</span>
-            <strong style={{ color: "#171717" }}>{customer.phone || "-"}</strong>
+            <strong style={{ color: "#171717" }}>
+              {formatNorthAmericanPhoneDisplay(customer.phone) || "-"}
+            </strong>
           </div>
           <div style={summaryCardStyle}>
             <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Email</span>

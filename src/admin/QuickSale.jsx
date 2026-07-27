@@ -16,6 +16,7 @@ import { customerIdsEqual } from "../lib/customerIds";
 import PaymentStatusBadge from "../components/PaymentStatusBadge";
 import { PAYMENT_METHOD_OPTIONS } from "../orders/orderFinancials";
 import { isStaffWorkspaceView } from "./adminRoleView";
+import { formatNorthAmericanPhoneDisplay } from "../lib/phoneNormalization";
 
 const taxRate = 0.13;
 const counterPaymentMethods = PAYMENT_METHOD_OPTIONS.filter((option) =>
@@ -1761,7 +1762,10 @@ export default function QuickSale() {
                             <strong>{customer.name}</strong>
                             {customer.company ? ` - ${customer.company}` : ""}
                             <span style={{ display: "block", marginTop: "4px", color: "#64748b", fontSize: "13px" }}>
-                              {[customer.phone, customer.email].filter(Boolean).join(" • ") ||
+                              {[
+                                formatNorthAmericanPhoneDisplay(customer.phone),
+                                customer.email,
+                              ].filter(Boolean).join(" • ") ||
                                 `${customer.order_numbers?.length || 0} linked orders`}
                             </span>
                           </button>
@@ -1952,7 +1956,9 @@ export default function QuickSale() {
                       </div>
 
                       <div style={{ display: "grid", gap: "6px", color: "#475569", fontSize: "14px" }}>
-                        {selectedCustomer.phone ? <span>{selectedCustomer.phone}</span> : null}
+                        {selectedCustomer.phone ? (
+                          <span>{formatNorthAmericanPhoneDisplay(selectedCustomer.phone)}</span>
+                        ) : null}
                         {selectedCustomer.email ? <span>{selectedCustomer.email}</span> : null}
                         {selectedCustomer.order_numbers?.length ? (
                           <span>{selectedCustomer.order_numbers.length} linked order records</span>

@@ -48,6 +48,7 @@ import {
 import { canUseLocalPersistenceFallback } from "./persistenceMode";
 import { ensureTeeCoProductionProcess } from "../integrations/teeCoProductionProcess";
 import { recordOrderTransitionDiagnostic } from "./orderTransitionDiagnostics";
+import { assertIntakeRequestApprovalAllowed } from "../quotes/intakeApprovalGuard";
 
 const STORAGE_KEY = "teeCoStaffOrders";
 const orderListeners = new Set();
@@ -1565,6 +1566,15 @@ export async function updateStoredOrder(orderNumber, updates) {
     activity_type: updates?.activity_type || "",
   });
   const currentOrders = getStoredOrders();
+  const currentOrder = currentOrders.find((order) => order.order_number === orderNumber);
+  const requestsIntakeApproval =
+    String(updates?.staff_review_status || "").trim().toLowerCase() === "approved" ||
+    String(updates?.activity_type || "").trim().toLowerCase() === "order_request_review";
+
+  if (currentOrder && requestsIntakeApproval) {
+    assertIntakeRequestApprovalAllowed(currentOrder);
+  }
+
   const now = new Date().toISOString();
   let updatedOrder = null;
   let previousOrder = null;

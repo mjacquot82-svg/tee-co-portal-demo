@@ -15,6 +15,7 @@ import {
 } from "../lib/operationalAuthStore";
 import {
   isPortalOrderingPath,
+  isPortalOrderingWorkflowPath,
   PORTAL_ORDER_CATALOG_PATH,
 } from "./customerPortalStartOrderRoute";
 import { usePaymentReconciliationRefresh } from "../lib/usePaymentReconciliationRefresh";
@@ -31,6 +32,7 @@ const portalLinks = [
 function CustomerPortalLoading() {
   return (
     <div
+      className="customer-portal-app"
       style={{
         minHeight: "100vh",
         display: "grid",
@@ -130,6 +132,7 @@ export default function CustomerPortalShell() {
   }
 
   const initials = getUserInitials(customerSession.displayName);
+  const isOrderingWorkflow = isPortalOrderingWorkflowPath(location.pathname);
 
   return (
     <div
@@ -150,10 +153,8 @@ export default function CustomerPortalShell() {
         }}
       >
         <div
+          className="customer-portal-header-inner"
           style={{
-            maxWidth: "1180px",
-            margin: "0 auto",
-            padding: "18px 24px",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -181,8 +182,9 @@ export default function CustomerPortalShell() {
 
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             <NavLink
-              to={PORTAL_ORDER_CATALOG_PATH}
-              state={{ draftRecoveryRequested: true }}
+              className="customer-portal-primary-action"
+              to={isOrderingWorkflow ? "/portal/orders" : PORTAL_ORDER_CATALOG_PATH}
+              state={isOrderingWorkflow ? undefined : { draftRecoveryRequested: true }}
               style={() => ({
                 display: "inline-flex",
                 alignItems: "center",
@@ -197,7 +199,7 @@ export default function CustomerPortalShell() {
                 boxShadow: "0 12px 24px rgba(15, 118, 110, 0.18)",
               })}
             >
-              Start New Order
+              {isOrderingWorkflow ? "← Back to Account" : "Start New Order"}
             </NavLink>
             <div
               style={{
@@ -240,21 +242,11 @@ export default function CustomerPortalShell() {
         </div>
       </header>
 
-      <main style={{ maxWidth: "1180px", margin: "0 auto", padding: "28px 24px 48px" }}>
-        <div
-          className="customer-portal-layout"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "240px minmax(0, 1fr)",
-            gap: "24px",
-            alignItems: "start",
-          }}
-        >
+      <main className="customer-portal-workspace">
+        <div className="customer-portal-layout">
           <aside
             className="customer-portal-sidebar"
             style={{
-              position: "sticky",
-              top: "108px",
               borderRadius: "24px",
               border: "1px solid #dbe4ee",
               background: "rgba(255,255,255,0.9)",
@@ -312,6 +304,7 @@ export default function CustomerPortalShell() {
             {portalLinks.map((link) => (
               link.to === PORTAL_ORDER_CATALOG_PATH ? null : (
               <NavLink
+                className="customer-portal-section-link"
                 key={link.to}
                 to={link.to}
                 style={({ isActive }) => ({
@@ -330,7 +323,11 @@ export default function CustomerPortalShell() {
             ))}
           </aside>
 
-          <div style={{ minWidth: 0 }}>
+          <div
+            className={`customer-portal-content ${
+              isPortalOrderingPath(location.pathname) ? "customer-portal-ordering" : ""
+            }`}
+          >
             <Outlet context={{ customerSession }} />
           </div>
         </div>

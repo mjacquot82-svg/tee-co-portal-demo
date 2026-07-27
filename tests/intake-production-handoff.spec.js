@@ -7,8 +7,8 @@ test("completed intake points to the existing production workspace", async () =>
   );
 
   expect(source).toContain('data-testid="intake-production-handoff"');
-  expect(source).toContain("Continue this order into production");
-  expect(source).toContain("ready to be released into the Production Queue");
+  expect(source).toContain("Continue to production");
+  expect(source).toContain("This request is ready for the Production Queue.");
   expect(source).toContain('to={`/admin/orders/${order.order_number}#production-handoff`}');
   expect(source).toContain("Continue to Production");
   expect(source).toContain("View Production Queue");

@@ -22,6 +22,7 @@ import { generateQuoteSnapshot } from "../lib/quoteEngine";
 import { uploadCustomerArtwork } from "../services/customerArtworkService";
 import { resolveCustomerIdentity, validateCustomerIdentity } from "../lib/customerIdentity";
 import { getCustomerDisplayName } from "../lib/customerRecordMatching";
+import { formatNorthAmericanPhoneDisplay } from "../lib/phoneNormalization";
 import "./NewOrder.css";
 
 const fallbackSizeKeys = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"];
@@ -719,7 +720,10 @@ export default function NewOrder() {
                       </strong>
                       {customer.company ? ` — ${customer.company}` : ""}
                       <span style={{ display: "block", marginTop: "3px", color: "#64748b", fontSize: "13px" }}>
-                        {[customer.phone, customer.email].filter(Boolean).join(" • ") || "Saved customer"}
+                        {[
+                          formatNorthAmericanPhoneDisplay(customer.phone),
+                          customer.email,
+                        ].filter(Boolean).join(" • ") || "Saved customer"}
                       </span>
                     </button>
                   ))}

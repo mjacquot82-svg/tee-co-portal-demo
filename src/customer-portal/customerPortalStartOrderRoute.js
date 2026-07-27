@@ -14,6 +14,13 @@ export function isPortalOrderingPath(pathname = "") {
     normalizedPath.startsWith(`${PORTAL_ORDER_CATALOG_PATH}/`);
 }
 
+export function isPortalOrderingWorkflowPath(pathname = "") {
+  const normalizedPath = String(pathname || "");
+  return isPortalOrderingPath(normalizedPath) ||
+    normalizedPath === PORTAL_REQUEST_ORDER_PATH ||
+    normalizedPath === PORTAL_ORDER_SUBMITTED_PATH;
+}
+
 export function getOrderingWorkflowPaths(pathname = "") {
   const portalOrdering = isPortalOrderingPath(pathname);
   const base = portalOrdering ? PORTAL_ORDER_CATALOG_PATH : "";

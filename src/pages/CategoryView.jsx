@@ -161,6 +161,7 @@ export default function CategoryView() {
 
   return (
     <div
+      className="storefront-category-page"
       style={{
         maxWidth: "1240px",
         margin: "0 auto",

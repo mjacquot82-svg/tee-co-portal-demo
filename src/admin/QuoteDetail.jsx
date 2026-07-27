@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
+import "./OrderDetail.css";
 import PricingSummary from "../components/PricingSummary";
 import OwnerNextActionCard from "../components/OwnerNextActionCard";
 import { formatDateTime } from "../lib/dateFormatting";
@@ -38,12 +39,18 @@ import {
 import PaymentRequestForm from "./PaymentRequestForm";
 import { requestQuoteDeposit } from "./quoteDepositRequestAction";
 import { buildIntakeActionConfirmation, buildIntakeWorkflowSummary } from "./workflowCopy";
+import { formatNorthAmericanPhoneDisplay } from "../lib/phoneNormalization";
 import {
   getAvailableIntakeActions,
   getCompletedIntakeActions,
   getOutstandingIntakeRequirements,
 } from "./intakeActionPresentation";
 import { getPricingAttentionReason } from "./intakePricingPresentation";
+import {
+  assertIntakeRequestApprovalAllowed,
+  isArtworkReviewComplete,
+  isDepositDecisionComplete,
+} from "../quotes/intakeApprovalGuard";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -347,6 +354,7 @@ function PrimaryActionButton({ children, onClick, tone = "default", type = "butt
     <button
       type={type}
       onClick={onClick}
+      data-action-tone={tone}
       style={{
         border: `1px solid ${palette.border}`,
         background: palette.background,
@@ -622,14 +630,73 @@ function IntakeReviewScreen({
   ].filter(Boolean);
   const orderLineItems = getOrderLineItems(order);
   const pricingAttentionReason = getPricingAttentionReason(order, financials);
-  const requiresStaffReview = attentionItems.includes("Staff Review");
   const requiresArtworkUpload = attentionItems.includes("Artwork Needed");
-  const requiresArtworkReview = attentionItems.includes("Artwork Review");
   const requiresCustomerResponse = attentionItems.includes("Customer Response");
-  const requiresDepositDecision = attentionItems.includes("Deposit Decision");
   const intakeComplete = attentionItems.length === 0;
   const workflowSummary = buildIntakeWorkflowSummary(order);
-
+  const artworkReviewComplete = isArtworkReviewComplete(order);
+  const depositDecisionComplete = isDepositDecisionComplete(order);
+  const intakeStages = [
+    {
+      key: "artwork-review",
+      label: "Artwork Review",
+      icon: "◫",
+      complete: artworkReviewComplete,
+      blocked: requiresArtworkUpload || requiresCustomerResponse,
+    },
+    {
+      key: "deposit-decision",
+      label: "Deposit Decision",
+      icon: "$",
+      complete: depositDecisionComplete,
+      blocked: false,
+    },
+    {
+      key: "approve-request",
+      label: "Approve Request",
+      icon: "✓",
+      complete: completedActions.approveRequest,
+      blocked: false,
+    },
+  ];
+  const currentStageIndex = intakeStages.findIndex((stage) => !stage.complete);
+  const currentRequirement =
+    currentStageIndex === 0 && requiresArtworkUpload
+      ? "Artwork Needed"
+      : currentStageIndex === 0 && requiresCustomerResponse
+        ? "Customer Response"
+        : intakeStages[currentStageIndex]?.label || "";
+  const currentActionCopy = {
+    "Artwork Needed": {
+      title: "Request customer artwork",
+      detail: "The production file is still missing.",
+    },
+    "Artwork Review": {
+      title: "Review the uploaded artwork",
+      detail: "Approve the file when it is ready for production.",
+    },
+    "Deposit Decision": {
+      title: "Decide the deposit requirement",
+      detail: "Require a deposit or mark it as not required.",
+    },
+    "Approve Request": {
+      title: "Approve the request",
+      detail: "Artwork and the deposit decision are complete.",
+    },
+    "Customer Response": {
+      title: "Wait for the customer",
+      detail: "Continue when the requested changes are returned.",
+    },
+  }[currentRequirement];
+  const conciseWorkflowSummary = intakeComplete
+    ? "Intake complete · Ready for production"
+    : `${attentionItems.length} open · Next: ${currentActionCopy?.title || currentRequirement}`;
+  const customerInitials = String(order.customer_name || "Customer")
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
   function handleOpenDepositModal() {
     setDepositModalOpen(true);
   }
@@ -662,55 +729,34 @@ function IntakeReviewScreen({
   return (
     <div
       data-testid="intake-review-screen"
-      style={{ maxWidth: "1180px", margin: "0 auto", padding: "24px", display: "grid", gap: "18px" }}
+      className="production-console intake-production-console"
     >
       <section
         aria-live="polite"
+        aria-label={workflowSummary}
         data-testid="intake-workflow-confirmation"
-        style={{
-          borderRadius: "16px",
-          padding: "16px 18px",
-          border: intakeComplete ? "1px solid #bbf7d0" : "1px solid #fed7aa",
-          background: intakeComplete ? "#ecfdf5" : "#fff7ed",
-          color: intakeComplete ? "#166534" : "#9a3412",
-          fontWeight: 700,
-          lineHeight: 1.6,
-          whiteSpace: "pre-line",
-        }}
+        className={`intake-console-confirmation ${intakeComplete ? "is-complete" : ""}`}
       >
-        {workflowSummary}
+        {conciseWorkflowSummary}
       </section>
 
       <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: "16px",
-          flexWrap: "wrap",
-        }}
+        className="intake-console-header"
       >
-        <div>
-          <p
-            style={{
-              margin: 0,
-              color: "#0f766e",
-              fontSize: "12px",
-              fontWeight: 900,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            Order Request Review
-          </p>
-          <h1 style={{ margin: "6px 0" }}>Order Request {order.order_number}</h1>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-            <StatusPill tone={intakeComplete ? "success" : "warning"}>
-              {intakeComplete
-                ? "Intake Review Complete"
-                : `${attentionItems.length} Intake Requirement${attentionItems.length === 1 ? "" : "s"} Remaining`}
-            </StatusPill>
-            <span style={{ color: "#64748b", fontWeight: 700 }}>{submittedAt}</span>
+        <div className="intake-console-header-identity">
+          <span className="intake-console-header-avatar" aria-hidden="true">{customerInitials}</span>
+          <div>
+            <p>Customer request</p>
+            <h1>{order.customer_name || "Customer request"}</h1>
+            <div className="intake-console-header-meta">
+              <span className="intake-console-request-number">Request {order.order_number}</span>
+              <StatusPill tone={intakeComplete ? "success" : "warning"}>
+                {intakeComplete
+                  ? "Review complete"
+                  : `${attentionItems.length} open`}
+              </StatusPill>
+              <span>{submittedAt}</span>
+            </div>
           </div>
         </div>
 
@@ -730,78 +776,97 @@ function IntakeReviewScreen({
         </Link>
       </header>
 
+      <section className="production-console-workflow" aria-label="Request review workflow">
+        <div className="production-console-workflow-label">
+          <span>Review progress</span>
+          <strong>{intakeStages.filter((stage) => stage.complete).length}/3</strong>
+        </div>
+        <ol className="production-console-pills">
+          {intakeStages.map((stage, index) => {
+            const state = stage.complete ? "complete" : stage.blocked ? "blocked" : "pending";
+            const current = index === currentStageIndex;
+            return (
+              <li
+                key={stage.key}
+                className={`production-console-pill is-${state} ${current ? "is-current" : ""}`}
+                aria-current={current ? "step" : undefined}
+              >
+                <span className="intake-console-stage-icon" aria-hidden="true">
+                  {state === "complete" ? "✓" : stage.icon}
+                </span>
+                {stage.label}
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+
       <section
         data-testid="intake-workflow-guidance"
-        style={{
-          ...cardStyle(intakeComplete ? "#ecfdf5" : "#fff7ed"),
-          border: intakeComplete ? "1px solid #bbf7d0" : "1px solid #fed7aa",
-          display: "grid",
-          gap: "14px",
-        }}
+        className={`production-console-action-banner intake-console-action ${
+          intakeComplete ? "is-complete" : ""
+        }`}
       >
-        <div>
+        <div className="production-console-action-copy">
           <p style={{ margin: 0, color: intakeComplete ? "#166534" : "#9a3412", fontSize: "12px", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            {intakeComplete ? "Next Business Phase" : "Outstanding Requirements"}
+            {intakeComplete ? "Next Step" : "Current Action"}
           </p>
           <h2 style={{ margin: "6px 0 0", color: intakeComplete ? "#14532d" : "#7c2d12" }}>
-            {attentionItems.length ? "What to do next" : "Continue this order into production"}
+            {attentionItems.length
+              ? intakeStages[currentStageIndex]?.label
+              : "Continue to production"}
           </h2>
           <p style={{ margin: "8px 0 0", color: intakeComplete ? "#166534" : "#9a3412", lineHeight: 1.5 }}>
             {attentionItems.length
-              ? "Review each requirement below and use the action shown with it."
-              : "Intake is complete and this order is ready to be released into the Production Queue. Continue in the existing production workspace, where you can also assign the work or leave it unassigned."}
+              ? currentActionCopy?.detail
+              : "This request is ready for the Production Queue."}
           </p>
         </div>
         {attentionItems.length ? (
-          <div data-testid="intake-outstanding-requirements" style={{ display: "grid", gap: "12px" }}>
-            {requiresStaffReview ? (
-              <article data-testid="intake-requirement-staff" style={cardStyle("#ffffff")}>
-                <h3 style={{ margin: 0, color: "#7c2d12" }}>Staff Review</h3>
-                <p style={{ margin: "6px 0 12px", color: "#475569", lineHeight: 1.5 }}>
-                  Verify the submitted garments and artwork, and review the estimated total below. Approve the request when it is complete and ready to move forward.
-                </p>
-                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                  {availableActions.approveRequest ? (
-                    <PrimaryActionButton onClick={onApproveRequest}>Approve Request</PrimaryActionButton>
+          <div data-testid="intake-outstanding-requirements" className="intake-console-requirements">
+            <article
+              data-testid="intake-requirement-artwork-review"
+              className={
+                artworkReviewComplete
+                  ? "is-complete"
+                  : currentStageIndex === 0
+                    ? "is-current"
+                    : "is-upcoming"
+              }
+            >
+              <h3><i aria-hidden="true">{artworkReviewComplete ? "✓" : currentStageIndex === 0 ? "●" : "○"}</i>Artwork Review</h3>
+              <span>{artworkReviewComplete ? "Completed" : currentStageIndex === 0 ? requiresCustomerResponse ? "Waiting for customer" : requiresArtworkUpload ? "Current · Artwork needed" : "Current stage" : "Upcoming"}</span>
+              <p>Review the production artwork or request the missing file.</p>
+              {currentStageIndex === 0 && !requiresCustomerResponse ? (
+                <div className="production-console-action-buttons">
+                  {availableActions.requestArtwork ? (
+                    <PrimaryActionButton onClick={onRequestArtwork} tone="warning">Request Artwork</PrimaryActionButton>
+                  ) : null}
+                  {availableActions.approveArtwork ? (
+                    <PrimaryActionButton onClick={onApproveArtwork}>Approve Artwork</PrimaryActionButton>
                   ) : null}
                   {availableActions.requestChanges ? (
                     <PrimaryActionButton onClick={onRequestChanges} tone="neutral">Request Changes</PrimaryActionButton>
                   ) : null}
                 </div>
-              </article>
-            ) : null}
+              ) : (
+                <small>{artworkReviewComplete ? "No action needed" : "Waiting for customer artwork"}</small>
+              )}
+              {requiresCustomerResponse ? (
+                <small data-testid="intake-requirement-customer-response">Waiting for customer response</small>
+              ) : null}
+              {requiresArtworkUpload ? <small data-testid="intake-requirement-artwork-upload">Artwork required</small> : null}
+            </article>
 
-            {requiresArtworkUpload ? (
-              <article data-testid="intake-requirement-artwork-upload" style={cardStyle("#ffffff")}>
-                <h3 style={{ margin: 0, color: "#7c2d12" }}>Artwork Needed</h3>
-                <p style={{ margin: "6px 0 12px", color: "#475569", lineHeight: 1.5 }}>
-                  The customer has not supplied the artwork needed for production. Ask them to provide it.
-                </p>
-                {availableActions.requestArtwork ? (
-                  <PrimaryActionButton onClick={onRequestArtwork} tone="warning">Request Artwork</PrimaryActionButton>
-                ) : null}
-              </article>
-            ) : null}
-
-            {requiresArtworkReview ? (
-              <article data-testid="intake-requirement-artwork-review" style={cardStyle("#ffffff")}>
-                <h3 style={{ margin: 0, color: "#7c2d12" }}>Artwork Review</h3>
-                <p style={{ margin: "6px 0 12px", color: "#475569", lineHeight: 1.5 }}>
-                  Check the uploaded artwork and approve it when it is suitable for this order.
-                </p>
-                {availableActions.approveArtwork ? (
-                  <PrimaryActionButton onClick={onApproveArtwork}>Approve Artwork</PrimaryActionButton>
-                ) : null}
-              </article>
-            ) : null}
-
-            {requiresDepositDecision ? (
-              <article data-testid="intake-requirement-deposit" style={cardStyle("#ffffff")}>
-                <h3 style={{ margin: 0, color: "#7c2d12" }}>Deposit Decision</h3>
-                <p style={{ margin: "6px 0 12px", color: "#475569", lineHeight: 1.5 }}>
-                  Decide whether payment is required before this order can move forward.
-                </p>
-                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <article
+              data-testid="intake-requirement-deposit"
+              className={depositDecisionComplete ? "is-complete" : currentStageIndex === 1 ? "is-current" : "is-upcoming"}
+            >
+              <h3><i aria-hidden="true">{depositDecisionComplete ? "✓" : currentStageIndex === 1 ? "●" : "○"}</i>Deposit Decision</h3>
+              <span>{depositDecisionComplete ? "Completed" : currentStageIndex === 1 ? "Current stage" : "Upcoming"}</span>
+              <p>Decide whether payment is required before production.</p>
+              {currentStageIndex === 1 ? (
+                <div className="production-console-action-buttons">
                   {availableActions.requireDeposit ? (
                     <PrimaryActionButton onClick={handleOpenDepositModal} tone="warning">Require Deposit</PrimaryActionButton>
                   ) : null}
@@ -809,20 +874,40 @@ function IntakeReviewScreen({
                     <PrimaryActionButton onClick={onMarkDepositNotRequired} tone="neutral">Mark Deposit Not Required</PrimaryActionButton>
                   ) : null}
                 </div>
-              </article>
-            ) : null}
+              ) : (
+                <small>{depositDecisionComplete ? "No action needed" : "Available after artwork review"}</small>
+              )}
+            </article>
 
-            {requiresCustomerResponse ? (
-              <article data-testid="intake-requirement-customer-response" style={cardStyle("#ffffff")}>
-                <h3 style={{ margin: 0, color: "#7c2d12" }}>Customer Response</h3>
-                <p style={{ margin: "6px 0 0", color: "#475569", lineHeight: 1.5 }}>
-                  Changes have already been requested. No staff action is required until the customer responds.
-                </p>
-              </article>
-            ) : null}
+            <article
+              data-testid="intake-requirement-staff"
+              className={
+                completedActions.approveRequest
+                  ? "is-complete"
+                  : currentStageIndex === 2
+                    ? "is-current"
+                    : "is-upcoming"
+              }
+            >
+              <h3><i aria-hidden="true">{completedActions.approveRequest ? "✓" : currentStageIndex === 2 ? "●" : "○"}</i>Approve Request</h3>
+              <span>{completedActions.approveRequest ? "Completed" : currentStageIndex === 2 ? "Current stage" : "Upcoming"}</span>
+              <p>Approve the request after artwork and the deposit decision are complete.</p>
+              {currentStageIndex === 2 ? (
+                <div className="production-console-action-buttons">
+                  {availableActions.approveRequest ? (
+                    <PrimaryActionButton onClick={onApproveRequest}>Approve Request</PrimaryActionButton>
+                  ) : null}
+                  {availableActions.requestChanges ? (
+                    <PrimaryActionButton onClick={onRequestChanges} tone="neutral">Request Changes</PrimaryActionButton>
+                  ) : null}
+                </div>
+              ) : (
+                <small>{completedActions.approveRequest ? "No action needed" : "Available after the deposit decision"}</small>
+              )}
+            </article>
           </div>
         ) : (
-          <div data-testid="intake-production-handoff" style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+          <div data-testid="intake-production-handoff" className="production-console-action-buttons">
             <Link
               to={`/admin/orders/${order.order_number}#production-handoff`}
               style={{
@@ -883,17 +968,29 @@ function IntakeReviewScreen({
         />
       ) : null}
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.25fr) minmax(280px, 0.75fr)", gap: "18px", alignItems: "start" }}>
-        <div style={{ display: "grid", gap: "18px" }}>
+      <div className="intake-console-layout">
+        <div className="intake-console-main">
           <WorkspaceCard
             eyebrow="Customer"
             title="Submitted by"
             description="Contact details needed during intake review."
+            className="production-console-card intake-console-summary"
           >
+            <div className="intake-console-customer-profile">
+              <span aria-hidden="true">{customerInitials}</span>
+              <div>
+                <strong>{order.customer_name || "Customer"}</strong>
+                <small>
+                  {[order.customer_company, order.customer_email].filter(Boolean).join(" · ")}
+                </small>
+              </div>
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "14px" }}>
-              <DetailItem label="Name" value={order.customer_name} />
               <DetailItem label="Email" value={order.customer_email} />
-              <DetailItem label="Phone" value={order.customer_phone} />
+              <DetailItem
+                label="Phone"
+                value={formatNorthAmericanPhoneDisplay(order.customer_phone)}
+              />
               {order.customer_company ? <DetailItem label="Company" value={order.customer_company} /> : null}
             </div>
           </WorkspaceCard>
@@ -902,8 +999,13 @@ function IntakeReviewScreen({
             eyebrow="Order Details"
             title="Order Contents"
             description="Garments and configurations exactly as the customer submitted them."
+            className="production-console-card production-console-garments intake-console-garments"
           >
-            <div data-testid="intake-order-contents" style={{ display: "grid", gap: "14px" }}>
+            <div className="intake-console-table-head" aria-hidden="true">
+              <span>Qty</span><span>Garment</span><span>Color</span><span>Sizes</span>
+              <span>Placement</span><span>Decoration</span><span>Artwork</span>
+            </div>
+            <div data-testid="intake-order-contents" className="intake-console-order-contents">
               {orderLineItems.map((lineItem, index) => {
                 const assignedArtwork = getLineItemArtwork(order, lineItem);
                 const sizes = Object.entries(lineItem.size_breakdown || {}).filter(([, quantity]) => Number(quantity) > 0);
@@ -912,12 +1014,13 @@ function IntakeReviewScreen({
                   <article
                     key={lineItem.id || `order-line-item-${index + 1}`}
                     data-testid="intake-order-line-item"
-                    style={{ border: "1px solid #dbe2ea", borderRadius: "16px", padding: "16px", background: "#f8fafc" }}
+                    className="intake-console-line-item"
                   >
-                    <h3 style={{ margin: "0 0 14px", color: "#0f172a", fontSize: "18px" }}>
+                    <strong className="intake-console-line-quantity">{formatValue(lineItem.quantity, "0")}</strong>
+                    <h3>
                       {lineItem.garment || "Custom garment"}
                     </h3>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "14px" }}>
+                    <div className="intake-console-line-details">
                       <DetailItem label="Color" value={lineItem.selected_color} />
                       <div>
                         <p style={{ margin: 0, color: "#64748b", fontSize: "12px", fontWeight: 800 }}>Size Breakdown</p>
@@ -956,6 +1059,7 @@ function IntakeReviewScreen({
             eyebrow="Artwork"
             title="Artwork status"
             description="What the customer selected and what staff still need to review."
+            className="production-console-card production-console-artwork intake-console-artwork"
           >
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "14px", marginBottom: "14px" }}>
               <DetailItem label="Artwork Choice" value={resolveArtworkChoice(order)} />
@@ -965,7 +1069,7 @@ function IntakeReviewScreen({
             </div>
 
             {artworkFiles.length ? (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
+              <div className="production-console-artwork-list">
                 {artworkFiles.map((file, index) => {
                   const assetUrl = getArtworkAssetUrl(file);
                   const displayName = getArtworkDisplayName(file);
@@ -974,25 +1078,24 @@ function IntakeReviewScreen({
                   return (
                     <article
                       key={file.id || displayName || index}
-                      style={{
-                        border: "1px solid #dbe2ea",
-                        borderRadius: "14px",
-                        padding: "12px",
-                        background: "#f8fafc",
-                        display: "grid",
-                        gap: "8px",
-                      }}
                     >
                       {imageFile ? (
-                        <img
-                          src={assetUrl}
-                          alt={displayName}
-                          style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", borderRadius: "10px" }}
-                        />
+                        <div className="production-console-artwork-thumb">
+                          <img src={assetUrl} alt="" />
+                        </div>
                       ) : null}
-                      <strong style={{ color: "#0f172a" }}>{displayName || "Artwork file"}</strong>
+                      <div className="production-console-artwork-name">
+                        <strong>{displayName || "Artwork file"}</strong>
+                        <span>{file.notes || order.artwork_status || "Pending review"}</span>
+                      </div>
+                      {assetUrl ? (
+                        <div className="production-console-artwork-actions">
+                          <a href={assetUrl} target="_blank" rel="noreferrer">Preview</a>
+                          <a href={assetUrl} download>Download</a>
+                        </div>
+                      ) : null}
                       {file.notes ? (
-                        <span style={{ color: "#64748b", fontSize: "13px", lineHeight: 1.5 }}>
+                        <span className="intake-console-artwork-note">
                           {file.notes}
                         </span>
                       ) : null}
@@ -1055,11 +1158,12 @@ function IntakeReviewScreen({
           </WorkspaceCard>
         </div>
 
-        <aside style={{ display: "grid", gap: "18px" }}>
+        <aside className="intake-console-sidebar">
           <WorkspaceCard
             eyebrow="Financial"
             title="Review pricing"
             description="Detailed payment tools stay hidden until expanded or released."
+            className="production-console-card intake-console-pricing"
           >
             <div style={{ display: "grid", gap: "14px" }}>
               <DetailItem label="Estimated Total" value={money(financials?.total_amount)} />
@@ -1097,7 +1201,7 @@ function IntakeReviewScreen({
             </div>
           </WorkspaceCard>
 
-          <section style={{ ...cardStyle("#f8fafc"), padding: 0, overflow: "hidden" }}>
+          <section className="production-console-card intake-console-advanced">
             <button
               type="button"
               onClick={() => setAdvancedOpen((current) => !current)}
@@ -1421,6 +1525,7 @@ export default function QuoteDetail() {
 
   async function handleApproveRequest() {
     if (archived || canceled) return;
+    assertIntakeRequestApprovalAllowed(order);
 
     const reviewUpdates = {
       request_status: "Approved - Pending Requirements",

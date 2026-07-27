@@ -250,6 +250,7 @@ export default function GarmentView() {
 
   return (
     <div
+      className="storefront-garment-page"
       style={{
         maxWidth: "1100px",
         margin: "0 auto",

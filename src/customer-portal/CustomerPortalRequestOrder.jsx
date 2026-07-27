@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate, useOutletContext } from "react-router-dom";
+import { Link, useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { useCatalogLookups } from "../lib/catalogLookupsStore";
 import { ensureCustomerProfile } from "../lib/customerProfileStore";
 import { linkOrderToCustomer } from "../lib/customersStore";
 import { createStoredOrder } from "../lib/ordersStore";
 import { validateCustomerIdentity } from "../lib/customerIdentity";
+import { formatNorthAmericanPhoneDisplay } from "../lib/phoneNormalization";
 import { getDefaultDecorationType } from "../lib/orderConfiguration";
 import {
   clearPendingCustomerRequest,
@@ -158,6 +159,9 @@ export default function CustomerPortalRequestOrder() {
   const draftRecoveryRequired = Boolean(
     pendingRequest &&
       (draftRecoveryState === "choose" || location.state?.draftRecoveryRequested)
+  );
+  const isAuthenticatedCustomer = Boolean(
+    customerSession?.id || customerSession?.email
   );
 
   useEffect(() => {
@@ -718,42 +722,74 @@ export default function CustomerPortalRequestOrder() {
               />
             </label>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                gap: "14px",
-              }}
-            >
-              <label style={labelStyle()}>
-                Contact name (First and Last)
-                <input
-                  type="text"
-                  value={contactName}
-                  onChange={(event) => {
-                    contactNameEditedRef.current = true;
-                    setContactName(event.target.value);
+            {isAuthenticatedCustomer ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                  borderRadius: "16px",
+                  border: "1px solid #dbeafe",
+                  background: "#eff6ff",
+                  padding: "13px 16px",
+                  color: "#1e3a8a",
+                }}
+              >
+                <span style={{ lineHeight: 1.5 }}>
+                  This order will be associated with your Tee &amp; Co. account.
+                </span>
+                <Link
+                  to="/portal/account"
+                  style={{
+                    color: "#1d4ed8",
+                    fontSize: "13px",
+                    fontWeight: 800,
+                    textDecoration: "none",
                   }}
-                  required
-                  style={fieldStyle()}
-                />
-              </label>
+                >
+                  Manage Account
+                </Link>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                  gap: "14px",
+                }}
+              >
+                <label style={labelStyle()}>
+                  Contact name (First and Last)
+                  <input
+                    type="text"
+                    value={contactName}
+                    onChange={(event) => {
+                      contactNameEditedRef.current = true;
+                      setContactName(event.target.value);
+                    }}
+                    required
+                    style={fieldStyle()}
+                  />
+                </label>
 
-              <label style={labelStyle()}>
-                Contact phone
-                <input
-                  type="tel"
-                  value={contactPhone}
-                  onChange={(event) => {
-                    contactPhoneEditedRef.current = true;
-                    setContactPhone(event.target.value);
-                  }}
-                  required
-                  placeholder="Best number for questions about this request"
-                  style={fieldStyle()}
-                />
-              </label>
-            </div>
+                <label style={labelStyle()}>
+                  Contact phone
+                  <input
+                    type="tel"
+                    value={formatNorthAmericanPhoneDisplay(contactPhone)}
+                    onChange={(event) => {
+                      contactPhoneEditedRef.current = true;
+                      setContactPhone(event.target.value);
+                    }}
+                    required
+                    placeholder="Best number for questions about this request"
+                    style={fieldStyle()}
+                  />
+                </label>
+              </div>
+            )}
 
             {submitMessage ? (
               <div

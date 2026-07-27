@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("hydrated portal profile defaults contact name and phone from linked identity", async ({ page }) => {
+test("authenticated review uses the linked profile without editable contact fields", async ({ page }) => {
   await page.addInitScript(() => {
     const authUserId = "auth-contact-defaults";
     const email = "marc.contact.defaults@example.com";
@@ -106,18 +106,18 @@ test("hydrated portal profile defaults contact name and phone from linked identi
 
   expect(runtimeResolution.resolvedProfile).toMatchObject({
     name: "Marc Jacquot",
-    phone: "519-881-6869",
+    phone: "+15198816869",
   });
 
-  await expect(page.getByRole("textbox", { name: "Contact name (First and Last)" })).toHaveValue(
-    "Marc Jacquot"
-  );
-  await expect(page.getByRole("textbox", { name: "Contact phone" })).toHaveValue(
-    "519-881-6869"
-  );
-
-  await page.getByRole("textbox", { name: "Contact name (First and Last)" }).fill("Order Contact");
-  await expect(page.getByRole("textbox", { name: "Contact name (First and Last)" })).toHaveValue(
-    "Order Contact"
+  await expect(
+    page.getByRole("textbox", { name: "Contact name (First and Last)" })
+  ).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Contact phone" })).toHaveCount(0);
+  await expect(
+    page.getByText("This order will be associated with your Tee & Co. account.")
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Manage Account" })).toHaveAttribute(
+    "href",
+    "/portal/account"
   );
 });

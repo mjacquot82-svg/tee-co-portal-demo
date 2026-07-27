@@ -29,11 +29,14 @@ test("production artwork resolves from each garment to its production file", () 
   expect(getArtworkAssetUrl(sleeve)).toBe("https://example.test/sleeve.svg");
 });
 
-test("garment cards surface urgent manufacturing notes without changing their content", async () => {
+test("garment table surfaces urgent manufacturing notes without changing their content", async () => {
   const source = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/order-detail/GarmentProductionCards.jsx", import.meta.url), "utf8"));
   expect(source).toContain("/urgent|warning|caution|rush/i");
-  expect(source).toContain('data-testid="garment-production-warning"');
-  expect(source).toContain('height: "360px"');
+  expect(source).toContain('urgentNote ? "garment-production-warning"');
+  expect(source).toContain('className="production-console-table"');
+  expect(source).toContain('<th scope="col">Qty</th>');
+  expect(source).toContain('<th scope="col">Artwork</th>');
+  expect(source).toContain("<details");
 });
 
 test("order production notes surface warnings while historical workspaces remain secondary", async () => {
@@ -47,16 +50,27 @@ test("order production notes surface warnings while historical workspaces remain
 });
 
 test("the production route composes focused controls and garment cards", async () => {
-  const source = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/admin/OrderDetail.jsx", import.meta.url), "utf8"));
+  const [source, managementSource, consoleSource] = await Promise.all([
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/admin/OrderDetail.jsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/order-detail/OrderManagementWorkspace.jsx", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../src/order-detail/ProductionWorkspaceConsole.jsx", import.meta.url), "utf8")),
+  ]);
   expect(source).toContain("<ProductionActionPanel");
   expect(source).toContain("<AssignmentOnlyPanel");
   expect(source).toContain("<GarmentProductionCards order={order} />");
+  expect(source).toContain("<ProductionWorkspaceConsole");
   expect(source).not.toContain("<AssignmentPanel");
   expect(source).toContain('data-testid="production-job-header"');
   expect(source).toContain("{assignmentPanel}");
-  expect(source).toContain("Request Approval");
-  expect(source).toContain("Artwork Approval");
-  expect(source).toContain("Deposit Decision");
+  expect(consoleSource).toContain('className="production-console-pills"');
+  expect(consoleSource).toContain('className="production-console-overview"');
+  expect(consoleSource).toContain('label: "Order Review"');
+  expect(consoleSource).toContain('label: "Artwork Review"');
+  expect(consoleSource).toContain('label: "Deposit Decision"');
+  expect(managementSource).toContain("Request Approval");
+  expect(managementSource).toContain("Artwork Approval");
+  expect(managementSource).toContain("Deposit Decision");
+  expect(managementSource).toContain("collapsedByDefault");
 });
 
 test("the primary production workspace does not repeat lifecycle state", async () => {

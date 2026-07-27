@@ -5,6 +5,7 @@ import { buildPotentialDuplicateCustomerGroups } from "../lib/customerDuplicates
 import { createStoredCustomer, useStoredCustomers } from "../lib/customersStore";
 import { getStoredOrders } from "../lib/ordersStore";
 import { getStoredQuickSales } from "../lib/salesStore";
+import { formatNorthAmericanPhoneDisplay } from "../lib/phoneNormalization";
 
 const fieldStyle = {
   border: "1px solid #cbd5e1",
@@ -481,7 +482,10 @@ export default function Customers() {
                             {customer.name || customer.id}
                           </strong>
                           <span style={{ color: "#6b7280", fontSize: "12px" }}>
-                            {[customer.phone, customer.email].filter(Boolean).join(" • ") ||
+                            {[
+                              formatNorthAmericanPhoneDisplay(customer.phone),
+                              customer.email,
+                            ].filter(Boolean).join(" • ") ||
                               "No contact info"}
                           </span>
                           <span style={{ color: "#92400e", fontSize: "12px", fontWeight: 700 }}>
@@ -549,7 +553,10 @@ export default function Customers() {
                       {customer.company || "No company saved"}
                     </p>
                     <p style={{ margin: "6px 0 0", color: "#475569", fontSize: "13px" }}>
-                      {[customer.phone, customer.email].filter(Boolean).join(" • ") || "No contact info"}
+                      {[
+                        formatNorthAmericanPhoneDisplay(customer.phone),
+                        customer.email,
+                      ].filter(Boolean).join(" • ") || "No contact info"}
                     </p>
                   </div>
 

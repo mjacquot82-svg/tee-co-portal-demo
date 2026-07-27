@@ -14,3 +14,14 @@ export function normalizeNorthAmericanPhoneE164(value) {
   }
   return "";
 }
+
+export function formatNorthAmericanPhoneDisplay(value) {
+  const raw = normalizeText(value);
+  if (!raw) return "";
+
+  const normalized = normalizeNorthAmericanPhoneE164(raw);
+  const match = normalized.match(/^\+1(\d{3})(\d{3})(\d{4})$/);
+  if (!match) return raw;
+
+  return `(${match[1]}) ${match[2]}-${match[3]}`;
+}
