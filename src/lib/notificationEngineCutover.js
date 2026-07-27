@@ -9,9 +9,15 @@ export const NOTIFICATION_ENGINE_CUTOVER_MODES = Object.freeze({
 });
 
 export const AUTHORITATIVE_NOTIFICATION_EVENTS = Object.freeze([
+  "new_customer_request",
+  "quote_ready_for_approval",
   "quote_approved",
+  "artwork_revision_requested",
+  "artwork_approved",
   "deposit_requested",
+  "payment_request_created",
   "payment_received",
+  "payment_failed",
   "order_in_production",
   "order_ready_for_pickup",
   "order_completed",

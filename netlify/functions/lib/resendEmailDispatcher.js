@@ -20,12 +20,9 @@ export function buildResendAdapterRequest({
   businessEvent,
   allowAuthoritative = false,
 }) {
-  if (
-    delivery?.channel !== "email" ||
-    notification?.event_type !== "quote_approved"
-  ) {
+  if (delivery?.channel !== "email" || !normalizeText(notification?.event_type)) {
     throw new Error(
-      "Phase 2F Resend adapter accepts only Order Approved email Deliveries."
+      "Resend adapter requires a customer email Delivery with an event type."
     );
   }
   if (

@@ -844,7 +844,7 @@ test("authoritative pickup creates one idempotent dispatcher-eligible SMS Delive
   }
 });
 
-test("delivery materialization rejects unsupported modes and authoritative events", async () => {
+test("delivery materialization rejects unsupported modes and unknown events", async () => {
   const originalFetch = globalThis.fetch;
   let fetchCalls = 0;
   globalThis.fetch = async () => {
@@ -873,7 +873,7 @@ test("delivery materialization rejects unsupported modes and authoritative event
         ...input,
         accepted: {
           ...businessEvent,
-          event_type: "payment_failed",
+          event_type: "inventory_low",
         },
         cutoverMode: "authoritative",
       });

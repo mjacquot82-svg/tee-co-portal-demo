@@ -63,7 +63,7 @@ export async function handler(event) {
       String(process.env.NOTIFICATION_ENGINE_ORDER_APPROVED_CUTOVER || "")
         .trim()
         .toLowerCase() === "true";
-    if (!cutoverEnabled || eventType !== "quote_approved" || !idempotencyKey) {
+    if (!cutoverEnabled || !eventType || !idempotencyKey) {
       return json(409, { error: "Notification Engine cutover is not enabled for this event." });
     }
     const adapter = createResendEmailAdapter({
@@ -72,7 +72,7 @@ export async function handler(event) {
     });
     const result = await runResendEmailDeliveryCutover({
       deliveryId,
-      workerId: `order-approved:${deliveryId}`,
+      workerId: `customer-email:${deliveryId}`,
       adapter,
       dispatcherClient: buildServiceRoleDispatcherClient({
         supabaseUrl,

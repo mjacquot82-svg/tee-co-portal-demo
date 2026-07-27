@@ -31,11 +31,17 @@ test("Phase 2I verify mode keeps legacy authoritative and enables durable observ
   });
 });
 
-test("authoritative cutover includes approved operational customer lifecycle events", () => {
+test("authoritative cutover includes the complete customer lifecycle", () => {
   expect(AUTHORITATIVE_NOTIFICATION_EVENTS).toEqual([
+    "new_customer_request",
+    "quote_ready_for_approval",
     "quote_approved",
+    "artwork_revision_requested",
+    "artwork_approved",
     "deposit_requested",
+    "payment_request_created",
     "payment_received",
+    "payment_failed",
     "order_in_production",
     "order_ready_for_pickup",
     "order_completed",
@@ -58,9 +64,10 @@ test("authoritative cutover includes approved operational customer lifecycle eve
   expect(resolveNotificationEngineCutover("payment_failed", {
     notificationEngineCutoverMode: "authoritative",
   })).toMatchObject({
-    mode: "legacy",
-    runLegacy: true,
-    runEngine: false,
+    mode: "authoritative",
+    runLegacy: false,
+    runEngine: true,
+    observationOnly: false,
   });
   expect(resolveNotificationEngineCutover("order_ready_for_pickup", {
     notificationEngineCutoverMode: "authoritative",
@@ -72,7 +79,7 @@ test("authoritative cutover includes approved operational customer lifecycle eve
   });
 });
 
-test("authoritative Resend consumes one claimed durable Delivery and completes its Attempt", async () => {
+test("authoritative Resend consumes a lifecycle Delivery and completes its Attempt", async () => {
   const rpcCalls = [];
   const delivery = {
     id: "delivery:cutover-1",
@@ -99,7 +106,7 @@ test("authoritative Resend consumes one claimed durable Delivery and completes i
             notification: {
               id: "notification:cutover-1",
               business_event_id: "event:cutover-1",
-              event_type: "quote_approved",
+              event_type: "order_ready_for_pickup",
             },
             business_event: { id: "event:cutover-1" },
           }],
@@ -143,11 +150,38 @@ test("authoritative Resend consumes one claimed durable Delivery and completes i
     destination: { email: "customer@example.com" },
     content: { subject: "Approved", body: "Stored body" },
     idempotencyKey: "delivery:cutover-1",
+    metadata: { eventType: "order_ready_for_pickup" },
   });
   expect(rpcCalls.map(([name]) => name)).toEqual([
     "claim_resend_email_delivery_cutover",
     "complete_resend_email_delivery_cutover",
   ]);
+});
+
+test("journey migration generalizes immediate and scheduled Resend claims", async () => {
+  const migration = await readFile(
+    new URL("../supabase/customer-notification-journey-cutover.sql", import.meta.url),
+    "utf8"
+  );
+
+  expect(migration).toContain(
+    "create or replace function public.claim_resend_email_delivery_cutover"
+  );
+  expect(migration).toContain(
+    "create or replace function public.claim_resend_email_deliveries_authoritative"
+  );
+  expect(migration).toContain(
+    "create or replace function public.recover_abandoned_notification_delivery_claims_authoritative"
+  );
+  expect(migration).toContain(
+    "(notification_row.policy_snapshot ->> 'email_enabled')::boolean"
+  );
+  expect(migration).toContain(
+    "#>> '{phase2D,dispatcherEligible}'"
+  );
+  expect(migration).not.toContain(
+    "notification_row.event_type = 'quote_approved'"
+  );
 });
 
 test("Phase 2I migration verifies durable cardinality, disabled channels, and aggregate state", async () => {

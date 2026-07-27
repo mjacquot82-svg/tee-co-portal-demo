@@ -51,6 +51,106 @@ test("approval delivery rejects the retired unrendered legacy email path", async
   }
 });
 
+test("customer email endpoint dispatches an authoritative lifecycle Delivery", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalEnv = {
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    CUSTOMER_NOTIFICATION_FROM_EMAIL:
+      process.env.CUSTOMER_NOTIFICATION_FROM_EMAIL,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    NOTIFICATION_ENGINE_ORDER_APPROVED_CUTOVER:
+      process.env.NOTIFICATION_ENGINE_ORDER_APPROVED_CUTOVER,
+  };
+  const providerRequests = [];
+
+  process.env.RESEND_API_KEY = "resend-test-key";
+  process.env.CUSTOMER_NOTIFICATION_FROM_EMAIL =
+    "Tee & Co <orders@example.com>";
+  process.env.SUPABASE_URL = "https://supabase.example.com";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-test-key";
+  process.env.NOTIFICATION_ENGINE_ORDER_APPROVED_CUTOVER = "true";
+
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url);
+    if (requestUrl.endsWith("/rpc/claim_resend_email_delivery_cutover")) {
+      return {
+        ok: true,
+        json: async () => [{
+          delivery: {
+            id: "delivery:pickup-email",
+            notification_id: "notification:pickup-email",
+            channel: "email",
+            status: "processing",
+            claim_token: "claim:pickup-email",
+            claimed_at: "2026-07-27T19:00:00.000Z",
+            attempt_count: 0,
+            idempotency_key: "delivery:pickup-email",
+            destination_snapshot: {
+              email: "customer@example.com",
+              observationOnly: false,
+            },
+            rendered_content: {
+              subject: "Your order is ready",
+              body: "Stored pickup body",
+            },
+          },
+          notification: {
+            id: "notification:pickup-email",
+            business_event_id: "event:pickup-email",
+            event_type: "order_ready_for_pickup",
+          },
+          business_event: { id: "event:pickup-email" },
+        }],
+      };
+    }
+    if (requestUrl.endsWith("/rpc/complete_resend_email_delivery_cutover")) {
+      return {
+        ok: true,
+        json: async () => ({
+          id: "delivery:pickup-email",
+          status: "sent",
+        }),
+      };
+    }
+    providerRequests.push({ url: requestUrl, options });
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ id: "resend-pickup-email" }),
+    };
+  };
+
+  try {
+    const response = await handler({
+      httpMethod: "POST",
+      body: JSON.stringify({
+        eventType: "order_ready_for_pickup",
+        deliveryId: "delivery:pickup-email",
+        idempotencyKey: "delivery:pickup-email",
+      }),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toMatchObject({
+      delivered: true,
+      providerMessageId: "resend-pickup-email",
+    });
+    expect(providerRequests).toHaveLength(1);
+    expect(JSON.parse(providerRequests[0].options.body)).toMatchObject({
+      to: ["customer@example.com"],
+      subject: "Your order is ready",
+      text: "Stored pickup body",
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    Object.entries(originalEnv).forEach(([key, value]) => {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    });
+  }
+});
+
 test("approval notification remains attached to the persisted approval transition", async () => {
   const source = await import("node:fs/promises").then((fs) =>
     fs.readFile(new URL("../src/lib/ordersStore.js", import.meta.url), "utf8")
