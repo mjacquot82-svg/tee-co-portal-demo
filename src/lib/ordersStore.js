@@ -59,6 +59,91 @@ let cachedOrdersSnapshot = EMPTY_ORDERS;
 let ordersHydrationStarted = false;
 let ordersHydrationPromise = null;
 let hasHydratedOrdersFromSupabase = false;
+let successfulOrderWriteSequence = 0;
+const latestSuccessfulWriteByOrder = new Map();
+const orderUpdateQueues = new Map();
+
+function getOrderRecordKey(order = {}) {
+  return String(order.order_number || order.id || "").trim();
+}
+
+function getOrderUpdatedAtTime(order = {}) {
+  const timestamp = new Date(order.updated_at || 0).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function recordSuccessfulOrderWrite(order = {}) {
+  const key = getOrderRecordKey(order);
+  if (!key) return;
+
+  successfulOrderWriteSequence += 1;
+  latestSuccessfulWriteByOrder.set(key, {
+    sequence: successfulOrderWriteSequence,
+    updatedAt: order.updated_at || "",
+  });
+}
+
+export function mergeOrdersByFreshness(
+  currentOrders = [],
+  incomingOrders = [],
+  options = {}
+) {
+  const {
+    preserveCurrentOnly = false,
+    hydrationStartWriteSequence = null,
+  } = options;
+  const currentByKey = new Map(
+    (Array.isArray(currentOrders) ? currentOrders : [])
+      .map((order) => [getOrderRecordKey(order), order])
+      .filter(([key]) => Boolean(key))
+  );
+  const incomingKeys = new Set();
+  const mergedOrders = [];
+
+  (Array.isArray(incomingOrders) ? incomingOrders : []).forEach((incomingOrder) => {
+    const key = getOrderRecordKey(incomingOrder);
+    if (!key) {
+      mergedOrders.push(incomingOrder);
+      return;
+    }
+
+    incomingKeys.add(key);
+    const currentOrder = currentByKey.get(key);
+    if (!currentOrder) {
+      mergedOrders.push(incomingOrder);
+      return;
+    }
+
+    const successfulWrite = latestSuccessfulWriteByOrder.get(key);
+    const hydrationPredatesSuccessfulWrite =
+      Number.isFinite(hydrationStartWriteSequence) &&
+      successfulWrite?.sequence > hydrationStartWriteSequence;
+    const incomingIsOlder =
+      getOrderUpdatedAtTime(incomingOrder) < getOrderUpdatedAtTime(currentOrder);
+
+    mergedOrders.push(
+      hydrationPredatesSuccessfulWrite || incomingIsOlder
+        ? currentOrder
+        : incomingOrder
+    );
+  });
+
+  (Array.isArray(currentOrders) ? currentOrders : []).forEach((currentOrder) => {
+    const key = getOrderRecordKey(currentOrder);
+    if (!key || incomingKeys.has(key)) return;
+
+    const successfulWrite = latestSuccessfulWriteByOrder.get(key);
+    const hydrationPredatesSuccessfulWrite =
+      Number.isFinite(hydrationStartWriteSequence) &&
+      successfulWrite?.sequence > hydrationStartWriteSequence;
+
+    if (preserveCurrentOnly || hydrationPredatesSuccessfulWrite) {
+      mergedOrders.push(currentOrder);
+    }
+  });
+
+  return mergedOrders;
+}
 
 function persistArtworkRelationship(promise, context) {
   Promise.resolve(promise).catch((error) => {
@@ -1398,12 +1483,21 @@ export async function ensureOrdersHydrated(options = {}) {
     return ordersHydrationPromise;
   }
 
+  const hydrationStartWriteSequence = successfulOrderWriteSequence;
   ordersHydrationStarted = true;
   ordersHydrationPromise = fetchOrdersFromSupabase()
     .then((remoteOrders) => {
       if (Array.isArray(remoteOrders)) {
         hasHydratedOrdersFromSupabase = true;
-        return publishOrdersSnapshot(remoteOrders, { emit: true, writeStorage: true });
+        const synchronizedOrders = mergeOrdersByFreshness(
+          readStoredOrders(),
+          remoteOrders,
+          { hydrationStartWriteSequence }
+        );
+        return publishOrdersSnapshot(synchronizedOrders, {
+          emit: true,
+          writeStorage: true,
+        });
       }
 
       return readStoredOrders();
@@ -1509,6 +1603,7 @@ export async function createStoredOrder(orderInput) {
   };
 
   const persistedOrder = normalizeStoredOrder(await createOrderInSupabase(normalizeStoredOrder(order)));
+  recordSuccessfulOrderWrite(persistedOrder);
   const nextOrders = [
     persistedOrder,
     ...currentOrders.filter((entry) => entry.order_number !== persistedOrder.order_number),
@@ -1558,7 +1653,7 @@ export function findStoredOrder(orderNumber) {
   return getStoredOrders().find((order) => order.order_number === orderNumber);
 }
 
-export async function updateStoredOrder(orderNumber, updates) {
+async function performStoredOrderUpdate(orderNumber, updates) {
   recordOrderTransitionDiagnostic("updateStoredOrder:executed", {
     order_number: orderNumber,
     requested_status: updates?.status || "",
@@ -1579,27 +1674,27 @@ export async function updateStoredOrder(orderNumber, updates) {
   let updatedOrder = null;
   let previousOrder = null;
 
-  const nextOrders = currentOrders.map((order) => {
-    if (order.order_number !== orderNumber) return order;
-
-    previousOrder = order;
-
+  if (currentOrder) {
+    previousOrder = currentOrder;
     const cleanUpdates = stripActivityMeta(
       buildWorkflowDerivedUpdates(
-        order,
-        buildWorkflowOverrideUpdates(order, buildAssignmentUpdates(order, updates))
+        currentOrder,
+        buildWorkflowOverrideUpdates(
+          currentOrder,
+          buildAssignmentUpdates(currentOrder, updates)
+        )
       )
     );
 
     updatedOrder = normalizeStoredOrder({
-      ...order,
+      ...currentOrder,
       ...cleanUpdates,
       customer_id:
-        normalizeCustomerId(cleanUpdates.customer_id || order.customer_id) ||
-        resolveCustomerForRecord({ ...order, ...cleanUpdates })?.id ||
+        normalizeCustomerId(cleanUpdates.customer_id || currentOrder.customer_id) ||
+        resolveCustomerForRecord({ ...currentOrder, ...cleanUpdates })?.id ||
         "",
       ...buildStaffAuditFields("updated"),
-      created_at: order.created_at,
+      created_at: currentOrder.created_at,
       updated_at: now,
       activity_log: [
         buildActivityEvent(
@@ -1607,12 +1702,10 @@ export async function updateStoredOrder(orderNumber, updates) {
           describeOrderUpdate(updates),
           now
         ),
-        ...(order.activity_log || []),
+        ...(currentOrder.activity_log || []),
       ],
     });
-
-    return updatedOrder;
-  });
+  }
 
   if (!updatedOrder) return null;
 
@@ -1620,10 +1713,11 @@ export async function updateStoredOrder(orderNumber, updates) {
     await updateOrderInSupabase(orderNumber, updatedOrder)
   );
   updatedOrder = persistedOrder;
+  recordSuccessfulOrderWrite(persistedOrder);
   saveStoredOrders(
-    nextOrders.map((order) =>
-      order.order_number === persistedOrder.order_number ? persistedOrder : order
-    )
+    mergeOrdersByFreshness(readStoredOrders(), [persistedOrder], {
+      preserveCurrentOnly: true,
+    })
   );
   try {
     recordOrderTransitionDiagnostic("ensureTeeCoProductionProcess:started", {
@@ -1885,6 +1979,24 @@ export async function updateStoredOrder(orderNumber, updates) {
   return updatedOrder;
 }
 
+export function updateStoredOrder(orderNumber, updates) {
+  const previousUpdate = orderUpdateQueues.get(orderNumber) || Promise.resolve();
+  const queuedUpdate = previousUpdate
+    .catch(() => undefined)
+    .then(() => performStoredOrderUpdate(orderNumber, updates));
+
+  orderUpdateQueues.set(orderNumber, queuedUpdate);
+  void queuedUpdate
+    .finally(() => {
+      if (orderUpdateQueues.get(orderNumber) === queuedUpdate) {
+        orderUpdateQueues.delete(orderNumber);
+      }
+    })
+    .catch(() => undefined);
+
+  return queuedUpdate;
+}
+
 export async function recordStoredOrderPayment(orderNumber, paymentInput = {}, options = {}) {
   const order = findStoredOrder(orderNumber);
   if (!order) return null;
@@ -2034,4 +2146,7 @@ export function configureOrdersPersistenceForTests(options = {}) {
   hasHydratedOrdersFromSupabase = false;
   cachedOrdersRaw = null;
   cachedOrdersSnapshot = EMPTY_ORDERS;
+  successfulOrderWriteSequence = 0;
+  latestSuccessfulWriteByOrder.clear();
+  orderUpdateQueues.clear();
 }
