@@ -1,4 +1,3 @@
-import { buildLegacyOrderApprovedEmailRequest } from "./lib/legacyOrderApprovedEmailRequest.js";
 import {
   createResendEmailAdapter,
   getConfiguredResendSender,
@@ -58,7 +57,6 @@ export async function handler(event) {
 
   const eventType = String(payload.eventType || "").trim();
   const deliveryId = String(payload.deliveryId || "").trim();
-  const orderNumber = String(payload.orderNumber || "").trim();
   const idempotencyKey = String(payload.idempotencyKey || "").trim();
   if (deliveryId) {
     const cutoverEnabled =
@@ -100,45 +98,8 @@ export async function handler(event) {
       providerMessageId: result.providerResult.providerMessageId,
     });
   }
-  if (eventType !== "quote_approved" || !orderNumber || !idempotencyKey) {
-    return json(400, { error: "A supported event, order number, and idempotency key are required." });
-  }
-
-  const orderResponse = await fetch(
-    `${supabaseUrl}/rest/v1/orders?order_number=eq.${encodeURIComponent(orderNumber)}&select=order_number,customer_name,customer_email,approval_status,staff_review_status&limit=1`,
-    {
-      headers: {
-        apikey: serviceRoleKey,
-        Authorization: `Bearer ${serviceRoleKey}`,
-      },
-    }
-  );
-  const orders = await orderResponse.json().catch(() => []);
-  if (!orderResponse.ok) return json(502, { error: "Unable to verify the approved order." });
-
-  const order = Array.isArray(orders) ? orders[0] : null;
-  const approved = [order?.approval_status, order?.staff_review_status]
-    .some((status) => String(status || "").trim().toLowerCase() === "approved");
-  if (!order || !approved) return json(409, { error: "The order is not approved." });
-
-  const to = String(order.customer_email || "").trim();
-  if (!to) return json(422, { error: "The approved order has no customer email." });
-
-  const request = buildLegacyOrderApprovedEmailRequest({
-    order,
-    idempotencyKey,
-  });
-  const adapter = createResendEmailAdapter({
-    apiKey,
-    from: getConfiguredResendSender(),
-  });
-  const result = await adapter.send(request);
-  if (!result.ok) {
-    return json(result.httpStatus, { error: result.failureReason });
-  }
-
-  return json(200, {
-    delivered: true,
-    providerMessageId: result.providerMessageId,
+  return json(409, {
+    error:
+      "Customer email delivery requires an authoritative rendered Delivery.",
   });
 }

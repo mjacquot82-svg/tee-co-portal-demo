@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import {
-  buildDefaultNotificationTemplates,
   saveNotificationTemplateVersion,
   updateNotificationTemplate,
   resetNotificationTemplate,
@@ -10,6 +9,17 @@ import { resolvePublishedNotificationTemplates } from "../src/lib/notificationTe
 
 function createTemplateClient(seedVersions = []) {
   const versions = seedVersions.map((version) => ({ ...version }));
+  const policies = [{
+    event_type: "quote_approved",
+    effective_to: null,
+    email_enabled: true,
+    sms_enabled: true,
+    staff_notification_enabled: false,
+    channel_template_assignments: {
+      email: "quote_approved:v1",
+      sms: "quote_approved:v1",
+    },
+  }];
   const calls = [];
   return {
     versions,
@@ -44,6 +54,25 @@ function createTemplateClient(seedVersions = []) {
               : null,
         };
         versions.push(row);
+        if (row.status === "published") {
+          for (const policy of policies) {
+            if (
+              policy.event_type !== row.template_type ||
+              policy.effective_to !== null
+            ) {
+              continue;
+            }
+            for (const [enabledField, channel] of [
+              ["email_enabled", "email"],
+              ["sms_enabled", "sms"],
+              ["staff_notification_enabled", "staff"],
+            ]) {
+              if (policy[enabledField]) {
+                policy.channel_template_assignments[channel] = row.id;
+              }
+            }
+          }
+        }
         return { data: row, error: null };
       },
       from(table) {
@@ -76,6 +105,7 @@ function createTemplateClient(seedVersions = []) {
         return query;
       },
     },
+    policies,
   };
 }
 
@@ -134,8 +164,8 @@ test("C5 successful editor saves create sequential immutable published versions"
   });
 });
 
-test("C5 resolves the latest publication while preserving existing policy assignments and history", async () => {
-  const { client, versions } = createTemplateClient([versionOne]);
+test("C5 publication immediately updates active policy assignments and preserves history", async () => {
+  const { client, versions, policies } = createTemplateClient([versionOne]);
   await saveNotificationTemplateVersion(
     template({ emailBody: "Hi {{customer_name}}, newly published." }),
     { client }
@@ -145,15 +175,7 @@ test("C5 resolves the latest publication while preserving existing policy assign
     { client, status: "draft" }
   );
 
-  const policy = {
-    email_enabled: true,
-    sms_enabled: false,
-    staff_notification_enabled: false,
-    channel_template_assignments: { email: "quote_approved:v1" },
-  };
-  const assignmentBeforeResolution = structuredClone(
-    policy.channel_template_assignments
-  );
+  const policy = policies[0];
   const result = await resolvePublishedNotificationTemplates({
     eventType: "quote_approved",
     policy,
@@ -173,36 +195,77 @@ test("C5 resolves the latest publication while preserving existing policy assign
       body: "Hi Taylor, newly published.",
     },
   });
-  expect(policy.channel_template_assignments).toEqual(
-    assignmentBeforeResolution
-  );
+  expect(policy.channel_template_assignments).toEqual({
+    email: "quote_approved:v2",
+    sms: "quote_approved:v2",
+  });
   expect(versions).toHaveLength(3);
   expect(versions[0]).toEqual(versionOne);
   expect(versions[2].status).toBe("draft");
 });
 
-test("C5 reset publishes defaults as another immutable version", async () => {
-  const { client, versions } = createTemplateClient([versionOne]);
-  const defaults = buildDefaultNotificationTemplates().find(
-    (entry) => entry.type === "quote_approved"
+test("next authoritative email and SMS use a published administrator edit without a policy save", async () => {
+  const { client, policies, calls } = createTemplateClient([versionOne]);
+  await updateNotificationTemplate(
+    "quote_approved",
+    template({
+      emailSubject: "Teresa changed {{order_number}}",
+      emailBody: "Teresa email for {{customer_name}}.",
+      smsMessage: "Teresa SMS for {{order_number}}.",
+    }),
+    { client }
   );
+
+  const result = await resolvePublishedNotificationTemplates({
+    eventType: "quote_approved",
+    policy: policies[0],
+    mergeContext: {
+      customer_name: "Taylor",
+      order_number: "TC-ADMIN-EDIT",
+      company_name: "Tee & Co",
+    },
+    client,
+  });
+
+  expect(calls.map(([name]) => name)).toEqual([
+    "save_notification_template_version",
+  ]);
+  expect(result.snapshots).toMatchObject({
+    email: {
+      templateVersionId: "quote_approved:v2",
+      content: {
+        subject: "Teresa changed TC-ADMIN-EDIT",
+        body: "Teresa email for Taylor.",
+      },
+    },
+    sms: {
+      templateVersionId: "quote_approved:v2",
+      content: {
+        body: "Teresa SMS for TC-ADMIN-EDIT.",
+      },
+    },
+  });
+});
+
+test("C5 reset republishes the database baseline without runtime copy", async () => {
+  const { client, versions } = createTemplateClient([versionOne]);
 
   const reset = await resetNotificationTemplate("quote_approved", { client });
 
   expect(reset).toMatchObject({
-    name: defaults.templateName,
-    emailSubject: defaults.emailSubject,
-    emailBody: defaults.emailBody,
-    smsMessage: defaults.smsMessage,
+    name: versionOne.name,
+    emailSubject: versionOne.email_subject,
+    emailBody: versionOne.email_body,
+    smsMessage: versionOne.sms_message,
   });
   expect(versions).toHaveLength(2);
   expect(versions[1]).toMatchObject({
     id: "quote_approved:v2",
     status: "published",
-    name: defaults.templateName,
-    email_subject: defaults.emailSubject,
-    email_body: defaults.emailBody,
-    sms_message: defaults.smsMessage,
+    name: versionOne.name,
+    email_subject: versionOne.email_subject,
+    email_body: versionOne.email_body,
+    sms_message: versionOne.sms_message,
   });
 });
 
@@ -228,6 +291,8 @@ test("C5 migration provides atomic publication, immutable history, and Owner-onl
     "insert into public.notification_template_versions"
   );
   expect(migration).toContain("update public.notification_templates");
+  expect(migration).toContain("update public.notification_policies");
+  expect(migration).toContain("channel_template_assignments");
   expect(migration).toContain(
     "create trigger protect_notification_template_version"
   );

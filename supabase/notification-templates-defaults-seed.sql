@@ -55,20 +55,18 @@ The {{company_name}} Team$template$,
   (
     'quote_approved',
     'Order Approved',
-    'Your order has been approved',
+    'Order approved — {{order_number}}',
     $template$Hi {{customer_name}},
 
-Your order {{order_number}} has been reviewed and approved by Tee & Co.
+Your order {{order_number}} has been approved.
 
-No action is required from you at this time.
-
-We are preparing your order for the next stage and will notify you if anything is required or when your order is ready.
+No action is needed. We'll let you know when it enters production.
 
 Thanks,
 The {{company_name}} Team$template$,
-    'Hi {{customer_name}}, your order {{order_number}} has been approved. No action is required right now.',
+    'Hi {{customer_name}}, order {{order_number}} is approved. No action is needed. We''ll let you know when production begins.',
     true,
-    false,
+    true,
     true
   ),
   (
@@ -109,21 +107,19 @@ The {{company_name}} Team$template$,
   (
     'deposit_requested',
     'Deposit Requested',
-    'Deposit required to begin your order — {{order_number}}',
+    'Deposit required for order {{order_number}}',
     $template$Hi {{customer_name}},
 
-Your order {{order_number}} is ready to go into production once we receive your deposit.
+A deposit of {{deposit_amount}} is now required for order {{order_number}} before production can be scheduled.
 
-Deposit Amount: {{deposit_amount}}
-
-Please submit your deposit using the link below:
+Action required: submit your deposit here:
 {{payment_link}}
 
-Once your deposit is received, we'll get started right away!
+We'll confirm when it is received.
 
 Thanks,
 The {{company_name}} Team$template$,
-    'Hi {{customer_name}}, deposit of {{deposit_amount}} required for order {{order_number}}. Pay here: {{payment_link}}',
+    'Hi {{customer_name}}, a {{deposit_amount}} deposit is required for order {{order_number}} before production can be scheduled. Pay here: {{payment_link}}',
     true,
     true,
     false
@@ -151,21 +147,18 @@ The {{company_name}} Team$template$,
   (
     'payment_received',
     'Payment Received',
-    'Payment received — {{order_number}}',
+    'Deposit received — {{order_number}}',
     $template$Hi {{customer_name}},
 
-Thank you! We've received your payment for order {{order_number}}.
+We've received your {{deposit_amount}} deposit for order {{order_number}}.
 
-Amount Paid: {{deposit_amount}}
-Balance Due: {{balance_due}}
-
-We'll keep you updated as your order progresses.
+No action is needed. We'll notify you when production begins.
 
 Thanks,
 The {{company_name}} Team$template$,
-    'Hi {{customer_name}}, payment received for order {{order_number}}. Balance due: {{balance_due}}. Thanks!',
+    'Hi {{customer_name}}, we received your {{deposit_amount}} deposit for order {{order_number}}. No action is needed; we''ll notify you when production begins.',
     true,
-    false,
+    true,
     true
   ),
   (
@@ -191,16 +184,16 @@ The {{company_name}} Team$template$,
   (
     'order_in_production',
     'Order In Production',
-    'Your order is in production — {{order_number}}',
+    'Your order has entered production — {{order_number}}',
     $template$Hi {{customer_name}},
 
-Your order {{order_number}} is now in production! Our team is working hard to bring your design to life.
+Your order {{order_number}} has entered production.
 
-We'll notify you when your order is ready for pickup.
+No action is needed. We'll notify you when it is ready for pickup.
 
 Thanks,
 The {{company_name}} Team$template$,
-    'Hi {{customer_name}}, your order {{order_number}} has entered our production schedule. We''ll let you know when it''s ready.',
+    'Hi {{customer_name}}, order {{order_number}} has entered production. No action is needed; we''ll let you know when it''s ready for pickup.',
     true,
     true,
     false
@@ -211,16 +204,13 @@ The {{company_name}} Team$template$,
     'Your order is ready for pickup — {{order_number}}',
     $template$Hi {{customer_name}},
 
-Great news! Your order {{order_number}} is complete and ready for pickup.
+Your order {{order_number}} is ready for pickup.
 
-Pickup Date: {{pickup_date}}
-Balance Due: {{balance_due}}
-
-Please bring your remaining balance when you come to pick up your order.
+Action required: please arrange to pick it up. Your remaining balance is {{balance_due}}.
 
 Thanks,
 The {{company_name}} Team$template$,
-    'Hi {{customer_name}}, your order {{order_number}} is ready for pickup on {{pickup_date}}! Balance due: {{balance_due}}.',
+    'Hi {{customer_name}}, order {{order_number}} is ready for pickup. Please arrange pickup; your remaining balance is {{balance_due}}.',
     true,
     true,
     false
@@ -228,18 +218,18 @@ The {{company_name}} Team$template$,
   (
     'order_completed',
     'Order Completed',
-    'Order complete — thank you, {{customer_name}}!',
+    'Order complete — {{order_number}}',
     $template$Hi {{customer_name}},
 
-Thank you for choosing {{company_name}}! Your order {{order_number}} is now complete.
+Your order {{order_number}} has been completed.
 
-We hope you love your new gear. We'd love to see you again for your next order!
+No action is needed. Thank you for choosing {{company_name}} — we hope you enjoy your order!
 
 Thanks,
 The {{company_name}} Team$template$,
-    'Hi {{customer_name}}, your order {{order_number}} is complete. Thanks for choosing {{company_name}}!',
+    'Hi {{customer_name}}, order {{order_number}} is complete. No action is needed. Thanks for choosing {{company_name}}!',
     true,
-    false,
+    true,
     false
   )
 on conflict (type) do nothing;

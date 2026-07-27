@@ -303,7 +303,7 @@ test("Phase 2F migration claims only Order Approved email and stores provider ou
   expect(migration).not.toContain("retry_scheduled");
 });
 
-test("legacy endpoint delegates transport and contains no Order Approved content construction", async () => {
+test("customer email endpoint requires a rendered authoritative Delivery", async () => {
   const endpoint = await readFile(
     new URL(
       "../netlify/functions/customer-notification.js",
@@ -312,9 +312,12 @@ test("legacy endpoint delegates transport and contains no Order Approved content
     "utf8"
   );
 
-  expect(endpoint).toContain("buildLegacyOrderApprovedEmailRequest");
   expect(endpoint).toContain("createResendEmailAdapter");
-  expect(endpoint).not.toContain("No action is required from you");
+  expect(endpoint).toContain(
+    "Customer email delivery requires an authoritative rendered Delivery."
+  );
+  expect(endpoint).not.toContain("buildLegacyOrderApprovedEmailRequest");
+  expect(endpoint).not.toContain("Your order has been approved");
   expect(endpoint).not.toContain("api.resend.com");
 });
 

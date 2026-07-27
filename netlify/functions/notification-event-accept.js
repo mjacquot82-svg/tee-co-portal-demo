@@ -232,12 +232,12 @@ async function generateNotificationForAcceptedEvent({
       method: "POST",
       headers: restHeaders(
         serviceRoleKey,
-        "resolution=merge-duplicates,return=representation"
+        "resolution=ignore-duplicates,return=representation"
       ),
       body: JSON.stringify(notification),
     }
   );
-  const notifications = await readJson(notificationResponse);
+  let notifications = await readJson(notificationResponse);
   await recordDiagnostic("persist_notification:returned", {
     http_status: notificationResponse.status,
     ok: notificationResponse.ok,
@@ -248,9 +248,31 @@ async function generateNotificationForAcceptedEvent({
       notifications?.message || "Unable to persist Notification."
     );
   }
-  const persisted = Array.isArray(notifications)
+  let persisted = Array.isArray(notifications)
     ? notifications[0]
     : notifications;
+  if (!persisted?.id) {
+    const existingQuery = new URLSearchParams({
+      select: "*",
+      business_event_id: `eq.${notification.business_event_id}`,
+      policy_id: `eq.${notification.policy_id}`,
+      policy_version: `eq.${notification.policy_version}`,
+      limit: "1",
+    });
+    const existingResponse = await fetch(
+      `${supabaseUrl}/rest/v1/notifications?${existingQuery}`,
+      { headers: restHeaders(serviceRoleKey) }
+    );
+    notifications = await readJson(existingResponse);
+    if (!existingResponse.ok) {
+      throw new Error(
+        notifications?.message || "Unable to resolve existing Notification."
+      );
+    }
+    persisted = Array.isArray(notifications)
+      ? notifications[0]
+      : notifications;
+  }
   if (!persisted?.id) {
     throw new Error("Notification persistence returned no durable identity.");
   }

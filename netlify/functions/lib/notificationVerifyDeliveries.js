@@ -1,7 +1,9 @@
 import { normalizeNorthAmericanPhoneE164 } from "../../../src/lib/phoneNormalization.js";
+import { AUTHORITATIVE_NOTIFICATION_EVENTS } from "../../../src/lib/notificationEngineCutover.js";
 
 const CHANNELS = ["email", "sms", "staff"];
 const MATERIALIZATION_MODES = new Set(["verify", "authoritative"]);
+const AUTHORITATIVE_EVENT_TYPES = new Set(AUTHORITATIVE_NOTIFICATION_EVENTS);
 
 function normalizeText(value) {
   return String(value ?? "").trim();
@@ -330,16 +332,33 @@ async function persistDelivery({
       method: "POST",
       headers: restHeaders(
         serviceRoleKey,
-        "resolution=merge-duplicates,return=representation"
+        "resolution=ignore-duplicates,return=representation"
       ),
       body: JSON.stringify(row),
     }
   );
-  const result = await readJson(response);
+  let result = await readJson(response);
   if (!response.ok) {
     throw new Error(result?.message || `Unable to persist ${channel} Delivery.`);
   }
-  const persisted = Array.isArray(result) ? result[0] : result;
+  let persisted = Array.isArray(result) ? result[0] : result;
+  if (!persisted?.id) {
+    const existingResponse = await fetch(
+      `${supabaseUrl}/rest/v1/notification_deliveries?${new URLSearchParams({
+        select: "*",
+        idempotency_key: `eq.${row.idempotency_key}`,
+        limit: "1",
+      })}`,
+      { headers: restHeaders(serviceRoleKey) }
+    );
+    result = await readJson(existingResponse);
+    if (!existingResponse.ok) {
+      throw new Error(
+        result?.message || `Unable to resolve existing ${channel} Delivery.`
+      );
+    }
+    persisted = Array.isArray(result) ? result[0] : result;
+  }
   if (!persisted?.id) {
     throw new Error(`${channel} Delivery persistence returned no identity.`);
   }
@@ -424,7 +443,7 @@ export async function createVerifyDeliveriesForAcceptedNotification({
       deliveries: [],
     };
   }
-  if (accepted.event_type !== "quote_approved") {
+  if (!AUTHORITATIVE_EVENT_TYPES.has(accepted.event_type)) {
     return {
       created: false,
       reason: "unsupported_event",
@@ -462,22 +481,46 @@ export async function createVerifyDeliveriesForAcceptedNotification({
     supabaseUrl,
     serviceRoleKey,
   });
+  const eventMergeContext =
+    accepted.payload?.notificationMergeContext &&
+    typeof accepted.payload.notificationMergeContext === "object"
+      ? accepted.payload.notificationMergeContext
+      : {};
   const mergeContext = {
+    ...eventMergeContext,
     customer_name: normalizeText(
-      customer?.name || customer?.company || order?.customer_name
+      eventMergeContext.customer_name ||
+        customer?.name ||
+        customer?.company ||
+        order?.customer_name
     ),
     order_number: normalizeText(
-      order?.order_number ||
+      eventMergeContext.order_number ||
+        order?.order_number ||
         accepted.payload?.legacyNotificationContext?.orderNumber ||
         accepted.subject_id
     ),
-    company_name: "Tee & Co",
+    deposit_amount: normalizeText(
+      eventMergeContext.deposit_amount || order?.deposit_amount
+    ),
+    balance_due: normalizeText(
+      eventMergeContext.balance_due || order?.balance_due
+    ),
+    payment_link: normalizeText(
+      eventMergeContext.payment_link || order?.payment_link
+    ),
+    pickup_date: normalizeText(
+      eventMergeContext.pickup_date || order?.pickup_date || order?.due_date
+    ),
+    company_name: normalizeText(
+      eventMergeContext.company_name || "Tee & Co"
+    ),
   };
   const missingRequired = ["customer_name", "order_number", "company_name"]
     .filter((field) => !mergeContext[field]);
   if (missingRequired.length) {
     throw new Error(
-      `Missing required quote_approved merge fields: ${missingRequired.join(", ")}.`
+      `Missing required ${accepted.event_type} merge fields: ${missingRequired.join(", ")}.`
     );
   }
 

@@ -1,4 +1,5 @@
 import { mapBusinessEventToRow } from "./notificationEngineFoundation";
+import { buildCanonicalNotificationMergeContext } from "./notificationMergeContext";
 
 function normalizeText(value) {
   return String(value ?? "").trim();
@@ -85,6 +86,8 @@ export function buildNotificationBusinessEvent(eventType, context = {}) {
   const subject = resolveSubject(context);
   const occurredAt = resolveOccurredAt(context);
   const explicit = context.businessEvent || {};
+  const notificationMergeContext =
+    buildCanonicalNotificationMergeContext(normalizedEventType, context);
 
   return {
     id: normalizeText(explicit.id),
@@ -104,6 +107,7 @@ export function buildNotificationBusinessEvent(eventType, context = {}) {
     occurredAt,
     payload: {
       ...(explicit.payload && typeof explicit.payload === "object" ? explicit.payload : {}),
+      notificationMergeContext,
       legacyNotificationContext: {
         orderNumber: firstText(context.orderNumber, context.order?.order_number),
         customerReference: firstText(
@@ -120,4 +124,3 @@ export function buildNotificationBusinessEvent(eventType, context = {}) {
 export function buildNotificationBusinessEventRow(eventType, context = {}) {
   return mapBusinessEventToRow(buildNotificationBusinessEvent(eventType, context));
 }
-

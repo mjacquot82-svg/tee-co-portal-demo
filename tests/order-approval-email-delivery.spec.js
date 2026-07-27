@@ -7,7 +7,7 @@ import {
 } from "../src/lib/ordersStore.js";
 import { buildProductionReadyWorkflowUpdates } from "../src/quotes/productionReadiness.js";
 
-test("approval delivery verifies persisted approval and sends the customer email", async () => {
+test("approval delivery rejects the retired unrendered legacy email path", async () => {
   const originalFetch = globalThis.fetch;
   const originalEnv = {
     RESEND_API_KEY: process.env.RESEND_API_KEY,
@@ -23,18 +23,6 @@ test("approval delivery verifies persisted approval and sends the customer email
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-test-key";
   globalThis.fetch = async (url, options = {}) => {
     requests.push({ url: String(url), options });
-    if (String(url).includes("/rest/v1/orders")) {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => [{
-          order_number: "TC-APPROVED-2001",
-          customer_name: "Taylor Chen",
-          customer_email: "taylor@example.com",
-          approval_status: "Approved",
-        }],
-      };
-    }
     return { ok: true, status: 200, json: async () => ({ id: "email-2001" }) };
   };
 
@@ -48,29 +36,11 @@ test("approval delivery verifies persisted approval and sends the customer email
       }),
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(requests).toHaveLength(2);
-    expect(requests[1].options.headers["Idempotency-Key"]).toBe(
-      "quote_approved:TC-APPROVED-2001:customer"
-    );
-    expect(JSON.parse(requests[1].options.body)).toMatchObject({
-      from: "Tee & Co <orders@example.com>",
-      to: ["taylor@example.com"],
-      subject: "Your order has been approved",
-    });
-    expect(JSON.parse(requests[1].options.body).text).toBe(`Hi Taylor Chen,
-
-Your order TC-APPROVED-2001 has been reviewed and approved by Tee & Co.
-
-No action is required from you at this time.
-
-We are preparing your order for the next stage and will notify you if anything is required or when your order is ready.
-
-Thanks,
-The Tee & Co Team`);
+    expect(response.statusCode).toBe(409);
+    expect(requests).toHaveLength(0);
     expect(JSON.parse(response.body)).toMatchObject({
-      delivered: true,
-      providerMessageId: "email-2001",
+      error:
+        "Customer email delivery requires an authoritative rendered Delivery.",
     });
   } finally {
     globalThis.fetch = originalFetch;

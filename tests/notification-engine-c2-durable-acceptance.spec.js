@@ -4,6 +4,7 @@ import { handler } from "../netlify/functions/notification-event-accept.js";
 import { createVerifyDeliveriesForAcceptedNotification } from "../netlify/functions/lib/notificationVerifyDeliveries.js";
 import { acceptNotificationBusinessEventDurably } from "../src/lib/notificationBusinessEventAcceptance.js";
 import {
+  listNotificationActivity,
   resetNotificationActivityForTests,
   triggerNotificationEvent,
 } from "../src/lib/notificationDeliveryService.js";
@@ -146,6 +147,64 @@ test("browser acceptance uses a navigation-safe request and waits for durable id
     keepalive: true,
   });
   expect(JSON.parse(requests[0].options.body)).toEqual({ businessEvent });
+});
+
+test("authoritative pickup bypasses legacy activity and uses durable ingress once", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  resetNotificationActivityForTests();
+  globalThis.fetch = async (url, options = {}) => {
+    requests.push({ url: String(url), options });
+    const acceptedEvent = JSON.parse(options.body).businessEvent;
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { accepted: true, businessEvent: acceptedEvent };
+      },
+    };
+  };
+
+  try {
+    const result = await triggerNotificationEvent(
+      NOTIFICATION_TYPES.orderReadyForPickup,
+      {
+        notificationEngineCutoverMode: "authoritative",
+        order: {
+          id: "order-pickup-ingress",
+          order_number: "TC-PICKUP-INGRESS",
+          updated_at: "2026-07-27T17:36:48.000Z",
+          customer_phone: "+15198816869",
+        },
+        businessEvent: {
+          subjectType: "order",
+          subjectId: "order-pickup-ingress",
+          occurrenceId:
+            "order_ready_for_pickup:2026-07-27T17:36:48.000Z",
+          correlationId: "order:TC-PICKUP-INGRESS",
+          occurredAt: "2026-07-27T17:36:48.000Z",
+        },
+        source: "orders_store",
+      }
+    );
+
+    expect(result).toEqual([]);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].url).toBe(
+      "/.netlify/functions/notification-event-accept"
+    );
+    expect(
+      JSON.parse(requests[0].options.body).businessEvent
+    ).toMatchObject({
+      event_type: "order_ready_for_pickup",
+      subject_id: "order-pickup-ingress",
+      occurrence_id:
+        "order_ready_for_pickup:2026-07-27T17:36:48.000Z",
+    });
+    expect(listNotificationActivity()).toEqual([]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("durable ingress accepts through service-role persistence without mutating a replay", async () => {
@@ -648,6 +707,143 @@ test("authoritative quote approval creates exactly three idempotent dispatcher-e
   }
 });
 
+test("authoritative pickup creates one idempotent dispatcher-eligible SMS Delivery", async () => {
+  const originalFetch = globalThis.fetch;
+  const deliveries = new Map();
+  const accepted = {
+    ...businessEvent,
+    id: "business-event:pickup-1",
+    event_type: "order_ready_for_pickup",
+    subject_id: "order-pickup-1",
+    occurrence_id: "order_ready_for_pickup:2026-07-27T17:36:48.000Z",
+    payload: {
+      legacyNotificationContext: {
+        orderNumber: "TC-PICKUP-1",
+        customerReference: "customer-pickup-1",
+      },
+    },
+  };
+  const notification = {
+    id: "notification:pickup-1",
+    event_type: "order_ready_for_pickup",
+    status: "evaluated",
+    engine_metadata: {},
+  };
+  const policy = {
+    email_enabled: false,
+    sms_enabled: true,
+    staff_notification_enabled: false,
+    customer_audience_enabled: true,
+    staff_audience_enabled: false,
+    owner_audience_enabled: false,
+    channel_template_assignments: {
+      sms: "order_ready_for_pickup:v1",
+    },
+  };
+  const template = {
+    id: "order_ready_for_pickup:v1",
+    template_type: "order_ready_for_pickup",
+    version: 1,
+    status: "published",
+    sms_message: "Your order {{order_number}} is ready for pickup.",
+  };
+
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url);
+    if (requestUrl.includes("/orders?")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [{
+          id: "order-pickup-1",
+          order_number: "TC-PICKUP-1",
+          customer_id: "customer-pickup-1",
+          customer_phone: "+1 (519) 881-6869",
+        }],
+      };
+    }
+    if (requestUrl.includes("/customers?")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [{
+          id: "customer-pickup-1",
+          name: "Pickup Customer",
+          phone: "+1 (519) 881-6869",
+        }],
+      };
+    }
+    if (requestUrl.includes("/notification_template_versions?")) {
+      return { ok: true, status: 200, json: async () => [template] };
+    }
+    if (
+      requestUrl.includes("/notification_deliveries?on_conflict=") &&
+      options.method === "POST"
+    ) {
+      const row = JSON.parse(options.body);
+      const existing = deliveries.get(row.idempotency_key);
+      if (existing) {
+        return { ok: true, status: 200, json: async () => [] };
+      }
+      deliveries.set(row.idempotency_key, row);
+      return { ok: true, status: 201, json: async () => [row] };
+    }
+    if (
+      requestUrl.includes("/notification_deliveries?") &&
+      !options.method
+    ) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [deliveries.values().next().value],
+      };
+    }
+    if (
+      requestUrl.includes("/notifications?id=eq.") &&
+      options.method === "PATCH"
+    ) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [{ ...notification, ...JSON.parse(options.body) }],
+      };
+    }
+    throw new Error(`Unexpected request: ${requestUrl}`);
+  };
+
+  try {
+    const input = {
+      accepted,
+      notification,
+      policy,
+      supabaseUrl: "https://example.supabase.co",
+      serviceRoleKey: "service-role",
+      cutoverMode: "authoritative",
+    };
+    const first = await createVerifyDeliveriesForAcceptedNotification(input);
+    const replay = await createVerifyDeliveriesForAcceptedNotification(input);
+
+    expect(first.deliveries).toHaveLength(1);
+    expect(replay.deliveries).toHaveLength(1);
+    expect(deliveries.size).toBe(1);
+    expect([...deliveries.values()][0]).toMatchObject({
+      channel: "sms",
+      template_type: "order_ready_for_pickup",
+      rendered_content: {
+        body: "Your order TC-PICKUP-1 is ready for pickup.",
+      },
+      status: "queued",
+      destination_snapshot: {
+        normalizedPhone: "+15198816869",
+        observationOnly: false,
+        dispatcherEligible: true,
+      },
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("delivery materialization rejects unsupported modes and authoritative events", async () => {
   const originalFetch = globalThis.fetch;
   let fetchCalls = 0;
@@ -677,7 +873,7 @@ test("delivery materialization rejects unsupported modes and authoritative event
         ...input,
         accepted: {
           ...businessEvent,
-          event_type: "payment_received",
+          event_type: "payment_failed",
         },
         cutoverMode: "authoritative",
       });

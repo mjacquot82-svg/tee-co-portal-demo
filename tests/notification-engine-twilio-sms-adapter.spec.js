@@ -448,6 +448,72 @@ test("SMS dispatcher persists SID and deterministic Delivery Attempt identity", 
   });
 });
 
+test("pickup Delivery is scheduled once and invokes Twilio exactly once", async () => {
+  const envelope = smsEnvelope("pickup", {
+    delivery: {
+      rendered_content: {
+        body: "Your order TC-PICKUP-1 is ready for pickup.",
+      },
+    },
+    notification: {
+      event_type: "order_ready_for_pickup",
+    },
+    businessEvent: {
+      event_type: "order_ready_for_pickup",
+    },
+  });
+  const database = createTwilioLifecycleDatabase([envelope]);
+  const requests = [];
+  const adapter = {
+    key: "twilio",
+    async send(request) {
+      requests.push(request);
+      return {
+        status: "sent",
+        retryability: "terminal",
+        providerMessageId: MESSAGE_SID,
+        failureCode: "",
+        failureReason: "",
+        providerMetadata: {},
+      };
+    },
+  };
+
+  const first = await runScheduledTwilioSmsDispatcher({
+    cutoverEnabled: true,
+    runId: "pickup-run-1",
+    workerId: "pickup-worker-1",
+    adapter,
+    dispatcherClient: database.client,
+    now: () => new Date(NOW),
+  });
+  const duplicate = await runScheduledTwilioSmsDispatcher({
+    cutoverEnabled: true,
+    runId: "pickup-run-2",
+    workerId: "pickup-worker-2",
+    adapter,
+    dispatcherClient: database.client,
+    now: () => new Date(NOW),
+  });
+
+  expect(first).toMatchObject({
+    claimedCount: 1,
+    completedCount: 1,
+  });
+  expect(duplicate).toMatchObject({
+    claimedCount: 0,
+    completedCount: 0,
+  });
+  expect(requests).toHaveLength(1);
+  expect(database.attempts).toHaveLength(1);
+  expect(requests[0]).toMatchObject({
+    deliveryId: envelope.delivery.id,
+    content: {
+      body: "Your order TC-PICKUP-1 is ready for pickup.",
+    },
+  });
+});
+
 test("SMS dispatcher is policy-driven and ignores disabled, manual, and observation Deliveries", async () => {
   const enabled = smsEnvelope("enabled");
   const disabled = smsEnvelope("disabled", {

@@ -319,7 +319,10 @@ function queuePhase2BObservation(eventType, context, template) {
 }
 
 function acceptRequiredBusinessEvent(eventType, context, cutover) {
-  if (eventType !== NOTIFICATION_TYPES.quoteApproved) {
+  if (
+    eventType !== NOTIFICATION_TYPES.quoteApproved &&
+    !(cutover.supported && !cutover.runLegacy)
+  ) {
     return null;
   }
 
@@ -412,7 +415,9 @@ export function triggerNotificationEvent(eventType, context = {}) {
     cutover
   );
   if (!cutover.runLegacy) {
-    return queuePhase2BObservation(eventType, context, template).then(() => []);
+    return requiredBusinessEventAcceptance
+      ? requiredBusinessEventAcceptance.then(() => [])
+      : queuePhase2BObservation(eventType, context, template).then(() => []);
   }
 
   const mergeFields = buildDefaultMergeFields(context);

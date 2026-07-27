@@ -1,29 +1,5 @@
--- Notification Engine production-readiness remediation C5.
--- Additive immutable template publication; policy and delivery behavior are unchanged.
-
-create or replace function public.protect_notification_template_version()
-returns trigger
-language plpgsql
-set search_path = public
-as $$
-begin
-  if tg_op = 'DELETE' then
-    raise exception 'Notification template versions are immutable.'
-      using errcode = '55000';
-  end if;
-  if new is distinct from old then
-    raise exception 'Notification template versions are immutable.'
-      using errcode = '55000';
-  end if;
-  return new;
-end;
-$$;
-
-drop trigger if exists protect_notification_template_version
-  on public.notification_template_versions;
-create trigger protect_notification_template_version
-  before update or delete on public.notification_template_versions
-  for each row execute procedure public.protect_notification_template_version();
+-- Make administrator template publication immediately authoritative.
+-- Publishing and active-policy reassignment occur in one transaction.
 
 create or replace function public.save_notification_template_version(
   p_template_type text,
@@ -59,8 +35,8 @@ begin
   end if;
   if not exists (
     select 1
-      from public.notification_templates template
-     where template.type = v_template_type
+    from public.notification_templates template
+    where template.type = v_template_type
   ) then
     raise exception 'Unknown notification template type.';
   end if;
@@ -71,10 +47,11 @@ begin
   perform pg_advisory_xact_lock(
     hashtext('notification-template-version:' || v_template_type)
   );
+
   select coalesce(max(version), 0) + 1
-    into v_version
-    from public.notification_template_versions
-   where template_type = v_template_type;
+  into v_version
+  from public.notification_template_versions
+  where template_type = v_template_type;
 
   insert into public.notification_template_versions (
     id,
@@ -108,44 +85,39 @@ begin
 
   if v_status = 'published' then
     update public.notification_templates
-       set name = coalesce(p_name, ''),
-           email_subject = coalesce(p_email_subject, ''),
-           email_body = coalesce(p_email_body, ''),
-           sms_message = coalesce(p_sms_message, ''),
-           updated_at = v_now
-     where type = v_template_type;
+    set
+      name = coalesce(p_name, ''),
+      email_subject = coalesce(p_email_subject, ''),
+      email_body = coalesce(p_email_body, ''),
+      sms_message = coalesce(p_sms_message, ''),
+      updated_at = v_now
+    where type = v_template_type;
 
     update public.notification_policies
-       set channel_template_assignments =
-             coalesce(channel_template_assignments, '{}'::jsonb)
-             || case
-                  when email_enabled
-                    then jsonb_build_object('email', v_result.id)
-                  else '{}'::jsonb
-                end
-             || case
-                  when sms_enabled
-                    then jsonb_build_object('sms', v_result.id)
-                  else '{}'::jsonb
-                end
-             || case
-                  when staff_notification_enabled
-                    then jsonb_build_object('staff', v_result.id)
-                  else '{}'::jsonb
-                end,
-           updated_at = v_now
-     where event_type = v_template_type
-       and effective_to is null;
+    set
+      channel_template_assignments =
+        coalesce(channel_template_assignments, '{}'::jsonb)
+        || case
+          when email_enabled then jsonb_build_object('email', v_result.id)
+          else '{}'::jsonb
+        end
+        || case
+          when sms_enabled then jsonb_build_object('sms', v_result.id)
+          else '{}'::jsonb
+        end
+        || case
+          when staff_notification_enabled then
+            jsonb_build_object('staff', v_result.id)
+          else '{}'::jsonb
+        end,
+      updated_at = v_now
+    where event_type = v_template_type
+      and effective_to is null;
   end if;
 
   return v_result;
 end;
 $$;
-
-revoke all on function public.protect_notification_template_version()
-  from public, anon, authenticated;
-grant execute on function public.protect_notification_template_version()
-  to service_role;
 
 revoke all on function public.save_notification_template_version(
   text, text, text, text, text, text, jsonb

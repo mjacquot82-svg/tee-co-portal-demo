@@ -53,7 +53,9 @@ test("triggerNotificationEvent resolves template content and stores activity rec
     recipientType: "customer",
     templateType: NOTIFICATION_TYPES.quoteApproved,
   });
-  expect(records[0].generatedContent.emailSubject).toBe("Your order has been approved");
+  expect(records[0].generatedContent.emailSubject).toBe(
+    "Order approved — TC-4401"
+  );
   expect(records[0].generatedContent.emailBody).toContain("Taylor Chen");
 
   const storedRecords = listNotificationActivity();

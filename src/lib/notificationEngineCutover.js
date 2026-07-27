@@ -8,7 +8,14 @@ export const NOTIFICATION_ENGINE_CUTOVER_MODES = Object.freeze({
   authoritative: "authoritative",
 });
 
-export const AUTHORITATIVE_NOTIFICATION_EVENTS = Object.freeze(["quote_approved"]);
+export const AUTHORITATIVE_NOTIFICATION_EVENTS = Object.freeze([
+  "quote_approved",
+  "deposit_requested",
+  "payment_received",
+  "order_in_production",
+  "order_ready_for_pickup",
+  "order_completed",
+]);
 
 function enabled(value) {
   return String(value ?? "").trim().toLowerCase() === "true";

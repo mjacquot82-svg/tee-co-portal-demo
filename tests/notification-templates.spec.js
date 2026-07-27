@@ -72,8 +72,8 @@ test("approval and production use distinct customer SMS templates", () => {
   const approvalSms = renderTemplateContent(approval.smsMessage, mergeFields);
   const productionSms = renderTemplateContent(production.smsMessage, mergeFields);
 
-  expect(approvalSms).toContain("has been approved");
-  expect(productionSms).toContain("has entered our production schedule");
+  expect(approvalSms).toContain("is approved");
+  expect(productionSms).toContain("has entered production");
   expect(productionSms).not.toBe(approvalSms);
 });
 

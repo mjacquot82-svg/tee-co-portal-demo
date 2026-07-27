@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { getJsonStorageItem, hasBrowserStorage, setJsonStorageItem } from "./browserStorage";
 import { supabase } from "./supabaseClient";
+import { getNotificationMergeRule } from "./notificationMergeContext";
 
 const STORAGE_KEY = "teeCoNotificationTemplates";
 const VERSION_STORAGE_KEY = "teeCoNotificationTemplateVersions";
@@ -98,7 +99,10 @@ export const NOTIFICATION_TEMPLATE_SAMPLE_DATA = Object.freeze(
   )
 );
 
-const DEFAULT_TEMPLATES = Object.freeze({
+// Non-production fixtures keep local development and isolated unit tests usable
+// when Supabase is intentionally unavailable. Production never selects these
+// message bodies as runtime templates.
+const NON_PRODUCTION_TEMPLATE_FIXTURES = Object.freeze({
   [NOTIFICATION_TYPES.newCustomerRequest]: {
     type: NOTIFICATION_TYPES.newCustomerRequest,
     name: "New Customer Request",
@@ -141,20 +145,18 @@ The {{company_name}} Team`,
   [NOTIFICATION_TYPES.quoteApproved]: {
     type: NOTIFICATION_TYPES.quoteApproved,
     name: "Order Approved",
-    emailSubject: "Your order has been approved",
+    emailSubject: "Order approved — {{order_number}}",
     emailBody: `Hi {{customer_name}},
 
-Your order {{order_number}} has been reviewed and approved by Tee & Co.
+Your order {{order_number}} has been approved.
 
-No action is required from you at this time.
-
-We are preparing your order for the next stage and will notify you if anything is required or when your order is ready.
+No action is needed. We'll let you know when it enters production.
 
 Thanks,
 The {{company_name}} Team`,
-    smsMessage: "Hi {{customer_name}}, your order {{order_number}} has been approved. No action is required right now.",
+    smsMessage: "Hi {{customer_name}}, order {{order_number}} is approved. No action is needed. We'll let you know when production begins.",
     emailEnabled: true,
-    smsEnabled: false,
+    smsEnabled: true,
     staffNotificationEnabled: true,
   },
   [NOTIFICATION_TYPES.artworkRevisionRequested]: {
@@ -195,21 +197,19 @@ The {{company_name}} Team`,
   [NOTIFICATION_TYPES.depositRequested]: {
     type: NOTIFICATION_TYPES.depositRequested,
     name: "Deposit Requested",
-    emailSubject: "Deposit required to begin your order — {{order_number}}",
+    emailSubject: "Deposit required for order {{order_number}}",
     emailBody: `Hi {{customer_name}},
 
-Your order {{order_number}} is ready to go into production once we receive your deposit.
+A deposit of {{deposit_amount}} is now required for order {{order_number}} before production can be scheduled.
 
-Deposit Amount: {{deposit_amount}}
-
-Please submit your deposit using the link below:
+Action required: submit your deposit here:
 {{payment_link}}
 
-Once your deposit is received, we'll get started right away!
+We'll confirm when it is received.
 
 Thanks,
 The {{company_name}} Team`,
-    smsMessage: "Hi {{customer_name}}, deposit of {{deposit_amount}} required for order {{order_number}}. Pay here: {{payment_link}}",
+    smsMessage: "Hi {{customer_name}}, a {{deposit_amount}} deposit is required for order {{order_number}} before production can be scheduled. Pay here: {{payment_link}}",
     emailEnabled: true,
     smsEnabled: true,
     staffNotificationEnabled: false,
@@ -237,21 +237,18 @@ The {{company_name}} Team`,
   [NOTIFICATION_TYPES.paymentReceived]: {
     type: NOTIFICATION_TYPES.paymentReceived,
     name: "Payment Received",
-    emailSubject: "Payment received — {{order_number}}",
+    emailSubject: "Deposit received — {{order_number}}",
     emailBody: `Hi {{customer_name}},
 
-Thank you! We've received your payment for order {{order_number}}.
+We've received your {{deposit_amount}} deposit for order {{order_number}}.
 
-Amount Paid: {{deposit_amount}}
-Balance Due: {{balance_due}}
-
-We'll keep you updated as your order progresses.
+No action is needed. We'll notify you when production begins.
 
 Thanks,
 The {{company_name}} Team`,
-    smsMessage: "Hi {{customer_name}}, payment received for order {{order_number}}. Balance due: {{balance_due}}. Thanks!",
+    smsMessage: "Hi {{customer_name}}, we received your {{deposit_amount}} deposit for order {{order_number}}. No action is needed; we'll notify you when production begins.",
     emailEnabled: true,
-    smsEnabled: false,
+    smsEnabled: true,
     staffNotificationEnabled: true,
   },
   [NOTIFICATION_TYPES.paymentFailed]: {
@@ -277,16 +274,16 @@ The {{company_name}} Team`,
   [NOTIFICATION_TYPES.orderInProduction]: {
     type: NOTIFICATION_TYPES.orderInProduction,
     name: "Order In Production",
-    emailSubject: "Your order is in production — {{order_number}}",
+    emailSubject: "Your order has entered production — {{order_number}}",
     emailBody: `Hi {{customer_name}},
 
-Your order {{order_number}} is now in production! Our team is working hard to bring your design to life.
+Your order {{order_number}} has entered production.
 
-We'll notify you when your order is ready for pickup.
+No action is needed. We'll notify you when it is ready for pickup.
 
 Thanks,
 The {{company_name}} Team`,
-    smsMessage: "Hi {{customer_name}}, your order {{order_number}} has entered our production schedule. We'll let you know when it's ready.",
+    smsMessage: "Hi {{customer_name}}, order {{order_number}} has entered production. No action is needed; we'll let you know when it's ready for pickup.",
     emailEnabled: true,
     smsEnabled: true,
     staffNotificationEnabled: false,
@@ -297,16 +294,13 @@ The {{company_name}} Team`,
     emailSubject: "Your order is ready for pickup — {{order_number}}",
     emailBody: `Hi {{customer_name}},
 
-Great news! Your order {{order_number}} is complete and ready for pickup.
+Your order {{order_number}} is ready for pickup.
 
-Pickup Date: {{pickup_date}}
-Balance Due: {{balance_due}}
-
-Please bring your remaining balance when you come to pick up your order.
+Action required: please arrange to pick it up. Your remaining balance is {{balance_due}}.
 
 Thanks,
 The {{company_name}} Team`,
-    smsMessage: "Hi {{customer_name}}, your order {{order_number}} is ready for pickup on {{pickup_date}}! Balance due: {{balance_due}}.",
+    smsMessage: "Hi {{customer_name}}, order {{order_number}} is ready for pickup. Please arrange pickup; your remaining balance is {{balance_due}}.",
     emailEnabled: true,
     smsEnabled: true,
     staffNotificationEnabled: false,
@@ -314,21 +308,39 @@ The {{company_name}} Team`,
   [NOTIFICATION_TYPES.orderCompleted]: {
     type: NOTIFICATION_TYPES.orderCompleted,
     name: "Order Completed",
-    emailSubject: "Order complete — thank you, {{customer_name}}!",
+    emailSubject: "Order complete — {{order_number}}",
     emailBody: `Hi {{customer_name}},
 
-Thank you for choosing {{company_name}}! Your order {{order_number}} is now complete.
+Your order {{order_number}} has been completed.
 
-We hope you love your new gear. We'd love to see you again for your next order!
+No action is needed. Thank you for choosing {{company_name}} — we hope you enjoy your order!
 
 Thanks,
 The {{company_name}} Team`,
-    smsMessage: "Hi {{customer_name}}, your order {{order_number}} is complete. Thanks for choosing {{company_name}}!",
+    smsMessage: "Hi {{customer_name}}, order {{order_number}} is complete. No action is needed. Thanks for choosing {{company_name}}!",
     emailEnabled: true,
-    smsEnabled: false,
+    smsEnabled: true,
     staffNotificationEnabled: false,
   },
 });
+
+const EMPTY_RUNTIME_TEMPLATES = Object.freeze(
+  Object.fromEntries(
+    Object.values(NON_PRODUCTION_TEMPLATE_FIXTURES).map((template) => [
+      template.type,
+      Object.freeze({
+        ...template,
+        emailSubject: "",
+        emailBody: "",
+        smsMessage: "",
+      }),
+    ])
+  )
+);
+
+const DEFAULT_TEMPLATES = shouldUseSupabase()
+  ? EMPTY_RUNTIME_TEMPLATES
+  : NON_PRODUCTION_TEMPLATE_FIXTURES;
 
 // Array form of template definitions for test compatibility
 export const NOTIFICATION_TEMPLATE_DEFINITIONS = Object.freeze(
@@ -667,7 +679,12 @@ export async function updateNotificationTemplate(type, updates = {}, options = {
     { ...current[normalizedType], ...updates },
     DEFAULT_TEMPLATES[normalizedType]
   );
-  await saveNotificationTemplateVersion(updatedTemplate, options);
+  await saveNotificationTemplateVersion(updatedTemplate, {
+    ...options,
+    requiredMergeFields:
+      options.requiredMergeFields ||
+      getNotificationMergeRule(normalizedType).required,
+  });
 
   if (String(options.status || "published").toLowerCase() === "draft") {
     return updatedTemplate;
@@ -687,9 +704,38 @@ export async function resetNotificationTemplate(type, options = {}) {
   if (!normalizedType || !DEFAULT_TEMPLATES[normalizedType]) {
     throw new Error("A valid notification template type is required.");
   }
+  const resolvedClient = options.client || supabase;
+  if (resolvedClient?.from) {
+    const { data, error } = await resolvedClient
+      .from("notification_template_versions")
+      .select("*")
+      .eq("template_type", normalizedType)
+      .eq("status", "published")
+      .order("version", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data?.id) {
+      throw new Error(
+        `No published baseline template exists for ${normalizedType}.`
+      );
+    }
+    const current = getNotificationTemplates()[normalizedType];
+    return updateNotificationTemplate(
+      normalizedType,
+      {
+        ...current,
+        name: data.name,
+        emailSubject: data.email_subject,
+        emailBody: data.email_body,
+        smsMessage: data.sms_message,
+      },
+      options
+    );
+  }
   return updateNotificationTemplate(
     normalizedType,
-    DEFAULT_TEMPLATES[normalizedType],
+    NON_PRODUCTION_TEMPLATE_FIXTURES[normalizedType],
     options
   );
 }

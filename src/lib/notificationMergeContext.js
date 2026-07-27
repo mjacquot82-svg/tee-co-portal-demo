@@ -57,7 +57,6 @@ export const NOTIFICATION_EVENT_MERGE_RULES = Object.freeze({
       "customer_name",
       "order_number",
       "deposit_amount",
-      "balance_due",
       "company_name",
     ],
   },
@@ -77,7 +76,6 @@ export const NOTIFICATION_EVENT_MERGE_RULES = Object.freeze({
     required: [
       "customer_name",
       "order_number",
-      "pickup_date",
       "balance_due",
       "company_name",
     ],
@@ -254,4 +252,3 @@ export function validateNotificationMergeContext({
     unresolvedRequiredTokens,
   };
 }
-

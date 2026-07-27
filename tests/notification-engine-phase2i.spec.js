@@ -31,8 +31,15 @@ test("Phase 2I verify mode keeps legacy authoritative and enables durable observ
   });
 });
 
-test("Phase 2I limits authoritative cutover to already-approved Order Approved email", () => {
-  expect(AUTHORITATIVE_NOTIFICATION_EVENTS).toEqual(["quote_approved"]);
+test("authoritative cutover includes approved operational customer lifecycle events", () => {
+  expect(AUTHORITATIVE_NOTIFICATION_EVENTS).toEqual([
+    "quote_approved",
+    "deposit_requested",
+    "payment_received",
+    "order_in_production",
+    "order_ready_for_pickup",
+    "order_completed",
+  ]);
   expect(resolveNotificationEngineCutover("quote_approved", {
     notificationEngineCutoverMode: "authoritative",
   })).toMatchObject({
@@ -44,9 +51,24 @@ test("Phase 2I limits authoritative cutover to already-approved Order Approved e
   expect(resolveNotificationEngineCutover("payment_received", {
     notificationEngineCutoverMode: "authoritative",
   })).toMatchObject({
+    mode: "authoritative",
+    runLegacy: false,
+    runEngine: true,
+  });
+  expect(resolveNotificationEngineCutover("payment_failed", {
+    notificationEngineCutoverMode: "authoritative",
+  })).toMatchObject({
     mode: "legacy",
     runLegacy: true,
     runEngine: false,
+  });
+  expect(resolveNotificationEngineCutover("order_ready_for_pickup", {
+    notificationEngineCutoverMode: "authoritative",
+  })).toMatchObject({
+    mode: "authoritative",
+    runLegacy: false,
+    runEngine: true,
+    observationOnly: false,
   });
 });
 
@@ -242,7 +264,7 @@ test("Phase 2I retires pending promise registries and preserves legacy history r
   expect(activityRepository).toContain("Legacy");
 });
 
-test("Phase 2I introduces no SMS, Twilio, or additional authoritative email event", async () => {
+test("authoritative lifecycle expansion preserves the existing SMS provider architecture", async () => {
   const sources = await Promise.all([
     "../src/lib/notificationEngineCutover.js",
     "../netlify/functions/customer-notification.js",
@@ -251,5 +273,7 @@ test("Phase 2I introduces no SMS, Twilio, or additional authoritative email even
   const combined = sources.join("\n");
   expect(combined).not.toContain("Twilio");
   expect(combined).not.toContain("sendSms");
-  expect(AUTHORITATIVE_NOTIFICATION_EVENTS).toHaveLength(1);
+  expect(AUTHORITATIVE_NOTIFICATION_EVENTS).toContain(
+    "order_ready_for_pickup"
+  );
 });
