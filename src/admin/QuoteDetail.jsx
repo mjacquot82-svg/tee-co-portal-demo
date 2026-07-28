@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./OrderDetail.css";
 import PricingSummary from "../components/PricingSummary";
 import OwnerNextActionCard from "../components/OwnerNextActionCard";
@@ -341,7 +341,40 @@ function ArchivedAccordionSection({
   );
 }
 
+function getActiveActionLabel(label) {
+  const normalized = String(label || "");
+  const labels = {
+    "Approve Artwork": "Approving Artwork...",
+    "Request Artwork": "Requesting Artwork...",
+    "Request Changes": "Requesting Revision...",
+    "Mark Deposit Not Required": "Saving...",
+    "Approve Request": "Approving Request...",
+    "Reject Request": "Rejecting Request...",
+    "Save Price": "Saving...",
+  };
+  return labels[normalized] || "Saving...";
+}
+
+function ActionSpinner() {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        display: "inline-block",
+        width: "14px",
+        height: "14px",
+        border: "2px solid currentColor",
+        borderRightColor: "transparent",
+        borderRadius: "999px",
+        animation: "tee-co-action-spin 0.7s linear infinite",
+      }}
+    />
+  );
+}
+
 function PrimaryActionButton({ children, onClick, tone = "default", type = "button" }) {
+  const [pending, setPending] = useState(false);
+  const [feedback, setFeedback] = useState(null);
   const tones = {
     default: { background: "#0f172a", border: "#0f172a", color: "#ffffff" },
     neutral: { background: "#ffffff", border: "#cbd5e1", color: "#0f172a" },
@@ -350,23 +383,62 @@ function PrimaryActionButton({ children, onClick, tone = "default", type = "butt
   };
   const palette = tones[tone] || tones.default;
 
+  async function handleClick(event) {
+    if (!onClick || pending) return;
+    setPending(true);
+    setFeedback(null);
+    try {
+      await onClick(event);
+      setFeedback({ tone: "success", message: "Complete" });
+      window.setTimeout(() => setFeedback(null), 1600);
+    } catch (error) {
+      setFeedback({
+        tone: "error",
+        message: error instanceof Error ? error.message : "The action could not be completed.",
+      });
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
-    <button
-      type={type}
-      onClick={onClick}
-      data-action-tone={tone}
-      style={{
-        border: `1px solid ${palette.border}`,
-        background: palette.background,
-        color: palette.color,
-        borderRadius: "12px",
-        padding: "12px 14px",
-        fontWeight: 800,
-        cursor: "pointer",
-      }}
-    >
-      {children}
-    </button>
+    <span style={{ display: "inline-grid", gap: "5px" }}>
+      <button
+        type={type}
+        onClick={onClick ? handleClick : undefined}
+        disabled={pending}
+        aria-busy={pending}
+        data-action-tone={tone}
+        style={{
+          border: `1px solid ${palette.border}`,
+          background: palette.background,
+          color: palette.color,
+          borderRadius: "12px",
+          padding: "12px 14px",
+          fontWeight: 800,
+          cursor: pending ? "wait" : "pointer",
+          opacity: pending ? 0.72 : 1,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "8px",
+        }}
+      >
+        {pending ? <ActionSpinner /> : null}
+        {pending ? getActiveActionLabel(children) : children}
+      </button>
+      {feedback ? (
+        <small
+          role={feedback.tone === "error" ? "alert" : "status"}
+          style={{
+            color: feedback.tone === "error" ? "#b91c1c" : "#166534",
+            fontWeight: 800,
+          }}
+        >
+          {feedback.message}
+        </small>
+      ) : null}
+    </span>
   );
 }
 
@@ -377,6 +449,8 @@ function DepositRequestModal({ order, totalAmount, onCancel, onConfirm }) {
   const [message, setMessage] = useState(
     `Please send your deposit by e-transfer to orders@teeandco.ca and include your order number ${order.order_number}.`
   );
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const normalizedTotal = roundCurrency(totalAmount);
   const parsedPercentage = Number(percentage);
   const parsedFixedAmount = Number(fixedAmount);
@@ -391,16 +465,25 @@ function DepositRequestModal({ order, totalAmount, onCancel, onConfirm }) {
     calculatedAmount <= normalizedTotal &&
     (depositType !== "percentage" || parsedPercentage > 0);
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
-    if (!hasValidAmount) return;
+    if (!hasValidAmount || submitting) return;
 
-    onConfirm({
-      amount: calculatedAmount,
-      type: depositType,
-      percentage: depositType === "percentage" ? parsedPercentage : null,
-      message: String(message || "").trim(),
-    });
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      await onConfirm({
+        amount: calculatedAmount,
+        type: depositType,
+        percentage: depositType === "percentage" ? parsedPercentage : null,
+        message: String(message || "").trim(),
+      });
+    } catch (error) {
+      setSubmitError(error instanceof Error && error.message
+        ? error.message
+        : "The deposit request could not be sent. Try again.");
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -546,9 +629,15 @@ function DepositRequestModal({ order, totalAmount, onCancel, onConfirm }) {
         </label>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", flexWrap: "wrap" }}>
+          {submitError ? (
+            <p role="alert" style={{ margin: 0, color: "#b91c1c", fontWeight: 800 }}>
+              {submitError}
+            </p>
+          ) : null}
           <button
             type="button"
             onClick={onCancel}
+            disabled={submitting}
             style={{
               border: "1px solid #cbd5e1",
               background: "#ffffff",
@@ -556,14 +645,15 @@ function DepositRequestModal({ order, totalAmount, onCancel, onConfirm }) {
               borderRadius: "12px",
               padding: "12px 14px",
               fontWeight: 800,
-              cursor: "pointer",
+              cursor: submitting ? "not-allowed" : "pointer",
             }}
           >
             Cancel
           </button>
           <button
             type="submit"
-            disabled={!hasValidAmount}
+            disabled={!hasValidAmount || submitting}
+            aria-busy={submitting}
             style={{
               border: "1px solid #fdba74",
               background: hasValidAmount ? "#fff7ed" : "#f1f5f9",
@@ -571,10 +661,15 @@ function DepositRequestModal({ order, totalAmount, onCancel, onConfirm }) {
               borderRadius: "12px",
               padding: "12px 14px",
               fontWeight: 900,
-              cursor: hasValidAmount ? "pointer" : "not-allowed",
+              cursor: hasValidAmount && !submitting ? "pointer" : "not-allowed",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
             }}
           >
-            Request Deposit
+            {submitting ? <ActionSpinner /> : null}
+            {submitting ? "Requesting Deposit..." : "Request Deposit"}
           </button>
         </div>
       </form>
@@ -613,6 +708,7 @@ function IntakeReviewScreen({
   const [priceEditing, setPriceEditing] = useState(false);
   const [priceDraft, setPriceDraft] = useState("");
   const [priceError, setPriceError] = useState("");
+  const [priceSaving, setPriceSaving] = useState(false);
   const submittedAt = formatDateTime(order.created_at, " • ");
   const artworkFiles = getUploadedOrderArtworkFiles(order);
   const artworkReferenceNames = getOrderArtworkReferenceNames(order);
@@ -736,9 +832,9 @@ function IntakeReviewScreen({
     setDepositModalOpen(true);
   }
 
-  function handleConfirmDepositRequest(requestDetails) {
+  async function handleConfirmDepositRequest(requestDetails) {
+    await onRequireDeposit(requestDetails);
     setDepositModalOpen(false);
-    onRequireDeposit(requestDetails);
   }
 
   function handleOpenPriceEditor() {
@@ -749,6 +845,7 @@ function IntakeReviewScreen({
 
   async function handlePriceSubmit(event) {
     event.preventDefault();
+    if (priceSaving) return;
     const nextPrice = Number(priceDraft);
 
     if (!Number.isFinite(nextPrice) || nextPrice <= 0) {
@@ -756,9 +853,18 @@ function IntakeReviewScreen({
       return;
     }
 
-    await onUpdatePrice(roundCurrency(nextPrice));
-    setPriceEditing(false);
+    setPriceSaving(true);
     setPriceError("");
+    try {
+      await onUpdatePrice(roundCurrency(nextPrice));
+      setPriceEditing(false);
+    } catch (error) {
+      setPriceError(error instanceof Error && error.message
+        ? error.message
+        : "The price could not be saved. Try again.");
+    } finally {
+      setPriceSaving(false);
+    }
   }
 
   return (
@@ -1230,7 +1336,26 @@ function IntakeReviewScreen({
                   </label>
                   {priceError ? <p role="alert" style={{ margin: 0, color: "#b91c1c", fontWeight: 700 }}>{priceError}</p> : null}
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                    <PrimaryActionButton type="submit">Save Price</PrimaryActionButton>
+                    <button
+                      type="submit"
+                      disabled={priceSaving}
+                      aria-busy={priceSaving}
+                      style={{
+                        border: "1px solid #0f172a",
+                        background: "#0f172a",
+                        color: "#ffffff",
+                        borderRadius: "12px",
+                        padding: "12px 14px",
+                        fontWeight: 800,
+                        cursor: priceSaving ? "wait" : "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      {priceSaving ? <ActionSpinner /> : null}
+                      {priceSaving ? "Saving..." : "Save Price"}
+                    </button>
                     <PrimaryActionButton onClick={() => setPriceEditing(false)} tone="neutral">Cancel</PrimaryActionButton>
                   </div>
                 </form>
@@ -1376,6 +1501,9 @@ export default function QuoteDetail() {
   );
   const artworkReferenceNames = useMemo(() => getOrderArtworkReferenceNames(order), [order]);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [releasePending, setReleasePending] = useState(false);
+  const [releaseError, setReleaseError] = useState("");
+  const releasePromiseRef = useRef(null);
   const [archivedSections, setArchivedSections] = useState({
     quoteDetails: false,
     artworkApproval: false,
@@ -1464,16 +1592,32 @@ export default function QuoteDetail() {
   async function handleReleaseToProduction() {
     if (archived || canceled) return;
     if (!productionReadiness.ready) return;
+    if (releasePromiseRef.current) return releasePromiseRef.current;
 
-    await updateStoredOrder(order.order_number, {
-      quote_status: "Ready For Production",
-      status: "Awaiting Production",
-      operational_visible: true,
-      production_ready: true,
-      activity_type: "release_to_production",
-      activity_note: "Quote released into Production Orders.",
-    });
-    showWorkflowConfirmation(`Order Moved to Production for ${order.order_number} · ${order.customer_name || "Customer"}`);
+    setReleasePending(true);
+    setReleaseError("");
+    const operation = (async () => {
+      try {
+        await updateStoredOrder(order.order_number, {
+          quote_status: "Ready For Production",
+          status: "Awaiting Production",
+          operational_visible: true,
+          production_ready: true,
+          activity_type: "release_to_production",
+          activity_note: "Quote released into Production Orders.",
+        });
+        showWorkflowConfirmation(`Order Moved to Production for ${order.order_number} · ${order.customer_name || "Customer"}`);
+      } catch (error) {
+        setReleaseError(error instanceof Error && error.message
+          ? error.message
+          : "The order could not be released to production. Try again.");
+      } finally {
+        setReleasePending(false);
+        releasePromiseRef.current = null;
+      }
+    })();
+    releasePromiseRef.current = operation;
+    return operation;
   }
 
   async function handleOwnerNextAction(actionKey) {
@@ -1746,6 +1890,11 @@ export default function QuoteDetail() {
           {flashMessage}
         </section>
       ) : null}
+      {releaseError ? (
+        <section role="alert" style={{ marginBottom: "20px", borderRadius: "16px", padding: "14px 16px", border: "1px solid #fecaca", background: "#fef2f2", color: "#b91c1c", fontWeight: 700 }}>
+          {releaseError}
+        </section>
+      ) : null}
 
       <div
         style={{
@@ -1822,6 +1971,8 @@ export default function QuoteDetail() {
               type="button"
               data-testid="quote-detail-release-to-production"
               onClick={handleReleaseToProduction}
+              disabled={releasePending}
+              aria-busy={releasePending}
               style={{
                 border: "none",
                 background: "#166534",
@@ -1829,10 +1980,14 @@ export default function QuoteDetail() {
                 borderRadius: "12px",
                 padding: "11px 14px",
                 fontWeight: 700,
-                cursor: "pointer",
+                cursor: releasePending ? "wait" : "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
               }}
             >
-              Release to Production
+              {releasePending ? <ActionSpinner /> : null}
+              {releasePending ? "Releasing to Production..." : "Release to Production"}
             </button>
           ) : null}
           {!archived && !canceled && canManageArchive ? (
@@ -2527,7 +2682,8 @@ export default function QuoteDetail() {
                 <button
                   type="button"
                   onClick={handleReleaseToProduction}
-                  disabled={archived}
+                  disabled={archived || releasePending}
+                  aria-busy={releasePending}
                   style={{
                     border: "none",
                     background: "#166534",
@@ -2535,11 +2691,15 @@ export default function QuoteDetail() {
                     borderRadius: "12px",
                     padding: "11px 14px",
                     fontWeight: 700,
-                    cursor: archived ? "not-allowed" : "pointer",
+                    cursor: archived ? "not-allowed" : releasePending ? "wait" : "pointer",
                     opacity: archived ? 0.55 : 1,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
                   }}
                 >
-                  Release to Production
+                  {releasePending ? <ActionSpinner /> : null}
+                  {releasePending ? "Releasing to Production..." : "Release to Production"}
                 </button>
               ) : null}
               {archived ? (

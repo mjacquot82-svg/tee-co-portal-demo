@@ -275,12 +275,12 @@ export default function OrderDetail() {
 
     const updates = buildWorkflowActionUpdates(order, enrichedAction);
     if (!updates) return;
+    await saveOrderUpdates(updates);
     setWorkflowFeedback({
       tone: "success",
       ...buildWorkflowActionConfirmation(order, enrichedAction),
       nextActionLabel: "",
     });
-    await saveOrderUpdates(updates);
   }
 
   function handlePrintTicket() {

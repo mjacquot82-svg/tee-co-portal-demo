@@ -26,6 +26,9 @@ test("authenticated request form identifies the final submission action", () => 
   expect(source).toContain("Ready for final submission");
   expect(source).toContain("It does not authorize production or payment.");
   expect(source).toContain('"Submit Order Request"');
+  expect(source).toContain('aria-busy={submitState === "submitting"}');
+  expect(source).toContain('"Submitting Order..."');
+  expect(source).toContain('disabled={submitState === "submitting" || !selectedProduct}');
 });
 
 test("authenticated request form reviews the prior selection instead of reopening the catalog", () => {

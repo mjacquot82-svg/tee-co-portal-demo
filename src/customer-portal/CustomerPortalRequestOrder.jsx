@@ -823,6 +823,7 @@ export default function CustomerPortalRequestOrder() {
               <button
                 type="submit"
                 disabled={submitState === "submitting" || !selectedProduct}
+                aria-busy={submitState === "submitting"}
                 style={{
                   borderRadius: "999px",
                   border: "none",
@@ -831,9 +832,28 @@ export default function CustomerPortalRequestOrder() {
                   padding: "13px 18px",
                   fontWeight: 800,
                   cursor: submitState === "submitting" || !selectedProduct ? "not-allowed" : "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
                 }}
               >
-                {submitState === "submitting" ? "Submitting Request..." : "Submit Order Request"}
+                {submitState === "submitting" ? (
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    style={{
+                      width: "15px",
+                      height: "15px",
+                    }}
+                  >
+                    <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="3" />
+                    <path d="M12 3a9 9 0 0 1 9 9" fill="none" stroke="#ffffff" strokeWidth="3" strokeLinecap="round">
+                      <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.7s" repeatCount="indefinite" />
+                    </path>
+                  </svg>
+                ) : null}
+                {submitState === "submitting" ? "Submitting Order..." : "Submit Order Request"}
               </button>
 
               <button

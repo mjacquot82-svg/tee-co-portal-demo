@@ -412,6 +412,54 @@ test("Quote Detail request deposit action creates Square checkout request before
   expect(result.checkoutUrl).toBe("https://square.link/u/quote-deposit");
 });
 
+test("active unpaid deposit requests are idempotent", async () => {
+  const order = {
+    id: "order-idempotent-deposit",
+    order_number: "TC-SQ-IDEMPOTENT",
+    customer_id: "customer-idempotent-deposit",
+    customer_name: "Idempotent Customer",
+    deposit_amount: 75,
+    balance_due: 150,
+  };
+  const squareSendOptions = {
+    sentAt: "2026-07-28T12:00:00.000Z",
+    squareLinkOptions: {
+      endpoint: "/square-test",
+      disableFallback: true,
+      fetcher: async () => ({
+        ok: true,
+        json: async () => ({
+          mode: "production",
+          payment_link: {
+            id: "LNK-IDEMPOTENT",
+            url: "https://square.link/u/idempotent",
+            order_id: "ORD-IDEMPOTENT",
+            status: "created",
+          },
+        }),
+      }),
+    },
+  };
+
+  const [first, duplicate] = await Promise.all([
+    createAndSendDepositPaymentRequestForOrder(order, {}, { squareSendOptions }),
+    createAndSendDepositPaymentRequestForOrder(order, {}, { squareSendOptions }),
+  ]);
+  const retry = await createAndSendDepositPaymentRequestForOrder(order, {}, { squareSendOptions });
+  const depositRequests = getCustomerPortalPaymentData({
+    orders: [order],
+    customerIds: [order.customer_id],
+    paymentRequests: [getPaymentRequestById(first.paymentRequest.id)],
+    payments: [],
+    paymentEvents: listPaymentEvents(),
+  }).paymentRequests;
+
+  expect(duplicate.paymentRequest.id).toBe(first.paymentRequest.id);
+  expect(retry.paymentRequest.id).toBe(first.paymentRequest.id);
+  expect(retry.reused).toBe(true);
+  expect(depositRequests).toHaveLength(1);
+});
+
 test("legacy deposit message can include the Square checkout link", () => {
   const content = buildDepositRequestContent(
     {

@@ -1,6 +1,17 @@
 import { formatShortDate } from "../lib/dateFormatting";
-import { createPaymentRequestPersisted } from "../lib/paymentsStore";
+import {
+  createPaymentRequestPersisted,
+  getStoredPaymentRequests,
+} from "../lib/paymentsStore";
 import { sendSquarePaymentRequest } from "../services/squareService";
+
+const activeDepositRequestPromises = new Map();
+const ACTIVE_UNPAID_STATUSES = new Set([
+  "open",
+  "sent",
+  "processing",
+  "partially_paid",
+]);
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -82,12 +93,67 @@ export function buildDepositRequestMailto(order = {}, options = {}) {
 }
 
 export async function createAndSendDepositPaymentRequestForOrder(order = {}, requestDetails = {}, options = {}) {
+  const orderIdentity = normalizeText(order.id || order.order_number);
+  const pendingRequest = activeDepositRequestPromises.get(orderIdentity);
+  if (pendingRequest) return pendingRequest;
+
+  const operation = createAndSendDepositPaymentRequestForOrderOnce(
+    order,
+    requestDetails,
+    options
+  );
+  if (!orderIdentity) return operation;
+
+  activeDepositRequestPromises.set(orderIdentity, operation);
+  try {
+    return await operation;
+  } finally {
+    if (activeDepositRequestPromises.get(orderIdentity) === operation) {
+      activeDepositRequestPromises.delete(orderIdentity);
+    }
+  }
+}
+
+async function createAndSendDepositPaymentRequestForOrderOnce(
+  order = {},
+  requestDetails = {},
+  options = {}
+) {
   const amountRequested = firstPositiveMoneyValue(order.deposit_amount, order.deposit?.amount, order.balance_due);
   if (amountRequested <= 0) {
     throw new Error("Deposit amount is required before creating a Square checkout request.");
   }
 
-  const paymentRequest = await createPaymentRequestPersisted({
+  const existingActiveRequest = getStoredPaymentRequests().find((request) => {
+    const sameOrder =
+      (order.id && request.order_id === order.id) ||
+      (order.order_number && request.order_number === order.order_number);
+    const outstanding =
+      moneyValue(request.amount_paid) < moneyValue(request.amount_requested);
+    return (
+      sameOrder &&
+      normalizeText(request.request_type).toLowerCase() === "deposit" &&
+      ACTIVE_UNPAID_STATUSES.has(normalizeText(request.status).toLowerCase()) &&
+      outstanding
+    );
+  });
+
+  if (existingActiveRequest?.provider_checkout_url) {
+    return {
+      paymentRequest: existingActiveRequest,
+      providerLink: {
+        provider: existingActiveRequest.payment_provider || "square",
+        provider_checkout_url: existingActiveRequest.provider_checkout_url,
+        provider_payment_link_id:
+          existingActiveRequest.provider_payment_link_id || "",
+        provider_order_id: existingActiveRequest.provider_order_id || "",
+        metadata: { mode: "existing_active_request" },
+      },
+      reused: true,
+    };
+  }
+
+  const paymentRequest = existingActiveRequest || await createPaymentRequestPersisted({
     customer_id: order.customer_id || "",
     order_id: order.id || "",
     order_number: order.order_number || "",
@@ -108,8 +174,12 @@ export async function createAndSendDepositPaymentRequestForOrder(order = {}, req
     },
   });
 
-  return sendSquarePaymentRequest(paymentRequest, {
+  const result = await sendSquarePaymentRequest(paymentRequest, {
     ...(options.squareSendOptions || {}),
     awaitPersistence: true,
   });
+  return {
+    ...result,
+    reused: Boolean(existingActiveRequest),
+  };
 }

@@ -1189,3 +1189,8 @@
     order: initial;
   }
 }
+@keyframes tee-co-action-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
