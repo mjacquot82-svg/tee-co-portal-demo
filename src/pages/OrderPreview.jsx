@@ -13,6 +13,7 @@ import {
 import { getActiveCustomerSession } from "../lib/customerSessionStore";
 import {
   getPendingCustomerRequest,
+  mergeCustomerArtworkLibraries,
   savePendingCustomerRequest,
   upsertPendingCustomerLineItem,
 } from "../lib/pendingCustomerRequestStore";
@@ -22,6 +23,8 @@ import {
 } from "../lib/pendingCustomerArtworkStore";
 import { generateQuoteSnapshot } from "../lib/quoteEngine";
 import { useStoredProducts } from "../lib/productsStore";
+import { ensureCustomerProfile } from "../lib/customerProfileStore";
+import { listCustomerArtwork } from "../services/customerArtworkService";
 import {
   getOrderingWorkflowPaths,
   PORTAL_REQUEST_ORDER_PATH,
@@ -51,7 +54,13 @@ export default function OrderPreview() {
   );
   const editingLineItem = passedState.lineItem || null;
   const existingRequest = getPendingCustomerRequest() || {};
-  const artworkLibrary = existingRequest.artworkLibrary || [];
+  const draftArtworkLibrary = existingRequest.artworkLibrary || [];
+  const [persistedArtworkLibrary, setPersistedArtworkLibrary] = useState([]);
+  const [artworkLibraryError, setArtworkLibraryError] = useState("");
+  const artworkLibrary = mergeCustomerArtworkLibraries(
+    draftArtworkLibrary,
+    persistedArtworkLibrary
+  );
   const editingArtworkId =
     editingLineItem?.artworkId ||
     editingLineItem?.artwork_id ||
@@ -110,8 +119,54 @@ export default function OrderPreview() {
   const [selectedArtworkId, setSelectedArtworkId] = useState(
     editingArtworkId || artworkLibrary[0]?.id || ""
   );
+  const resolvedSelectedArtworkId = artworkLibrary.some(
+    (asset) => asset.id === selectedArtworkId
+  )
+    ? selectedArtworkId
+    : artworkLibrary[0]?.id || "";
+  const resolvedExistingArtwork = artworkLibrary.find(
+    (asset) => asset.id === resolvedSelectedArtworkId
+  );
+  const selectedArtworkDisplayName =
+    artworkChoice === "existing"
+      ? resolvedExistingArtwork?.displayName || ""
+      : artwork?.name || editingLineItem?.artworkName || "";
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
   const [submitError, setSubmitError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    const customerSession = getActiveCustomerSession();
+
+    if (!customerSession?.email) {
+      return () => {
+        active = false;
+      };
+    }
+
+    async function loadPersistedArtwork() {
+      setArtworkLibraryError("");
+      try {
+        const profile = await ensureCustomerProfile(customerSession);
+        if (!profile?.id) return;
+        const customerArtwork = await listCustomerArtwork(profile.id);
+        if (active) setPersistedArtworkLibrary(customerArtwork);
+      } catch (error) {
+        if (!active) return;
+        setPersistedArtworkLibrary([]);
+        setArtworkLibraryError(
+          error instanceof Error && error.message
+            ? error.message
+            : "Your saved artwork could not be loaded."
+        );
+      }
+    }
+
+    void loadPersistedArtwork();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const selectedPlacements = useMemo(() => {
     if (!allowedPlacements.length) return [];
@@ -195,8 +250,7 @@ export default function OrderPreview() {
   }
 
   function buildConfiguredLineItem() {
-    const selectedExistingArtwork = artworkLibrary.find((asset) => asset.id === selectedArtworkId);
-    const selectedArtwork = artworkChoice === "existing" ? selectedExistingArtwork : artwork;
+    const selectedArtwork = artworkChoice === "existing" ? resolvedExistingArtwork : artwork;
     return {
       id: editingLineItem?.id || `line-${Date.now()}`,
       garmentId: passedState.garmentId || "",
@@ -236,9 +290,17 @@ export default function OrderPreview() {
           storageReference: "",
         }
       : null;
-    const nextArtworkLibrary = newArtworkAsset && !artworkLibrary.some((asset) => asset.id === newArtworkAsset.id)
-      ? [...artworkLibrary, newArtworkAsset]
-      : artworkLibrary;
+    const selectedExistingArtwork = artworkChoice === "existing"
+      ? resolvedExistingArtwork
+      : null;
+    const nextArtworkLibrary = mergeCustomerArtworkLibraries(
+      [
+        ...draftArtworkLibrary,
+        ...(newArtworkAsset ? [newArtworkAsset] : []),
+        ...(selectedExistingArtwork ? [selectedExistingArtwork] : []),
+      ],
+      []
+    );
     const pendingRequest = {
       ...existingRequest,
       ...configuredLineItem,
@@ -416,9 +478,9 @@ export default function OrderPreview() {
             <p style={{ margin: "0 0 6px 0", color: "#57534e", fontSize: "14px" }}>
               Custom decoration included
             </p>
-            {artwork?.name || artworkLibrary.find((asset) => asset.id === selectedArtworkId)?.displayName || editingLineItem?.artworkName ? (
+            {selectedArtworkDisplayName ? (
               <p style={{ margin: 0, color: "#57534e", fontSize: "14px" }}>
-                Artwork: {artworkChoice === "existing" ? artworkLibrary.find((asset) => asset.id === selectedArtworkId)?.displayName : artwork?.name || editingLineItem?.artworkName}
+                Artwork: {selectedArtworkDisplayName}
               </p>
             ) : null}
           </div>
@@ -606,7 +668,7 @@ export default function OrderPreview() {
                 {artworkChoice === "existing" ? (
                   <select
                     aria-label="Choose existing artwork"
-                    value={selectedArtworkId}
+                    value={resolvedSelectedArtworkId}
                     onChange={(event) => setSelectedArtworkId(event.target.value)}
                     style={{ padding: "11px", borderRadius: "12px", border: "1px solid #d6d3d1", background: "#ffffff" }}
                   >
@@ -625,6 +687,12 @@ export default function OrderPreview() {
                 Upload artwork for this garment. You can reuse it on the next garment.
               </p>
             )}
+
+            {artworkLibraryError ? (
+              <p role="alert" style={{ margin: "0 0 10px", color: "#b91c1c", fontSize: "13px" }}>
+                {artworkLibraryError}
+              </p>
+            ) : null}
 
             {artworkChoice === "upload" ? (
               <button

@@ -81,6 +81,20 @@ function normalizeArtworkAsset(asset = {}, index = 0) {
   };
 }
 
+export function mergeCustomerArtworkLibraries(draftArtwork = [], persistedArtwork = []) {
+  const mergedArtwork = [];
+  const seenArtworkIds = new Set();
+
+  [...draftArtwork, ...persistedArtwork].forEach((asset, index) => {
+    const normalizedAsset = normalizeArtworkAsset(asset, index);
+    if (!normalizedAsset.id || seenArtworkIds.has(normalizedAsset.id)) return;
+    seenArtworkIds.add(normalizedAsset.id);
+    mergedArtwork.push(normalizedAsset);
+  });
+
+  return mergedArtwork;
+}
+
 export function upsertPendingCustomerLineItem(lineItems = [], lineItem = {}) {
   const normalizedItems = Array.isArray(lineItems) ? lineItems.map(normalizeLineItem) : [];
   const normalizedLineItem = normalizeLineItem(lineItem, normalizedItems.length);

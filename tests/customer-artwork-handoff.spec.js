@@ -10,6 +10,7 @@ import {
   savePendingCustomerArtworkAsset,
 } from "../src/lib/pendingCustomerArtworkStore.js";
 import {
+  mergeCustomerArtworkLibraries,
   normalizePendingCustomerRequest,
   upsertPendingCustomerLineItem,
 } from "../src/lib/pendingCustomerRequestStore.js";
@@ -21,6 +22,85 @@ test("garment configuration offers existing artwork or a new upload", () => {
   expect(previewSource).toContain("Upload New Artwork");
   expect(previewSource).toContain("artworkId: selectedArtwork?.id");
   expect(previewSource).toContain("artworkLibrary: nextArtworkLibrary");
+});
+
+test("authenticated garment configuration loads only the canonical customer's persisted artwork", () => {
+  const previewSource = fs.readFileSync(path.resolve(process.cwd(), "src/pages/OrderPreview.jsx"), "utf8");
+  const artworkServiceSource = fs.readFileSync(
+    path.resolve(process.cwd(), "src/services/customerArtworkService.js"),
+    "utf8"
+  );
+
+  expect(previewSource).toContain("await ensureCustomerProfile(customerSession)");
+  expect(previewSource).toContain("await listCustomerArtwork(profile.id)");
+  expect(artworkServiceSource).toContain('.eq("customer_id", customerId)');
+  expect(previewSource).not.toContain("listCustomerArtwork(customerSession.id)");
+});
+
+test("persisted customer artwork merges with draft artwork without duplicate records", () => {
+  const persistedArtwork = {
+    id: "persisted-artwork-id",
+    customer_id: "customer-a",
+    display_name: "Existing Logo",
+    file_name: "existing-logo.svg",
+    storage_path: "customer-a/existing-logo.svg",
+  };
+  const draftArtwork = {
+    id: "draft-artwork-id",
+    displayName: "New Back Print",
+    originalFilename: "back-print.png",
+  };
+
+  expect(
+    mergeCustomerArtworkLibraries(
+      [draftArtwork],
+      [persistedArtwork, persistedArtwork]
+    )
+  ).toEqual([
+    expect.objectContaining({
+      id: "draft-artwork-id",
+      displayName: "New Back Print",
+    }),
+    expect.objectContaining({
+      id: "persisted-artwork-id",
+      displayName: "Existing Logo",
+      storageReference: "customer-a/existing-logo.svg",
+    }),
+  ]);
+});
+
+test("persisted artwork survives submission without entering the upload queue", () => {
+  const previewSource = fs.readFileSync(path.resolve(process.cwd(), "src/pages/OrderPreview.jsx"), "utf8");
+  const requestSource = fs.readFileSync(
+    path.resolve(process.cwd(), "src/customer-portal/CustomerPortalRequestOrder.jsx"),
+    "utf8"
+  );
+  const persistedArtwork = {
+    id: "persisted-artwork-id",
+    display_name: "Existing Logo",
+    file_name: "existing-logo.svg",
+    storage_path: "customer-a/existing-logo.svg",
+  };
+  const draft = normalizePendingCustomerRequest({
+    artworkLibrary: [persistedArtwork],
+    lineItems: [{
+      id: "shirt",
+      productId: "shirt",
+      garmentName: "Shirt",
+      artworkId: persistedArtwork.id,
+      artworkName: persistedArtwork.display_name,
+    }],
+  });
+
+  expect(draft.artworkLibrary[0]).toMatchObject({
+    id: "persisted-artwork-id",
+    storageReference: "customer-a/existing-logo.svg",
+  });
+  expect(draft.lineItems[0].artworkId).toBe("persisted-artwork-id");
+  expect(previewSource).toContain("selectedExistingArtwork ? [selectedExistingArtwork] : []");
+  expect(requestSource).toContain("if (!pendingAsset?.file) continue;");
+  expect(requestSource).toContain("uploaded?.id || draftAsset.id");
+  expect(requestSource).toContain("artwork_id: artworkId");
 });
 
 test("pending artwork survives the route handoff without JSON serialization", async () => {
