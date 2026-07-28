@@ -306,6 +306,7 @@ function buildSupabaseCustomerPayload(customer) {
     phone: canonicalCustomer.phone || "",
     company: canonicalCustomer.company || "",
     notes: canonicalCustomer.notes || "",
+    auth_user_id: canonicalCustomer.auth_user_id || null,
     external_reference: canonicalCustomer.external_reference || "",
     archived: Boolean(canonicalCustomer.archived),
     archived_at: canonicalCustomer.archived ? canonicalCustomer.archived_at || null : null,

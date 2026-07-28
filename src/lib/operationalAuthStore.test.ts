@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const signUp = vi.fn();
+const signInWithPassword = vi.fn();
 const resetPasswordForEmail = vi.fn();
 const updateUser = vi.fn();
 
@@ -9,6 +10,7 @@ vi.mock("./supabaseClient", () => ({
   supabase: {
     auth: {
       signUp,
+      signInWithPassword,
       resetPasswordForEmail,
       updateUser,
       onAuthStateChange: vi.fn(() => ({ data: { subscription: {} } })),
@@ -23,6 +25,7 @@ vi.mock("./authDiagnostics", () => ({
 describe("signUpCustomerAccount", () => {
   beforeEach(() => {
     signUp.mockReset();
+    signInWithPassword.mockReset();
     resetPasswordForEmail.mockReset();
     updateUser.mockReset();
   });
@@ -71,5 +74,89 @@ describe("signUpCustomerAccount", () => {
 
     await expect(updateCustomerPassword("new-password")).resolves.toEqual({ ok: true });
     expect(updateUser).toHaveBeenCalledWith({ password: "new-password" });
+  });
+});
+
+describe("shared Supabase login session replacement", () => {
+  const ownerAuthUser = {
+    id: "owner-auth-user",
+    email: "owner@example.com",
+    app_metadata: { operational_role: "owner" },
+    user_metadata: {},
+  };
+  const customerAuthUser = {
+    id: "customer-auth-user",
+    email: "customer@example.com",
+    app_metadata: {},
+    user_metadata: { full_name: "Acceptance Customer" },
+  };
+
+  beforeEach(() => {
+    signInWithPassword.mockReset();
+  });
+
+  it("replaces the previous operational snapshot after successful customer login", async () => {
+    const { getOperationalAuthSnapshot, signInToOperationalWorkspace } =
+      await import("./operationalAuthStore");
+
+    signInWithPassword.mockResolvedValueOnce({
+      data: { user: ownerAuthUser, session: { user: ownerAuthUser } },
+      error: null,
+    });
+    await signInToOperationalWorkspace({
+      email: ownerAuthUser.email,
+      password: "owner-password",
+    });
+    expect(getOperationalAuthSnapshot().operationalUser?.role).toBe("Owner");
+
+    signInWithPassword.mockResolvedValueOnce({
+      data: { user: customerAuthUser, session: { user: customerAuthUser } },
+      error: null,
+    });
+    const customerResult = await signInToOperationalWorkspace({
+      email: customerAuthUser.email,
+      password: "customer-password",
+    });
+
+    expect(customerResult.actorType).toBe("customer");
+    expect(getOperationalAuthSnapshot()).toMatchObject({
+      user: customerAuthUser,
+      operationalUser: null,
+      actorType: "customer",
+    });
+    expect(getOperationalAuthSnapshot().customerSession?.id).toBe(customerAuthUser.id);
+  });
+
+  it("preserves the previous operational snapshot when customer login fails", async () => {
+    const { getOperationalAuthSnapshot, signInToOperationalWorkspace } =
+      await import("./operationalAuthStore");
+
+    signInWithPassword.mockResolvedValueOnce({
+      data: { user: ownerAuthUser, session: { user: ownerAuthUser } },
+      error: null,
+    });
+    await signInToOperationalWorkspace({
+      email: ownerAuthUser.email,
+      password: "owner-password",
+    });
+
+    signInWithPassword.mockResolvedValueOnce({
+      data: { user: null, session: null },
+      error: { message: "Invalid login credentials" },
+    });
+    const failedResult = await signInToOperationalWorkspace({
+      email: customerAuthUser.email,
+      password: "wrong-password",
+    });
+
+    expect(failedResult).toMatchObject({
+      ok: false,
+      message: "Invalid login credentials",
+    });
+    expect(getOperationalAuthSnapshot()).toMatchObject({
+      user: ownerAuthUser,
+      actorType: "operational",
+    });
+    expect(getOperationalAuthSnapshot().operationalUser?.role).toBe("Owner");
   });
 });

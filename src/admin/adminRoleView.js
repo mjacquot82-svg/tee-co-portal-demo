@@ -16,6 +16,9 @@ const OPERATIONAL_ROLE_RANK = {
 const SUPABASE_OWNER_AUTHORIZATION_PATHS = new Set([
   "/admin/settings/notifications",
   "/admin/settings/notifications/policy",
+]);
+
+const SUPABASE_OPERATIONAL_AUTHORIZATION_PATHS = new Set([
   "/admin/settings/notifications/activity",
 ]);
 
@@ -233,13 +236,39 @@ export function requiresSupabaseOwnerAuthorization(pathname = "") {
   );
 }
 
-export function isSupabaseAuthenticatedOwner(user = null) {
+export function requiresSupabaseOperationalAuthorization(pathname = "") {
+  return SUPABASE_OPERATIONAL_AUTHORIZATION_PATHS.has(
+    normalizeRoutePathname(pathname)
+  );
+}
+
+export function getSupabaseRouteAuthorizationRequirement(pathname = "") {
+  if (requiresSupabaseOwnerAuthorization(pathname)) return "owner";
+  if (requiresSupabaseOperationalAuthorization(pathname)) return "operational";
+  return "";
+}
+
+export function isSupabaseAuthenticatedOperationalUser(user = null) {
   return Boolean(
     user?.id &&
     user?.isSupabaseAuthSession === true &&
     user?.authMode === "supabase-session" &&
+    resolveOperationalRole(user)
+  );
+}
+
+export function isSupabaseAuthenticatedOwner(user = null) {
+  return Boolean(
+    isSupabaseAuthenticatedOperationalUser(user) &&
     isOwnerView(user)
   );
+}
+
+export function satisfiesSupabaseRouteAuthorization(user, requirement = "") {
+  if (!requirement) return true;
+  return requirement === "owner"
+    ? isSupabaseAuthenticatedOwner(user)
+    : isSupabaseAuthenticatedOperationalUser(user);
 }
 
 export function isStaffWorkspaceView(staffUser = getActiveStaffUser()) {

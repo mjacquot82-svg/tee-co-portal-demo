@@ -105,7 +105,7 @@ export default function Login() {
     (redirectTo && redirectTo.startsWith("/portal")) ||
     (redirectTo && redirectTo.startsWith("/admin"))
       ? redirectTo
-      : "/admin";
+      : "/portal/orders";
   const targetIsAdminRoute = resolvedRedirectTarget.startsWith("/admin");
   const targetIsCustomerRoute =
     resolvedRedirectTarget === "/my-orders" ||
@@ -208,11 +208,6 @@ export default function Login() {
     if (targetIsAdminRoute) {
       if (canAccessOperationalWorkspace(resolvedRedirectTarget, routeAccessUser)) {
         navigate(resolvedRedirectTarget, { replace: true });
-        return;
-      }
-
-      if (activeCustomerSession) {
-        navigate("/portal/orders", { replace: true });
       }
       return;
     }

@@ -6,14 +6,13 @@ import {
   canAccessOperationalWorkspace,
   canAccessProtectedManagementRoute,
   classifyAdminRoute,
+  getSupabaseRouteAuthorizationRequirement,
   getAssignedOrdersForStaff,
   getRouteAccessUser,
   getOperationalOrdersForStaff,
   hasOperationalSession,
-  isSupabaseAuthenticatedOwner,
   isAdminWorkspaceView,
   isStaffWorkspaceView,
-  requiresSupabaseOwnerAuthorization,
   requiresProtectedManagementAccess,
   resolveOperationalRole,
 } from "../admin/adminRoleView";
@@ -53,6 +52,7 @@ import {
 } from "../lib/operationalAuthStore";
 import { getPendingCustomerRequest } from "../lib/pendingCustomerRequestStore";
 import OrderCart from "./OrderCart";
+import NotificationAuthorizationGate from "./NotificationAuthorizationGate";
 import {
   PORTAL_REQUEST_ORDER_PATH,
   PUBLIC_GARMENT_FLOW_SOURCE,
@@ -1310,8 +1310,8 @@ export default function Layout() {
   }
   usePaymentReconciliationRefresh(isAdmin);
   const requiresManagementAccess = requiresProtectedManagementAccess(location.pathname);
-  const requiresSupabaseOwner =
-    requiresSupabaseOwnerAuthorization(location.pathname);
+  const supabaseAuthorizationRequirement =
+    getSupabaseRouteAuthorizationRequirement(location.pathname);
   const requiresCustomerSession = location.pathname === "/my-orders";
   const [authenticatedOperationalUser, setAuthenticatedOperationalUser] = useState(() =>
     getOperationalAuthUser()
@@ -1410,20 +1410,6 @@ export default function Layout() {
         ? "allowed"
         : "blocked",
     });
-
-    if (
-      requiresSupabaseOwner &&
-      !isSupabaseAuthenticatedOwner(authenticatedOperationalUser)
-    ) {
-      logAdminRouteGuard("redirect", adminRouteGuardSnapshot, {
-        redirectReason: "supabase-owner-session-required",
-      });
-      navigate(
-        `/login?redirectTo=${encodeURIComponent(location.pathname + location.search)}&auth=owner`,
-        { replace: true }
-      );
-      return;
-    }
 
     if (!hasOperationalSession(routeAccessUser)) {
       logAdminRouteGuard("redirect", adminRouteGuardSnapshot, {
@@ -1529,7 +1515,6 @@ export default function Layout() {
     operationalAuthLoading,
     routeAccessUser,
     requiresManagementAccess,
-    requiresSupabaseOwner,
   ]);
 
   useEffect(() => {
@@ -1681,7 +1666,14 @@ export default function Layout() {
               />
 
               <main style={{ minWidth: 0 }}>
-                <Outlet />
+                <NotificationAuthorizationGate
+                  requirement={supabaseAuthorizationRequirement}
+                  pathname={`${location.pathname}${location.search}`}
+                  operationalUser={authenticatedOperationalUser}
+                  pinUser={activeStaffUser}
+                >
+                  <Outlet />
+                </NotificationAuthorizationGate>
               </main>
             </div>
           </div>
