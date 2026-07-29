@@ -15,6 +15,27 @@ import {
   buildPaymentAction,
   buildPickupAction,
 } from "../src/admin/QuickSale.jsx";
+import {
+  derivePickupPresentationStage,
+  PICKUP_PRESENTATION_STAGES,
+} from "../src/front-counter/frontCounterPresentation.js";
+
+test("Front Counter presentation progresses through explicit POS stages", () => {
+  expect(derivePickupPresentationStage()).toBe(PICKUP_PRESENTATION_STAGES.SEARCH);
+  expect(derivePickupPresentationStage({ hasCustomer: true })).toBe(
+    PICKUP_PRESENTATION_STAGES.ORDERS
+  );
+  expect(
+    derivePickupPresentationStage({ hasCustomer: true, hasSelectedOrder: true })
+  ).toBe(PICKUP_PRESENTATION_STAGES.ACTION);
+  expect(
+    derivePickupPresentationStage({
+      hasCustomer: true,
+      hasSelectedOrder: true,
+      hasCompletedPickup: true,
+    })
+  ).toBe(PICKUP_PRESENTATION_STAGES.COMPLETION);
+});
 
 test("Ready For Pickup remains backward compatible with the existing Front Counter queue", () => {
   expect(

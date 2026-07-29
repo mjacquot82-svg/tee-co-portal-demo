@@ -24,7 +24,7 @@ body.app-ready {
 
 @media (max-width: 1320px) {
   .front-counter-workspace-grid {
-    grid-template-columns: minmax(0, 0.75fr) minmax(0, 1fr) !important;
+    grid-template-columns: minmax(0, 1fr) !important;
     height: auto !important;
     overflow: visible !important;
   }
@@ -34,7 +34,17 @@ body.app-ready {
   }
 
   .front-counter-workspace-summary {
-    grid-column: 1 / -1;
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .front-counter-workspace {
+    padding: 8px !important;
+  }
+
+  .pickup-customer-header {
+    grid-template-columns: minmax(0, 1fr) !important;
   }
 }
 

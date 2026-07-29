@@ -196,6 +196,12 @@ test("Scenario B: remaining balance is collected before Customer Pickup and comp
   await expect(paymentCard).toContainText("$120.00");
   await expect(paymentCard).toContainText("Payment Required");
   await page.getByRole("button", { name: "Cash", exact: true }).click();
+  const amountInput = page.getByLabel("Amount");
+  await amountInput.fill("121");
+  await expect(page.getByRole("button", { name: "Record Cash" })).toBeDisabled();
+  await expect(page.getByText("Payment exceeds remaining balance.")).toBeVisible();
+  await amountInput.fill("120");
+  await expect(page.getByRole("button", { name: "Record Cash" })).toBeEnabled();
   await page.getByRole("button", { name: "Record Cash" }).click();
   await expect(page.getByText(/now ready to release/i)).toBeVisible();
   await expect(

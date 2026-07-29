@@ -14,7 +14,6 @@ import {
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 import { validatePaymentAmount } from "../lib/financialValidation";
 import { customerIdsEqual } from "../lib/customerIds";
-import PaymentStatusBadge from "../components/PaymentStatusBadge";
 import { PAYMENT_METHOD_OPTIONS } from "../orders/orderFinancials";
 import { isStaffWorkspaceView } from "./adminRoleView";
 import { formatNorthAmericanPhoneDisplay } from "../lib/phoneNormalization";
@@ -23,6 +22,10 @@ import {
   deriveFrontCounterState,
   isReleasedToFrontCounter,
 } from "../front-counter/frontCounterWorkflow";
+import {
+  derivePickupPresentationStage,
+  PICKUP_PRESENTATION_STAGES,
+} from "../front-counter/frontCounterPresentation";
 
 const taxRate = 0.13;
 const counterPaymentMethods = PAYMENT_METHOD_OPTIONS.filter((option) =>
@@ -526,65 +529,57 @@ export function buildSelectableTransactionItems(orders = []) {
   });
 }
 
-function buildCustomerSummary(orders = []) {
-  const activeOrders = orders.length;
-  const unpaidBalances = orders.filter((order) => Number(order.balance_due || 0) > 0).length;
-  const paidOrders = Math.max(0, orders.length - unpaidBalances);
-  const pickupReady = orders.filter((order) => order.pickup_status === "Ready for Pickup").length;
-  const releaseReady = orders.filter(
-    (order) => order.pickup_status === "Ready for Pickup" && Number(order.balance_due || 0) <= 0
-  ).length;
-  const pickupAwaitingPayment = Math.max(0, pickupReady - releaseReady);
-  const outstandingBalance = sumValues(orders.map((order) => order.balance_due));
-
-  return {
-    activeOrders,
-    unpaidBalances,
-    paidOrders,
-    pickupReady,
-    releaseReady,
-    pickupAwaitingPayment,
-    outstandingBalance,
-  };
-}
-
-function OperationalStat({ label, value, emphasis = "default" }) {
+function CustomerPickupHeader({
+  customer,
+  releasedOrderCount,
+  remainingToday,
+  onChangeCustomer,
+  onViewCustomer,
+}) {
   return (
-    <div
+    <section
+      data-testid="pickup-customer-header"
+      className="pickup-customer-header"
       style={{
-        border: "1px solid #e2e8f0",
-        borderRadius: "18px",
-        padding: "16px 18px",
-        background: "#f8fafc",
-        display: "grid",
-        gap: "4px",
+        ...sectionCardStyle,
+        position: "sticky",
+        top: "8px",
+        zIndex: 10,
+        gridTemplateColumns: "minmax(0, 1fr) auto",
+        alignItems: "center",
+        padding: "14px 18px",
       }}
     >
-      <span
-        style={{
-          color: "#64748b",
-          fontSize: "11px",
-          fontWeight: 800,
-          textTransform: "uppercase",
-          letterSpacing: "0.06em",
-        }}
-      >
-        {label}
-      </span>
-      <span
-        style={{
-          color: emphasis === "danger" ? "#b91c1c" : emphasis === "success" ? "#166534" : "#0f172a",
-          fontSize: "26px",
-          fontWeight: 800,
-        }}
-      >
-        {value}
-      </span>
-    </div>
+      <div style={{ minWidth: 0 }}>
+        <h2 style={{ margin: 0, color: "#0f172a", fontSize: "22px" }}>{customer.name}</h2>
+        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "5px", color: "#475569" }}>
+          {customer.phone ? <span>{formatNorthAmericanPhoneDisplay(customer.phone)}</span> : null}
+          <strong>{releasedOrderCount} Released Order{releasedOrderCount === 1 ? "" : "s"}</strong>
+          <strong style={{ color: remainingToday > 0 ? "#b91c1c" : "#166534" }}>
+            {currency(remainingToday)} Remaining Today
+          </strong>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+        <button type="button" onClick={onChangeCustomer} style={getCompletionButtonStyle()}>
+          Change Customer
+        </button>
+        <button type="button" onClick={onViewCustomer} style={getCompletionButtonStyle()}>
+          View Customer
+        </button>
+      </div>
+    </section>
   );
 }
 
-function PickupCompletionPanel({ completion, onStartNextCustomer, onViewOrder, onViewReceipt }) {
+function PickupCompletionPanel({
+  completion,
+  hasRemainingOrders,
+  onReturnToOrders,
+  onStartNextCustomer,
+  onViewOrder,
+  onViewReceipt,
+}) {
   return (
     <div
       data-testid="pickup-completion"
@@ -609,6 +604,11 @@ function PickupCompletionPanel({ completion, onStartNextCustomer, onViewOrder, o
       <button type="button" onClick={onStartNextCustomer} style={getCompletionButtonStyle(true)}>
         Start Next Customer
       </button>
+      {hasRemainingOrders ? (
+        <button type="button" onClick={onReturnToOrders} style={getCompletionButtonStyle()}>
+          Return to Released Orders
+        </button>
+      ) : null}
       <button type="button" onClick={onViewOrder} style={getCompletionButtonStyle()}>
         View Order
       </button>
@@ -882,7 +882,29 @@ export default function QuickSale() {
       amountDue: sumValues(paymentItems.map((item) => item.amount)),
     };
   }, [selectedTransactionItems]);
-  const customerSummary = useMemo(() => buildCustomerSummary(customerOrders), [customerOrders]);
+  const pickupVisitSummary = useMemo(
+    () => ({
+      releasedOrderCount: selectableItems.length,
+      remainingToday: sumValues(
+        selectableItems
+          .filter((item) => item.kind === "payment")
+          .map((item) => item.amount)
+      ),
+    }),
+    [selectableItems]
+  );
+  const pickupPresentationStage = derivePickupPresentationStage({
+    hasCustomer: Boolean(selectedCustomer),
+    hasSelectedOrder: selectedTransactionItems.length === 1,
+    hasCompletedPickup: Boolean(completedPickup),
+  });
+  const pickupActionPanelTitle = completedPickup
+    ? "Order Completed"
+    : paymentProcessingOrderNumber
+    ? "Payment Confirmation Pending"
+    : selectedTransactionKind === "payment"
+    ? `Collect ${currency(transactionSummary.amountDue)} Payment`
+    : "Confirm Customer Handoff";
   const paymentSelectionKey = `${selectedPaymentSignature}:${Number(transactionSummary.amountDue || 0)}`;
   const paymentAmount =
     selectedTransactionKind !== "payment"
@@ -1064,6 +1086,21 @@ export default function QuickSale() {
     resetPaymentForm("");
   }
 
+  function returnToReleasedOrders() {
+    setCompletedPickup(null);
+    setTransactionMessage("");
+    setSelectedTransactionIds([]);
+  }
+
+  function viewSelectedCustomer() {
+    if (!selectedCustomer?.id || selectedCustomer.source !== "saved") return;
+    window.open(
+      `/admin/customers/${selectedCustomer.id}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
   function openCreateCustomerForm() {
     setShowCreateCustomerForm(true);
     setCreateCustomerError("");
@@ -1159,12 +1196,6 @@ export default function QuickSale() {
     }
 
     setSplitPrimaryAmount("");
-  }
-
-  function removeTransactionItem(itemId) {
-    setSelectedTransactionIds((current) => current.filter((id) => id !== itemId));
-    setTransactionMessage("");
-    setPaymentError("");
   }
 
   function updateCustomerName(value) {
@@ -1757,21 +1788,44 @@ export default function QuickSale() {
 
             <div
               className="front-counter-workspace-grid"
+              data-stage={pickupPresentationStage}
               style={{
                 display: "grid",
-                gridTemplateColumns: "minmax(0, 0.75fr) minmax(0, 1fr) minmax(0, 0.9fr)",
+                gridTemplateColumns:
+                  pickupPresentationStage === PICKUP_PRESENTATION_STAGES.ACTION
+                    ? "minmax(320px, 0.4fr) minmax(0, 0.6fr)"
+                    : "minmax(0, 1fr)",
                 gap: "12px",
                 alignItems: "start",
-                height: "calc(100vh - 238px)",
                 minHeight: "398px",
-                overflow: "hidden",
               }}
             >
+              {selectedCustomer ? (
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <CustomerPickupHeader
+                    customer={selectedCustomer}
+                    releasedOrderCount={pickupVisitSummary.releasedOrderCount}
+                    remainingToday={pickupVisitSummary.remainingToday}
+                    onChangeCustomer={startNextCustomer}
+                    onViewCustomer={viewSelectedCustomer}
+                  />
+                </div>
+              ) : null}
+
+              {!selectedCustomer ? (
               <aside className="front-counter-workspace-column" style={{ display: "grid", gap: "12px", minWidth: 0, minHeight: 0 }}>
-                <section style={{ ...sectionCardStyle, maxHeight: "100%", overflow: "hidden" }}>
+                <section
+                  data-testid="pickup-customer-search"
+                  style={{
+                    ...sectionCardStyle,
+                    width: "min(760px, 100%)",
+                    margin: "24px auto",
+                    boxSizing: "border-box",
+                  }}
+                >
                   <div>
                     <h2 style={{ margin: "0 0 4px", fontSize: "22px", color: "#0f172a" }}>
-                      Search Customer
+                      Who is picking up today?
                     </h2>
                     <p style={{ margin: 0, color: "#64748b", lineHeight: 1.35, fontSize: "14px" }}>
                       Search by customer, phone, email, company, or order number.
@@ -1971,73 +2025,11 @@ export default function QuickSale() {
                     </div>
                   ) : null}
 
-                  {selectedCustomer ? (
-                    <div
-                      style={{
-                        border: "1px solid #e2e8f0",
-                        borderRadius: "18px",
-                        padding: "16px",
-                        background: "#f8fafc",
-                        display: "grid",
-                        gap: "12px",
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "start" }}>
-                        <div>
-                          <h3 style={{ margin: 0, fontSize: "22px", color: "#0f172a" }}>
-                            {selectedCustomer.name}
-                          </h3>
-                          <p style={{ margin: "4px 0 0", color: "#64748b" }}>
-                            {selectedCustomer.company || "Customer profile"}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={startNextCustomer}
-                          style={{
-                            border: "1px solid #cbd5e1",
-                            background: "#ffffff",
-                            borderRadius: "10px",
-                            padding: "8px 10px",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Start New Customer
-                        </button>
-                      </div>
-
-                      <div style={{ display: "grid", gap: "6px", color: "#475569", fontSize: "14px" }}>
-                        {selectedCustomer.phone ? (
-                          <span>{formatNorthAmericanPhoneDisplay(selectedCustomer.phone)}</span>
-                        ) : null}
-                        {selectedCustomer.email ? <span>{selectedCustomer.email}</span> : null}
-                        {selectedCustomer.order_numbers?.length ? (
-                          <span>{selectedCustomer.order_numbers.length} linked order records</span>
-                        ) : (
-                          <span>No linked order numbers stored yet.</span>
-                        )}
-                        <span>
-                          {customerSummary.activeOrders} active orders • {customerSummary.pickupReady} pickup ready • {currency(customerSummary.outstandingBalance)} due
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      style={{
-                        border: "1px dashed #cbd5e1",
-                        borderRadius: "18px",
-                        padding: "18px",
-                        color: "#64748b",
-                        background: "#f8fafc",
-                      }}
-                    >
-                      Select a customer to see every order released to Front Counter.
-                    </div>
-                  )}
                 </section>
               </aside>
+              ) : null}
 
+              {selectedCustomer && !completedPickup ? (
               <section className="front-counter-workspace-column" style={{ ...sectionCardStyle, minWidth: 0, minHeight: 0, maxHeight: "100%", overflow: "hidden" }}>
                 <div>
                   <h2 style={{ margin: "0 0 4px", fontSize: "22px", color: "#0f172a" }}>
@@ -2144,21 +2136,12 @@ export default function QuickSale() {
                             </div>
                           </div>
 
-                          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-                            <PaymentStatusBadge status={item.order.payment_status || "Draft"} />
-                            <PaymentStatusBadge status={item.order.invoice_status || "Draft"} />
-                            <span style={{ color: "#475569", fontWeight: 700 }}>
-                              Pickup: {item.order.pickup_status || "Pending"}
-                            </span>
-                            <span style={{ color: "#475569", fontWeight: 700 }}>
-                              Paid to date: {currency(item.order.paid_to_date)}
-                            </span>
-                          </div>
-
                           <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-                            <p style={{ margin: 0, color: "#475569" }}>
-                              {item.order.deposit_credited_message} {item.order.balance_summary}
-                            </p>
+                            <span style={{ color: "#475569", fontWeight: 700 }}>
+                              {item.kind === "payment"
+                                ? `${currency(item.amount)} must be collected before handoff.`
+                                : "Paid in full and ready for customer handoff."}
+                            </span>
 
                             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                               <button
@@ -2199,21 +2182,26 @@ export default function QuickSale() {
                   </div>
                 )}
               </section>
+              ) : null}
 
+              {selectedCustomer &&
+              (selectedTransactionItems.length > 0 || completedPickup) ? (
               <aside className="front-counter-workspace-column front-counter-workspace-summary" style={{ display: "grid", gap: "12px", minWidth: 0, minHeight: 0 }}>
-                <section style={{ ...sectionCardStyle, maxHeight: "100%", overflow: "hidden" }}>
+                <section data-testid="pickup-action-panel" style={{ ...sectionCardStyle, maxHeight: "100%", overflow: "hidden" }}>
                   <div>
                     <h2 style={{ margin: "0 0 4px", fontSize: "22px", color: "#0f172a" }}>
-                      Transaction Summary
+                      {pickupActionPanelTitle}
                     </h2>
                     <p style={{ margin: 0, color: "#64748b", fontSize: "14px", lineHeight: 1.35 }}>
-                      Review the active items, total due, and complete the counter action.
+                      Complete the required action for the selected order.
                     </p>
                   </div>
 
                   {completedPickup ? (
                     <PickupCompletionPanel
                       completion={completedPickup}
+                      hasRemainingOrders={visibleSelectableItems.length > 0}
+                      onReturnToOrders={returnToReleasedOrders}
                       onStartNextCustomer={startNextCustomer}
                       onViewOrder={() =>
                         navigate(`/admin/orders/${completedPickup.orderNumber}`)
@@ -2222,29 +2210,8 @@ export default function QuickSale() {
                         navigate(`/admin/sales/receipt/${completedPickup.saleNumber}`)
                       }
                     />
-                  ) : !selectedTransactionItems.length ? (
-                    <div
-                      style={{
-                        border: "1px dashed #cbd5e1",
-                        borderRadius: "18px",
-                        padding: "18px",
-                        background: "#f8fafc",
-                        color: "#64748b",
-                      }}
-                    >
-                      Select an order to continue with its required payment or handoff action.
-                    </div>
                   ) : (
                     <>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px" }}>
-                        <OperationalStat label="Selected Items" value={transactionSummary.selectedCount} />
-                        <OperationalStat
-                          label="Transaction Total"
-                          value={currency(transactionSummary.amountDue)}
-                          emphasis={transactionSummary.amountDue > 0 ? "danger" : "success"}
-                        />
-                      </div>
-
                       <div style={{ display: "grid", gap: "10px" }}>
                         {selectedTransactionItems.map((item) => (
                           <article
@@ -2265,25 +2232,8 @@ export default function QuickSale() {
                             <div style={{ marginTop: "4px", color: "#64748b", fontSize: "13px" }}>
                               {item.label}
                             </div>
-                            <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "center", marginTop: "10px", flexWrap: "wrap" }}>
-                              <span style={{ color: "#475569", fontSize: "13px", fontWeight: 700 }}>
-                                {item.kind === "pickup" ? "Customer release-ready item" : "Selected for counter payment"}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => removeTransactionItem(item.id)}
-                                style={{
-                                  border: "1px solid #fecaca",
-                                  background: "#ffffff",
-                                  color: "#b91c1c",
-                                  borderRadius: "10px",
-                                  padding: "8px 10px",
-                                  fontWeight: 700,
-                                  cursor: "pointer",
-                                }}
-                              >
-                                Remove
-                              </button>
+                            <div style={{ marginTop: "8px", color: "#475569", fontSize: "13px", fontWeight: 700 }}>
+                              {item.order.garment || item.order.item || "Custom order"} • Qty {item.order.qty || 0}
                             </div>
                           </article>
                         ))}
@@ -2302,7 +2252,7 @@ export default function QuickSale() {
                           cursor: "pointer",
                         }}
                       >
-                        Clear Selection
+                        Back to Released Orders
                       </button>
                       {selectedTransactionKind === "payment" ? (
                         <form
@@ -2556,6 +2506,7 @@ export default function QuickSale() {
                   )}
                 </section>
               </aside>
+              ) : null}
             </div>
           </>
         ) : null}
