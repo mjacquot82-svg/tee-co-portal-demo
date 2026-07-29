@@ -39,6 +39,8 @@ const SUCCESS_PAYMENT_STATUSES = new Set([
   "succeeded",
   "success",
   "settled",
+  "complete",
+  "completed",
 ]);
 const OPEN_REQUEST_STATUSES = new Set([
   "draft",
@@ -131,8 +133,61 @@ function getLegacyPaymentHistory(order = {}) {
 function isSuccessfulPayment(payment = {}) {
   const status = normalizeLower(payment.status || payment.provider_status);
   if (!status) return true;
-  if (FAILED_PAYMENT_STATUSES.has(status)) return false;
-  return SUCCESS_PAYMENT_STATUSES.has(status) || !status.includes("fail");
+  return SUCCESS_PAYMENT_STATUSES.has(status);
+}
+
+function getPaymentIdentityKeys(payment = {}) {
+  return [
+    payment.provider_payment_id,
+    payment.idempotency_key,
+    payment.metadata?.square_payment_id,
+    payment.metadata?.legacyPaymentId,
+    payment.id,
+    payment.payment_number,
+  ]
+    .map((value) => normalizeText(value))
+    .filter(Boolean);
+}
+
+function aggregateSuccessfulPayments(payments = []) {
+  const seenKeys = new Set();
+  let total = 0;
+
+  for (const payment of payments.filter(isSuccessfulPayment)) {
+    const identityKeys = getPaymentIdentityKeys(payment);
+    if (identityKeys.some((key) => seenKeys.has(key))) continue;
+
+    identityKeys.forEach((key) => seenKeys.add(key));
+    total += normalizeAmount(payment.amount);
+  }
+
+  return {
+    total: normalizeAmount(total),
+    seenKeys,
+  };
+}
+
+export function deriveCanonicalTotalPaid(order = {}) {
+  const { payments, hasModernRecords } = getModernPaymentSources(order);
+  const legacyPayments = getLegacyPaymentHistory(order);
+  const modernAggregation = aggregateSuccessfulPayments(payments);
+  const unmatchedLegacyPayments = legacyPayments.filter(
+    (payment) =>
+      !getPaymentIdentityKeys(payment).some((key) => modernAggregation.seenKeys.has(key))
+  );
+  const legacyAggregation = aggregateSuccessfulPayments(unmatchedLegacyPayments);
+  const enumeratedTotal = normalizeAmount(
+    modernAggregation.total + legacyAggregation.total
+  );
+  const explicitPaid = normalizeAmount(
+    order.total_paid ?? order.amount_paid ?? order.paid_amount
+  );
+
+  if (hasModernRecords || legacyPayments.length) {
+    return normalizeAmount(Math.max(enumeratedTotal, explicitPaid));
+  }
+
+  return explicitPaid;
 }
 
 function isFailedPayment(payment = {}) {
@@ -153,13 +208,6 @@ function isDepositPayment(order = {}, payment = {}) {
     id.includes("deposit") ||
     (depositAmount > 0 && amount > 0 && amount <= depositAmount)
   );
-}
-
-function resolveLegacyTotalPaid(order = {}) {
-  const explicitPaid = normalizeAmount(order.total_paid ?? order.amount_paid ?? order.paid_amount);
-  if (explicitPaid > 0) return explicitPaid;
-
-  return getLegacyPaymentHistory(order).reduce((sum, payment) => sum + normalizeAmount(payment.amount), 0);
 }
 
 function resolveTotalAmount(order = {}) {
@@ -320,14 +368,7 @@ export function deriveOrderPaymentState(order = {}) {
   const depositRequired = hasDepositRequirement(order, depositAmount);
   const successfulPayments = payments.filter(isSuccessfulPayment);
   const legacyPayments = hasModernRecords ? [] : getLegacyPaymentHistory(order);
-  const totalPaidFromModern = successfulPayments.reduce(
-    (sum, payment) => sum + normalizeAmount(payment.amount),
-    0
-  );
-  const totalPaidFromLegacy = legacyPayments.length
-    ? legacyPayments.reduce((sum, payment) => sum + normalizeAmount(payment.amount), 0)
-    : resolveLegacyTotalPaid(order);
-  const totalPaid = normalizeAmount(hasModernRecords ? totalPaidFromModern : totalPaidFromLegacy);
+  const totalPaid = deriveCanonicalTotalPaid(order);
   const depositPaidFromPayments = successfulPayments
     .filter((payment) => isDepositPayment(order, payment))
     .reduce((sum, payment) => sum + normalizeAmount(payment.amount), 0);

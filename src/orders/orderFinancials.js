@@ -1,4 +1,8 @@
-import { deriveOrderPaymentState, deriveOrderWorkflowState } from "./canonicalState";
+import {
+  deriveCanonicalTotalPaid,
+  deriveOrderPaymentState,
+  deriveOrderWorkflowState,
+} from "./canonicalState";
 import { calculateInvoiceTax, DEFAULT_SALES_TAX_RATE } from "./salesTax";
 
 export const PAYMENT_STATUS_OPTIONS = [
@@ -728,20 +732,10 @@ export function deriveOrderFinancials(order = {}, options = {}) {
     resolvedTotalAmount ?? subtotal + taxAmount
   );
   const depositAmount = normalizeCurrency(order.deposit_amount ?? order.deposit?.amount);
-  const historyPaid = normalizeCurrency(
-    paymentHistory.reduce((sum, payment) => sum + normalizeCurrency(payment.amount), 0)
-  );
-  const totalPaid = normalizeCurrency(
-    paymentHistory.length
-      ? historyPaid
-      : resolveCurrency(
-          order.total_paid,
-          order.amount_paid,
-          order.paid_amount,
-          order.pricing?.total_paid,
-          order.pricing?.amount_paid
-        ) ?? historyPaid
-  );
+  const totalPaid = normalizeCurrency(deriveCanonicalTotalPaid({
+    ...order,
+    payment_history: paymentHistory,
+  }));
   const balanceDue = normalizeCurrency(Math.max(totalAmount - totalPaid, 0));
   const depositApplied = normalizeCurrency(Math.min(totalPaid, depositAmount));
   const depositOutstanding = normalizeCurrency(Math.max(depositAmount - depositApplied, 0));
