@@ -18,6 +18,26 @@ body.app-ready {
   visibility: visible;
 }
 
+.front-counter-workspace {
+  max-width: none;
+}
+
+@media (max-width: 1320px) {
+  .front-counter-workspace-grid {
+    grid-template-columns: minmax(0, 0.75fr) minmax(0, 1fr) !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .front-counter-workspace-column {
+    min-width: 0;
+  }
+
+  .front-counter-workspace-summary {
+    grid-column: 1 / -1;
+  }
+}
+
 img {
   display: block;
   max-width: 100%;

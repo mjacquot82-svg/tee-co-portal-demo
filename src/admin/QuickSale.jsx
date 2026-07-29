@@ -1632,10 +1632,12 @@ export default function QuickSale() {
 
   return (
     <div
+      className="front-counter-workspace"
       style={{
-        maxWidth: "1480px",
+        width: "100%",
         margin: "0 auto",
         padding: "14px",
+        boxSizing: "border-box",
         fontFamily:
           'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
@@ -1727,9 +1729,10 @@ export default function QuickSale() {
             ) : null}
 
             <div
+              className="front-counter-workspace-grid"
               style={{
                 display: "grid",
-                gridTemplateColumns: "minmax(230px, 0.75fr) minmax(300px, 1fr) minmax(280px, 0.9fr)",
+                gridTemplateColumns: "minmax(0, 0.75fr) minmax(0, 1fr) minmax(0, 0.9fr)",
                 gap: "12px",
                 alignItems: "start",
                 height: "calc(100vh - 238px)",
@@ -1737,7 +1740,7 @@ export default function QuickSale() {
                 overflow: "hidden",
               }}
             >
-              <aside style={{ display: "grid", gap: "12px", minHeight: 0 }}>
+              <aside className="front-counter-workspace-column" style={{ display: "grid", gap: "12px", minWidth: 0, minHeight: 0 }}>
                 <section style={{ ...sectionCardStyle, maxHeight: "100%", overflow: "hidden" }}>
                   <div>
                     <h2 style={{ margin: "0 0 4px", fontSize: "22px", color: "#0f172a" }}>
@@ -2014,7 +2017,7 @@ export default function QuickSale() {
                 </section>
               </aside>
 
-              <section style={{ ...sectionCardStyle, minHeight: 0, maxHeight: "100%", overflow: "hidden" }}>
+              <section className="front-counter-workspace-column" style={{ ...sectionCardStyle, minWidth: 0, minHeight: 0, maxHeight: "100%", overflow: "hidden" }}>
                 <div>
                   <h2 style={{ margin: "0 0 4px", fontSize: "22px", color: "#0f172a" }}>
                     {activeMode === "pickup" ? "Ready Orders" : "Outstanding Balances"}
@@ -2168,7 +2171,7 @@ export default function QuickSale() {
                 )}
               </section>
 
-              <aside style={{ display: "grid", gap: "12px", minHeight: 0 }}>
+              <aside className="front-counter-workspace-column front-counter-workspace-summary" style={{ display: "grid", gap: "12px", minWidth: 0, minHeight: 0 }}>
                 <section style={{ ...sectionCardStyle, maxHeight: "100%", overflow: "hidden" }}>
                   <div>
                     <h2 style={{ margin: "0 0 4px", fontSize: "22px", color: "#0f172a" }}>
