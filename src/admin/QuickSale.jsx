@@ -36,10 +36,12 @@ const splitPaymentMethods = ["Cash", "Debit", "Credit", "E-Transfer", "Cheque"];
 const paymentWorkflowActions = [
   {
     id: "card",
-    title: "Charge Card",
+    title: "Record Card Payment",
     recordMethod: "Card",
     shortLabel: "Card",
-    buttonLabel: "Record Card",
+    buttonLabel: "Confirm Card Payment Received",
+    description:
+      "Use after the customer has completed payment on the physical Square Terminal.",
     notePlaceholder: "Optional terminal note or reference.",
     accent: "#1d4ed8",
     background: "#eff6ff",
@@ -2261,13 +2263,42 @@ export default function QuickSale() {
                           style={{ display: "grid", gap: "14px", borderTop: "1px solid #e2e8f0", paddingTop: "16px" }}
                         >
                           <div style={{ display: "grid", gap: "10px" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+                            <div style={{ display: "grid", gap: "10px" }}>
                               <h3 style={{ margin: 0, fontSize: "17px", color: "#0f172a" }}>
                                 Payment Actions
                               </h3>
-                              <span style={{ color: "#64748b", fontSize: "13px", fontWeight: 700 }}>
-                                Remaining {currency(outstandingBalanceAfterPayment)}
-                              </span>
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                                  gap: "10px",
+                                }}
+                              >
+                                {[
+                                  ["Current Balance Due", transactionSummary.amountDue],
+                                  ["Amount Being Recorded", enteredPaymentAmount],
+                                  ["Balance After Recording", outstandingBalanceAfterPayment],
+                                ].map(([label, amount]) => (
+                                  <div
+                                    key={label}
+                                    style={{
+                                      border: "1px solid #e2e8f0",
+                                      borderRadius: "12px",
+                                      padding: "10px 12px",
+                                      background: "#f8fafc",
+                                      display: "grid",
+                                      gap: "3px",
+                                    }}
+                                  >
+                                    <span style={{ color: "#64748b", fontSize: "12px", fontWeight: 700 }}>
+                                      {label}
+                                    </span>
+                                    <strong style={{ color: "#0f172a", fontSize: "17px" }}>
+                                      {currency(amount)}
+                                    </strong>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                               {paymentWorkflowActions.map((action) => (
@@ -2308,10 +2339,15 @@ export default function QuickSale() {
                                   <strong style={{ color: "#0f172a", fontSize: "18px" }}>
                                     {activePaymentAction.title}
                                   </strong>
+                                  {activePaymentAction.description ? (
+                                    <span style={{ color: "#475569", fontSize: "13px", fontWeight: 600 }}>
+                                      {activePaymentAction.description}
+                                    </span>
+                                  ) : null}
                                 </div>
                                 <div style={{ textAlign: "right", display: "grid", gap: "4px" }}>
                                   <span style={{ color: "#475569", fontSize: "12px", fontWeight: 700 }}>
-                                    Total Due
+                                    Current Balance Due
                                   </span>
                                   <strong style={{ color: "#0f172a", fontSize: "18px" }}>
                                     {currency(transactionSummary.amountDue)}

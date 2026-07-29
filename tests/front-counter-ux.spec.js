@@ -210,6 +210,17 @@ test("customer pickup progressively reveals orders and the selected action", asy
     .getByRole("button", { name: "Continue" })
     .click();
   await expect(page.getByRole("heading", { name: "Collect $1.00 Payment" })).toBeVisible();
+  await page.getByRole("button", { name: "Record Card Payment" }).click();
+  await expect(page.getByText("Current Balance Due").first()).toBeVisible();
+  await expect(page.getByText("Amount Being Recorded")).toBeVisible();
+  await expect(page.getByText("Balance After Recording")).toBeVisible();
+  await expect(
+    page.getByText("Use after the customer has completed payment on the physical Square Terminal.")
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Confirm Card Payment Received" })
+  ).toBeVisible();
+  await expect(page.getByText(/^Remaining \$0\.00$/)).toHaveCount(0);
   const desktopColumns = await page
     .locator('.front-counter-workspace-grid[data-stage="action"]')
     .evaluate((element) => getComputedStyle(element).gridTemplateColumns);
