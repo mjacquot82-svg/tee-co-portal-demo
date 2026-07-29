@@ -56,21 +56,17 @@ async function installFrontCounterSession(page, user = ownerUser) {
   }, { owner: user });
 }
 
-test("front counter uses a compact transaction selector and stateful walk-in workspace", async ({ page }) => {
+test("front counter uses unified customer pickup and a separate stateful walk-in workspace", async ({ page }) => {
   await installFrontCounterSession(page);
   await page.goto("/admin/sales/new");
 
   await expect(page.getByRole("heading", { name: "Current transaction" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Collect Payment/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Customer Pickup/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Walk-In Sale/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Collect Payment/ })).toHaveCount(0);
 
-  await page.getByRole("button", { name: /Customer Pickup/ }).click();
   await expect(page.getByText("Search Customer", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Ready Orders" })).toBeVisible();
-
-  await page.getByRole("button", { name: /Collect Payment/ }).click();
-  await expect(page.getByRole("heading", { name: "Outstanding Balances" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Released Orders" })).toBeVisible();
 
   await page.getByRole("button", { name: /Walk-In Sale/ }).click();
   await expect(page.getByRole("heading", { name: "Search Product" })).toBeVisible();

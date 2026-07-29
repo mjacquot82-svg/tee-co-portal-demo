@@ -6,6 +6,7 @@ import { validateCustomerIdentity } from "../lib/customerIdentity";
 import { createStoredCustomer, getStoredCustomers } from "../lib/customersStore";
 import { getCustomerDisplayName } from "../lib/customerRecordMatching";
 import {
+  getStoredOrders,
   recordStoredOrderPayment,
   updateStoredOrder,
   useStoredOrders,
@@ -76,29 +77,17 @@ const paymentWorkflowActions = [
 ];
 
 const transactionWorkspaceModes = {
-  payment: {
-    id: "payment",
-    label: "Payment Items",
-    title: "Payment Collection",
-    description:
-      "Collect deposits and balances that are due now.",
-    selectionHeading: "Select Payment Items",
-    selectionDescription:
-      "Select the balances to collect.",
-    emptySelectedCustomerMessage:
-      "No payment items are due for this customer right now. Deposits and unpaid balances appear here when collection is needed.",
-  },
   pickup: {
     id: "pickup",
-    label: "Pickup Items",
-    title: "Pickup Release",
+    label: "Customer Pickup",
+    title: "Customer Pickup",
     description:
-      "Release completed orders that are ready to hand off.",
-    selectionHeading: "Select Pickup Releases",
+      "Find the customer once. The system will guide payment and handoff.",
+    selectionHeading: "Released Orders",
     selectionDescription:
-      "Select the ready orders being handed to the customer.",
+      "Select an order to complete its next required action.",
     emptySelectedCustomerMessage:
-      "No pickup releases are ready for this customer. Paid, release-ready orders appear here when they can be handed off.",
+      "No orders released to Front Counter are available for this customer.",
   },
   "quick-sale": {
     id: "quick-sale",
@@ -161,19 +150,10 @@ const sectionCardStyle = {
 
 const frontCounterActions = [
   {
-    id: "payment",
-    title: "Collect Payment",
-    description: "Find a customer, review outstanding balances, and record payment.",
-    steps: ["Search Customer", "Outstanding Balances", "Collect Payment", "Complete"],
-    accent: "#1d4ed8",
-    background: "#eff6ff",
-    border: "#bfdbfe",
-  },
-  {
     id: "pickup",
     title: "Customer Pickup",
-    description: "Find ready orders, confirm release, and complete handoff.",
-    steps: ["Search Customer", "Ready Orders", "Confirm Pickup", "Complete"],
+    description: "Find the customer once, then follow the required payment or pickup action.",
+    steps: ["Search Customer", "Review Order", "Complete Required Action", "Confirm Handoff"],
     accent: "#047857",
     background: "#ecfdf5",
     border: "#a7f3d0",
@@ -305,15 +285,7 @@ function getSplitMethodButtonStyle(active) {
 function filterSelectionIdsForMode(mode, selectedIds, items) {
   if (mode === "quick-sale") return [];
 
-  const allowedIds = new Set(
-    items
-      .filter((item) => {
-        if (mode === "payment") return item.kind === "payment";
-        if (mode === "pickup") return item.kind === "pickup";
-        return false;
-      })
-      .map((item) => item.id)
-  );
+  const allowedIds = new Set(items.map((item) => item.id));
 
   return selectedIds.filter((id) => allowedIds.has(id));
 }
@@ -612,6 +584,55 @@ function OperationalStat({ label, value, emphasis = "default" }) {
   );
 }
 
+function PickupCompletionPanel({ completion, onStartNextCustomer, onViewOrder, onViewReceipt }) {
+  return (
+    <div
+      data-testid="pickup-completion"
+      style={{
+        border: "1px solid #86efac",
+        borderRadius: "18px",
+        padding: "20px",
+        background: "#f0fdf4",
+        display: "grid",
+        gap: "14px",
+      }}
+    >
+      <div>
+        <p style={{ margin: 0, color: "#15803d", fontWeight: 900 }}>Order completed</p>
+        <h3 style={{ margin: "6px 0 0", color: "#0f172a", fontSize: "24px" }}>
+          {completion.orderNumber}
+        </h3>
+        <p style={{ margin: "8px 0 0", color: "#475569" }}>
+          The order was handed to the customer and completed.
+        </p>
+      </div>
+      <button type="button" onClick={onStartNextCustomer} style={getCompletionButtonStyle(true)}>
+        Start Next Customer
+      </button>
+      <button type="button" onClick={onViewOrder} style={getCompletionButtonStyle()}>
+        View Order
+      </button>
+      {completion.saleNumber ? (
+        <button type="button" onClick={onViewReceipt} style={getCompletionButtonStyle()}>
+          View Receipt
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function getCompletionButtonStyle(primary = false) {
+  return {
+    background: primary ? "#166534" : "#ffffff",
+    color: primary ? "#ffffff" : "#0f172a",
+    border: primary ? "none" : "1px solid #cbd5e1",
+    borderRadius: "12px",
+    padding: "13px 18px",
+    cursor: "pointer",
+    fontWeight: 800,
+  };
+}
+
 function PaymentWorkflowActionButton({ action, active, onSelect }) {
   return (
     <button
@@ -732,7 +753,7 @@ export default function QuickSale() {
     [customers, storedOrders]
   );
 
-  const [activeMode, setActiveMode] = useState("payment");
+  const [activeMode, setActiveMode] = useState("pickup");
   const [lookupQuery, setLookupQuery] = useState("");
   const [customerMatches, setCustomerMatches] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -755,6 +776,8 @@ export default function QuickSale() {
   const [splitPrimaryAmount, setSplitPrimaryAmount] = useState("");
   const [paymentNote, setPaymentNote] = useState("");
   const [paymentError, setPaymentError] = useState("");
+  const [paymentProcessingOrderNumber, setPaymentProcessingOrderNumber] = useState("");
+  const [completedPickup, setCompletedPickup] = useState(null);
 
   const [linkedCustomerId, setLinkedCustomerId] = useState("");
   const [linkedCustomerName, setLinkedCustomerName] = useState("");
@@ -826,19 +849,9 @@ export default function QuickSale() {
     () => buildSelectableTransactionItems(customerOrders),
     [customerOrders]
   );
-  const visibleSelectableItems = useMemo(() => {
-    if (activeMode === "payment") {
-      return selectableItems.filter((item) => item.kind === "payment");
-    }
-
-    if (activeMode === "pickup") {
-      return selectableItems.filter((item) => item.kind === "pickup");
-    }
-
-    return selectableItems;
-  }, [activeMode, selectableItems]);
+  const visibleSelectableItems = selectableItems;
   const activeWorkspaceMode =
-    transactionWorkspaceModes[activeMode] || transactionWorkspaceModes.payment;
+    transactionWorkspaceModes[activeMode] || transactionWorkspaceModes.pickup;
   const canOfferCustomerCreate =
     activeMode !== "quick-sale" &&
     lookupQuery.trim().length >= 2 &&
@@ -971,12 +984,6 @@ export default function QuickSale() {
     return () => window.removeEventListener("keydown", handleGlobalEnter);
   }, []);
 
-  useEffect(() => {
-    setSelectedTransactionIds((current) =>
-      filterSelectionIdsForMode(activeMode, current, selectableItems)
-    );
-  }, [activeMode, selectableItems]);
-
   function resetPaymentForm(nextAmount = "") {
     setPaymentAmountOverride(nextAmount);
     setPaymentAmountOverrideSelection(nextAmount ? paymentSelectionKey : "");
@@ -1021,6 +1028,9 @@ export default function QuickSale() {
 
   function selectCustomer(customer, options = {}) {
     const { preserveLookupMessage = false } = options;
+    const customerItems = buildSelectableTransactionItems(
+      buildCustomerOrders(customer, storedOrders)
+    );
     setSelectedCustomer(customer);
     setLookupQuery(customer.name || "");
     setCustomerMatches([]);
@@ -1029,13 +1039,28 @@ export default function QuickSale() {
     }
     setShowCreateCustomerForm(false);
     setCreateCustomerError("");
-    setSelectedTransactionIds([]);
+    setSelectedTransactionIds(
+      customerItems.length === 1 ? [customerItems[0].id] : []
+    );
     setTransactionMessage("");
+    setCompletedPickup(null);
     setCustomerName(customer.name || "");
     setCustomerPhone(customer.phone || "");
     setLinkedCustomerId(customer.source === "saved" ? customer.id : "");
     setLinkedCustomerName(customer.name || "");
-    setActiveMode((currentMode) => (currentMode === "quick-sale" ? "payment" : currentMode));
+    setActiveMode((currentMode) => (currentMode === "quick-sale" ? "pickup" : currentMode));
+    resetPaymentForm("");
+  }
+
+  function startNextCustomer() {
+    setSelectedCustomer(null);
+    setLookupQuery("");
+    setCustomerMatches([]);
+    setCustomerLookupMessage("");
+    setSelectedTransactionIds([]);
+    setTransactionMessage("");
+    setCompletedPickup(null);
+    setPaymentProcessingOrderNumber("");
     resetPaymentForm("");
   }
 
@@ -1109,30 +1134,10 @@ export default function QuickSale() {
   function toggleTransactionItem(item) {
     setTransactionMessage("");
     setPaymentError("");
-    setSelectedTransactionIds((current) => {
-      const nextSet = new Set(current);
-      const alreadySelected = nextSet.has(item.id);
-      const currentItems = selectableItems.filter((entry) => nextSet.has(entry.id));
-      const currentKind = currentItems[0]?.kind;
-
-      if (alreadySelected) {
-        nextSet.delete(item.id);
-        return Array.from(nextSet);
-      }
-
-      if (currentKind && currentKind !== item.kind) {
-        return [item.id];
-      }
-
-      nextSet.add(item.id);
-      return Array.from(nextSet);
-    });
-
-    if (item.kind === "payment") {
-      setActiveMode("payment");
-    } else if (item.kind === "pickup") {
-      setActiveMode("pickup");
-    }
+    setCompletedPickup(null);
+    setSelectedTransactionIds((current) =>
+      current.includes(item.id) ? [] : [item.id]
+    );
   }
 
   function clearTransactionSelection() {
@@ -1435,6 +1440,8 @@ export default function QuickSale() {
       selectedTransactionItems.map((item) => [item.orderNumber, Number(item.amount || 0)])
     );
     const updatedOrders = [];
+    const activeOrderNumber = selectedTransactionItems[0]?.orderNumber || "";
+    setPaymentProcessingOrderNumber(activeOrderNumber);
 
     try {
       for (const entry of paymentEntries) {
@@ -1469,23 +1476,37 @@ export default function QuickSale() {
           ? "Payment exceeds remaining balance."
           : error?.message || "Unable to save payment.";
       setPaymentError(message);
+      setPaymentProcessingOrderNumber("");
       alert(message);
       return;
     }
 
     if (!updatedOrders.length) {
       setPaymentError("No selected orders could be updated.");
+      setPaymentProcessingOrderNumber("");
       return;
     }
 
+    const confirmedOrders = getStoredOrders();
     const readyForRelease = Array.from(
       new Set(
         updatedOrders
-          .filter((order) => order.pickup_status === "Ready for Pickup" && Number(order.balance_due || 0) <= 0)
+          .map(
+            (order) =>
+              confirmedOrders.find(
+                (candidate) => candidate.order_number === order.order_number
+              ) || order
+          )
+          .filter((order) => deriveFrontCounterState(order).canRecordPickup)
           .map((order) => order.order_number)
       )
     );
-    setSelectedTransactionIds([]);
+    setPaymentProcessingOrderNumber("");
+    setSelectedTransactionIds(
+      readyForRelease.length === 1 && selectedTransactionItems.length === 1
+        ? [`${readyForRelease[0]}-pickup-release`]
+        : []
+    );
     setTransactionMessage(
       readyForRelease.length
         ? `${activePaymentAction.title} recorded across ${selectedTransactionItems.length} selected item${
@@ -1497,9 +1518,6 @@ export default function QuickSale() {
             selectedTransactionItems.length === 1 ? "" : "s"
           }. Financial balances were updated successfully. Operational order status may still remain active until production or pickup workflow is complete.`
     );
-    if (readyForRelease.length) {
-      setActiveMode("pickup");
-    }
     resetPaymentForm("");
   }
 
@@ -1507,6 +1525,7 @@ export default function QuickSale() {
     if (!selectedTransactionItems.length || selectedTransactionKind !== "pickup") return;
 
     const releasedOrders = [];
+    let completedSale = null;
 
     for (const item of selectedTransactionItems) {
       const order = item.order;
@@ -1521,7 +1540,7 @@ export default function QuickSale() {
         (sale.production_order_numbers || []).includes(order.order_number)
       );
       if (!existingSale) {
-        createStoredQuickSale({
+        completedSale = createStoredQuickSale({
           sale_number: `SALE-${order.order_number}`,
           customer_id: order.customer_id,
           customer_name: order.customer_name,
@@ -1538,11 +1557,19 @@ export default function QuickSale() {
           production_order_numbers: [order.order_number],
           notes: "Completed through Front Counter customer pickup.",
         });
+      } else {
+        completedSale = existingSale;
       }
       releasedOrders.push(order.order_number);
     }
 
     setSelectedTransactionIds([]);
+    if (releasedOrders.length === 1) {
+      setCompletedPickup({
+        orderNumber: releasedOrders[0],
+        saleNumber: completedSale?.sale_number || "",
+      });
+    }
     setTransactionMessage(
       `Pickup released for ${releasedOrders.length} selected order${
         releasedOrders.length === 1 ? "" : "s"
@@ -1966,13 +1993,7 @@ export default function QuickSale() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => {
-                            setSelectedCustomer(null);
-                            setLookupQuery("");
-                            setCustomerMatches([]);
-                            setCustomerLookupMessage("");
-                            clearTransactionSelection();
-                          }}
+                          onClick={startNextCustomer}
                           style={{
                             border: "1px solid #cbd5e1",
                             background: "#ffffff",
@@ -1982,7 +2003,7 @@ export default function QuickSale() {
                             cursor: "pointer",
                           }}
                         >
-                          Clear
+                          Start New Customer
                         </button>
                       </div>
 
@@ -2011,7 +2032,7 @@ export default function QuickSale() {
                         background: "#f8fafc",
                       }}
                     >
-                      Select a customer to open payment or pickup items.
+                      Select a customer to see every order released to Front Counter.
                     </div>
                   )}
                 </section>
@@ -2020,7 +2041,7 @@ export default function QuickSale() {
               <section className="front-counter-workspace-column" style={{ ...sectionCardStyle, minWidth: 0, minHeight: 0, maxHeight: "100%", overflow: "hidden" }}>
                 <div>
                   <h2 style={{ margin: "0 0 4px", fontSize: "22px", color: "#0f172a" }}>
-                    {activeMode === "pickup" ? "Ready Orders" : "Outstanding Balances"}
+                    Released Orders
                   </h2>
                   <p style={{ margin: 0, color: "#475569", lineHeight: 1.35, fontSize: "14px" }}>
                     {activeWorkspaceMode.selectionDescription}
@@ -2056,10 +2077,18 @@ export default function QuickSale() {
                     {visibleSelectableItems.map((item) => {
                       const tones = getActionToneStyles(item.tone);
                       const isSelected = selectedTransactionIds.includes(item.id);
+                      const nextActionLabel =
+                        paymentProcessingOrderNumber === item.orderNumber
+                          ? "Processing Payment"
+                          : item.kind === "payment"
+                          ? `Payment Required — ${currency(item.amount)} Remaining`
+                          : "Ready for Pickup";
 
                       return (
                         <article
                           key={item.id}
+                          data-testid="front-counter-order-card"
+                          data-order-number={item.orderNumber}
                           style={{
                             borderRadius: "18px",
                             padding: "16px",
@@ -2081,7 +2110,7 @@ export default function QuickSale() {
                                     letterSpacing: "0.08em",
                                   }}
                                 >
-                                  {item.selectionLabel}
+                                  {nextActionLabel}
                                 </span>
                                 <span
                                   style={{
@@ -2094,7 +2123,7 @@ export default function QuickSale() {
                                     color: "#0f172a",
                                   }}
                                 >
-                                  {item.kind === "pickup" ? "Pickup" : "Payment"}
+                                  {item.kind === "pickup" ? "Handoff" : "Payment"}
                                 </span>
                               </div>
                               <h3 style={{ margin: "6px 0 4px", fontSize: "20px", color: "#0f172a" }}>
@@ -2145,7 +2174,7 @@ export default function QuickSale() {
                                   cursor: "pointer",
                                 }}
                               >
-                                {isSelected ? "Selected" : "Select"}
+                                {isSelected ? "Selected" : "Continue"}
                               </button>
                               <button
                                 type="button"
@@ -2182,7 +2211,18 @@ export default function QuickSale() {
                     </p>
                   </div>
 
-                  {!selectedTransactionItems.length ? (
+                  {completedPickup ? (
+                    <PickupCompletionPanel
+                      completion={completedPickup}
+                      onStartNextCustomer={startNextCustomer}
+                      onViewOrder={() =>
+                        navigate(`/admin/orders/${completedPickup.orderNumber}`)
+                      }
+                      onViewReceipt={() =>
+                        navigate(`/admin/sales/receipt/${completedPickup.saleNumber}`)
+                      }
+                    />
+                  ) : !selectedTransactionItems.length ? (
                     <div
                       style={{
                         border: "1px dashed #cbd5e1",
@@ -2192,8 +2232,7 @@ export default function QuickSale() {
                         color: "#64748b",
                       }}
                     >
-                      Select one or more payment items or pickup releases to build the active
-                      counter transaction.
+                      Select an order to continue with its required payment or handoff action.
                     </div>
                   ) : (
                     <>
@@ -2453,7 +2492,11 @@ export default function QuickSale() {
 
                               <button
                                 type="submit"
-                                disabled={!paymentValidation.valid || !splitPaymentValidation.valid}
+                                disabled={
+                                  Boolean(paymentProcessingOrderNumber) ||
+                                  !paymentValidation.valid ||
+                                  !splitPaymentValidation.valid
+                                }
                                 style={{
                                   background:
                                     paymentValidation.valid && splitPaymentValidation.valid
@@ -2470,7 +2513,9 @@ export default function QuickSale() {
                                   fontWeight: 800,
                                 }}
                               >
-                                {activePaymentAction.buttonLabel}
+                                {paymentProcessingOrderNumber
+                                  ? "Processing Payment…"
+                                  : activePaymentAction.buttonLabel}
                               </button>
                             </div>
                           ) : null}
@@ -2487,7 +2532,7 @@ export default function QuickSale() {
                               fontWeight: 700,
                             }}
                           >
-                            {transactionSummary.pickupCount} pickup item{transactionSummary.pickupCount === 1 ? "" : "s"} selected and ready to release.
+                            This order is paid in full and ready to hand to the customer.
                           </div>
 
                           <button
@@ -2503,7 +2548,7 @@ export default function QuickSale() {
                               fontWeight: 800,
                             }}
                           >
-                            Release Selected Pickup
+                            Confirm Order Handed to Customer
                           </button>
                         </div>
                       ) : null}

@@ -28,6 +28,11 @@ function buildReadyOrder({
     operational_visible: true,
     production_ready: true,
     pickup_status: "Ready for Pickup",
+    front_counter_status:
+      paid >= total ? "Ready For Customer Pickup" : "Awaiting Remaining Payment",
+    front_counter_released_at: "2026-07-29T10:00:00.000Z",
+    front_counter_released_by_staff_id: "production-staff-acceptance",
+    front_counter_released_by_staff_name: "Production Acceptance",
     artwork_approval_required: true,
     artwork_approval_status: "Approved",
     artwork_files: [{ id: `${orderNumber}-art`, name: "acceptance-logo.png" }],
@@ -109,7 +114,7 @@ async function installScenario(page, order) {
         "teeCoStaffOrders",
         JSON.stringify({
           schemaVersion: 2,
-          scope: `local:${window.location.origin}:staff:${activeOwner.id}`,
+          scope: `development:${window.location.origin}:staff:${activeOwner.id}`,
           serverConfirmed: false,
           orders: [seededOrder],
         })
@@ -120,21 +125,6 @@ async function installScenario(page, order) {
   );
 }
 
-async function releaseToFrontCounter(page, orderNumber) {
-  await page.goto("/admin/orders");
-  await expect(page.getByTestId("production-queue-page")).toBeVisible();
-  const row = page
-    .getByTestId("production-queue-row")
-    .filter({ hasText: orderNumber });
-  await expect(row).toBeVisible();
-  await row
-    .locator(
-      '[data-testid="production-workflow-action"][data-action-key="release_to_front_counter"]'
-    )
-    .click();
-  await expect(row).toHaveCount(0);
-}
-
 async function selectCustomer(page, customerName) {
   const search = page.getByPlaceholder("Search name, phone, email, company, or order #");
   await search.fill(customerName);
@@ -142,13 +132,20 @@ async function selectCustomer(page, customerName) {
 }
 
 async function completePickup(page, orderNumber) {
-  await page.getByRole("button", { name: /Customer Pickup/ }).click();
-  await expect(page.getByRole("heading", { name: "Ready Orders" })).toBeVisible();
-  const orderCard = page.locator("article").filter({ hasText: orderNumber });
+  await expect(page.getByRole("heading", { name: "Released Orders" })).toBeVisible();
+  const orderCard = page.locator(
+    `[data-testid="front-counter-order-card"][data-order-number="${orderNumber}"]`
+  );
   await expect(orderCard).toBeVisible();
-  await orderCard.getByRole("button", { name: "Select", exact: true }).click();
-  await page.getByRole("button", { name: "Release Selected Pickup" }).click();
+  if (await orderCard.getByRole("button", { name: "Continue", exact: true }).count()) {
+    await orderCard.getByRole("button", { name: "Continue", exact: true }).click();
+  }
+  await page.getByRole("button", { name: "Confirm Order Handed to Customer" }).click();
   await expect(page.getByText("Pickup released for 1 selected order.")).toBeVisible();
+  await expect(page.getByText("Order completed", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start Next Customer" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "View Order" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "View Receipt" })).toBeVisible();
 }
 
 test("Scenario A: fully paid decorated order releases only to Customer Pickup and completes", async ({
@@ -162,15 +159,17 @@ test("Scenario A: fully paid decorated order releases only to Customer Pickup an
     paid: 120,
   });
   await installScenario(page, order);
-  await releaseToFrontCounter(page, order.order_number);
 
   await page.goto("/admin/sales/new");
-  await page.getByRole("button", { name: /Collect Payment/ }).click();
   await selectCustomer(page, order.customer_name);
-  await expect(page.getByText(order.order_number)).toHaveCount(0);
+  await expect(page.getByText("Ready for Pickup", { exact: true })).toBeVisible();
 
   await completePickup(page, order.order_number);
-  await expect(page.getByText(order.order_number)).toHaveCount(0);
+  await expect(
+    page.locator(
+      `[data-testid="front-counter-order-card"][data-order-number="${order.order_number}"]`
+    )
+  ).toHaveCount(0);
 
   await page.goto("/admin/sales");
   await expect(page.getByRole("heading", { name: "Sales History" })).toBeVisible();
@@ -188,17 +187,20 @@ test("Scenario B: remaining balance is collected before Customer Pickup and comp
     paid: 80,
   });
   await installScenario(page, order);
-  await releaseToFrontCounter(page, order.order_number);
 
   await page.goto("/admin/sales/new");
-  await page.getByRole("button", { name: /Collect Payment/ }).click();
   await selectCustomer(page, order.customer_name);
-  const paymentCard = page.locator("article").filter({ hasText: order.order_number });
+  const paymentCard = page.locator(
+    `[data-testid="front-counter-order-card"][data-order-number="${order.order_number}"]`
+  );
   await expect(paymentCard).toContainText("$120.00");
-  await paymentCard.getByRole("button", { name: "Select", exact: true }).click();
+  await expect(paymentCard).toContainText("Payment Required");
   await page.getByRole("button", { name: "Cash", exact: true }).click();
   await page.getByRole("button", { name: "Record Cash" }).click();
   await expect(page.getByText(/now ready to release/i)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Confirm Order Handed to Customer" })
+  ).toBeVisible();
 
   await completePickup(page, order.order_number);
   await page.goto("/admin/sales");
