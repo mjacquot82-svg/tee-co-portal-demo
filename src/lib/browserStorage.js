@@ -23,10 +23,29 @@ export function setRawStorageItem(key, value, options = {}) {
   const storageArea = getStorageArea(options.storage);
   if (!storageArea) return false;
 
+  const maxBytes = Number(options.maxBytes || 0);
+  if (maxBytes > 0 && new Blob([String(value)]).size > maxBytes) {
+    try {
+      storageArea.removeItem(key);
+    } catch {
+      // The authoritative in-memory snapshot remains available even if stale
+      // browser cache cleanup is unavailable.
+    }
+    return false;
+  }
+
   try {
     storageArea.setItem(key, value);
     return true;
   } catch (error) {
+    if (error?.name === "QuotaExceededError") {
+      try {
+        storageArea.removeItem(key);
+      } catch {
+        // Ignore cleanup failures and keep the authoritative in-memory value.
+      }
+      return false;
+    }
     console.error(`Unable to write browser storage key "${key}"`, error);
     return false;
   }
@@ -67,4 +86,3 @@ export function setJsonStorageItem(key, value, options = {}) {
 export function hasBrowserStorage() {
   return canUseBrowserStorage();
 }
-

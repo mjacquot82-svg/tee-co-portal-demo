@@ -104,12 +104,37 @@ test("staff-ready counts match production destinations and dashboard hierarchy s
   expect(overview).toBeGreaterThan(changed);
 });
 
+test("dashboard and production wait for authoritative order hydration before rendering queues", async () => {
+  const fs = await import("node:fs/promises");
+  const dashboardSource = await fs.readFile(
+    new URL("../src/admin/Dashboard.jsx", import.meta.url),
+    "utf8"
+  );
+  const productionSource = await fs.readFile(
+    new URL("../src/admin/Orders.jsx", import.meta.url),
+    "utf8"
+  );
+
+  expect(dashboardSource).toContain("useStoredOrdersHydrationState");
+  expect(dashboardSource).toContain('ordersHydration.status !== "ready"');
+  expect(dashboardSource.indexOf('ordersHydration.status !== "ready"')).toBeLessThan(
+    dashboardSource.indexOf("<OwnerDashboard")
+  );
+  expect(productionSource).toContain("useStoredOrdersHydrationState");
+  expect(productionSource).toContain('ordersHydration.status !== "ready"');
+  expect(productionSource.indexOf('ordersHydration.status !== "ready"')).toBeLessThan(
+    productionSource.lastIndexOf("return (")
+  );
+});
+
 test("owner dashboard renders Teresa's morning briefing with trusted shortcuts", async ({ page }) => {
   const config = getOperationalConfig();
   await page.goto("/login?redirectTo=/admin");
   await loginThroughOperationalPin(page, config, "/admin");
 
-  await expect(page.getByRole("heading", { name: "Actionable work" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Actionable work" })).toBeVisible({
+    timeout: 20_000,
+  });
   await expect(page.getByRole("heading", { name: "Blocked until the customer responds" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Work the team can start" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "What changed" })).toBeVisible();

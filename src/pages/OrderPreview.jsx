@@ -114,7 +114,13 @@ export default function OrderPreview() {
   const [notes, setNotes] = useState("");
   const [artwork, setArtwork] = useState(null);
   const [artworkChoice, setArtworkChoice] = useState(
-    editingArtworkId || artworkLibrary.length ? "existing" : "upload"
+    passedState.artworkAction === "upload"
+      ? "upload"
+      : passedState.artworkAction === "existing"
+      ? "existing"
+      : editingArtworkId || artworkLibrary.length
+      ? "existing"
+      : "upload"
   );
   const [selectedArtworkId, setSelectedArtworkId] = useState(
     editingArtworkId || artworkLibrary[0]?.id || ""

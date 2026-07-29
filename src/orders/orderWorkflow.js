@@ -31,6 +31,7 @@ export const PRODUCTION_WORKFLOW_EVENT_TYPES = [
   "moved_to_printing",
   "moved_to_qc",
   "ready_for_pickup",
+  "released_to_front_counter",
   "order_completed",
   "order_on_hold",
   "resumed_from_hold",
@@ -43,6 +44,7 @@ export const PRODUCTION_WORKFLOW_ACTIONS = [
   "start_embroidery",
   "move_to_qc",
   "mark_ready_for_pickup",
+  "release_to_front_counter",
   "complete_order",
   "put_on_hold",
   "resume_from_hold",
@@ -115,6 +117,12 @@ const ACTION_DEFINITIONS = {
     label: "Mark Ready For Pickup",
     targetStatus: "Ready For Pickup",
     eventType: "ready_for_pickup",
+  },
+  release_to_front_counter: {
+    key: "release_to_front_counter",
+    label: "Release to Front Counter",
+    targetStatus: "Ready For Pickup",
+    eventType: "released_to_front_counter",
   },
   complete_order: {
     key: "complete_order",
@@ -295,6 +303,9 @@ export function getAvailableProductionActions(order = {}, options = {}) {
       actions.push(ACTION_DEFINITIONS.put_on_hold);
     }
   } else if (status === "Ready For Pickup") {
+    if (!order.front_counter_released_at && !order.front_counter_status) {
+      actions.push(ACTION_DEFINITIONS.release_to_front_counter);
+    }
     actions.push(ACTION_DEFINITIONS.complete_order);
   } else if (canAdvanceOperationalStatus(status)) {
     actions.push({

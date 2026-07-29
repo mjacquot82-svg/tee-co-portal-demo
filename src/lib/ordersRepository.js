@@ -357,6 +357,13 @@ export function mapSupabaseOrderRowToOrder(row = {}) {
     ),
     invoice_status: firstText(row.invoice_status, snapshot.invoice_status),
     pickup_status: firstText(row.pickup_status, snapshot.pickup_status),
+    front_counter_status: firstText(snapshot.front_counter_status),
+    front_counter_released_at: snapshot.front_counter_released_at || null,
+    front_counter_released_by_staff_id:
+      snapshot.front_counter_released_by_staff_id || null,
+    front_counter_released_by_staff_name:
+      snapshot.front_counter_released_by_staff_name || "",
+    front_counter_completed_at: snapshot.front_counter_completed_at || null,
     payment_history: Array.isArray(row.payment_history)
       ? row.payment_history
       : snapshot.payment_history || [],
@@ -427,14 +434,34 @@ async function runOrderQuery(operationName, queryFactory, fallbackValue) {
 }
 
 export async function fetchOrdersFromSupabase() {
-  const rows = await runOrderQuery(
-    "list",
-    (client) =>
-      client.from(ORDERS_TABLE).select("*").order("created_at", { ascending: false }),
-    null
-  );
+  const pageSize = 100;
+  const rows = [];
 
-  return Array.isArray(rows) ? rows.map(mapSupabaseOrderRowToOrder) : null;
+  for (let page = 0; ; page += 1) {
+    let paginated = false;
+    const pageRows = await runOrderQuery(
+      "list",
+      (client) => {
+        const query = client
+          .from(ORDERS_TABLE)
+          .select("*")
+          .order("created_at", { ascending: false });
+        const from = page * pageSize;
+        if (typeof query.range === "function") {
+          paginated = true;
+          return query.range(from, from + pageSize - 1);
+        }
+        return query;
+      },
+      null
+    );
+
+    if (!Array.isArray(pageRows)) return null;
+    rows.push(...pageRows);
+    if (!paginated || pageRows.length < pageSize) break;
+  }
+
+  return rows.map(mapSupabaseOrderRowToOrder);
 }
 
 export async function createOrderInSupabase(order) {

@@ -1,5 +1,8 @@
 import { Link } from "react-router-dom";
-import { useStoredOrders } from "../lib/ordersStore";
+import {
+  useStoredOrders,
+  useStoredOrdersHydrationState,
+} from "../lib/ordersStore";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 import { formatDateTime } from "../lib/dateFormatting";
 import { buildOperationalMetrics } from "../operations/buildOperationalMetrics";
@@ -568,6 +571,7 @@ function OwnerDashboard({ orders, operationalEvents }) {
 
 export default function Dashboard() {
   const orders = useStoredOrders();
+  const ordersHydration = useStoredOrdersHydrationState();
   const operationalEvents = useOperationalEvents();
   const staffUser = getActiveStaffUser();
   const resolvedRole = resolveOperationalRole(staffUser);
@@ -580,6 +584,19 @@ export default function Dashboard() {
         staffUser={staffUser}
         pathname="/admin"
         workspaceAccess="blocked"
+      />
+    );
+  }
+
+  if (ordersHydration.status !== "ready") {
+    return (
+      <AdminDiagnosticsPanel
+        title="Loading current orders"
+        message="The dashboard is synchronizing the current production order collection before calculating queue counts."
+        staffUser={staffUser}
+        pathname="/admin"
+        workspaceAccess="loading"
+        error={ordersHydration.status === "error" ? ordersHydration.error?.message : null}
       />
     );
   }

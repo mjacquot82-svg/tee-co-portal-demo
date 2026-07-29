@@ -485,7 +485,7 @@ export function ensureCustomersHydrated() {
 
   if (!shouldUseSupabase()) {
     logFallbackActivation("hydration", new Error("Supabase client unavailable"));
-    customersHydrationPromise = Promise.resolve(getStoredCustomers());
+    customersHydrationPromise = Promise.resolve(readCustomersFromStorage());
     return customersHydrationPromise;
   }
 

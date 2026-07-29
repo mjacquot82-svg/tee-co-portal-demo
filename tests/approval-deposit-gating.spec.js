@@ -120,6 +120,9 @@ async function tryReuseEligibleApprovalGatingOrder(page, config) {
 
     const artworkGate = getWorkflowGate(page, "artworkApproval");
     const depositGate = getWorkflowGate(page, "depositRequirement");
+    if ((await artworkGate.count()) === 0 || (await depositGate.count()) === 0) {
+      return null;
+    }
     const artworkRequired = await artworkGate.getAttribute("data-required");
     const artworkOverridden = await artworkGate.getAttribute("data-overridden");
     const depositOverridden = await depositGate.getAttribute("data-overridden");
@@ -224,7 +227,7 @@ async function chooseFirstRealProduct(page) {
 
 async function createOperationalQuoteThroughUi(page, config) {
   await page.goto("/admin/quotes/new");
-  await expect(page.getByRole("heading", { name: "New Quote" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "New Order Request" })).toBeVisible();
 
   const customerId = await selectExistingCustomerForNewOrder(page, config.customerText);
   await chooseFirstRealProduct(page);

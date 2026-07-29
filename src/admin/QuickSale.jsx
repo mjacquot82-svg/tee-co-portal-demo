@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useStoredProducts } from "../lib/productsStore";
-import { createStoredQuickSale } from "../lib/salesStore";
+import { createStoredQuickSale, getStoredQuickSales } from "../lib/salesStore";
 import { validateCustomerIdentity } from "../lib/customerIdentity";
 import { createStoredCustomer, getStoredCustomers } from "../lib/customersStore";
 import { getCustomerDisplayName } from "../lib/customerRecordMatching";
@@ -17,6 +17,11 @@ import PaymentStatusBadge from "../components/PaymentStatusBadge";
 import { PAYMENT_METHOD_OPTIONS } from "../orders/orderFinancials";
 import { isStaffWorkspaceView } from "./adminRoleView";
 import { formatNorthAmericanPhoneDisplay } from "../lib/phoneNormalization";
+import {
+  buildCompletedCustomerPickupUpdates,
+  deriveFrontCounterState,
+  isReleasedToFrontCounter,
+} from "../front-counter/frontCounterWorkflow";
 
 const taxRate = 0.13;
 const counterPaymentMethods = PAYMENT_METHOD_OPTIONS.filter((option) =>
@@ -457,7 +462,10 @@ function buildCustomerOrders(selectedCustomer, orders) {
   });
 }
 
-function buildPaymentAction(order) {
+export function buildPaymentAction(order) {
+  if (!isReleasedToFrontCounter(order)) return null;
+  const frontCounterState = deriveFrontCounterState(order);
+  if (!frontCounterState.canCollectPayment) return null;
   if (Number(order.balance_due || 0) <= 0) return null;
 
   const isDepositStep =
@@ -485,7 +493,10 @@ function buildPaymentAction(order) {
   };
 }
 
-function buildPickupAction(order) {
+export function buildPickupAction(order) {
+  if (!isReleasedToFrontCounter(order)) return null;
+  const frontCounterState = deriveFrontCounterState(order);
+  if (!frontCounterState.canRecordPickup) return null;
   if (order.pickup_status !== "Ready for Pickup") return null;
   if (Number(order.balance_due || 0) > 0) return null;
 
@@ -501,7 +512,7 @@ function buildPickupAction(order) {
   };
 }
 
-function buildSelectableTransactionItems(orders = []) {
+export function buildSelectableTransactionItems(orders = []) {
   const items = orders.flatMap((order) => {
     const transactionItems = [];
     const paymentAction = buildPaymentAction(order);
@@ -1501,16 +1512,33 @@ export default function QuickSale() {
       const order = item.order;
       if (!order) continue;
 
-      const balanceNote =
-        Number(order.balance_due || 0) > 0 ? ` Outstanding balance: ${currency(order.balance_due)}.` : "";
+      const completionUpdates = buildCompletedCustomerPickupUpdates(order);
+      if (!completionUpdates) continue;
 
-      await updateStoredOrder(order.order_number, {
-        pickup_status: "Picked Up",
-        picked_up_at: order.picked_up_at || new Date().toISOString(),
-        status: order.status === "Ready for Pickup" ? "Picked Up" : order.status,
-        activity_type: "pickup",
-        activity_note: `Order marked as picked up.${balanceNote}`,
-      });
+      await updateStoredOrder(order.order_number, completionUpdates);
+
+      const existingSale = getStoredQuickSales().find((sale) =>
+        (sale.production_order_numbers || []).includes(order.order_number)
+      );
+      if (!existingSale) {
+        createStoredQuickSale({
+          sale_number: `SALE-${order.order_number}`,
+          customer_id: order.customer_id,
+          customer_name: order.customer_name,
+          customer_phone: order.customer_phone,
+          payment_method: order.payment_method || "Previously Recorded",
+          payment_status: "Paid",
+          items: Array.isArray(order.line_items) ? order.line_items : [],
+          subtotal: Number(order.subtotal || 0),
+          tax_rate: Number(order.tax_rate || taxRate),
+          tax_total: Number(order.tax_amount || order.tax_total || 0),
+          total: Number(order.total_amount || order.total || 0),
+          amount_paid: Number(order.total_paid || order.total_amount || order.total || 0),
+          balance_due: 0,
+          production_order_numbers: [order.order_number],
+          notes: "Completed through Front Counter customer pickup.",
+        });
+      }
       releasedOrders.push(order.order_number);
     }
 

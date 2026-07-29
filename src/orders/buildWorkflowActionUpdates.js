@@ -2,6 +2,7 @@ import {
   getProductionWorkflowAction,
   normalizeOperationalStatus,
 } from "./orderWorkflow";
+import { buildReleaseToFrontCounterUpdates } from "../front-counter/frontCounterWorkflow";
 
 export function buildWorkflowActionUpdates(order, actionInput) {
   const action =
@@ -12,6 +13,15 @@ export function buildWorkflowActionUpdates(order, actionInput) {
   }
 
   const now = new Date().toISOString();
+
+  if (action.key === "release_to_front_counter") {
+    return buildReleaseToFrontCounterUpdates(order, {
+      occurredAt: now,
+      staffUserId: action.staffUserId,
+      staffName: action.staffName,
+    });
+  }
+
   const targetStatus = normalizeOperationalStatus(action.targetStatus);
   const updates = {
     status: targetStatus,

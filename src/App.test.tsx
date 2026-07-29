@@ -6,6 +6,6 @@ describe("App", () => {
   it("renders the platform shell", () => {
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: /platform application shell/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /shop the storefront/i })).toBeInTheDocument();
   });
 });

@@ -226,6 +226,51 @@ describe("orders browser cache", () => {
     ]);
   });
 
+  test("reports loading instead of treating the pre-hydration empty snapshot as authoritative", async () => {
+    installMemoryStorage();
+    const hydrationResult = createDeferred<{ data: unknown[]; error: null }>();
+    const remote = orderSnapshot({
+      id: "server-dashboard-order",
+      order_number: "TC-SERVER-DASHBOARD",
+      status: "Ready For Production",
+      quote_status: "Ready For Production",
+      operational_visible: true,
+      production_ready: true,
+    });
+    const query = {
+      select: vi.fn(() => query),
+      order: vi.fn(() => hydrationResult.promise),
+    };
+    configureOrdersPersistenceForTests({
+      supabaseClient: { from: vi.fn(() => query) },
+      supabaseConfigured: true,
+      persistenceMode: PERSISTENCE_MODES.production,
+    });
+
+    const hydration = ensureOrdersHydrated();
+
+    expect(getStoredOrders()).toEqual([]);
+    expect(getOrdersHydrationState()).toMatchObject({
+      status: "loading",
+      source: "cache",
+    });
+
+    hydrationResult.resolve({ data: [remote], error: null });
+    await hydration;
+
+    expect(getOrdersHydrationState()).toMatchObject({
+      status: "ready",
+      source: "server",
+    });
+    expect(getStoredOrders()).toEqual([
+      expect.objectContaining({
+        order_number: "TC-SERVER-DASHBOARD",
+        status: "Ready For Production",
+        operational_visible: true,
+      }),
+    ]);
+  });
+
   test("does not let hydration that began before a successful write regress workflow state", async () => {
     installMemoryStorage();
     const hydrationResult = createDeferred<{ data: unknown[]; error: null }>();
@@ -416,6 +461,59 @@ describe("orders browser cache", () => {
     expect(getStoredOrders()[0].artwork_approval_status).toBe("Pending Review");
 
     await ensureOrdersHydrated({ force: true });
+    expect(getStoredOrders()[0].artwork_approval_status).toBe("Approved");
+  });
+
+  test("keeps authoritative orders ready while a forced reconciliation refresh is in flight", async () => {
+    installMemoryStorage();
+    const refreshResult = createDeferred<{ data: unknown[]; error: null }>();
+    let hydrationCount = 0;
+    const query = {
+      select: vi.fn(() => query),
+      order: vi.fn(() => {
+        hydrationCount += 1;
+        if (hydrationCount === 1) {
+          return Promise.resolve({
+            data: [
+              orderSnapshot({
+                artwork_approval_status: "Pending Review",
+              }),
+            ],
+            error: null,
+          });
+        }
+        return refreshResult.promise;
+      }),
+    };
+    configureOrdersPersistenceForTests({
+      supabaseClient: { from: vi.fn(() => query) },
+      supabaseConfigured: true,
+      persistenceMode: PERSISTENCE_MODES.production,
+    });
+
+    await ensureOrdersHydrated();
+    const refresh = ensureOrdersHydrated({ force: true });
+
+    expect(getOrdersHydrationState()).toMatchObject({
+      status: "ready",
+      source: "server",
+    });
+    expect(getStoredOrders()[0].artwork_approval_status).toBe("Pending Review");
+
+    refreshResult.resolve({
+      data: [
+        orderSnapshot({
+          artwork_approval_status: "Approved",
+        }),
+      ],
+      error: null,
+    });
+    await refresh;
+
+    expect(getOrdersHydrationState()).toMatchObject({
+      status: "ready",
+      source: "server",
+    });
     expect(getStoredOrders()[0].artwork_approval_status).toBe("Approved");
   });
 

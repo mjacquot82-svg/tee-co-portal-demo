@@ -254,6 +254,12 @@ export default function OrderDetail() {
     const enrichedAction =
       action.key === "resume_from_hold"
         ? { ...action, resumeStaffName: activeStaffUser?.name || "" }
+        : action.key === "release_to_front_counter"
+        ? {
+            ...action,
+            staffUserId: activeStaffUser?.id || "",
+            staffName: activeStaffUser?.name || "",
+          }
         : action;
 
     const gating = buildWorkflowBlockDetails(order, enrichedAction);

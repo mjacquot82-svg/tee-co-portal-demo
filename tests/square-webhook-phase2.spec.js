@@ -32,6 +32,11 @@ import {
   resolveDepositWorkflowLabel,
 } from "../src/customer-portal/CustomerPortalShared.jsx";
 import { isDepositActionRequired } from "../src/lib/depositPaymentProviders.js";
+import { buildOwnerWorkspaceModel } from "../src/admin/Dashboard.jsx";
+import {
+  matchesProductionStatus,
+  normalizeProductionOrder,
+} from "../src/production/productionWorkspace.js";
 
 const notificationUrl = "https://teeandco.test/.netlify/functions/square-webhook";
 const signatureKey = "square-webhook-test-key";
@@ -318,13 +323,14 @@ test("successful Square payment updates stale order financial rollup for admin a
 
   const updatedOrder = supabase.rows("orders")[0];
   expect(updatedOrder).toMatchObject({
+    status: "Ready For Production",
+    operational_visible: true,
+    production_ready: true,
     total_paid: 150,
-    amount_paid: 150,
-    paid_to_date: 150,
     deposit_applied: 150,
     deposit_outstanding: 0,
     payment_collection_state: "Awaiting Final Payment",
-    quote_status: "Approved",
+    quote_status: "Ready For Production",
     deposit_workflow_status: "Deposit Received",
     deposit_status: "paid",
     balance_due: 450,
@@ -339,8 +345,19 @@ test("successful Square payment updates stale order financial rollup for admin a
   });
   expect(buildDepositStatus(updatedOrder, adminFinancials)).toBe("Deposit Received");
   expect(resolveCustomerOrderStatus(updatedOrder)).not.toMatchObject({ label: "Payment Due" });
-  expect(resolveDepositWorkflowLabel(updatedOrder)).toBe("Deposit Received");
+  expect(resolveDepositWorkflowLabel(updatedOrder)).toBe("$150.00 Received");
   expect(isDepositActionRequired(updatedOrder)).toBe(false);
+
+  const dashboard = buildOwnerWorkspaceModel([updatedOrder], []);
+  expect(
+    dashboard.readyItems.find((item) => item.key === "ready-for-production")
+  ).toMatchObject({ count: 1 });
+  expect(
+    matchesProductionStatus(
+      normalizeProductionOrder(updatedOrder),
+      "ready-for-production"
+    )
+  ).toBe(true);
 });
 
 test("Square order reconciliation writes only production order columns", () => {

@@ -14,6 +14,7 @@ import {
 import { getProductCharacteristics } from "../products/productCharacteristics";
 
 const STORAGE_KEY = "teeCoProducts";
+const PRODUCTS_CACHE_MAX_BYTES = 1_000_000;
 const EMPTY_PRODUCTS = [];
 const productListeners = new Set();
 let cachedProductsStorageRaw = null;
@@ -624,7 +625,9 @@ function setProductsSnapshot(products) {
   cachedProductsStorageRaw = normalizedSnapshot;
 
   if (hasBrowserStorage()) {
-    setRawStorageItem(STORAGE_KEY, normalizedSnapshot);
+    setRawStorageItem(STORAGE_KEY, normalizedSnapshot, {
+      maxBytes: PRODUCTS_CACHE_MAX_BYTES,
+    });
   }
 
   emitProductsUpdated();

@@ -51,6 +51,7 @@ import { recordOrderTransitionDiagnostic } from "./orderTransitionDiagnostics";
 import { assertIntakeRequestApprovalAllowed } from "../quotes/intakeApprovalGuard";
 
 const STORAGE_KEY = "teeCoStaffOrders";
+const ORDERS_CACHE_MAX_BYTES = 1_500_000;
 const ORDERS_CACHE_SCHEMA_VERSION = 2;
 const orderListeners = new Set();
 const EMPTY_ORDERS = [];
@@ -520,7 +521,9 @@ function publishOrdersSnapshot(orders, options = {}) {
   cachedOrdersRaw = JSON.stringify(buildOrdersCacheEnvelope(normalizedOrders));
 
   if (writeStorage && hasBrowserStorage()) {
-    const snapshotWasStored = setRawStorageItem(STORAGE_KEY, cachedOrdersRaw);
+    const snapshotWasStored = setRawStorageItem(STORAGE_KEY, cachedOrdersRaw, {
+      maxBytes: ORDERS_CACHE_MAX_BYTES,
+    });
 
     if (!snapshotWasStored) {
       // Supabase is authoritative. If the browser cache is over quota, keep the
@@ -1522,16 +1525,20 @@ export function getOrdersHydrationState() {
 export async function ensureOrdersHydrated(options = {}) {
   const { force = false } = options;
 
-  if (!force && ordersHydrationStarted) {
+  if (ordersHydrationStarted) {
     return ordersHydrationPromise;
   }
 
+  if (!force && hasHydratedOrdersFromSupabase) {
+    return readStoredOrders();
+  }
+
   const hydrationStartWriteSequence = successfulOrderWriteSequence;
+  const hadAuthoritativeOrders = hasHydratedOrdersFromSupabase;
   ordersHydrationStarted = true;
-  setOrdersHydrationState(
-    "loading",
-    hasHydratedOrdersFromSupabase ? "server" : "cache"
-  );
+  if (!hadAuthoritativeOrders) {
+    setOrdersHydrationState("loading", "cache");
+  }
   ordersHydrationPromise = fetchOrdersFromSupabase()
     .then((remoteOrders) => {
       if (Array.isArray(remoteOrders)) {
@@ -1548,9 +1555,16 @@ export async function ensureOrdersHydrated(options = {}) {
         return publishedOrders;
       }
 
-      return readStoredOrders();
+      const cachedOrders = readStoredOrders();
+      setOrdersHydrationState("ready", "cache");
+      return cachedOrders;
     })
     .catch((error) => {
+      if (hadAuthoritativeOrders) {
+        setOrdersHydrationState("ready", "server", error);
+        throw error;
+      }
+
       if (!canOrdersUseLocalPersistenceFallback()) {
         setOrdersHydrationState(
           "error",
@@ -1605,6 +1619,14 @@ export function subscribeToStoredOrders(listener) {
 
 export function useStoredOrders() {
   return useSyncExternalStore(subscribeToStoredOrders, getStoredOrders, () => EMPTY_ORDERS);
+}
+
+export function useStoredOrdersHydrationState() {
+  return useSyncExternalStore(
+    subscribeToStoredOrders,
+    getOrdersHydrationState,
+    getOrdersHydrationState
+  );
 }
 
 export function seedStoredOrders(seedOrders = demoOrders) {

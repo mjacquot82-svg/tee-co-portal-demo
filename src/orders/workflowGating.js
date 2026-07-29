@@ -194,7 +194,8 @@ export function buildProductionGatingState(order = {}, action = null) {
   );
   const artworkSatisfied = isArtworkApprovalSatisfied(order);
   const depositSatisfied = isDepositRequirementSatisfied(order);
-  const appliesToTarget = isProductionTargetStatus(targetStatus);
+  const appliesToTarget =
+    action?.key !== "release_to_front_counter" && isProductionTargetStatus(targetStatus);
 
   const checks = [
     {

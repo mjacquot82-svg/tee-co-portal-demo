@@ -2,7 +2,11 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import WorkflowBadge from "../components/WorkflowBadge";
 import { formatShortDate } from "../lib/dateFormatting";
-import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
+import {
+  updateStoredOrder,
+  useStoredOrders,
+  useStoredOrdersHydrationState,
+} from "../lib/ordersStore";
 import { buildWorkflowActionUpdates } from "../orders/buildWorkflowActionUpdates";
 import { isOnHoldOperationalStatus, sortOrdersByOperationalStatus } from "../orders/orderWorkflow";
 import {
@@ -41,6 +45,8 @@ import {
   buildWorkflowActionConfirmation,
 } from "./workflowCopy";
 import { buildOwnerBlockedQueuePresentation } from "../production/ownerBlockedQueuePresentation";
+import AdminDiagnosticsPanel from "../components/AdminDiagnosticsPanel";
+import { isReleasedToFrontCounter } from "../front-counter/frontCounterWorkflow";
 
 const ESCALATION_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const DAILY_STATUS_FILTERS = [
@@ -1161,6 +1167,7 @@ function ProductionDetailDrawer({
 export default function Orders() {
   const navigate = useNavigate();
   const storedOrders = useStoredOrders();
+  const ordersHydration = useStoredOrdersHydrationState();
   const staffUser = getActiveStaffUser();
   const [actionFeedbackByOrder, setActionFeedbackByOrder] = useState({});
   const [selectedOrderSnapshot, setSelectedOrderSnapshot] = useState(null);
@@ -1180,7 +1187,10 @@ export default function Orders() {
     [storedOrders]
   );
   const workspaceOrders = useMemo(
-    () => (isStaffWorkspace ? getOperationalOrdersForStaff(orders) : orders),
+    () =>
+      (isStaffWorkspace ? getOperationalOrdersForStaff(orders) : orders).filter(
+        (order) => !isReleasedToFrontCounter(order)
+      ),
     [isStaffWorkspace, orders]
   );
   const statusCounts = useMemo(() => getProductionStatusCounts(workspaceOrders), [workspaceOrders]);
@@ -1225,6 +1235,19 @@ export default function Orders() {
     [filteredOrders, selectedOrderNumber, selectedOrderSnapshot, workspaceOrders]
   );
 
+  if (ordersHydration.status !== "ready") {
+    return (
+      <AdminDiagnosticsPanel
+        title="Loading production orders"
+        message="The production workspace is synchronizing the current order collection before displaying queue results."
+        staffUser={staffUser}
+        pathname="/admin/orders"
+        workspaceAccess="loading"
+        error={ordersHydration.status === "error" ? ordersHydration.error?.message : null}
+      />
+    );
+  }
+
   function updateFilters(nextValues) {
     const nextParams = new URLSearchParams(searchParams);
 
@@ -1259,6 +1282,12 @@ export default function Orders() {
     const enrichedAction =
       action.key === "resume_from_hold"
         ? { ...action, resumeStaffName: staffUser?.name || "" }
+        : action.key === "release_to_front_counter"
+        ? {
+            ...action,
+            staffUserId: staffUser?.id || "",
+            staffName: staffUser?.name || "",
+          }
         : action;
 
     const gating = buildWorkflowBlockDetails(order, enrichedAction);

@@ -191,6 +191,18 @@ export async function syncSupabaseOrderPaymentState(supabase, payment = {}, paym
     payments: paymentsResult.data || [],
   });
   const persistedRollup = buildPersistedOrderPaymentRollup(rollup);
+  const depositReceived =
+    normalizeText(payment.payment_type || payment.request_type || paymentRequest?.request_type)
+      .toLowerCase() === "deposit" &&
+    rollup.deposit_workflow_status === "Deposit Received";
+  const operationalPromotion = depositReceived
+    ? {
+        status: "Ready For Production",
+        quote_status: "Ready For Production",
+        operational_visible: true,
+        production_ready: true,
+      }
+    : {};
   const capturedAt = normalizeText(payment.captured_at || payment.updated_at || payment.created_at) || new Date().toISOString();
   const existingActivity = Array.isArray(orderResult.data.activity_log) ? orderResult.data.activity_log : [];
   const activityEntry = buildSquareOrderActivityEntry(payment, paymentRequest || {}, capturedAt);
@@ -200,6 +212,7 @@ export async function syncSupabaseOrderPaymentState(supabase, payment = {}, paym
     .from("orders")
     .update({
       ...persistedRollup,
+      ...operationalPromotion,
       deposit_paid_at:
         rollup.deposit_workflow_status === "Deposit Received"
           ? orderResult.data.deposit_paid_at || capturedAt

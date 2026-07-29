@@ -38,6 +38,10 @@ import {
 } from "./customerPortalStartOrderRoute";
 import { resolveRequestContactDefaults } from "./requestContactDefaults";
 import { useCustomerPortalData } from "./useCustomerPortalData";
+import {
+  isDecoratedOrderLineItem,
+  requiresCustomerOrderArtwork,
+} from "./orderArtworkRequirement";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -137,6 +141,7 @@ export default function CustomerPortalRequestOrder() {
   const [contactPhone, setContactPhone] = useState(customerSession.phone || "");
   const [submitState, setSubmitState] = useState("idle");
   const [submitMessage, setSubmitMessage] = useState("");
+  const [artworkRequirementDialogOpen, setArtworkRequirementDialogOpen] = useState(false);
   const pendingRequestSource = location.state?.pendingRequestSource || "";
   const [pendingRequest, setPendingRequest] = useState(() => getPendingCustomerRequest());
   const [draftRecoveryState, setDraftRecoveryState] = useState(() =>
@@ -359,6 +364,18 @@ export default function CustomerPortalRequestOrder() {
       return;
     }
 
+    if (
+      requiresCustomerOrderArtwork(
+        configuredLineItems,
+        pendingRequest?.artworkLibrary || []
+      )
+    ) {
+      setArtworkRequirementDialogOpen(true);
+      setSubmitState("idle");
+      setSubmitMessage("");
+      return;
+    }
+
     const normalizedQuantity = orderQuantity;
     setSubmitState("submitting");
     setSubmitMessage("");
@@ -532,6 +549,28 @@ export default function CustomerPortalRequestOrder() {
           : "The request could not be sent. Try again."
       );
     }
+  }
+
+  function openArtworkSelection(artworkAction) {
+    const decoratedItemIndex = configuredLineItems.findIndex(isDecoratedOrderLineItem);
+    const lineItemIndex = decoratedItemIndex >= 0 ? decoratedItemIndex : 0;
+    const lineItem = configuredLineItems[lineItemIndex];
+    const pendingLineItem = pendingRequest?.lineItems?.[lineItemIndex] || {};
+    const editItem = {
+      ...pendingLineItem,
+      productId: lineItem?.product_id || pendingLineItem.productId || "",
+      artworkId: lineItem?.artwork_id || "",
+      artworkName: lineItem?.artwork_name || "",
+    };
+
+    setArtworkRequirementDialogOpen(false);
+    navigate(`${PORTAL_ORDER_CATALOG_PATH}/order-preview`, {
+      state: {
+        ...editItem,
+        lineItem: editItem,
+        artworkAction,
+      },
+    });
   }
 
   if (draftRecoveryRequired && pendingRequest) {
@@ -874,6 +913,101 @@ export default function CustomerPortalRequestOrder() {
             </div>
           </SectionCard>
         </form>
+
+        {artworkRequirementDialogOpen ? (
+          <div
+            role="presentation"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 1000,
+              display: "grid",
+              placeItems: "center",
+              padding: "20px",
+              background: "rgba(15, 23, 42, 0.58)",
+            }}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="artwork-required-title"
+              aria-describedby="artwork-required-description"
+              data-testid="artwork-required-dialog"
+              style={{
+                width: "min(100%, 540px)",
+                borderRadius: "22px",
+                background: "#ffffff",
+                boxShadow: "0 24px 70px rgba(15, 23, 42, 0.28)",
+                padding: "24px",
+                display: "grid",
+                gap: "16px",
+              }}
+            >
+              <div>
+                <h2
+                  id="artwork-required-title"
+                  style={{ margin: 0, color: "#0f172a", fontSize: "24px" }}
+                >
+                  Artwork Required
+                </h2>
+                <p
+                  id="artwork-required-description"
+                  style={{ margin: "10px 0 0", color: "#475569", lineHeight: 1.6 }}
+                >
+                  Before submitting your order, please upload your artwork or select artwork
+                  you&apos;ve previously uploaded.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => openArtworkSelection("upload")}
+                  style={{
+                    border: "none",
+                    borderRadius: "999px",
+                    background: "#0f766e",
+                    color: "#ffffff",
+                    padding: "11px 16px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  Upload Artwork
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openArtworkSelection("existing")}
+                  style={{
+                    border: "1px solid #0f766e",
+                    borderRadius: "999px",
+                    background: "#ffffff",
+                    color: "#0f766e",
+                    padding: "11px 16px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  Choose Existing Artwork
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setArtworkRequirementDialogOpen(false)}
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "999px",
+                    background: "#ffffff",
+                    color: "#334155",
+                    padding: "11px 16px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </section>
+          </div>
+        ) : null}
     </PortalPage>
   );
 }
