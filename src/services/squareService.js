@@ -88,13 +88,26 @@ function normalizeSquarePaymentLinkResponse(response = {}, paymentRequest = {}) 
   );
   const status = normalizeText(paymentLink.status || paymentLink.state || response.status || response.state, "created");
 
-  if (!checkoutUrl) {
-    throw new Error("Square payment link response did not include a checkout URL.");
+  let parsedCheckoutUrl;
+  try {
+    parsedCheckoutUrl = new URL(checkoutUrl);
+  } catch {
+    parsedCheckoutUrl = null;
+  }
+
+  if (
+    !parsedCheckoutUrl ||
+    parsedCheckoutUrl.protocol !== "https:" ||
+    !parsedCheckoutUrl.hostname
+  ) {
+    throw new Error(
+      "Square payment link response did not include a valid HTTPS checkout URL."
+    );
   }
 
   return {
     provider: "square",
-    provider_checkout_url: checkoutUrl,
+    provider_checkout_url: parsedCheckoutUrl.toString(),
     provider_payment_link_id: paymentLinkId,
     provider_order_id: orderId,
     provider_status: status,

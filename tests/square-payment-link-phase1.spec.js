@@ -10,10 +10,15 @@ import {
 import {
   createPaymentRequest,
   getPaymentRequestById,
+  getStoredPaymentRequests,
   listPaymentEvents,
   resetStoredPaymentsForTests,
   updatePaymentRequest,
 } from "../src/lib/paymentsStore.js";
+import {
+  listNotificationActivity,
+  resetNotificationActivityForTests,
+} from "../src/lib/notificationDeliveryService.js";
 import {
   findPaymentRequestForOrder,
   getCustomerPortalPaymentData,
@@ -28,6 +33,7 @@ import { deriveOwnerPaymentRequestNextAction } from "../src/orders/ownerWorkflow
 
 test.beforeEach(() => {
   resetStoredPaymentsForTests();
+  resetNotificationActivityForTests();
 });
 
 test("Square payment link creation sends an idempotent provider payload", async () => {
@@ -332,6 +338,70 @@ test("order financial summary deposit request creates a Square checkout payment 
   expect(findPaymentRequestForOrder(portalPayments.paymentRequests, "TC-SQ-SUMMARY", "deposit")).toMatchObject({
     provider_checkout_url: "https://square.link/u/summary-deposit",
   });
+
+  const depositNotifications = listNotificationActivity().filter(
+    (notification) =>
+      notification.eventType === "deposit_requested" &&
+      notification.recipientType === "customer"
+  );
+  expect(depositNotifications).toHaveLength(1);
+  expect(depositNotifications[0]).toMatchObject({
+    generatedContent: {
+      smsMessage: expect.stringContaining("https://square.link/u/summary-deposit"),
+    },
+    channels: {
+      sms: true,
+    },
+  });
+  expect(
+    listNotificationActivity().filter(
+      (notification) =>
+        notification.eventType === "payment_request_created" &&
+        notification.recipientType === "customer"
+    )
+  ).toHaveLength(0);
+});
+
+test("deposit notification is blocked until a valid HTTPS payment URL exists", async () => {
+  await expect(
+    createAndSendDepositPaymentRequestForOrder(
+      {
+        id: "order-invalid-square-url",
+        order_number: "TC-SQ-INVALID-URL",
+        customer_id: "customer-invalid-square-url",
+        customer_name: "Invalid URL Customer",
+        deposit_amount: 50,
+        balance_due: 100,
+      },
+      {},
+      {
+        squareSendOptions: {
+          squareLinkOptions: {
+            endpoint: "/square-test",
+            disableFallback: true,
+            fetcher: async () => ({
+              ok: true,
+              json: async () => ({
+                payment_link: {
+                  id: "LNK-INVALID",
+                  url: "javascript:alert(1)",
+                  order_id: "ORD-INVALID",
+                  status: "created",
+                },
+              }),
+            }),
+          },
+        },
+      }
+    )
+  ).rejects.toThrow("valid HTTPS");
+
+  expect(listNotificationActivity()).toHaveLength(0);
+  expect(getStoredPaymentRequests()).toHaveLength(1);
+  expect(getStoredPaymentRequests()[0]).toMatchObject({
+    status: "open",
+    provider_checkout_url: "",
+  });
 });
 
 test("Quote Detail request deposit action creates Square checkout request before updating order status", async () => {
@@ -458,6 +528,15 @@ test("active unpaid deposit requests are idempotent", async () => {
   expect(retry.paymentRequest.id).toBe(first.paymentRequest.id);
   expect(retry.reused).toBe(true);
   expect(depositRequests).toHaveLength(1);
+  const depositNotifications = listNotificationActivity().filter(
+    (notification) =>
+      notification.eventType === "deposit_requested" &&
+      notification.recipientType === "customer"
+  );
+  expect(depositNotifications).toHaveLength(1);
+  expect(depositNotifications[0].generatedContent.smsMessage).toContain(
+    "https://square.link/u/idempotent"
+  );
 });
 
 test("legacy deposit message can include the Square checkout link", () => {

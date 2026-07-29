@@ -530,6 +530,28 @@ export function saveStoredPaymentEvents(paymentEvents) {
   saveStoredList(PAYMENT_EVENTS_STORAGE_KEY, "paymentEvents", paymentEvents);
 }
 
+function isDepositPaymentRequest(paymentRequest = {}) {
+  return String(paymentRequest.request_type || "").trim().toLowerCase() === "deposit";
+}
+
+function requireValidPaymentUrl(paymentRequest = {}) {
+  const value = String(paymentRequest.provider_checkout_url || "").trim();
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    url = null;
+  }
+
+  if (!url || url.protocol !== "https:" || !url.hostname) {
+    throw new Error(
+      "A valid HTTPS payment URL is required before sending a deposit notification."
+    );
+  }
+
+  return url.toString();
+}
+
 async function notifyPaymentRequestCreated(paymentRequest) {
   if (paymentRequest.metadata?.source === "legacy_order_payment_history") {
     return;
@@ -565,16 +587,24 @@ async function notifyPaymentRequestCreated(paymentRequest) {
     pendingAcceptances.push(paymentRequestResult);
   }
 
-  if (String(paymentRequest.request_type || "").trim().toLowerCase() === "deposit") {
-    const depositResult = triggerNotificationEvent(
-      NOTIFICATION_TYPES.depositRequested,
-      {
+  await Promise.all(pendingAcceptances);
+}
+
+export async function notifyDepositPaymentRequestReady(paymentRequest = {}) {
+  if (!isDepositPaymentRequest(paymentRequest)) {
+    throw new Error("Only deposit payment requests can emit a deposit notification.");
+  }
+
+  const paymentLink = requireValidPaymentUrl(paymentRequest);
+  const depositResult = triggerNotificationEvent(
+    NOTIFICATION_TYPES.depositRequested,
+    {
       paymentRequest,
       source: "payments_store",
       customerName: paymentRequest.metadata?.customer_name || "",
       orderNumber: paymentRequest.order_number,
       depositAmount: paymentRequest.amount_requested,
-      paymentLink: paymentRequest.provider_checkout_url,
+      paymentLink,
       businessEvent: {
         subjectType: "payment_request",
         subjectId: paymentRequest.id,
@@ -582,21 +612,20 @@ async function notifyPaymentRequestCreated(paymentRequest) {
         correlationId: paymentRequest.order_number
           ? `order:${paymentRequest.order_number}`
           : "",
-        occurredAt: paymentRequest.created_at,
+        occurredAt: paymentRequest.updated_at || paymentRequest.created_at,
         source: "payments_store",
         payload: {
           paymentRequestId: paymentRequest.id,
           requestType: paymentRequest.request_type,
+          paymentLink,
         },
       },
-      }
-    );
-    if (depositResult && typeof depositResult.then === "function") {
-      pendingAcceptances.push(depositResult);
     }
-  }
+  );
 
-  await Promise.all(pendingAcceptances);
+  if (depositResult && typeof depositResult.then === "function") {
+    await depositResult;
+  }
 }
 
 export function createPaymentRequest(input = {}) {
@@ -624,7 +653,9 @@ export function createPaymentRequest(input = {}) {
     created_at: paymentRequest.created_at,
   });
 
-  void notifyPaymentRequestCreated(paymentRequest);
+  if (!isDepositPaymentRequest(paymentRequest)) {
+    void notifyPaymentRequestCreated(paymentRequest);
+  }
 
   return paymentRequest;
 }
@@ -655,7 +686,9 @@ export async function createPaymentRequestPersisted(input = {}) {
     payload: { paymentRequest },
     created_at: paymentRequest.created_at,
   });
-  await notifyPaymentRequestCreated(paymentRequest);
+  if (!isDepositPaymentRequest(paymentRequest)) {
+    await notifyPaymentRequestCreated(paymentRequest);
+  }
 
   return getPaymentRequestById(paymentRequest.id) || paymentRequest;
 }

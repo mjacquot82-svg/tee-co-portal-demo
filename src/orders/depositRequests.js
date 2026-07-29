@@ -2,6 +2,7 @@ import { formatShortDate } from "../lib/dateFormatting";
 import {
   createPaymentRequestPersisted,
   getStoredPaymentRequests,
+  notifyDepositPaymentRequestReady,
 } from "../lib/paymentsStore";
 import { sendSquarePaymentRequest } from "../services/squareService";
 
@@ -178,6 +179,7 @@ async function createAndSendDepositPaymentRequestForOrderOnce(
     ...(options.squareSendOptions || {}),
     awaitPersistence: true,
   });
+  await notifyDepositPaymentRequestReady(result.paymentRequest);
   return {
     ...result,
     reused: Boolean(existingActiveRequest),
