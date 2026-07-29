@@ -3,6 +3,9 @@ export const PORTAL_ORDER_CATALOG_PATH = "/portal/order";
 export const PORTAL_ORDER_SUBMITTED_PATH = "/portal/order-submitted";
 export const PUBLIC_STOREFRONT_PATH = "/";
 export const PUBLIC_GARMENT_FLOW_SOURCE = "public-garment-flow";
+export const START_NEW_PORTAL_ORDER_STATE = Object.freeze({
+  startNewPortalOrder: true,
+});
 
 export function isPublicGarmentFlowHandoff(source) {
   return String(source || "").trim() === PUBLIC_GARMENT_FLOW_SOURCE;
@@ -39,4 +42,8 @@ export function shouldOfferPendingDraftRecovery({
   pendingRequestSource = "",
 } = {}) {
   return Boolean(pendingRequest) && !isPublicGarmentFlowHandoff(pendingRequestSource);
+}
+
+export function shouldDiscardPendingDraftForNewOrder(navigationState = null) {
+  return navigationState?.startNewPortalOrder === true;
 }

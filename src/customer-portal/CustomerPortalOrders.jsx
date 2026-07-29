@@ -13,7 +13,10 @@ import {
   buildPortalOrderCardSummary,
   resolvePortalOrderAttention,
 } from "./portalOrderDetail";
-import { PORTAL_ORDER_CATALOG_PATH } from "./customerPortalStartOrderRoute";
+import {
+  PORTAL_ORDER_CATALOG_PATH,
+  START_NEW_PORTAL_ORDER_STATE,
+} from "./customerPortalStartOrderRoute";
 import {
   getCustomerPaymentDueLabel,
   getEstimatedBalanceAfterPayment,
@@ -405,6 +408,7 @@ export default function CustomerPortalOrders() {
             description="Start a new request whenever you are ready. Once Tee & Co opens it inside the workflow, it will appear here automatically."
             actionLabel="Start New Order"
             actionTo={PORTAL_ORDER_CATALOG_PATH}
+            actionState={START_NEW_PORTAL_ORDER_STATE}
           />
         )}
       </SectionCard>
@@ -444,6 +448,7 @@ export default function CustomerPortalOrders() {
       <div>
         <Link
           to={PORTAL_ORDER_CATALOG_PATH}
+          state={START_NEW_PORTAL_ORDER_STATE}
           style={{
             display: "inline-flex",
             alignItems: "center",

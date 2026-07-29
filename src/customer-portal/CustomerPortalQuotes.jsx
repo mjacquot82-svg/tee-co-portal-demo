@@ -7,6 +7,10 @@ import {
   SectionCard,
 } from "./CustomerPortalShared";
 import { useCustomerPortalData } from "./useCustomerPortalData";
+import {
+  PORTAL_ORDER_CATALOG_PATH,
+  START_NEW_PORTAL_ORDER_STATE,
+} from "./customerPortalStartOrderRoute";
 
 export default function CustomerPortalQuotes() {
   const location = useLocation();
@@ -71,7 +75,8 @@ export default function CustomerPortalQuotes() {
             title="No order requests yet"
             description="Start a request from the portal and Tee & Co will review it before production."
             actionLabel="Start New Order"
-            actionTo="/portal/order"
+            actionTo={PORTAL_ORDER_CATALOG_PATH}
+            actionState={START_NEW_PORTAL_ORDER_STATE}
           />
         )}
       </SectionCard>

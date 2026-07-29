@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizePendingCustomerRequest, upsertPendingCustomerLineItem } from "./pendingCustomerRequestStore";
+import { shouldDiscardPendingDraftForNewOrder } from "../customer-portal/customerPortalStartOrderRoute";
 
 const hoodie = {
   id: "hoodie-line",
@@ -43,5 +44,11 @@ describe("customer shopping draft", () => {
   it("adapts the original single-size handoff", () => {
     const draft = normalizePendingCustomerRequest({ productId: "tee", garmentName: "T-Shirt", selectedSize: "M", quantity: 4 });
     expect(draft.lineItems[0]).toMatchObject({ productId: "tee", size_breakdown: { M: 4 }, quantity: 4 });
+  });
+
+  it("distinguishes a new order from adding another garment to the current draft", () => {
+    expect(shouldDiscardPendingDraftForNewOrder({ startNewPortalOrder: true })).toBe(true);
+    expect(shouldDiscardPendingDraftForNewOrder({ addingAnotherGarment: true })).toBe(false);
+    expect(shouldDiscardPendingDraftForNewOrder(null)).toBe(false);
   });
 });

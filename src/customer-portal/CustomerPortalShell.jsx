@@ -17,6 +17,7 @@ import {
   isPortalOrderingPath,
   isPortalOrderingWorkflowPath,
   PORTAL_ORDER_CATALOG_PATH,
+  START_NEW_PORTAL_ORDER_STATE,
 } from "./customerPortalStartOrderRoute";
 import { usePaymentReconciliationRefresh } from "../lib/usePaymentReconciliationRefresh";
 
@@ -184,7 +185,7 @@ export default function CustomerPortalShell() {
             <NavLink
               className="customer-portal-primary-action"
               to={isOrderingWorkflow ? "/portal/orders" : PORTAL_ORDER_CATALOG_PATH}
-              state={isOrderingWorkflow ? undefined : { draftRecoveryRequested: true }}
+              state={isOrderingWorkflow ? undefined : START_NEW_PORTAL_ORDER_STATE}
               style={() => ({
                 display: "inline-flex",
                 alignItems: "center",
@@ -271,7 +272,7 @@ export default function CustomerPortalShell() {
 
             <NavLink
               to={PORTAL_ORDER_CATALOG_PATH}
-              state={{ draftRecoveryRequested: true }}
+              state={START_NEW_PORTAL_ORDER_STATE}
               style={() => ({
                 textDecoration: "none",
                 borderRadius: "18px",

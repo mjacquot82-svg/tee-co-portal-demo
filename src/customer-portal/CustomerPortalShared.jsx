@@ -143,7 +143,13 @@ export function SectionCard({ title, subtitle, children }) {
   );
 }
 
-export function EmptyState({ title, description, actionLabel, actionTo = "/" }) {
+export function EmptyState({
+  title,
+  description,
+  actionLabel,
+  actionTo = "/",
+  actionState,
+}) {
   return (
     <div
       style={{
@@ -161,6 +167,7 @@ export function EmptyState({ title, description, actionLabel, actionTo = "/" }) 
         <div>
           <Link
             to={actionTo}
+            state={actionState}
             style={{
               display: "inline-flex",
               alignItems: "center",

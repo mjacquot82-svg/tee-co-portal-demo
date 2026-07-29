@@ -1,6 +1,8 @@
-import { Link, useLocation } from "react-router-dom";
-import { useMemo } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useMemo } from "react";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
+import { clearPendingCustomerRequest } from "../lib/pendingCustomerRequestStore";
+import { clearPendingCustomerArtwork } from "../lib/pendingCustomerArtworkStore";
 import { useCatalogLookups } from "../lib/catalogLookupsStore";
 import {
   buildStorefrontCategories,
@@ -11,7 +13,10 @@ import {
   resolveStorefrontProductImage,
 } from "../lib/storefrontCatalog";
 import { areStoredProductsReady, resolveProductBasePrice, useStoredProducts } from "../lib/productsStore";
-import { getOrderingWorkflowPaths } from "../customer-portal/customerPortalStartOrderRoute";
+import {
+  getOrderingWorkflowPaths,
+  shouldDiscardPendingDraftForNewOrder,
+} from "../customer-portal/customerPortalStartOrderRoute";
 
 function buildStorefrontRenderIdentity(product, index) {
   const normalizedId = String(product?.id || "").trim();
@@ -64,7 +69,9 @@ function formatOptionCount(values = [], label) {
 
 export default function Home() {
   const location = useLocation();
+  const navigate = useNavigate();
   const orderingPaths = getOrderingWorkflowPaths(location.pathname);
+  const isStartingNewPortalOrder = shouldDiscardPendingDraftForNewOrder(location.state);
   const storedProducts = useStoredProducts();
   const productsReady = areStoredProductsReady();
   const lookups = useCatalogLookups();
@@ -123,6 +130,32 @@ export default function Home() {
     alt: heroProduct?.name || "Featured product",
     size: "medium",
   });
+
+  useEffect(() => {
+    if (!isStartingNewPortalOrder) return undefined;
+    let active = true;
+
+    // "Start New Order" is intentionally different from "Add Another Garment":
+    // discard the prior order-scoped draft before the customer configures anything new.
+    clearPendingCustomerRequest();
+    void clearPendingCustomerArtwork().then(() => {
+      if (active) navigate(location.pathname, { replace: true, state: null });
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [isStartingNewPortalOrder, location.pathname, navigate]);
+
+  if (isStartingNewPortalOrder) {
+    return (
+      <div className="storefront-home">
+        <div className="storefront-shell">
+          <p className="storefront-loading-copy">Starting a clean order…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="storefront-home">
