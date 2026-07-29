@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { hasFrontCounterOwnership } from "../orders/orderWorkflow";
 
 function isHoldAction(action) {
   return action?.key === "put_on_hold";
@@ -48,6 +49,7 @@ export default function ProductionActionPanel({
   const [holdReason, setHoldReason] = useState("");
   const [pendingActionKey, setPendingActionKey] = useState("");
   const [actionError, setActionError] = useState("");
+  const handedOff = hasFrontCounterOwnership(order);
   const availableActions = actions.filter((action) => !action.blocked);
   const primaryAction = availableActions.find((action) => !isHoldAction(action)) || null;
   const secondaryActions = availableActions.filter((action) => action !== primaryAction && isHoldAction(action));
@@ -99,9 +101,17 @@ export default function ProductionActionPanel({
       <div className="production-console-action-copy">
         <span>What to do next</span>
         <strong>
-          {primaryActionLabel || (order.status === "Completed" ? "Production complete" : "No production action available")}
+          {handedOff
+            ? "Handed off to Front Counter"
+            : primaryActionLabel || (order.status === "Completed" ? "Production complete" : "No production action available")}
         </strong>
-        <p>{primaryAction ? "Continue this job through its active production stage." : `Current status: ${order.status || "—"}`}</p>
+        <p>
+          {handedOff
+            ? "Production work is complete. Front Counter now owns payment collection, customer pickup, and final completion."
+            : primaryAction
+            ? "Continue this job through its active production stage."
+            : `Current status: ${order.status || "—"}`}
+        </p>
       </div>
 
       {feedback ? (
@@ -116,7 +126,7 @@ export default function ProductionActionPanel({
       ) : null}
 
       <div className="production-console-action-buttons">
-        {primaryAction ? (
+        {!handedOff && primaryAction ? (
           <button
             type="button"
             data-testid="workflow-action-button"

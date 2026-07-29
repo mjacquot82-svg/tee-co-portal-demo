@@ -24,6 +24,7 @@ import { normalizeOrderFinancials } from "../orders/orderFinancials";
 import { formatDateTimeParts } from "../lib/dateFormatting";
 import {
   getAvailableProductionActions,
+  hasFrontCounterOwnership,
   isCanceledOperationalStatus,
   normalizeOperationalStatus,
 } from "../orders/orderWorkflow";
@@ -559,7 +560,9 @@ export default function OrderDetail() {
             }
             action={
               <div id="production-handoff" className="order-detail-action-panel" style={{ scrollMarginTop: "16px" }}>
-            {hasProcessAuthority ? (
+            {hasFrontCounterOwnership(order) ? (
+              <ProductionActionPanel order={order} actions={[]} onPrint={handlePrintTicket} />
+            ) : hasProcessAuthority ? (
               <ProcessCurrentActionPanel projection={processProjection} onPrint={handlePrintTicket} />
             ) : showLegacyProduction ? (
               <ProductionActionPanel order={order} actions={workflowActions} onRunAction={handleWorkflowAction} feedback={workflowFeedback} onPrint={handlePrintTicket} />

@@ -99,7 +99,7 @@ test("pickup cannot be recorded while a remaining balance exists", () => {
   ).toBeNull();
 });
 
-test("existing production completion remains available until Front Counter wiring is approved", () => {
+test("production completion remains available before Front Counter release", () => {
   const actions = getAvailableProductionActions({
     status: "Ready For Pickup",
     pickup_status: "Ready for Pickup",
@@ -165,7 +165,40 @@ test("release transition keeps the order open and prevents a second release", ()
     ...updates,
   }).map((candidate) => candidate.key);
   expect(postReleaseActions).not.toContain("release_to_front_counter");
-  expect(postReleaseActions).toContain("complete_order");
+  expect(postReleaseActions).not.toContain("complete_order");
+  expect(postReleaseActions).toEqual([]);
+});
+
+test("production cannot complete an order after Front Counter ownership begins", () => {
+  const releasedOrder = {
+    status: "Ready For Pickup",
+    pickup_status: "Ready for Pickup",
+    balance_due: 0,
+    front_counter_released_at: "2026-07-29T12:00:00.000Z",
+    front_counter_status: FRONT_COUNTER_STATUSES.READY_FOR_PICKUP,
+  };
+
+  expect(
+    buildWorkflowActionUpdates(releasedOrder, {
+      key: "complete_order",
+      label: "Complete Order",
+      targetStatus: "Completed",
+    })
+  ).toBeNull();
+
+  expect(buildFrontCounterCompletionUpdates(releasedOrder)).toBeNull();
+  const pickupUpdates = buildCustomerPickupUpdates(releasedOrder, {
+    occurredAt: "2026-07-29T12:10:00.000Z",
+  });
+  expect(
+    buildFrontCounterCompletionUpdates(
+      { ...releasedOrder, ...pickupUpdates },
+      { occurredAt: "2026-07-29T12:15:00.000Z" }
+    )
+  ).toMatchObject({
+    status: "Completed",
+    activity_type: "front_counter_order_completed",
+  });
 });
 
 test("Front Counter tabs include only explicitly released eligible orders", () => {

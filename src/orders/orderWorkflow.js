@@ -225,6 +225,14 @@ export function isProductionExecutionStatus(status) {
   );
 }
 
+export function hasFrontCounterOwnership(order = {}) {
+  const frontCounterStatus = normalize(order.front_counter_status);
+  return (
+    Boolean(String(order.front_counter_released_at || "").trim()) ||
+    (Boolean(frontCounterStatus) && frontCounterStatus !== "not released")
+  );
+}
+
 export function canAdvanceOperationalStatus(status) {
   const normalizedStatus = normalizeOperationalStatus(status);
   if (TERMINAL_OPERATIONAL_STATUSES.has(normalizedStatus)) return false;
@@ -260,6 +268,10 @@ export function getAvailableProductionActions(order = {}, options = {}) {
   const compact = options.compact === true;
   const actions = [];
   const preferredStartAction = getPreferredProductionStartAction(order);
+
+  if (hasFrontCounterOwnership(order)) {
+    return actions;
+  }
 
   if (["Completed", "Canceled"].includes(status)) {
     return actions;

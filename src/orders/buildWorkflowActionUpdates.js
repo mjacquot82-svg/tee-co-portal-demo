@@ -1,5 +1,6 @@
 import {
   getProductionWorkflowAction,
+  hasFrontCounterOwnership,
   normalizeOperationalStatus,
 } from "./orderWorkflow";
 import { buildReleaseToFrontCounterUpdates } from "../front-counter/frontCounterWorkflow";
@@ -9,6 +10,10 @@ export function buildWorkflowActionUpdates(order, actionInput) {
     typeof actionInput === "string" ? getProductionWorkflowAction(actionInput) : actionInput;
 
   if (!order || !action?.targetStatus) {
+    return null;
+  }
+
+  if (hasFrontCounterOwnership(order)) {
     return null;
   }
 
