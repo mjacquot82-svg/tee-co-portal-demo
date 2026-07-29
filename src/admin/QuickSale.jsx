@@ -26,8 +26,9 @@ import {
   derivePickupPresentationStage,
   PICKUP_PRESENTATION_STAGES,
 } from "../front-counter/frontCounterPresentation";
+import { DEFAULT_SALES_TAX_RATE } from "../orders/salesTax";
 
-const taxRate = 0.13;
+const taxRate = DEFAULT_SALES_TAX_RATE;
 const counterPaymentMethods = PAYMENT_METHOD_OPTIONS.filter((option) =>
   ["Cash", "Debit", "Credit", "E-Transfer", "Cheque"].includes(option)
 );

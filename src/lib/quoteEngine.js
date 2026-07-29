@@ -1,5 +1,6 @@
 import { getProductPlacementConfig, resolveProductBasePrice } from "./productsStore";
 import { getLineItemQuantity, getOrderLineItems } from "./orderLineItems";
+import { calculateInvoiceTax, DEFAULT_SALES_TAX_RATE } from "../orders/salesTax";
 
 export function getPlacementUnitPrice(product, placementName, quantity = 0) {
   const configEntry = getProductPlacementConfig(product).find(
@@ -87,6 +88,13 @@ export function generateQuoteSnapshot(order, product) {
   const subtotal = garmentPricingAvailable
     ? garmentSubtotal + placementSubtotal + productionSubtotal + setupSubtotal
     : null;
+  const invoiceTotals =
+    subtotal === null
+      ? null
+      : calculateInvoiceTax(subtotal, {
+          taxRate: order?.tax_rate ?? DEFAULT_SALES_TAX_RATE,
+          taxExempt: order?.tax_exempt === true,
+        });
 
   return {
     order_number: order?.order_number || "",
@@ -108,9 +116,11 @@ export function generateQuoteSnapshot(order, product) {
     setup_subtotal: setupSubtotal,
     additional_fees_subtotal: setupSubtotal,
     subtotal,
-    tax: null,
-    taxes_placeholder: "Calculated at checkout",
-    total: subtotal,
+    tax_rate: invoiceTotals?.tax_rate ?? DEFAULT_SALES_TAX_RATE,
+    tax: invoiceTotals?.tax_amount ?? null,
+    tax_amount: invoiceTotals?.tax_amount ?? null,
+    total: invoiceTotals?.total_amount ?? null,
+    total_amount: invoiceTotals?.total_amount ?? null,
     generated_at: new Date().toISOString(),
   };
 }
@@ -143,6 +153,13 @@ export function generateOrderQuoteSnapshot(order, products = []) {
   const subtotal = pricingAvailable
     ? sum("garment_subtotal") + sum("placement_subtotal") + sum("production_method_subtotal") + setupSubtotal
     : null;
+  const invoiceTotals =
+    subtotal === null
+      ? null
+      : calculateInvoiceTax(subtotal, {
+          taxRate: order?.tax_rate ?? DEFAULT_SALES_TAX_RATE,
+          taxExempt: order?.tax_exempt === true,
+        });
 
   return {
     order_number: order?.order_number || "",
@@ -163,9 +180,11 @@ export function generateOrderQuoteSnapshot(order, products = []) {
     setup_subtotal: setupSubtotal,
     additional_fees_subtotal: setupSubtotal,
     subtotal,
-    tax: null,
-    taxes_placeholder: "Calculated at checkout",
-    total: subtotal,
+    tax_rate: invoiceTotals?.tax_rate ?? DEFAULT_SALES_TAX_RATE,
+    tax: invoiceTotals?.tax_amount ?? null,
+    tax_amount: invoiceTotals?.tax_amount ?? null,
+    total: invoiceTotals?.total_amount ?? null,
+    total_amount: invoiceTotals?.total_amount ?? null,
     generated_at: new Date().toISOString(),
   };
 }

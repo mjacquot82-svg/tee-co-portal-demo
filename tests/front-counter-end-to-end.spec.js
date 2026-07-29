@@ -15,6 +15,8 @@ function buildReadyOrder({
   customerName,
   total,
   paid,
+  subtotal = total,
+  tax = 0,
 }) {
   return {
     id: orderNumber,
@@ -42,7 +44,9 @@ function buildReadyOrder({
     deposit_workflow_status: paid > 0 ? "Deposit Received" : "Not Required",
     total_amount: total,
     total,
-    subtotal: total,
+    subtotal,
+    tax_amount: tax,
+    tax_rate: subtotal > 0 ? tax / subtotal : 0,
     total_paid: paid,
     amount_paid: paid,
     paid_to_date: paid,
@@ -211,4 +215,36 @@ test("Scenario B: remaining balance is collected before Customer Pickup and comp
   await completePickup(page, order.order_number);
   await page.goto("/admin/sales");
   await expect(page.getByText(`SALE-${order.order_number}`)).toBeVisible();
+});
+
+test("Scenario C: taxed invoice collects deposit plus taxed balance and preserves receipt totals", async ({
+  page,
+}) => {
+  const order = buildReadyOrder({
+    orderNumber: "FC-C-TAXED",
+    customerId: "fc-customer-c",
+    customerName: "Front Counter Taxed",
+    subtotal: 2,
+    tax: 0.26,
+    total: 2.26,
+    paid: 1,
+  });
+  await installScenario(page, order);
+
+  await page.goto("/admin/sales/new");
+  await selectCustomer(page, order.customer_name);
+  await expect(page.getByRole("heading", { name: "Collect $1.26 Payment" })).toBeVisible();
+  await page.getByRole("button", { name: "Cash", exact: true }).click();
+  await page.getByRole("button", { name: "Record Cash" }).click();
+  await expect(page.getByText(/now ready to release/i)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Confirm Order Handed to Customer" })
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Confirm Order Handed to Customer" }).click();
+  await page.getByRole("button", { name: "View Receipt" }).click();
+
+  await expect(page.getByText("Customer Receipt", { exact: true })).toBeVisible();
+  await expect(page.getByText("$2.00", { exact: true })).toBeVisible();
+  await expect(page.getByText("$0.26", { exact: true })).toBeVisible();
+  await expect(page.getByText("$2.26", { exact: true })).toHaveCount(2);
 });

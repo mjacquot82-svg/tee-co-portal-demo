@@ -72,16 +72,22 @@ function resolveQuoteStatus(currentStatus, depositOutstanding) {
 
 export function buildOrderPaymentRollup({ order = {}, paymentRequests = [], payments = [] } = {}) {
   const successfulPayments = payments.filter(isSuccessfulPayment);
-  const totalPaid = successfulPayments.reduce((total, payment) => total + normalizeAmount(payment.amount), 0);
+  const totalPaid = normalizeAmount(
+    successfulPayments.reduce((total, payment) => total + normalizeAmount(payment.amount), 0)
+  );
   const depositAmount = resolveDepositAmount(order, paymentRequests);
   const depositPaidFromPayments = successfulPayments
     .filter((payment) => normalizeLower(payment.payment_type || payment.request_type) === "deposit")
     .reduce((total, payment) => total + normalizeAmount(payment.amount), 0);
   const depositApplied = depositAmount > 0 ? Math.min(depositAmount, depositPaidFromPayments || totalPaid) : 0;
-  const depositOutstanding = Math.max(depositAmount - depositApplied, 0);
+  const depositOutstanding = normalizeAmount(Math.max(depositAmount - depositApplied, 0));
   const totalAmount = resolveOrderTotal(order);
   const currentBalanceDue = normalizeAmount(order.balance_due);
-  const balanceDue = totalAmount > 0 ? Math.max(totalAmount - totalPaid, 0) : Math.max(currentBalanceDue - totalPaid, 0);
+  const balanceDue = normalizeAmount(
+    totalAmount > 0
+      ? Math.max(totalAmount - totalPaid, 0)
+      : Math.max(currentBalanceDue - totalPaid, 0)
+  );
   const paymentCollectionState = buildPaymentCollectionState({
     totalAmount,
     totalPaid,

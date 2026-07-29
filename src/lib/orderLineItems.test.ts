@@ -25,7 +25,8 @@ describe("hierarchical apparel order model", () => {
     expect(quote.line_items).toHaveLength(2);
     expect(quote.garment_subtotal).toBe(190);
     expect(quote.production_subtotal).toBe(39);
-    expect(quote.total).toBe(229);
+    expect(quote.tax_amount).toBe(29.77);
+    expect(quote.total).toBe(258.77);
   });
 
   it("adapts legacy single-garment orders", () => {

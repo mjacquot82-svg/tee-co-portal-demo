@@ -1,4 +1,5 @@
 import { deriveOrderPaymentState, deriveOrderWorkflowState } from "./canonicalState";
+import { calculateInvoiceTax, DEFAULT_SALES_TAX_RATE } from "./salesTax";
 
 export const PAYMENT_STATUS_OPTIONS = [
   "Draft",
@@ -691,14 +692,32 @@ export function deriveOrderFinancials(order = {}, options = {}) {
     totalCandidate,
   } = resolveOrderFinancialCandidates(order, options);
   const resolvedSubtotal = subtotalCandidate?.amount ?? null;
-  const resolvedTaxAmount = taxCandidate?.amount ?? null;
-  const resolvedTotalAmount = totalCandidate?.amount ?? null;
+  let resolvedTaxAmount = taxCandidate?.amount ?? null;
+  let resolvedTotalAmount = totalCandidate?.amount ?? null;
   const subtotal = normalizeCurrency(
     resolvedSubtotal ??
       (resolvedTotalAmount !== null
         ? normalizeCurrency(resolvedTotalAmount - (resolvedTaxAmount ?? 0))
         : 0)
   );
+  const hasDeferredLegacyTax =
+    order.tax_exempt !== true &&
+    [
+      order.taxes_placeholder,
+      order.quote?.taxes_placeholder,
+      order.quote_snapshot?.taxes_placeholder,
+      order.quoteSnapshot?.taxes_placeholder,
+    ].some((value) => normalizeLower(value) === "calculated at checkout") &&
+    subtotal > 0 &&
+    (resolvedTaxAmount === null || resolvedTaxAmount === 0) &&
+    (resolvedTotalAmount === null || resolvedTotalAmount <= subtotal);
+  if (hasDeferredLegacyTax) {
+    const repairedTotals = calculateInvoiceTax(subtotal, {
+      taxRate: order.tax_rate ?? order.quote?.tax_rate ?? DEFAULT_SALES_TAX_RATE,
+    });
+    resolvedTaxAmount = repairedTotals.tax_amount;
+    resolvedTotalAmount = repairedTotals.total_amount;
+  }
   const taxAmount = normalizeCurrency(
     resolvedTaxAmount ??
       (resolvedTotalAmount !== null && resolvedSubtotal !== null
