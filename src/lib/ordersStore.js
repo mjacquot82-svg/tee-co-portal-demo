@@ -1896,7 +1896,6 @@ async function performStoredOrderUpdate(orderNumber, updates) {
       previousDepositStatus !== nextDepositStatus &&
       nextDepositStatus === "Deposit Requested"
     ) {
-      await triggerOrderNotification(NOTIFICATION_TYPES.depositRequested, updatedOrder);
       createStaffNotification({
         type: STAFF_NOTIFICATION_TYPES.paymentHold,
         orderNumber: updatedOrder.order_number,

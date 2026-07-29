@@ -347,9 +347,11 @@ test("order financial summary deposit request creates a Square checkout payment 
   expect(depositNotifications).toHaveLength(1);
   expect(depositNotifications[0]).toMatchObject({
     generatedContent: {
+      emailBody: expect.stringContaining("https://square.link/u/summary-deposit"),
       smsMessage: expect.stringContaining("https://square.link/u/summary-deposit"),
     },
     channels: {
+      email: true,
       sms: true,
     },
   });

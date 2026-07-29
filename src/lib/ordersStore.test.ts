@@ -16,6 +16,10 @@ import {
   getPendingCustomerRequest,
   savePendingCustomerRequest,
 } from "./pendingCustomerRequestStore";
+import {
+  listNotificationActivity,
+  resetNotificationActivityForTests,
+} from "./notificationDeliveryService";
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
@@ -327,6 +331,59 @@ describe("orders browser cache", () => {
     expect(finalOrder.deposit_requirement_status).toBe("Not Required");
     expect(persistedPayloads).toHaveLength(2);
     expect(persistedPayloads[1].artwork_approval_status).toBe("Approved");
+  });
+
+  test("keeps deposit workflow activity internal without emitting a second customer notification", async () => {
+    installMemoryStorage();
+    let persistedPayload: Record<string, unknown> | null = null;
+    const query = {
+      update: vi.fn((payload) => {
+        persistedPayload = payload;
+        return query;
+      }),
+      eq: vi.fn(() => query),
+      select: vi.fn(() => query),
+      single: vi.fn(() =>
+        Promise.resolve({ data: persistedPayload, error: null })
+      ),
+      order: vi.fn(() =>
+        Promise.resolve({ data: [orderSnapshot()], error: null })
+      ),
+    };
+    configureOrdersPersistenceForTests({
+      supabaseClient: { from: vi.fn(() => query) },
+      supabaseConfigured: true,
+      persistenceMode: PERSISTENCE_MODES.production,
+    });
+    await ensureOrdersHydrated({ force: true });
+    resetNotificationActivityForTests();
+
+    await updateStoredOrder("TC-RACE-1", {
+      deposit_required: true,
+      deposit_requirement: "required",
+      deposit_requirement_status: "Required",
+      deposit_workflow_status: "Deposit Requested",
+      deposit_amount: 50,
+      activity_type: "deposit_request",
+      activity_note: "Deposit requested after Square checkout creation.",
+    });
+
+    expect(getStoredOrders()[0]).toMatchObject({
+      deposit_workflow_status: "Deposit Requested",
+      deposit_amount: 50,
+    });
+    expect(
+      getStoredOrders()[0].activity_log.some(
+        (event) =>
+          event.type === "deposit_request" &&
+          event.note === "Deposit requested after Square checkout creation."
+      )
+    ).toBe(true);
+    expect(
+      listNotificationActivity().filter(
+        (notification) => notification.eventType === "deposit_requested"
+      )
+    ).toHaveLength(0);
   });
 
   test("accepts a newer state from a subsequent successful server hydration", async () => {
