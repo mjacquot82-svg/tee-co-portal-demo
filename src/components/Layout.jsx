@@ -266,6 +266,11 @@ function getAdminSections(staffUser) {
           label: "Order Export",
           navKey: "orderExport",
         },
+        {
+          to: "/admin/settings/square-terminal",
+          label: "Square Terminal",
+          navKey: "squareTerminal",
+        },
       ],
     },
   ]
@@ -286,6 +291,7 @@ function getActiveSidebarLink(pathname, staffUser) {
   if (pathname.startsWith("/admin/settings/notifications/policy")) return "notificationPolicy";
   if (pathname.startsWith("/admin/settings/notifications")) return "notificationTemplates";
   if (pathname.startsWith("/admin/settings/order-export")) return "orderExport";
+  if (pathname.startsWith("/admin/settings/square-terminal")) return "squareTerminal";
   if (pathname === "/admin/records/canceled") return "canceledOrders";
   if (pathname === "/admin/quotes/archived") return "archivedQuotes";
   if (pathname === "/admin/quotes") return "quotes";

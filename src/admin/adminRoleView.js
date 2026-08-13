@@ -16,6 +16,7 @@ const OPERATIONAL_ROLE_RANK = {
 const SUPABASE_OWNER_AUTHORIZATION_PATHS = new Set([
   "/admin/settings/notifications",
   "/admin/settings/notifications/policy",
+  "/admin/settings/square-terminal",
 ]);
 
 const SUPABASE_OPERATIONAL_AUTHORIZATION_PATHS = new Set([
@@ -29,6 +30,7 @@ export const MANAGEMENT_EXACT_PATHS = [
   "/admin/sales",
   "/admin/staff-users",
   "/admin/settings/notifications",
+  "/admin/settings/square-terminal",
   "/admin/quotes/archived",
   "/admin/settings/notifications",
 ];
@@ -160,6 +162,13 @@ const ADMIN_ROUTE_PERMISSION_RULES = [
   {
     type: "exact",
     value: "/admin/settings/order-export",
+    permissions: [PERMISSIONS.settingsManage],
+    classification: "protected-management",
+    ownerOnly: true,
+  },
+  {
+    type: "exact",
+    value: "/admin/settings/square-terminal",
     permissions: [PERMISSIONS.settingsManage],
     classification: "protected-management",
     ownerOnly: true,
