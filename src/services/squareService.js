@@ -4,6 +4,7 @@ import {
   updatePaymentRequestPersisted,
 } from "../lib/paymentsStore";
 import { buildCanonicalUrl } from "../lib/siteUrl";
+import { supabase } from "../lib/supabaseClient";
 
 const DEFAULT_PAYMENT_LINK_ENDPOINT = "/.netlify/functions/square-payment-link";
 
@@ -187,10 +188,19 @@ export async function createSquarePaymentLink(paymentRequest = {}, options = {})
   }
 
   try {
+    let accessToken = normalizeText(options.accessToken);
+    if (!accessToken && supabase) {
+      const session = await supabase.auth.getSession();
+      accessToken = normalizeText(session.data?.session?.access_token);
+    }
+    if (!accessToken && !options.fetcher) {
+      throw new Error("An authenticated operational session is required to create a Square payment link.");
+    }
     const response = await fetcher(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
       body: JSON.stringify(payload),
     });

@@ -408,7 +408,7 @@ function buildPaymentInput({ payment, paymentRequest, statusMapping, webhookEven
     status: statusMapping.paymentStatus,
     amount,
     currency: getSquarePaymentCurrency(payment),
-    method: "square_online",
+    method: normalizeText(payment.metadata?.terminal_attempt_id) ? "square_terminal" : "square_online",
     provider: "square",
     provider_payment_id: normalizeText(payment.id),
     provider_order_id: normalizeText(payment.order_id || payment.orderId),
@@ -421,7 +421,8 @@ function buildPaymentInput({ payment, paymentRequest, statusMapping, webhookEven
       : null,
     note: `Square ${normalizeText(webhookEvent.type, "payment event")}`,
     metadata: {
-      source: "square_webhook",
+      source: normalizeText(payment.metadata?.terminal_attempt_id) ? "square_terminal" : "square_webhook",
+      terminal_attempt_id: normalizeText(payment.metadata?.terminal_attempt_id),
       square_event_id: normalizeText(webhookEvent.event_id || webhookEvent.id),
       square_event_type: normalizeText(webhookEvent.type),
       square_payment_id: normalizeText(payment.id),

@@ -27,6 +27,12 @@ import {
   PICKUP_PRESENTATION_STAGES,
 } from "../front-counter/frontCounterPresentation";
 import { DEFAULT_SALES_TAX_RATE } from "../orders/salesTax";
+import {
+  cancelSquareTerminalCheckout,
+  createSquareTerminalCheckout,
+  getSquareTerminalCheckoutStatus,
+  TERMINAL_FINAL_STATES,
+} from "../services/squareTerminalCheckoutService";
 
 const taxRate = DEFAULT_SALES_TAX_RATE;
 const counterPaymentMethods = PAYMENT_METHOD_OPTIONS.filter((option) =>
@@ -35,8 +41,20 @@ const counterPaymentMethods = PAYMENT_METHOD_OPTIONS.filter((option) =>
 const splitPaymentMethods = ["Cash", "Debit", "Credit", "E-Transfer", "Cheque"];
 const paymentWorkflowActions = [
   {
+    id: "terminal",
+    title: "Square Terminal",
+    recordMethod: "Square Terminal",
+    shortLabel: "Terminal",
+    buttonLabel: "Send to Terminal",
+    description: "Send this single order's exact server-verified balance to the connected Terminal.",
+    notePlaceholder: "Terminal checkout notes are recorded automatically.",
+    accent: "#0f766e",
+    background: "#f0fdfa",
+    border: "1px solid #99f6e4",
+  },
+  {
     id: "card",
-    title: "Record Card Payment",
+    title: "Record Card Manually",
     recordMethod: "Card",
     shortLabel: "Card",
     buttonLabel: "Confirm Card Payment Received",
@@ -272,6 +290,16 @@ function getActionToneStyles(tone = "default") {
 
 function getPaymentActionConfig(actionId) {
   return paymentWorkflowActions.find((action) => action.id === actionId) || null;
+}
+
+function terminalStatusLabel(status) {
+  return ({
+    creating: "Sending", create_unknown: "Sending — recovering", pending: "Waiting for customer",
+    in_progress: "Waiting for customer", cancel_requested: "Cancel requested",
+    completed_unverified: "Verifying payment", completed: "Payment approved",
+    failed: "Declined/failed", canceled: "Canceled", timed_out: "Timed out",
+    reconciliation_required: "Reconciliation required",
+  })[status] || "Ready to send to Terminal";
 }
 
 function getSplitMethodButtonStyle(active) {
@@ -781,6 +809,7 @@ export default function QuickSale() {
   const [paymentError, setPaymentError] = useState("");
   const [paymentProcessingOrderNumber, setPaymentProcessingOrderNumber] = useState("");
   const [completedPickup, setCompletedPickup] = useState(null);
+  const [terminalAttempt, setTerminalAttempt] = useState(null);
 
   const [linkedCustomerId, setLinkedCustomerId] = useState("");
   const [linkedCustomerName, setLinkedCustomerName] = useState("");
@@ -947,6 +976,7 @@ export default function QuickSale() {
     [selectedPaymentAction]
   );
   const isSplitPaymentAction = selectedPaymentAction === "split";
+  const isTerminalPaymentAction = selectedPaymentAction === "terminal";
   const splitPrimaryAmountValue =
     splitPrimaryAmount === "" ? 0 : Math.max(0, Number(splitPrimaryAmount) || 0);
   const splitSecondaryAmountValue = Math.max(
@@ -1009,6 +1039,25 @@ export default function QuickSale() {
     return () => window.removeEventListener("keydown", handleGlobalEnter);
   }, []);
 
+  useEffect(() => {
+    if (!terminalAttempt?.id || TERMINAL_FINAL_STATES.has(terminalAttempt.status)) return undefined;
+    const timer = window.setInterval(async () => {
+      try {
+        const next = await getSquareTerminalCheckoutStatus(terminalAttempt.id);
+        setTerminalAttempt(next);
+        if (next.status === "completed") {
+          setTransactionMessage(`Payment approved on Square Terminal for ${next.orderNumber}. Balances were updated exactly once.`);
+          setPaymentProcessingOrderNumber("");
+        } else if (TERMINAL_FINAL_STATES.has(next.status)) {
+          setPaymentProcessingOrderNumber("");
+        }
+      } catch (error) {
+        setPaymentError(error instanceof Error ? error.message : "Unable to recover Terminal checkout status.");
+      }
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [terminalAttempt?.id, terminalAttempt?.status]);
+
   function resetPaymentForm(nextAmount = "") {
     setPaymentAmountOverride(nextAmount);
     setPaymentAmountOverrideSelection(nextAmount ? paymentSelectionKey : "");
@@ -1018,6 +1067,7 @@ export default function QuickSale() {
     setSplitPrimaryAmount("");
     setPaymentNote("");
     setPaymentError("");
+    setTerminalAttempt(null);
   }
 
   function handleLookupChange(value) {
@@ -1449,6 +1499,32 @@ export default function QuickSale() {
       return;
     }
 
+    if (isTerminalPaymentAction) {
+      if (selectedTransactionItems.length !== 1) {
+        setPaymentError("Square Terminal supports one existing order per checkout.");
+        return;
+      }
+      if (Math.abs(Number(paymentAmount || 0) - Number(transactionSummary.amountDue || 0)) > 0.009) {
+        setPaymentError("Square Terminal collects the exact remaining order balance; remove the custom amount.");
+        return;
+      }
+      const orderNumber = selectedTransactionItems[0].orderNumber;
+      setPaymentProcessingOrderNumber(orderNumber);
+      setPaymentError("");
+      try {
+        const attempt = await createSquareTerminalCheckout({ orderNumber });
+        setTerminalAttempt(attempt);
+        if (attempt.status === "completed") {
+          setTransactionMessage(`Payment approved on Square Terminal for ${orderNumber}.`);
+          setPaymentProcessingOrderNumber("");
+        }
+      } catch (error) {
+        setPaymentProcessingOrderNumber("");
+        setPaymentError(error?.code === "TERMINAL_DISABLED" ? "Terminal unavailable. Terminal checkout is not enabled." : error?.message || "Terminal unavailable.");
+      }
+      return;
+    }
+
     const paymentEntries = isSplitPaymentAction
       ? [
           {
@@ -1553,6 +1629,18 @@ export default function QuickSale() {
           }. Financial balances were updated successfully. Operational order status may still remain active until production or pickup workflow is complete.`
     );
     resetPaymentForm("");
+  }
+
+  async function handleCancelTerminal() {
+    if (!terminalAttempt?.id) return;
+    setPaymentError("");
+    try {
+      const next = await cancelSquareTerminalCheckout(terminalAttempt.id);
+      setTerminalAttempt(next);
+      if (TERMINAL_FINAL_STATES.has(next.status)) setPaymentProcessingOrderNumber("");
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : "Unable to cancel Terminal checkout.");
+    }
   }
 
   async function handleReleasePickupSelection() {
@@ -2362,6 +2450,7 @@ export default function QuickSale() {
                                   min="0"
                                   step="0.01"
                                   value={paymentAmount}
+                                  disabled={isTerminalPaymentAction}
                                   onChange={(event) => {
                                     setPaymentAmountOverride(event.target.value);
                                     setPaymentAmountOverrideSelection(paymentSelectionKey);
@@ -2464,12 +2553,32 @@ export default function QuickSale() {
                                 Notes
                                 <textarea
                                   value={paymentNote}
+                                  disabled={isTerminalPaymentAction}
                                   onChange={(event) => setPaymentNote(event.target.value)}
                                   rows={3}
                                   placeholder={activePaymentAction.notePlaceholder}
                                   style={{ ...fieldStyle, resize: "vertical" }}
                                 />
                               </label>
+
+                              {isTerminalPaymentAction ? (
+                                <div data-testid="terminal-checkout-status" aria-live="polite" style={{ border: "1px solid #99f6e4", borderRadius: "14px", padding: "12px 14px", background: "#ffffff", display: "grid", gap: "8px" }}>
+                                  <strong>{terminalStatusLabel(terminalAttempt?.status)}</strong>
+                                  {terminalAttempt ? (
+                                    <span style={{ color: "#475569", fontSize: "13px" }}>
+                                      {currency(terminalAttempt.amount)} · {terminalAttempt.orderNumber}
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: "#475569", fontSize: "13px" }}>Ready to send the exact remaining balance.</span>
+                                  )}
+                                  {terminalAttempt?.failureMessage ? <span style={{ color: "#b91c1c" }}>{terminalAttempt.failureMessage}</span> : null}
+                                  {["pending", "in_progress", "cancel_requested"].includes(terminalAttempt?.status) ? (
+                                    <button type="button" onClick={handleCancelTerminal} disabled={terminalAttempt.status === "cancel_requested"} style={{ justifySelf: "start", border: "1px solid #fca5a5", background: "#fff1f2", color: "#991b1b", borderRadius: "10px", padding: "9px 12px", fontWeight: 800 }}>
+                                      {terminalAttempt.status === "cancel_requested" ? "Cancel requested…" : "Cancel Terminal checkout"}
+                                    </button>
+                                  ) : null}
+                                </div>
+                              ) : null}
 
                               {paymentError || !paymentValidation.valid || !splitPaymentValidation.valid ? (
                                 <p style={{ margin: 0, color: "#b91c1c", fontWeight: 700 }}>
@@ -2481,6 +2590,7 @@ export default function QuickSale() {
                                 type="submit"
                                 disabled={
                                   Boolean(paymentProcessingOrderNumber) ||
+                                  (isTerminalPaymentAction && Boolean(terminalAttempt) && !TERMINAL_FINAL_STATES.has(terminalAttempt.status)) ||
                                   !paymentValidation.valid ||
                                   !splitPaymentValidation.valid
                                 }
@@ -2501,7 +2611,7 @@ export default function QuickSale() {
                                 }}
                               >
                                 {paymentProcessingOrderNumber
-                                  ? "Processing Payment…"
+                                  ? isTerminalPaymentAction ? terminalStatusLabel(terminalAttempt?.status || "creating") : "Processing Payment…"
                                   : activePaymentAction.buttonLabel}
                               </button>
                             </div>

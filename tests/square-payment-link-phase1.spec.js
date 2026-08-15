@@ -30,10 +30,20 @@ import {
 import { isDepositRequirementSatisfied } from "../src/orders/workflowGating.js";
 import { requestQuoteDeposit } from "../src/admin/quoteDepositRequestAction.js";
 import { deriveOwnerPaymentRequestNextAction } from "../src/orders/ownerWorkflowActions.js";
+import { authorizeSquarePaymentLinkRequest } from "../netlify/functions/square-payment-link.js";
 
 test.beforeEach(() => {
   resetStoredPaymentsForTests();
   resetNotificationActivityForTests();
+});
+
+test("Square Online Checkout server requires an authenticated operational session", async () => {
+  const client = { auth: { getUser: async (token) => token === "valid"
+    ? { data: { user: { id: "staff-1", app_metadata: { operational_role: "staff" } } }, error: null }
+    : { data: { user: null }, error: new Error("invalid") } } };
+  await expect(authorizeSquarePaymentLinkRequest({ headers: {} }, client)).resolves.toMatchObject({ ok: false, statusCode: 401 });
+  await expect(authorizeSquarePaymentLinkRequest({ headers: { authorization: "Bearer invalid" } }, client)).resolves.toMatchObject({ ok: false, statusCode: 401 });
+  await expect(authorizeSquarePaymentLinkRequest({ headers: { authorization: "Bearer valid" } }, client)).resolves.toMatchObject({ ok: true, role: "staff" });
 });
 
 test("Square payment link creation sends an idempotent provider payload", async () => {

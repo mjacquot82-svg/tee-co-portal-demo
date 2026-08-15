@@ -1,5 +1,11 @@
 /* global process */
 
+import { authorizeOperationalRequest, createSupabaseAdminClient } from "./lib/squareTerminalCheckout.js";
+
+export async function authorizeSquarePaymentLinkRequest(event, supabase) {
+  return authorizeOperationalRequest(event, supabase);
+}
+
 const SQUARE_VERSION = "2024-06-04";
 const DEFAULT_CHECKOUT_REDIRECT_URL = "https://teeandco.jdsstudio.ca/portal/payments";
 
@@ -83,6 +89,11 @@ export async function handler(event) {
   if (event.httpMethod !== "POST") {
     return json(405, { error: "Method not allowed." });
   }
+
+  const supabase = createSupabaseAdminClient();
+  if (!supabase) return json(501, { error: "Payment-link authorization is not configured." });
+  const authorization = await authorizeSquarePaymentLinkRequest(event, supabase);
+  if (!authorization.ok) return json(authorization.statusCode, { error: authorization.message });
 
   const accessToken = normalizeText(process.env.SQUARE_ACCESS_TOKEN);
   const locationId = normalizeText(process.env.SQUARE_LOCATION_ID);

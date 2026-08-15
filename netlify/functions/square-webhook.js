@@ -2,11 +2,16 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { buildOrderPaymentRollup } from "../../src/services/orderPaymentRollup.js";
+import { isSuccessfulPaymentRecord, isSuccessfulPaymentStatus } from "../../src/lib/paymentStatus.js";
 import {
   processSquareWebhookEvent,
   recordSquareWebhookProcessingFailure,
   verifySquareWebhookSignature,
 } from "../../src/services/squareWebhookProcessor.js";
+import {
+  processTerminalCheckoutWebhook,
+  recoverTerminalAttemptForPaymentWebhook,
+} from "./lib/squareTerminalCheckout.js";
 
 function json(statusCode, body) {
   return {
@@ -85,10 +90,7 @@ async function syncSupabasePaymentRequestTotals(supabase, paymentRequestId) {
     .eq("payment_request_id", normalizedId);
   if (paymentsResult.error) return requestResult.data;
 
-  const successfulPayments = (paymentsResult.data || []).filter((payment) => {
-    const status = normalizeText(payment.status).toLowerCase();
-    return !["failed", "voided", "canceled", "cancelled"].includes(status);
-  });
+  const successfulPayments = (paymentsResult.data || []).filter(isSuccessfulPaymentRecord);
   const amountPaid = successfulPayments.reduce(
     (total, payment) => total + normalizeAmount(payment.amount),
     0
@@ -114,11 +116,6 @@ async function syncSupabasePaymentRequestTotals(supabase, paymentRequestId) {
     .maybeSingle();
 
   return updateResult.data || requestResult.data;
-}
-
-function isSuccessfulPaymentStatus(status) {
-  const normalized = normalizeText(status).toLowerCase();
-  return ["captured", "paid", "succeeded", "success", "settled", "completed"].includes(normalized);
 }
 
 function buildSquareOrderActivityEntry(payment = {}, paymentRequest = {}, createdAt) {
@@ -405,6 +402,15 @@ export async function handler(event) {
   const adapter = buildSupabaseAdapter(supabase);
 
   try {
+    if (String(webhookEvent.type || "").startsWith("terminal.checkout.")) {
+      const result = await processTerminalCheckoutWebhook(supabase, webhookEvent);
+      return json(200, result);
+    }
+
+    if (String(webhookEvent.type || "").startsWith("payment.")) {
+      const terminalAttempt = await recoverTerminalAttemptForPaymentWebhook(supabase, webhookEvent);
+      if (terminalAttempt) return json(200, { processed: true, terminal: true, attempt: terminalAttempt });
+    }
     const result = await processSquareWebhookEvent(webhookEvent, {
       adapter,
       triggerNotifications: false,

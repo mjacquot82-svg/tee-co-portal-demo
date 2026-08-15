@@ -32,3 +32,7 @@ export function getSquareTerminalPairingStatus(options = {}) {
 export function createSquareTerminalPairingCode(deviceName, options = {}) {
   return requestTerminalDevice("POST", { deviceName }, options);
 }
+
+export function activateSquareTerminalDevice(registrationId, options = {}) {
+  return requestTerminalDevice("POST", { action: "activate", registrationId }, options);
+}

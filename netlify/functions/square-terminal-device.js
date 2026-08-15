@@ -136,6 +136,8 @@ function publicRegistration(row = {}) {
     pairedAt: row.paired_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    isActive: Boolean(row.is_active),
+    disabledAt: row.disabled_at || null,
   };
 }
 
@@ -202,6 +204,22 @@ export async function handler(event) {
         input = JSON.parse(event.body || "{}");
       } catch {
         return json(400, { error: "Invalid JSON body." });
+      }
+      if (input.action === "activate") {
+        const registrationId = normalizeText(input.registrationId);
+        if (!registrationId) return json(400, { error: "Missing registrationId." });
+        const selected = await supabase.from(REGISTRATIONS_TABLE).select("*").eq("id", registrationId).maybeSingle();
+        if (selected.error) throw selected.error;
+        if (!selected.data || selected.data.status !== "PAIRED" || !selected.data.square_device_id) {
+          return json(409, { error: "Only a paired Square Terminal can be activated." });
+        }
+        if (selected.data.square_location_id !== config.locationId) {
+          return json(409, { error: "The Terminal registration does not match the configured Square location." });
+        }
+        const activated = await supabase.rpc("activate_square_terminal_device", { p_registration_id: registrationId });
+        if (activated.error) throw activated.error;
+        const activatedRow = Array.isArray(activated.data) ? activated.data[0] : activated.data;
+        return json(200, { registration: publicRegistration(activatedRow) });
       }
       const deviceName = normalizeText(input.deviceName, DEFAULT_DEVICE_NAME).slice(0, 64);
       const response = await squareRequest("/v2/devices/codes", {

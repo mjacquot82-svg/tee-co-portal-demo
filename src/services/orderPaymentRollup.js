@@ -12,16 +12,8 @@ function normalizeAmount(value) {
   return Number.isFinite(amount) ? Math.max(0, Math.round(amount * 100) / 100) : 0;
 }
 
-const SUCCESSFUL_PAYMENT_STATUSES = new Set(["captured", "paid", "succeeded", "success", "settled", "completed"]);
-const FAILED_PAYMENT_STATUSES = new Set(["failed", "declined", "voided", "canceled", "cancelled", "refunded"]);
 const ACTIVE_QUOTE_STATUSES = new Set(["awaiting deposit", "deposit requested"]);
 
-function isSuccessfulPayment(payment = {}) {
-  const status = normalizeLower(payment.status || payment.provider_status);
-  if (!status) return true;
-  if (FAILED_PAYMENT_STATUSES.has(status)) return false;
-  return SUCCESSFUL_PAYMENT_STATUSES.has(status);
-}
 
 function resolveOrderTotal(order = {}) {
   return normalizeAmount(
@@ -71,7 +63,7 @@ function resolveQuoteStatus(currentStatus, depositOutstanding) {
 }
 
 export function buildOrderPaymentRollup({ order = {}, paymentRequests = [], payments = [] } = {}) {
-  const successfulPayments = payments.filter(isSuccessfulPayment);
+  const successfulPayments = payments.filter(isSuccessfulPaymentRecord);
   const totalPaid = normalizeAmount(
     successfulPayments.reduce((total, payment) => total + normalizeAmount(payment.amount), 0)
   );
@@ -123,3 +115,4 @@ export function buildOrderPaymentRollup({ order = {}, paymentRequests = [], paym
     deposit_status: depositWorkflowStatus === "Deposit Received" ? "paid" : order.deposit_status || "not_requested",
   };
 }
+import { isSuccessfulPaymentRecord } from "../lib/paymentStatus";

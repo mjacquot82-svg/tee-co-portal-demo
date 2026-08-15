@@ -4,6 +4,7 @@ import { getOperationalAuthUser } from "../lib/operationalAuthStore";
 import {
   createSquareTerminalPairingCode,
   getSquareTerminalPairingStatus,
+  activateSquareTerminalDevice,
 } from "../services/squareTerminalService";
 
 const pageStyle = { padding: "32px", maxWidth: "840px" };
@@ -35,6 +36,7 @@ export default function SquareTerminalPairing() {
   const [deviceName, setDeviceName] = useState("Tee & Co Front Counter");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [activating, setActivating] = useState(false);
   const [error, setError] = useState("");
 
   const ownerAuthorized = isSupabaseAuthenticatedOwner(authenticatedUser);
@@ -72,6 +74,19 @@ export default function SquareTerminalPairing() {
       setError(createError instanceof Error ? createError.message : "Unable to create pairing code.");
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleActivate() {
+    if (!registration?.id || registration.status !== "PAIRED") return;
+    setActivating(true);
+    setError("");
+    try {
+      setRegistration(await activateSquareTerminalDevice(registration.id));
+    } catch (activateError) {
+      setError(activateError instanceof Error ? activateError.message : "Unable to activate Terminal.");
+    } finally {
+      setActivating(false);
     }
   }
 
@@ -118,6 +133,12 @@ export default function SquareTerminalPairing() {
                 <p><strong>Device:</strong> {registration.deviceName}</p>
                 <p><strong>Square device ID:</strong> {registration.squareDeviceId}</p>
                 <p><strong>Paired:</strong> {formatTime(registration.pairedAt)}</p>
+                <p><strong>Checkout device:</strong> {registration.isActive ? "Active" : "Not active"}</p>
+                {!registration.isActive ? (
+                  <button type="button" style={buttonStyle} disabled={activating} onClick={handleActivate}>
+                    {activating ? "Activating…" : "Use for Terminal checkouts"}
+                  </button>
+                ) : null}
               </div>
             ) : null}
             {registration.status === "EXPIRED" ? <p>The last code expired before pairing. Generate a new code.</p> : null}

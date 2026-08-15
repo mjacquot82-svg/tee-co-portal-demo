@@ -1,4 +1,5 @@
 import { buildOrderPaymentRollup } from "./orderPaymentRollup";
+import { isSuccessfulPaymentRecord } from "../lib/paymentStatus";
 
 function normalizeText(value, fallback = "") {
   const trimmed = String(value || "").trim();
@@ -12,12 +13,6 @@ function normalizeLower(value) {
 function normalizeAmount(value) {
   const amount = typeof value === "number" ? value : Number(String(value || "").replace(/[^0-9.-]/g, ""));
   return Number.isFinite(amount) ? Math.max(0, Math.round(amount * 100) / 100) : 0;
-}
-
-function isSuccessfulPayment(payment = {}) {
-  const status = normalizeLower(payment.status || payment.provider_status);
-  if (["failed", "declined", "voided", "canceled", "cancelled"].includes(status)) return false;
-  return ["captured", "paid", "succeeded", "success", "settled", "completed"].includes(status);
 }
 
 function isSquarePayment(payment = {}) {
@@ -63,7 +58,7 @@ export function buildPaymentReconciliationInsights({
 } = {}) {
   const requestPayments = payments.filter((payment) => paymentMatchesRequest(payment, paymentRequest));
   const requestEvents = paymentEvents.filter((event) => eventMatchesRequest(event, paymentRequest));
-  const successfulPayments = requestPayments.filter(isSuccessfulPayment);
+  const successfulPayments = requestPayments.filter(isSuccessfulPaymentRecord);
   const squarePayments = successfulPayments.filter(isSquarePayment);
   const manualPayments = successfulPayments.filter(isManualPayment);
   const amountRequested = normalizeAmount(paymentRequest.amount_requested);
@@ -258,7 +253,7 @@ export function buildOrderPaymentReconciliationUpdates({
 
   const relatedPaymentRequests = paymentRequests.filter((request) => request.order_number === orderNumber);
   const relatedPayments = payments.filter((payment) => payment.order_number === orderNumber);
-  if (!relatedPaymentRequests.length && !relatedPayments.some(isSuccessfulPayment)) return null;
+  if (!relatedPaymentRequests.length && !relatedPayments.some(isSuccessfulPaymentRecord)) return null;
 
   const rollup = buildOrderPaymentRollup({
     order,

@@ -4,6 +4,7 @@ import { normalizeCustomerId } from "./customerIds";
 import { triggerNotificationEvent } from "./notificationDeliveryService";
 import { NOTIFICATION_TYPES } from "./notificationTemplatesStore";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
+import { isSuccessfulPaymentRecord, isSuccessfulPaymentStatus } from "./paymentStatus";
 
 const PAYMENT_REQUESTS_STORAGE_KEY = "teeCoPaymentRequests";
 const PAYMENTS_STORAGE_KEY = "teeCoPayments";
@@ -210,7 +211,7 @@ async function syncSupabasePaymentRequestTotals(identifier) {
   );
   const requestPayments = Array.isArray(payments) ? payments : [];
   const amountPaid = requestPayments
-    .filter((payment) => payment.status !== "failed" && payment.status !== "voided")
+    .filter(isSuccessfulPaymentRecord)
     .reduce((total, payment) => total + normalizeAmount(payment.amount), 0);
   const status = resolvePaymentRequestStatus(paymentRequest, requestPayments);
   const result = await persistSupabasePaymentRequestUpdate(paymentRequest.id, {
@@ -461,17 +462,10 @@ function normalizeIdentifier(value) {
   return normalizeText(value).toLowerCase();
 }
 
-function isSuccessfulPaymentStatus(status) {
-  const normalized = normalizeText(status).toLowerCase();
-  if (!normalized) return true;
-  if (["failed", "declined", "voided", "canceled", "cancelled"].includes(normalized)) return false;
-  return ["captured", "paid", "succeeded", "success", "settled", "completed"].includes(normalized);
-}
-
 export function resolvePaymentRequestStatus(paymentRequest = {}, requestPayments = []) {
   const amountRequested = normalizeAmount(paymentRequest.amount_requested);
   const amountPaid = requestPayments
-    .filter((payment) => payment.status !== "failed" && payment.status !== "voided")
+    .filter(isSuccessfulPaymentRecord)
     .reduce((total, payment) => total + normalizeAmount(payment.amount), 0);
 
   if (amountRequested > 0 && amountPaid >= amountRequested) return "paid";
@@ -484,7 +478,7 @@ function hydratePaymentRequest(paymentRequest = {}) {
     (payment) => payment.payment_request_id === paymentRequest.id
   );
   const amountPaid = requestPayments
-    .filter((payment) => payment.status !== "failed" && payment.status !== "voided")
+    .filter(isSuccessfulPaymentRecord)
     .reduce((total, payment) => total + normalizeAmount(payment.amount), 0);
 
   return {
