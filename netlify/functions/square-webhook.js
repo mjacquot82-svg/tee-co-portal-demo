@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { buildOrderPaymentRollup } from "../../src/services/orderPaymentRollup.js";
 import { isSuccessfulPaymentRecord, isSuccessfulPaymentStatus } from "../../src/lib/paymentStatus.js";
 import {
+  getSquareRefundState,
   processSquareWebhookEvent,
   recordSquareWebhookProcessingFailure,
   verifySquareWebhookSignature,
@@ -91,24 +92,27 @@ async function syncSupabasePaymentRequestTotals(supabase, paymentRequestId) {
   if (paymentsResult.error) return requestResult.data;
 
   const successfulPayments = (paymentsResult.data || []).filter(isSuccessfulPaymentRecord);
+  const hasPartialRefund = (paymentsResult.data || []).some((payment) => normalizeText(payment.status).toLowerCase() === "partially_refunded");
+  const hasFullRefund = (paymentsResult.data || []).some((payment) => normalizeText(payment.status).toLowerCase() === "refunded");
   const amountPaid = successfulPayments.reduce(
     (total, payment) => total + normalizeAmount(payment.amount),
     0
   );
   const amountRequested = normalizeAmount(requestResult.data.amount_requested);
-  const status =
-    amountRequested > 0 && amountPaid >= amountRequested
+  const status = hasPartialRefund
+    ? "reconciliation_required"
+    : amountRequested > 0 && amountPaid >= amountRequested
       ? "paid"
       : amountPaid > 0
         ? "partially_paid"
-        : requestResult.data.status || "open";
+        : hasFullRefund ? "refunded" : "open";
 
   const updateResult = await supabase
     .from("payment_requests")
     .update({
       amount_paid: amountPaid,
       status,
-      paid_at: status === "paid" ? requestResult.data.paid_at || new Date().toISOString() : requestResult.data.paid_at || null,
+      paid_at: status === "paid" ? requestResult.data.paid_at || new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", normalizedId)
@@ -120,11 +124,16 @@ async function syncSupabasePaymentRequestTotals(supabase, paymentRequestId) {
 
 function buildSquareOrderActivityEntry(payment = {}, paymentRequest = {}, createdAt) {
   const amount = normalizeAmount(payment.amount);
+  const paymentStatus = normalizeText(payment.status).toLowerCase();
+  const refundedAmount = normalizeAmount(payment.metadata?.refunded_amount);
+  const refund = ["refunded", "partially_refunded"].includes(paymentStatus);
   const requestType = normalizeText(paymentRequest.request_type || payment.payment_type, "payment").replace(/_/g, " ");
   return {
-    id: `square-payment-${normalizeText(payment.provider_payment_id || payment.id || Date.now())}`,
-    type: requestType === "deposit" ? "deposit_received" : "payment",
-    note: `Square ${requestType} received for $${amount.toFixed(2)}.`,
+    id: `square-payment-${normalizeText(payment.provider_payment_id || payment.id || Date.now())}${refund ? `-${paymentStatus}` : ""}`,
+    type: refund ? "payment_refund" : requestType === "deposit" ? "deposit_received" : "payment",
+    note: refund
+      ? `Square ${paymentStatus === "partially_refunded" ? "partial refund" : "refund"} recorded for $${refundedAmount.toFixed(2)}${paymentStatus === "partially_refunded" ? "; reconciliation required" : ""}.`
+      : `Square ${requestType} received for $${amount.toFixed(2)}.`,
     created_at: createdAt,
     source: "square_webhook",
     metadata: {
@@ -160,7 +169,9 @@ export function buildPersistedOrderPaymentRollup(rollup = {}) {
 
 export async function syncSupabaseOrderPaymentState(supabase, payment = {}, paymentRequest = null) {
   const orderNumber = normalizeText(payment.order_number || paymentRequest?.order_number);
-  if (!orderNumber || !isSuccessfulPaymentStatus(payment.status)) return null;
+  const paymentStatus = normalizeText(payment.status).toLowerCase();
+  const refundStatus = ["refunded", "partially_refunded"].includes(paymentStatus);
+  if (!orderNumber || (!isSuccessfulPaymentStatus(paymentStatus) && !refundStatus)) return null;
 
   const orderResult = await supabase
     .from("orders")
@@ -200,6 +211,10 @@ export async function syncSupabaseOrderPaymentState(supabase, payment = {}, paym
         production_ready: true,
       }
     : {};
+  const refund = refundStatus;
+  const refundDemotion = refund && rollup.deposit_outstanding > 0
+    ? { status: "Awaiting Deposit", quote_status: "Awaiting Deposit", operational_visible: false, production_ready: false }
+    : {};
   const capturedAt = normalizeText(payment.captured_at || payment.updated_at || payment.created_at) || new Date().toISOString();
   const existingActivity = Array.isArray(orderResult.data.activity_log) ? orderResult.data.activity_log : [];
   const activityEntry = buildSquareOrderActivityEntry(payment, paymentRequest || {}, capturedAt);
@@ -210,11 +225,12 @@ export async function syncSupabaseOrderPaymentState(supabase, payment = {}, paym
     .update({
       ...persistedRollup,
       ...operationalPromotion,
+      ...refundDemotion,
       deposit_paid_at:
         rollup.deposit_workflow_status === "Deposit Received"
           ? orderResult.data.deposit_paid_at || capturedAt
-          : orderResult.data.deposit_paid_at || null,
-      payment_method: "Square Online",
+          : null,
+      payment_method: normalizeText(payment.method).toLowerCase() === "square_terminal" ? "Square Terminal" : "Square Online",
       payment_reference: payment.provider_payment_id || payment.payment_number || payment.id || "",
       activity_log: hasActivityEntry ? existingActivity : [activityEntry, ...existingActivity],
       updated_at: new Date().toISOString(),
@@ -225,7 +241,7 @@ export async function syncSupabaseOrderPaymentState(supabase, payment = {}, paym
 
   if (updateResult.error) throw updateResult.error;
 
-  await supabase
+  if (!hasActivityEntry) await supabase
     .from("activity_logs")
     .insert({
       entity_type: "order",
@@ -357,6 +373,33 @@ function buildSupabaseAdapter(supabase) {
   };
 }
 
+export async function processPaymentWebhookWithTerminalRecovery(supabase, webhookEvent, options = {}) {
+  const terminalAttempt = await recoverTerminalAttemptForPaymentWebhook(supabase, webhookEvent, options.dependencies || {});
+  if (!terminalAttempt) return null;
+  const payment = webhookEvent.data?.object?.payment;
+  const refund = getSquareRefundState(payment);
+  if (!refund.refunded || terminalAttempt.status === "reconciliation_required") {
+    return { processed: true, terminal: true, attempt: terminalAttempt };
+  }
+  payment.metadata = {
+    ...(payment.metadata || {}),
+    payment_request_id: terminalAttempt.paymentRequestId,
+    order_number: terminalAttempt.orderNumber,
+    terminal_attempt_id: terminalAttempt.id,
+  };
+  const processorOptions = { triggerNotifications: false, ...(options.adapter ? { adapter: options.adapter } : {}) };
+  const result = await processSquareWebhookEvent(webhookEvent, processorOptions);
+  if (refund.partial) {
+    const quarantined = await supabase.from("square_terminal_checkout_attempts").update({
+      status: "reconciliation_required",
+      failure_code: "PARTIAL_REFUND_REQUIRES_RECONCILIATION",
+      failure_message: "Square reported a partial refund. Remaining paid value requires manual reconciliation.",
+    }).eq("id", terminalAttempt.id).select("*").maybeSingle();
+    if (quarantined.error) throw quarantined.error;
+  }
+  return { ...result, terminal: true, attempt: terminalAttempt, refund };
+}
+
 export async function handler(event) {
   if (event.httpMethod !== "POST") {
     return json(405, { error: "Method not allowed." });
@@ -408,8 +451,8 @@ export async function handler(event) {
     }
 
     if (String(webhookEvent.type || "").startsWith("payment.")) {
-      const terminalAttempt = await recoverTerminalAttemptForPaymentWebhook(supabase, webhookEvent);
-      if (terminalAttempt) return json(200, { processed: true, terminal: true, attempt: terminalAttempt });
+      const terminalResult = await processPaymentWebhookWithTerminalRecovery(supabase, webhookEvent, { adapter });
+      if (terminalResult) return json(200, terminalResult);
     }
     const result = await processSquareWebhookEvent(webhookEvent, {
       adapter,

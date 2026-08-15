@@ -4,10 +4,12 @@ import { expect, test } from "@playwright/test";
 import {
   buildPersistedOrderPaymentRollup,
   handler as squareWebhookHandler,
+  processPaymentWebhookWithTerminalRecovery,
   syncSupabaseOrderPaymentState,
 } from "../netlify/functions/square-webhook.js";
 import {
   buildSquareWebhookSignature,
+  getSquareRefundState,
   processSquareWebhookEvent,
 } from "../src/services/squareWebhookProcessor.js";
 import {
@@ -107,6 +109,14 @@ class FakeSupabaseQuery {
     return this;
   }
 
+  contains() {
+    return this;
+  }
+
+  limit() {
+    return this;
+  }
+
   maybeSingle() {
     this.singleMode = "maybe";
     return this;
@@ -176,6 +186,7 @@ class FakeSupabaseClient {
       payments: clone(seed.payments || []),
       payment_events: clone(seed.payment_events || []),
       activity_logs: clone(seed.activity_logs || []),
+      square_terminal_checkout_attempts: clone(seed.square_terminal_checkout_attempts || []),
     };
   }
 
@@ -250,6 +261,139 @@ test("valid Square completed webhook synchronizes payment state and production g
   expect(isDepositRequirementSatisfied(order)).toBe(true);
   expect(buildProductionGatingState(order, { targetStatus: "Ready For Production" }).blocked).toBe(false);
   expect(listNotificationActivity().some((record) => record.eventType === NOTIFICATION_TYPES.paymentReceived)).toBe(true);
+});
+
+test("full Square refund updates the existing canonical payment and reopens the request", async () => {
+  const request = createPaymentRequest({
+    id: "payment-request-refund", request_number: "PR-REFUND", order_number: "TC-REFUND",
+    request_type: "full_payment", status: "sent", amount_requested: 25,
+    payment_provider: "square", provider_order_id: "square-order-refund",
+  });
+  const completed = squarePaymentEvent({
+    event: { id: "event-refund-completed", created_at: "2026-06-24T12:00:00.000Z" },
+    payment: { id: "payment-refund", order_id: "square-order-refund", amount_money: { amount: 2500, currency: "CAD" }, updated_at: "2026-06-24T12:00:00.000Z" },
+  });
+  await processSquareWebhookEvent(completed);
+
+  const refunded = squarePaymentEvent({
+    event: { id: "event-refund-full", created_at: "2026-06-24T13:00:00.000Z" },
+    payment: { id: "payment-refund", order_id: "square-order-refund", amount_money: { amount: 2500, currency: "CAD" }, refunded_money: { amount: 2500, currency: "CAD" }, updated_at: "2026-06-24T13:00:00.000Z" },
+  });
+  const result = await processSquareWebhookEvent(refunded);
+
+  expect(result).toMatchObject({ status: "refunded", duplicate: false });
+  expect(listPayments()).toHaveLength(1);
+  expect(listPayments()[0]).toMatchObject({ provider_payment_id: "payment-refund", status: "refunded", amount: 25, metadata: { refunded_amount: 25, net_amount: 0, refund_status: "full" } });
+  expect(getPaymentRequestById(request.id)).toMatchObject({ status: "refunded", amount_paid: 0, paid_at: null });
+
+  await expect(processSquareWebhookEvent(refunded)).resolves.toMatchObject({ duplicate: true });
+  await expect(processSquareWebhookEvent(squarePaymentEvent({
+    event: { id: "event-refund-full-repeat", created_at: "2026-06-24T13:01:00.000Z" },
+    payment: { id: "payment-refund", order_id: "square-order-refund", amount_money: { amount: 2500, currency: "CAD" }, refunded_money: { amount: 2500, currency: "CAD" }, updated_at: "2026-06-24T13:01:00.000Z" },
+  }))).resolves.toMatchObject({ status: "refunded", duplicate: false });
+  expect(listPayments()).toHaveLength(1);
+  expect(getPaymentRequestById(request.id)).toMatchObject({ status: "refunded", amount_paid: 0 });
+});
+
+test("partial Square refund is quarantined conservatively without duplicating the payment", async () => {
+  const request = createPaymentRequest({
+    id: "payment-request-partial-refund", request_number: "PR-PARTIAL-REFUND", order_number: "TC-PARTIAL-REFUND",
+    request_type: "full_payment", status: "sent", amount_requested: 40,
+    payment_provider: "square", provider_order_id: "square-order-partial-refund",
+  });
+  await processSquareWebhookEvent(squarePaymentEvent({
+    event: { id: "event-partial-completed", created_at: "2026-06-24T12:00:00.000Z" },
+    payment: { id: "payment-partial-refund", order_id: "square-order-partial-refund", amount_money: { amount: 4000, currency: "CAD" }, updated_at: "2026-06-24T12:00:00.000Z" },
+  }));
+  const result = await processSquareWebhookEvent(squarePaymentEvent({
+    event: { id: "event-partial-refund", created_at: "2026-06-24T13:00:00.000Z" },
+    payment: { id: "payment-partial-refund", order_id: "square-order-partial-refund", amount_money: { amount: 4000, currency: "CAD" }, refunded_money: { amount: 1000, currency: "CAD" }, updated_at: "2026-06-24T13:00:00.000Z" },
+  }));
+
+  expect(getSquareRefundState({ amount_money: { amount: 4000 }, refunded_money: { amount: 1000 } })).toMatchObject({ refunded: true, partial: true, netAmount: 30 });
+  expect(result).toMatchObject({ status: "partially_refunded", paymentConfidence: "Manual Review Required" });
+  expect(result.reconciliationIssues).toContainEqual(expect.objectContaining({ code: "partial_refund", severity: "high" }));
+  expect(listPayments()).toHaveLength(1);
+  expect(listPayments()[0]).toMatchObject({ provider_payment_id: "payment-partial-refund", status: "partially_refunded", metadata: { refunded_amount: 10, net_amount: 30, refund_status: "partial" } });
+  expect(getPaymentRequestById(request.id)).toMatchObject({ status: "reconciliation_required", amount_paid: 0 });
+});
+
+test("stale completed webhook cannot overwrite a newer Square refund", async () => {
+  const request = createPaymentRequest({
+    id: "payment-request-stale-refund", request_number: "PR-STALE-REFUND", order_number: "TC-STALE-REFUND",
+    request_type: "full_payment", status: "sent", amount_requested: 15,
+    payment_provider: "square", provider_order_id: "square-order-stale-refund",
+  });
+  await processSquareWebhookEvent(squarePaymentEvent({
+    event: { id: "event-stale-completed", created_at: "2026-06-24T12:00:00.000Z" },
+    payment: { id: "payment-stale-refund", order_id: "square-order-stale-refund", amount_money: { amount: 1500, currency: "CAD" }, updated_at: "2026-06-24T12:00:00.000Z" },
+  }));
+  await processSquareWebhookEvent(squarePaymentEvent({
+    event: { id: "event-stale-refunded", created_at: "2026-06-24T14:00:00.000Z" },
+    payment: { id: "payment-stale-refund", order_id: "square-order-stale-refund", amount_money: { amount: 1500, currency: "CAD" }, refunded_money: { amount: 1500, currency: "CAD" }, updated_at: "2026-06-24T14:00:00.000Z" },
+  }));
+  await processSquareWebhookEvent(squarePaymentEvent({
+    event: { id: "event-stale-replayed", created_at: "2026-06-24T12:30:00.000Z" },
+    payment: { id: "payment-stale-refund", order_id: "square-order-stale-refund", amount_money: { amount: 1500, currency: "CAD" }, updated_at: "2026-06-24T12:30:00.000Z" },
+  }));
+
+  expect(listPayments()).toHaveLength(1);
+  expect(listPayments()[0]).toMatchObject({ status: "refunded", provider_payment_id: "payment-stale-refund" });
+  expect(getPaymentRequestById(request.id)).toMatchObject({ status: "refunded", amount_paid: 0 });
+});
+
+test("Terminal-correlated refund recovers the completed attempt and updates the canonical payment", async () => {
+  const request = createPaymentRequest({
+    id: "terminal-refund-request", request_number: "PR-TERMINAL-REFUND", order_number: "TC-TERMINAL-REFUND",
+    request_type: "full_payment", status: "sent", amount_requested: 12,
+    payment_provider: "square", provider_order_id: "terminal-refund-order",
+  });
+  await processSquareWebhookEvent(squarePaymentEvent({
+    event: { id: "terminal-completed-event", created_at: "2026-06-24T12:00:00.000Z" },
+    payment: { id: "terminal-refund-payment", order_id: "terminal-refund-order", amount_money: { amount: 1200, currency: "CAD" }, reference_id: "tc-terminal-refund", updated_at: "2026-06-24T12:00:00.000Z" },
+  }));
+  const supabase = new FakeSupabaseClient({ square_terminal_checkout_attempts: [{
+    id: "terminal-refund-attempt", payment_request_id: request.id, order_number: request.order_number,
+    status: "completed", square_checkout_id: "", square_reference_id: "tc-terminal-refund",
+    square_payment_ids: ["terminal-refund-payment"], verified_payment_id: "terminal-refund-payment", version: 4,
+  }] });
+  const refundEvent = squarePaymentEvent({
+    event: { id: "terminal-refund-event", created_at: "2026-06-24T13:00:00.000Z" },
+    payment: { id: "terminal-refund-payment", order_id: "terminal-refund-order", amount_money: { amount: 1200, currency: "CAD" }, refunded_money: { amount: 1200, currency: "CAD" }, reference_id: "tc-terminal-refund", updated_at: "2026-06-24T13:00:00.000Z" },
+  });
+
+  const result = await processPaymentWebhookWithTerminalRecovery(supabase, refundEvent);
+  expect(result).toMatchObject({ terminal: true, status: "refunded", attempt: { id: "terminal-refund-attempt", status: "completed" } });
+  expect(listPayments()).toHaveLength(1);
+  expect(listPayments()[0]).toMatchObject({ provider_payment_id: "terminal-refund-payment", status: "refunded", method: "square_terminal" });
+  expect(getPaymentRequestById(request.id)).toMatchObject({ status: "refunded", amount_paid: 0 });
+});
+
+test("Terminal partial refund quarantines the attempt and never remains fully paid", async () => {
+  const request = createPaymentRequest({
+    id: "terminal-partial-request", request_number: "PR-TERMINAL-PARTIAL", order_number: "TC-TERMINAL-PARTIAL",
+    request_type: "full_payment", status: "sent", amount_requested: 20,
+    payment_provider: "square", provider_order_id: "terminal-partial-order",
+  });
+  await processSquareWebhookEvent(squarePaymentEvent({
+    event: { id: "terminal-partial-completed", created_at: "2026-06-24T12:00:00.000Z" },
+    payment: { id: "terminal-partial-payment", order_id: "terminal-partial-order", amount_money: { amount: 2000, currency: "CAD" }, reference_id: "tc-terminal-partial", updated_at: "2026-06-24T12:00:00.000Z" },
+  }));
+  const supabase = new FakeSupabaseClient({ square_terminal_checkout_attempts: [{
+    id: "terminal-partial-attempt", payment_request_id: request.id, order_number: request.order_number,
+    status: "completed", square_checkout_id: "", square_reference_id: "tc-terminal-partial",
+    square_payment_ids: ["terminal-partial-payment"], verified_payment_id: "terminal-partial-payment", version: 4,
+  }] });
+  const result = await processPaymentWebhookWithTerminalRecovery(supabase, squarePaymentEvent({
+    event: { id: "terminal-partial-refund", created_at: "2026-06-24T13:00:00.000Z" },
+    payment: { id: "terminal-partial-payment", order_id: "terminal-partial-order", amount_money: { amount: 2000, currency: "CAD" }, refunded_money: { amount: 500, currency: "CAD" }, reference_id: "tc-terminal-partial", updated_at: "2026-06-24T13:00:00.000Z" },
+  }));
+
+  expect(result).toMatchObject({ terminal: true, status: "partially_refunded", refund: { partial: true, netAmount: 15 } });
+  expect(supabase.rows("square_terminal_checkout_attempts")[0]).toMatchObject({ status: "reconciliation_required", failure_code: "PARTIAL_REFUND_REQUIRES_RECONCILIATION" });
+  expect(listPayments()).toHaveLength(1);
+  expect(listPayments()[0]).toMatchObject({ provider_payment_id: "terminal-partial-payment", status: "partially_refunded" });
+  expect(getPaymentRequestById(request.id)).toMatchObject({ status: "reconciliation_required", amount_paid: 0 });
 });
 
 test("successful Square payment updates stale order financial rollup for admin and portal views", async () => {
@@ -358,6 +502,43 @@ test("successful Square payment updates stale order financial rollup for admin a
       "ready-for-production"
     )
   ).toBe(true);
+});
+
+test("refunded Square payment removes paid value from the persisted order rollup", async () => {
+  const supabase = new FakeSupabaseClient({
+    orders: [{
+      id: "order-refund-rollup", order_number: "TC-REFUND-ROLLUP", status: "Ready For Production",
+      quote_status: "Ready For Production", payment_status: "Paid", payment_collection_state: "Paid",
+      deposit_status: "paid", deposit_workflow_status: "Deposit Received", deposit_required: true,
+      deposit_amount: 25, deposit_paid_amount: 25, deposit_applied: 25, deposit_outstanding: 0,
+      total_paid: 25, amount_paid: 25, paid_to_date: 25, total_amount: 25, balance_due: 0,
+      production_ready: true, operational_visible: true, activity_log: [],
+    }],
+    payment_requests: [{
+      id: "request-refund-rollup", order_number: "TC-REFUND-ROLLUP", request_type: "deposit",
+      status: "refunded", amount_requested: 25, amount_paid: 0, paid_at: null,
+    }],
+    payments: [{
+      id: "payment-refund-rollup", order_number: "TC-REFUND-ROLLUP", payment_request_id: "request-refund-rollup",
+      payment_type: "deposit", status: "refunded", amount: 25, method: "square_terminal", provider: "square",
+      provider_payment_id: "square-payment-refund-rollup", provider_status: "COMPLETED",
+      metadata: { refunded_amount: 25, net_amount: 0, refund_status: "full" },
+      captured_at: "2026-06-24T12:01:00.000Z", updated_at: "2026-06-24T13:01:00.000Z",
+    }],
+  });
+
+  await syncSupabaseOrderPaymentState(supabase, supabase.rows("payments")[0], supabase.rows("payment_requests")[0]);
+
+  expect(supabase.rows("payments")).toHaveLength(1);
+  expect(supabase.rows("orders")[0]).toMatchObject({
+    status: "Awaiting Deposit", quote_status: "Awaiting Deposit", production_ready: false,
+    operational_visible: false, total_paid: 0, deposit_applied: 0, deposit_paid_amount: 0,
+    deposit_outstanding: 25, deposit_workflow_status: "Awaiting Deposit", deposit_status: "not_paid",
+    payment_status: "Awaiting Deposit", payment_collection_state: "Awaiting Deposit", balance_due: 25,
+    payment_method: "Square Terminal",
+  });
+  expect(supabase.rows("activity_logs")).toHaveLength(1);
+  expect(supabase.rows("activity_logs")[0]).toMatchObject({ activity_type: "payment_refund" });
 });
 
 test("Square order reconciliation writes only production order columns", () => {

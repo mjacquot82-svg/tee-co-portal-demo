@@ -4,7 +4,7 @@ import { normalizeCustomerId } from "./customerIds";
 import { triggerNotificationEvent } from "./notificationDeliveryService";
 import { NOTIFICATION_TYPES } from "./notificationTemplatesStore";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
-import { isSuccessfulPaymentRecord, isSuccessfulPaymentStatus } from "./paymentStatus";
+import { isSuccessfulPaymentRecord, isSuccessfulPaymentStatus, normalizePaymentStatus } from "./paymentStatus";
 
 const PAYMENT_REQUESTS_STORAGE_KEY = "teeCoPaymentRequests";
 const PAYMENTS_STORAGE_KEY = "teeCoPayments";
@@ -217,7 +217,7 @@ async function syncSupabasePaymentRequestTotals(identifier) {
   const result = await persistSupabasePaymentRequestUpdate(paymentRequest.id, {
     amount_paid: amountPaid,
     status,
-    paid_at: status === "paid" ? paymentRequest.paid_at || nowIso() : paymentRequest.paid_at || null,
+    paid_at: status === "paid" ? paymentRequest.paid_at || nowIso() : null,
   });
   return result;
 }
@@ -464,12 +464,16 @@ function normalizeIdentifier(value) {
 
 export function resolvePaymentRequestStatus(paymentRequest = {}, requestPayments = []) {
   const amountRequested = normalizeAmount(paymentRequest.amount_requested);
+  const hasPartialRefund = requestPayments.some((payment) => normalizePaymentStatus(payment.status || payment.provider_status) === "partially_refunded");
+  const hasFullRefund = requestPayments.some((payment) => normalizePaymentStatus(payment.status || payment.provider_status) === "refunded");
   const amountPaid = requestPayments
     .filter(isSuccessfulPaymentRecord)
     .reduce((total, payment) => total + normalizeAmount(payment.amount), 0);
 
+  if (hasPartialRefund) return "reconciliation_required";
   if (amountRequested > 0 && amountPaid >= amountRequested) return "paid";
   if (amountPaid > 0) return "partially_paid";
+  if (hasFullRefund) return "refunded";
   return paymentRequest.status || "open";
 }
 
@@ -785,7 +789,7 @@ export function syncPaymentRequestTotals(identifier) {
           ...request,
           amount_paid: syncedRequest.amount_paid,
           status: syncedRequest.status,
-          paid_at: syncedRequest.status === "paid" ? request.paid_at || nowIso() : request.paid_at || null,
+          paid_at: syncedRequest.status === "paid" ? request.paid_at || nowIso() : null,
           updated_at: nowIso(),
         }
       : request

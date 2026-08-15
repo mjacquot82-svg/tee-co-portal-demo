@@ -5,6 +5,7 @@ import {
   buildTerminalCheckoutPayload,
   getTerminalPaymentVerificationMismatches,
   isTerminalCheckoutEnabled,
+  isTerminalPilotOperationAllowed,
   mapTerminalCheckoutStatus,
   processTerminalCheckoutWebhook,
   recoverTerminalAttemptForPaymentWebhook,
@@ -98,6 +99,15 @@ test("server authorization permits operational staff but reserves owner operatio
   const ownerClient = { auth: { getUser: async () => ({ data: { user: { id: "owner", app_metadata: { operational_role: "owner" } } }, error: null }) } };
   expect(await authorizeOperationalRequest(event, ownerClient, { ownerOnly: true })).toMatchObject({ ok: true, role: "owner" });
   expect(await authorizeOperationalRequest({ headers: {} }, ownerClient)).toMatchObject({ ok: false, statusCode: 401 });
+});
+
+test("Terminal pilot restricts create and cancel to Owner while allowing status recovery", () => {
+  expect(isTerminalPilotOperationAllowed("owner", "create")).toBe(true);
+  expect(isTerminalPilotOperationAllowed("owner", "cancel")).toBe(true);
+  expect(isTerminalPilotOperationAllowed("manager", "create")).toBe(false);
+  expect(isTerminalPilotOperationAllowed("staff", "cancel")).toBe(false);
+  expect(isTerminalPilotOperationAllowed("manager", "status")).toBe(true);
+  expect(isTerminalPilotOperationAllowed("staff", "status")).toBe(true);
 });
 
 test("Terminal migration enforces server-only, uniqueness and atomic finalization", async () => {

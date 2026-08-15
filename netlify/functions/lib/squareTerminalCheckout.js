@@ -12,6 +12,7 @@ export const TERMINAL_ACTIVE_STATUSES = [
   "creating", "create_unknown", "pending", "in_progress", "cancel_requested", "completed_unverified",
 ];
 export const TERMINAL_FINAL_STATUSES = ["completed", "failed", "canceled", "timed_out", "reconciliation_required"];
+export const TERMINAL_PILOT_CREATE_CANCEL_ROLES = ["owner"];
 
 function normalizeText(value, fallback = "") {
   const text = String(value || "").trim();
@@ -61,6 +62,11 @@ export async function authorizeOperationalRequest(event, supabase, { ownerOnly =
     return { ok: false, statusCode: 403, message: ownerOnly ? "Owner access is required." : "Operational staff access is required." };
   }
   return { ok: true, user, role };
+}
+
+export function isTerminalPilotOperationAllowed(role, operation) {
+  if (!["create", "cancel"].includes(normalizeText(operation).toLowerCase())) return true;
+  return TERMINAL_PILOT_CREATE_CANCEL_ROLES.includes(normalizeText(role).toLowerCase());
 }
 
 export async function squareRequest(path, options = {}, dependencies = {}) {

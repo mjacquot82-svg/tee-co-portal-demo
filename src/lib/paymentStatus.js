@@ -14,6 +14,7 @@ const NON_SUCCESSFUL_PAYMENT_STATUSES = new Set([
   "declined",
   "failed",
   "pending",
+  "partially_refunded",
   "processing",
   "refunded",
   "voided",

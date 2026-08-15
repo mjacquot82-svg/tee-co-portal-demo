@@ -8,7 +8,7 @@ import {
 import { buildOrderPaymentRollup } from "../src/services/orderPaymentRollup.js";
 
 test("only explicit successful statuses contribute to payment totals", () => {
-  const statuses = ["failed", "declined", "voided", "canceled", "cancelled", "refunded", "pending", "processing", ""];
+  const statuses = ["failed", "declined", "voided", "canceled", "cancelled", "refunded", "partially_refunded", "pending", "processing", ""];
   for (const status of statuses) expect(isSuccessfulPaymentStatus(status)).toBe(false);
   for (const status of ["captured", "completed", "paid", "settled", "succeeded", "success", "approved"]) {
     expect(isSuccessfulPaymentStatus(status)).toBe(true);

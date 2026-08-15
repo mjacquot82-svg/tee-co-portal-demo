@@ -32,6 +32,8 @@ const PAYMENT_STATUS_PRECEDENCE = Object.freeze({
   canceled: 20,
   failed: 30,
   captured: 40,
+  partially_refunded: 50,
+  refunded: 60,
 });
 
 const FINAL_SUCCESS_STATUSES = new Set(["captured", "paid", "succeeded", "success", "settled", "completed"]);
@@ -130,8 +132,38 @@ function getSquarePaymentCurrency(payment = {}) {
   ).toUpperCase();
 }
 
+export function getSquareRefundState(payment = {}) {
+  const originalAmount = getSquarePaymentAmount(payment);
+  const refundedAmount = squareMoneyToAmount(payment.refunded_money || payment.refundedMoney);
+  if (refundedAmount <= 0) return { refunded: false, partial: false, originalAmount, refundedAmount: 0, netAmount: originalAmount };
+  const partial = originalAmount <= 0 || refundedAmount + 0.009 < originalAmount;
+  return {
+    refunded: true,
+    partial,
+    originalAmount,
+    refundedAmount,
+    netAmount: Math.max(0, Math.round((originalAmount - refundedAmount) * 100) / 100),
+  };
+}
+
 export function mapSquarePaymentStatus(payment = {}, eventType = "") {
   const status = normalizeLower(payment.status || payment.state || eventType);
+  const refund = getSquareRefundState(payment);
+
+  if (refund.refunded) {
+    return {
+      paymentStatus: refund.partial ? "partially_refunded" : "refunded",
+      requestStatus: refund.partial ? "reconciliation_required" : "refunded",
+      eventType: refund.partial ? "square_payment_partially_refunded" : "square_payment_refunded",
+      terminal: true,
+      successful: false,
+      failed: false,
+      processing: false,
+      refunded: true,
+      partialRefund: refund.partial,
+      refund,
+    };
+  }
 
   if (status.includes("fail") || status.includes("declin")) {
     return {
@@ -286,7 +318,7 @@ function shouldApplyWebhookState({ paymentRequest, statusMapping, eventTimestamp
     };
   }
 
-  if (existingSquarePayment && isSuccessfulStatus(existingSquarePayment.status) && !statusMapping.successful) {
+  if (existingSquarePayment && isSuccessfulStatus(existingSquarePayment.status) && !statusMapping.successful && !statusMapping.refunded) {
     return {
       apply: false,
       reason: "existing_successful_payment_protects_state",
@@ -326,6 +358,8 @@ function getPaymentConfidence(statusMapping, stateDecision, reconciliation = [])
   if (reconciliation.some((item) => item.severity === "high")) return "Manual Review Required";
   if (!stateDecision.apply) return "Stale Webhook Ignored";
   if (statusMapping.successful) return "Payment Verified";
+  if (statusMapping.partialRefund) return "Manual Review Required";
+  if (statusMapping.refunded) return "Refund Verified";
   if (statusMapping.processing) return "Awaiting Webhook Confirmation";
   if (statusMapping.failed) return "Manual Review Required";
   return "Awaiting Webhook Confirmation";
@@ -351,6 +385,15 @@ function buildReconciliationIssues({
   const totalPaid = successfulPayments.reduce((sum, paymentRecord) => sum + normalizeAmount(paymentRecord.amount), 0);
   const requested = normalizeAmount(paymentRequest.amount_requested);
   const issues = [];
+
+  if (statusMapping.partialRefund) {
+    issues.push({
+      code: "partial_refund",
+      severity: "high",
+      label: "Partial Refund Requires Reconciliation",
+      detail: "The Square payment was partially refunded and requires manual allocation before any remaining amount is treated as paid.",
+    });
+  }
 
   if (existingSameSquarePayment && statusMapping.successful) {
     issues.push({
@@ -427,6 +470,12 @@ function buildPaymentInput({ payment, paymentRequest, statusMapping, webhookEven
       square_event_type: normalizeText(webhookEvent.type),
       square_payment_id: normalizeText(payment.id),
       square_payment_status: normalizeText(payment.status),
+      ...(statusMapping.refunded ? {
+        original_amount: statusMapping.refund.originalAmount,
+        refunded_amount: statusMapping.refund.refundedAmount,
+        net_amount: statusMapping.refund.netAmount,
+        refund_status: statusMapping.partialRefund ? "partial" : "full",
+      } : {}),
     },
     created_at: normalizeText(payment.created_at || webhookEvent.created_at) || new Date().toISOString(),
     updated_at: normalizeText(payment.updated_at || webhookEvent.created_at) || new Date().toISOString(),
@@ -501,7 +550,8 @@ async function processSquareWebhookEventWithAdapter(webhookEvent = {}, options =
       recordedPayment = await adapter.recordPayment(paymentInput);
     } else if (
       adapter.updatePayment &&
-      getStatusPrecedence(statusMapping.paymentStatus) > getStatusPrecedence(existingSquarePayment.status)
+      (getStatusPrecedence(statusMapping.paymentStatus) > getStatusPrecedence(existingSquarePayment.status) ||
+        (statusMapping.refunded && stateDecision.apply && normalizeLower(existingSquarePayment.status) === statusMapping.paymentStatus))
     ) {
       recordedPayment = await adapter.updatePayment(existingSquarePayment.id, paymentInput);
     } else {
@@ -518,6 +568,10 @@ async function processSquareWebhookEventWithAdapter(webhookEvent = {}, options =
     event_source: "square_webhook",
     summary: statusMapping.successful
       ? `Square payment received for $${getSquarePaymentAmount(payment).toFixed(2)}.`
+      : statusMapping.refunded
+        ? statusMapping.partialRefund
+          ? `Square payment partially refunded for $${statusMapping.refund.refundedAmount.toFixed(2)}; reconciliation required.`
+          : `Square payment fully refunded for $${statusMapping.refund.refundedAmount.toFixed(2)}.`
       : statusMapping.failed
         ? `Square payment ${statusMapping.paymentStatus}.`
         : "Square payment is processing.",

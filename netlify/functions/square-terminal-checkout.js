@@ -6,6 +6,7 @@ import {
   createSupabaseAdminClient,
   createTerminalAttempt,
   getTerminalAttempt,
+  isTerminalPilotOperationAllowed,
 } from "./lib/squareTerminalCheckout.js";
 
 function json(statusCode, body) {
@@ -22,8 +23,13 @@ export async function handler(event) {
     const input = event.httpMethod === "POST" ? JSON.parse(event.body || "{}") : (event.queryStringParameters || {});
     let attempt;
     if (event.httpMethod === "GET") attempt = await getTerminalAttempt(supabase, input.attemptId);
-    else if (input.action === "cancel") attempt = await cancelTerminalAttempt(supabase, input.attemptId);
-    else attempt = await createTerminalAttempt(supabase, input, authorization.user);
+    else if (input.action === "cancel") {
+      if (!isTerminalPilotOperationAllowed(authorization.role, "cancel")) return json(403, { error: "Owner access is required during the Square Terminal pilot." });
+      attempt = await cancelTerminalAttempt(supabase, input.attemptId);
+    } else {
+      if (!isTerminalPilotOperationAllowed(authorization.role, "create")) return json(403, { error: "Owner access is required during the Square Terminal pilot." });
+      attempt = await createTerminalAttempt(supabase, input, authorization.user);
+    }
     return json(200, { attempt });
   } catch (error) {
     console.error("[square-terminal-checkout] request failed", { message: error instanceof Error ? error.message : "Unknown error", code: error?.code || error?.squareCode || "" });

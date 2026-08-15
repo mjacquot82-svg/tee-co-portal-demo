@@ -64,6 +64,7 @@ function resolveQuoteStatus(currentStatus, depositOutstanding) {
 
 export function buildOrderPaymentRollup({ order = {}, paymentRequests = [], payments = [] } = {}) {
   const successfulPayments = payments.filter(isSuccessfulPaymentRecord);
+  const hasRefundedPayments = payments.some((payment) => ["refunded", "partially_refunded"].includes(normalizeLower(payment.status || payment.provider_status)));
   const totalPaid = normalizeAmount(
     successfulPayments.reduce((total, payment) => total + normalizeAmount(payment.amount), 0)
   );
@@ -98,7 +99,7 @@ export function buildOrderPaymentRollup({ order = {}, paymentRequests = [], paym
       ? "Deposit Not Required"
       : depositOutstanding <= 0
         ? "Deposit Received"
-        : normalizeText(order.deposit_workflow_status, "Awaiting Deposit");
+        : hasRefundedPayments ? "Awaiting Deposit" : normalizeText(order.deposit_workflow_status, "Awaiting Deposit");
 
   return {
     total_paid: totalPaid,
@@ -106,13 +107,15 @@ export function buildOrderPaymentRollup({ order = {}, paymentRequests = [], paym
     paid_to_date: totalPaid,
     deposit_applied: depositApplied,
     deposit_outstanding: depositOutstanding,
-    deposit_paid_amount: Math.max(normalizeAmount(order.deposit_paid_amount), depositApplied),
+    deposit_paid_amount: hasRefundedPayments ? depositApplied : Math.max(normalizeAmount(order.deposit_paid_amount), depositApplied),
     balance_due: balanceDue,
     payment_status: paymentStatus,
     payment_collection_state: paymentCollectionState,
     quote_status: resolveQuoteStatus(order.quote_status, depositOutstanding),
     deposit_workflow_status: depositWorkflowStatus,
-    deposit_status: depositWorkflowStatus === "Deposit Received" ? "paid" : order.deposit_status || "not_requested",
+    deposit_status: depositWorkflowStatus === "Deposit Received"
+      ? "paid"
+      : hasRefundedPayments && depositAmount > 0 ? "not_paid" : order.deposit_status || "not_requested",
   };
 }
 import { isSuccessfulPaymentRecord } from "../lib/paymentStatus";
