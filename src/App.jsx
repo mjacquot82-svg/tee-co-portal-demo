@@ -25,6 +25,7 @@ import QuoteView from "./public/QuoteView";
 import Dashboard from "./admin/Dashboard";
 import Orders from "./admin/Orders";
 import NewOrder from "./admin/NewOrder";
+import StaffCreateOrder from "./admin/StaffCreateOrder";
 import OrderDetail from "./admin/OrderDetail";
 import Products from "./admin/Products";
 import GarmentLibrary from "./admin/GarmentLibrary";
@@ -79,6 +80,7 @@ export default function App() {
             <Route path="admin/records/canceled" element={<CanceledOrders />} />
             <Route path="admin/quotes/:orderNumber" element={<QuoteDetail />} />
             <Route path="admin/orders" element={<Orders />} />
+            <Route path="admin/orders/create" element={<StaffCreateOrder />} />
             <Route path="admin/orders/new" element={<Navigate to="/admin/quotes/new" replace />} />
             <Route path="admin/orders/:orderNumber" element={<OrderDetail />} />
 

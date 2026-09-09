@@ -237,6 +237,12 @@ export default function OrderManagementWorkspace({
           <Decision label="Placed" value={`${placedAt.date} at ${placedAt.time}`} />
           <Decision label="Last Updated" value={`${updatedAt.date} at ${updatedAt.time}`} />
           <Decision label="Source" value={order.source || "Operational intake"} />
+          {order.source === "Staff Portal" ? (
+            <Decision
+              label="Created By"
+              value={order.created_by_staff_name || order.order_metadata?.created_by_staff_name || "Operational Staff"}
+            />
+          ) : null}
         </div>
         {canCancelOrder ? (
           <button

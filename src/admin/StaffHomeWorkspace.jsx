@@ -188,7 +188,8 @@ export default function StaffHomeWorkspace({ orders, staffUser }) {
 
   return (
     <div style={{ maxWidth: "1280px", margin: "0 auto", padding: "24px", display: "grid", gap: "18px" }}>
-      <div>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div>
         <p style={{ margin: 0, color: "#78716c", fontSize: "12px", fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase" }}>
           Staff Home
         </p>
@@ -196,6 +197,13 @@ export default function StaffHomeWorkspace({ orders, staffUser }) {
         <p style={{ margin: 0, color: "#64748b", maxWidth: "760px" }}>
           Signed in as {staffUser?.name || "staff"}. This workspace is your personal execution queue: what needs to start, what is already in production, what is due soon, and what is ready for pickup.
         </p>
+        </div>
+        <Link
+          to="/admin/orders/create"
+          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: "12px", padding: "12px 16px", background: "#171717", color: "#ffffff", textDecoration: "none", fontWeight: 800 }}
+        >
+          + Create Order
+        </Link>
       </div>
 
       <Section title="My Queue Snapshot" description="Only work assigned directly to you appears here. Order requests, front-counter actions, and the global shop queue stay in their own workspaces.">
