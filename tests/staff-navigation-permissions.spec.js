@@ -47,6 +47,16 @@ test("hiding the Staff navigation entry does not change direct Order Requests ro
   ).toBe(true);
 });
 
+test("Staff Home links Enter Orders to the existing order-entry sheet", async () => {
+  const staffHomeSource = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/admin/StaffHomeWorkspace.jsx", import.meta.url), "utf8")
+  );
+
+  expect(staffHomeSource).toContain('to="/admin/quotes/new"');
+  expect(staffHomeSource).toContain("Enter Orders");
+  expect(staffHomeSource).not.toContain("StaffCreateOrder");
+});
+
 test("temporary order transition diagnostics are accessible only to an authenticated Owner", () => {
   expect(
     canAccessOperationalWorkspace(

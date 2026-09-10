@@ -198,6 +198,13 @@ export default function StaffHomeWorkspace({ orders, staffUser }) {
         </p>
       </div>
 
+      <Link
+        to="/admin/quotes/new"
+        style={{ justifySelf: "start", borderRadius: "12px", padding: "12px 16px", background: "#171717", color: "#ffffff", textDecoration: "none", fontWeight: 800 }}
+      >
+        Enter Orders
+      </Link>
+
       <Section title="My Queue Snapshot" description="Only work assigned directly to you appears here. Order requests, front-counter actions, and the global shop queue stay in their own workspaces.">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
           <SummaryCard label="Assigned To Me" value={summary.active} />
