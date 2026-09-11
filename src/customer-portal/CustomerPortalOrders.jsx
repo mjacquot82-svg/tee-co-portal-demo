@@ -85,10 +85,13 @@ function CompactOrderCard({ order, expanded, onToggle }) {
     ? formatOrderBalance(getEstimatedBalanceAfterPayment(order.balance_due, activePaymentRequest)) || "$0.00"
     : "";
   const itemName = getPrimaryItemName(order);
+  const productImage = String(order.product_image || "").trim();
+  const detailTo = order.order_number ? `/portal/orders/${order.order_number}` : "/portal/orders";
 
   return (
     <article
       data-testid="portal-compact-order-card"
+      className="portal-consumer-order-card"
       style={{
         borderRadius: "22px",
         border: summary.customerActionRequired ? "1px solid #fde68a" : "1px solid #dbe4ee",
@@ -110,21 +113,36 @@ function CompactOrderCard({ order, expanded, onToggle }) {
         }}
       >
         <div style={{ display: "grid", gap: "10px", minWidth: 0 }}>
-          <div style={{ display: "grid", gap: "4px" }}>
-            <strong style={{ color: "#0f172a", fontSize: "20px", lineHeight: 1.1 }}>
-              {orderNumber}
-            </strong>
-            <p
-              style={{
-                margin: 0,
-                color: "#334155",
-                fontSize: "15px",
-                lineHeight: 1.4,
-                fontWeight: 700,
-              }}
-            >
-              {itemName}
-            </p>
+          <div className="portal-consumer-order-identity" style={{ display: "flex", gap: "14px", alignItems: "center", minWidth: 0 }}>
+            <div className="portal-consumer-order-thumb" aria-hidden={!productImage}>
+              {productImage ? (
+                <img src={productImage} alt="" width="72" height="72" loading="lazy" decoding="async" />
+              ) : (
+                <span className="portal-consumer-order-thumb-fallback">{itemName.slice(0, 1)}</span>
+              )}
+            </div>
+            <div style={{ display: "grid", gap: "4px", minWidth: 0 }}>
+              <strong style={{ color: "#0f172a", fontSize: "20px", lineHeight: 1.1 }}>
+                <Link
+                  to={detailTo}
+                  className="portal-consumer-order-link"
+                  style={{ color: "inherit", textDecoration: "none" }}
+                >
+                  {orderNumber}
+                </Link>
+              </strong>
+              <p
+                style={{
+                  margin: 0,
+                  color: "#334155",
+                  fontSize: "15px",
+                  lineHeight: 1.4,
+                  fontWeight: 700,
+                }}
+              >
+                {itemName}
+              </p>
+            </div>
           </div>
 
           <div
@@ -315,7 +333,7 @@ export default function CustomerPortalOrders() {
     <PortalPage
       eyebrow="My Orders"
       title="My Orders"
-      description="Current orders, next steps, and balances."
+      description="Track status, payments, and next steps for each order."
     >
       <div
         style={{
@@ -445,10 +463,11 @@ export default function CustomerPortalOrders() {
         </SectionCard>
       ) : null}
 
-      <div>
+      <div className="portal-orders-primary-cta">
         <Link
           to={PORTAL_ORDER_CATALOG_PATH}
           state={START_NEW_PORTAL_ORDER_STATE}
+          className="portal-full-width-action"
           style={{
             display: "inline-flex",
             alignItems: "center",

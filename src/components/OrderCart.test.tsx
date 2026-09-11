@@ -9,26 +9,44 @@ describe("OrderCart", () => {
     { id: "tee", garmentName: "T-Shirt", quantity: 6, estimatedStartingPrice: 60 },
   ];
 
-  it("remains visible before the first garment is added", () => {
+  it("keeps desktop empty cart visible and marks empty for phone hide", () => {
     render(<OrderCart lineItems={[]} onReviewRequest={() => {}} />);
-    expect(screen.getByRole("complementary", { name: "Current order cart" })).toHaveTextContent("0 Garments");
-    expect(screen.getByText("No garments added yet")).toBeVisible();
+    const cart = screen.getByRole("complementary", { name: "Current order cart" });
+    expect(cart).toHaveClass("is-empty");
+    expect(cart).toHaveAttribute("data-empty", "true");
+    expect(cart).toHaveTextContent("0 Garments");
+    expect(screen.getByText("No garments added yet")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Review Request" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Review" })).not.toBeInTheDocument();
+    expect(document.querySelector(".order-cart-phone")).toBeNull();
   });
 
   it("summarizes one request using familiar cart information", () => {
     render(<OrderCart lineItems={lineItems} onReviewRequest={() => {}} />);
-    expect(screen.getByRole("complementary", { name: "Current order cart" })).toHaveTextContent("2 Garments");
-    expect(screen.getByRole("complementary", { name: "Current order cart" })).toHaveTextContent("12 Total Pieces");
-    expect(screen.getByRole("complementary", { name: "Current order cart" })).toHaveTextContent("$180.00 Estimated Starting Price");
-    expect(screen.getByText("✓ Hoodie")).toBeVisible();
-    expect(screen.getByText("✓ T-Shirt")).toBeVisible();
+    const cart = screen.getByRole("complementary", { name: "Current order cart" });
+    expect(cart).not.toHaveClass("is-empty");
+    expect(cart).toHaveAttribute("data-empty", "false");
+    expect(cart).toHaveTextContent("2 Garments");
+    expect(cart).toHaveTextContent("12 Total Pieces");
+    expect(cart).toHaveTextContent("$180.00 Estimated Starting Price");
+    expect(screen.getByText("✓ Hoodie")).toBeInTheDocument();
+    expect(screen.getByText("✓ T-Shirt")).toBeInTheDocument();
+    expect(cart).toHaveTextContent("2 items");
+    expect(cart).toHaveTextContent("12 pcs");
+    expect(cart).toHaveTextContent("Estimated: $180.00");
   });
 
   it("provides a working Review Request action", () => {
     const onReviewRequest = vi.fn();
     render(<OrderCart lineItems={lineItems} onReviewRequest={onReviewRequest} />);
     fireEvent.click(screen.getByRole("button", { name: "Review Request" }));
+    expect(onReviewRequest).toHaveBeenCalledOnce();
+  });
+
+  it("provides a compact Review action for phone when items exist", () => {
+    const onReviewRequest = vi.fn();
+    render(<OrderCart lineItems={lineItems} onReviewRequest={onReviewRequest} />);
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
     expect(onReviewRequest).toHaveBeenCalledOnce();
   });
 });

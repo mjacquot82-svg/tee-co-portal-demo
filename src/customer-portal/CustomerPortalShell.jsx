@@ -17,9 +17,14 @@ import {
   isPortalOrderingPath,
   isPortalOrderingWorkflowPath,
   PORTAL_ORDER_CATALOG_PATH,
+  PORTAL_REQUEST_ORDER_PATH,
   START_NEW_PORTAL_ORDER_STATE,
 } from "./customerPortalStartOrderRoute";
 import { usePaymentReconciliationRefresh } from "../lib/usePaymentReconciliationRefresh";
+import { getPendingCustomerRequest } from "../lib/pendingCustomerRequestStore";
+import OrderCart from "../components/OrderCart";
+
+const LOGO_SRC = "/tee&co512x512.png";
 
 const portalLinks = [
   { to: PORTAL_ORDER_CATALOG_PATH, label: "Start New Order" },
@@ -30,46 +35,49 @@ const portalLinks = [
   { to: "/portal/account", label: "Account" },
 ];
 
+const mobileNavLinks = [
+  { to: PORTAL_ORDER_CATALOG_PATH, label: "Shop", match: "shop" },
+  { to: "/portal/orders", label: "Orders", match: "orders" },
+  { to: "/portal/payments", label: "Payments", match: "payments" },
+  { to: "/portal/account", label: "Account", match: "account" },
+];
+
+function isMobileNavActive(pathname, match) {
+  const path = String(pathname || "");
+  if (match === "shop") {
+    return (
+      isPortalOrderingPath(path) ||
+      path === "/portal/request-order" ||
+      path === "/portal/order-submitted"
+    );
+  }
+  if (match === "orders") {
+    return path === "/portal/orders" || path.startsWith("/portal/orders/");
+  }
+  if (match === "payments") {
+    return path === "/portal/payments" || path.startsWith("/portal/payments/");
+  }
+  if (match === "account") {
+    return path === "/portal/account" || path === "/portal/quotes" || path === "/portal/invoices";
+  }
+  return false;
+}
+
 function CustomerPortalLoading() {
   return (
-    <div
-      className="customer-portal-app"
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        background:
-          "radial-gradient(circle at top, rgba(191, 219, 254, 0.28), transparent 34%), linear-gradient(180deg, #f8fafc 0%, #eef6f5 100%)",
-        padding: "24px",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "440px",
-          borderRadius: "28px",
-          border: "1px solid #dbe4ee",
-          background: "rgba(255,255,255,0.92)",
-          padding: "28px",
-          boxShadow: "0 20px 48px rgba(15, 23, 42, 0.08)",
-        }}
-      >
-        <p
-          style={{
-            margin: "0 0 8px",
-            fontSize: "12px",
-            fontWeight: 900,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: "#0f766e",
-          }}
-        >
-          Tee & Co Portal
-        </p>
-        <h1 style={{ margin: 0, color: "#0f172a", fontSize: "28px" }}>Restoring session</h1>
-        <p style={{ margin: "8px 0 0", color: "#475569", lineHeight: 1.6 }}>
-          Confirming your account access and loading your portal.
-        </p>
+    <div className="customer-portal-app customer-portal-loading">
+      <div className="customer-portal-loading-card">
+        <img
+          className="customer-portal-brand-mark"
+          src={LOGO_SRC}
+          alt=""
+          width="56"
+          height="56"
+          decoding="async"
+        />
+        <p className="customer-portal-brand-kicker">Tee & Co</p>
+        <h1>Signing you in</h1>
+        <p>Confirming your account and loading your shop.</p>
       </div>
     </div>
   );
@@ -134,108 +142,50 @@ export default function CustomerPortalShell() {
 
   const initials = getUserInitials(customerSession.displayName);
   const isOrderingWorkflow = isPortalOrderingWorkflowPath(location.pathname);
+  const isOrderingCatalog = isPortalOrderingPath(location.pathname);
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background:
-          "radial-gradient(circle at top left, rgba(191, 219, 254, 0.3), transparent 30%), radial-gradient(circle at bottom right, rgba(167, 243, 208, 0.28), transparent 30%), linear-gradient(180deg, #f8fafc 0%, #f0fdfa 100%)",
-      }}
-    >
-      <header
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 20,
-          backdropFilter: "blur(18px)",
-          background: "rgba(248, 250, 252, 0.86)",
-          borderBottom: "1px solid rgba(203, 213, 225, 0.8)",
-        }}
-      >
-        <div
-          className="customer-portal-header-inner"
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: "16px",
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ display: "grid", gap: "4px" }}>
-            <p
-              style={{
-                margin: 0,
-                fontSize: "12px",
-                fontWeight: 900,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                color: "#0f766e",
-              }}
-            >
-              Tee & Co
-            </p>
-            <strong style={{ color: "#0f172a", fontSize: "24px", lineHeight: 1.1 }}>
-              Customer Portal
-            </strong>
+    <div className="customer-portal-app">
+      <header className="customer-portal-header">
+        <div className="customer-portal-header-inner">
+          <div className="customer-portal-brand-block">
+            <img
+              className="customer-portal-brand-mark"
+              src={LOGO_SRC}
+              alt="Tee & Co"
+              width="40"
+              height="40"
+              decoding="async"
+            />
+            <div className="customer-portal-brand-copy">
+              <p className="customer-portal-brand-kicker">Tee & Co</p>
+              <strong className="customer-portal-brand-title">Customer Portal</strong>
+            </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <div className="customer-portal-header-actions">
             <NavLink
               className="customer-portal-primary-action"
               to={isOrderingWorkflow ? "/portal/orders" : PORTAL_ORDER_CATALOG_PATH}
               state={isOrderingWorkflow ? undefined : START_NEW_PORTAL_ORDER_STATE}
-              style={() => ({
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                minHeight: "44px",
-                borderRadius: "999px",
-                padding: "11px 18px",
-                textDecoration: "none",
-                fontWeight: 800,
-                background: isPortalOrderingPath(location.pathname) ? "#115e59" : "#0f766e",
-                color: "#ffffff",
-                boxShadow: "0 12px 24px rgba(15, 118, 110, 0.18)",
-              })}
             >
               {isOrderingWorkflow ? "← Back to Account" : "Start New Order"}
             </NavLink>
-            <div
-              style={{
-                width: "42px",
-                height: "42px",
-                borderRadius: "999px",
-                background: "#ccfbf1",
-                color: "#115e59",
-                display: "grid",
-                placeItems: "center",
-                fontWeight: 800,
-              }}
-            >
-              {initials}
+
+            <div className="customer-portal-identity">
+              <div className="customer-portal-avatar" aria-hidden="true">
+                {initials}
+              </div>
+              <div className="customer-portal-identity-text">
+                <p className="customer-portal-identity-name">{customerSession.displayName}</p>
+                <p className="customer-portal-identity-email">{customerSession.email}</p>
+              </div>
             </div>
-            <div style={{ minWidth: "160px" }}>
-              <p style={{ margin: 0, color: "#0f172a", fontWeight: 700 }}>
-                {customerSession.displayName}
-              </p>
-              <p style={{ margin: "2px 0 0", color: "#64748b", fontSize: "13px" }}>
-                {customerSession.email}
-              </p>
-            </div>
+
             <button
               type="button"
+              className="customer-portal-signout"
               onClick={handleSignOut}
-              style={{
-                border: "1px solid #cbd5e1",
-                background: "#ffffff",
-                color: "#0f172a",
-                borderRadius: "999px",
-                padding: "11px 16px",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
             >
               Sign Out
             </button>
@@ -245,32 +195,11 @@ export default function CustomerPortalShell() {
 
       <main className="customer-portal-workspace">
         <div className="customer-portal-layout">
-          <aside
-            className="customer-portal-sidebar"
-            style={{
-              borderRadius: "24px",
-              border: "1px solid #dbe4ee",
-              background: "rgba(255,255,255,0.9)",
-              boxShadow: "0 18px 42px rgba(15, 23, 42, 0.06)",
-              padding: "18px",
-              display: "grid",
-              gap: "8px",
-            }}
-          >
-            <p
-              style={{
-                margin: "0 0 4px",
-                fontSize: "11px",
-                fontWeight: 900,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                color: "#64748b",
-              }}
-            >
-              Primary Action
-            </p>
+          <aside className="customer-portal-sidebar" aria-label="Portal sections">
+            <p className="customer-portal-sidebar-label">Primary Action</p>
 
             <NavLink
+              className="customer-portal-section-link customer-portal-sidebar-start"
               to={PORTAL_ORDER_CATALOG_PATH}
               state={START_NEW_PORTAL_ORDER_STATE}
               style={() => ({
@@ -278,7 +207,7 @@ export default function CustomerPortalShell() {
                 borderRadius: "18px",
                 padding: "14px 16px",
                 color: "#ffffff",
-                background: isPortalOrderingPath(location.pathname)
+                background: isOrderingCatalog
                   ? "linear-gradient(135deg, #115e59 0%, #0f766e 100%)"
                   : "linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)",
                 border: "1px solid rgba(255,255,255,0.18)",
@@ -289,50 +218,70 @@ export default function CustomerPortalShell() {
               Start New Order
             </NavLink>
 
-            <p
-              style={{
-                margin: "8px 0 4px",
-                fontSize: "11px",
-                fontWeight: 900,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                color: "#64748b",
-              }}
-            >
-              Portal Sections
-            </p>
+            <p className="customer-portal-sidebar-label">Portal Sections</p>
 
-            {portalLinks.map((link) => (
+            {portalLinks.map((link) =>
               link.to === PORTAL_ORDER_CATALOG_PATH ? null : (
-              <NavLink
-                className="customer-portal-section-link"
-                key={link.to}
-                to={link.to}
-                style={({ isActive }) => ({
-                  textDecoration: "none",
-                  borderRadius: "16px",
-                  padding: "12px 14px",
-                  color: isActive ? "#0f766e" : "#0f172a",
-                  background: isActive ? "#ecfdf5" : "#ffffff",
-                  border: isActive ? "1px solid #a7f3d0" : "1px solid #e2e8f0",
-                  fontWeight: isActive ? 800 : 700,
-                })}
-              >
-                {link.label}
-              </NavLink>
+                <NavLink
+                  className="customer-portal-section-link"
+                  key={link.to}
+                  to={link.to}
+                  style={({ isActive }) => ({
+                    textDecoration: "none",
+                    borderRadius: "16px",
+                    padding: "12px 14px",
+                    color: isActive ? "#0f766e" : "#0f172a",
+                    background: isActive ? "#ecfdf5" : "#ffffff",
+                    border: isActive ? "1px solid #a7f3d0" : "1px solid #e2e8f0",
+                    fontWeight: isActive ? 800 : 700,
+                  })}
+                >
+                  {link.label}
+                </NavLink>
               )
-            ))}
+            )}
           </aside>
 
           <div
             className={`customer-portal-content ${
-              isPortalOrderingPath(location.pathname) ? "customer-portal-ordering" : ""
-            }`}
+              isOrderingCatalog ? "customer-portal-ordering" : ""
+            } ${isOrderingWorkflow ? "customer-portal-ordering-flow" : ""}`}
           >
+            {isOrderingCatalog ? (
+              <OrderCart
+                lineItems={getPendingCustomerRequest()?.lineItems || []}
+                onReviewRequest={() => navigate(PORTAL_REQUEST_ORDER_PATH)}
+              />
+            ) : null}
             <Outlet context={{ customerSession }} />
           </div>
         </div>
       </main>
+
+      <nav className="customer-portal-bottom-nav" aria-label="Primary shopping navigation">
+        {mobileNavLinks.map((link) => {
+          const active = isMobileNavActive(location.pathname, link.match);
+          return (
+            <NavLink
+              key={link.to}
+              to={link.to}
+              className={`customer-portal-bottom-nav-link${active ? " is-active" : ""}`}
+              aria-current={active ? "page" : undefined}
+            >
+              <span className="customer-portal-bottom-nav-icon" aria-hidden="true">
+                {link.match === "shop"
+                  ? "◇"
+                  : link.match === "orders"
+                    ? "☰"
+                    : link.match === "payments"
+                      ? "$"
+                      : "○"}
+              </span>
+              <span>{link.label}</span>
+            </NavLink>
+          );
+        })}
+      </nav>
     </div>
   );
 }

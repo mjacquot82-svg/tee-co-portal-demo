@@ -89,7 +89,7 @@ export default function CustomerPortalAccount() {
     <PortalPage
       eyebrow="Account"
       title="Account and profile"
-      description="Your profile section stays lightweight: basic contact details, customer record linkage, and a quick account summary."
+      description="Manage your contact details and review a quick account summary."
     >
       <div
         style={{
