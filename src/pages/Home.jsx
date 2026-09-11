@@ -7,6 +7,7 @@ import { useCatalogLookups } from "../lib/catalogLookupsStore";
 import {
   buildStorefrontCategories,
   getFeaturedStorefrontProducts,
+  getFirstPopulatedStorefrontCategoryId,
   getHeroStorefrontProduct,
   getStorefrontProductCategoryLabel,
   getStorefrontProducts,
@@ -111,19 +112,35 @@ export default function Home() {
     [storefrontCategories]
   );
 
+  // Phone rail keeps catalog order; only categories with live active products.
   const phoneCategories = useMemo(
     () => storefrontCategories.filter((category) => category?.productCount > 0),
     [storefrontCategories]
   );
   const [selectedPhoneCategoryId, setSelectedPhoneCategoryId] = useState(null);
+  const initialPhoneCategoryId = useMemo(
+    () => getFirstPopulatedStorefrontCategoryId(phoneCategories),
+    [phoneCategories]
+  );
   const activePhoneCategoryId =
     selectedPhoneCategoryId &&
     phoneCategories.some((category) => category.id === selectedPhoneCategoryId)
       ? selectedPhoneCategoryId
-      : phoneCategories[0]?.id || null;
+      : initialPhoneCategoryId;
   const activePhoneCategory =
     phoneCategories.find((category) => category.id === activePhoneCategoryId) || null;
   const phoneCategoryProducts = activePhoneCategory?.products || [];
+  const phoneShopPending = !productsReady && !storefrontProducts.length;
+
+  useEffect(() => {
+    if (!initialPhoneCategoryId) return;
+    const selectionStillValid =
+      selectedPhoneCategoryId &&
+      phoneCategories.some((category) => category.id === selectedPhoneCategoryId);
+    if (selectionStillValid) return;
+    // Derive from live catalog: first populated category in existing ordering.
+    setSelectedPhoneCategoryId(initialPhoneCategoryId);
+  }, [initialPhoneCategoryId, phoneCategories, selectedPhoneCategoryId]);
 
   const primaryCollection = collectionHighlights[0] || null;
   const heroProduct =
@@ -222,9 +239,6 @@ export default function Home() {
                       <span className="storefront-phone-category-rail-name">
                         {category.name}
                       </span>
-                      <span className="storefront-phone-category-rail-count">
-                        {category.productCount}
-                      </span>
                     </button>
                   );
                 })}
@@ -236,16 +250,20 @@ export default function Home() {
                 <div>
                   <p className="storefront-section-kicker">Selected category</p>
                   <h2 className="storefront-phone-products-title">
-                    {activePhoneCategory?.name || "Products"}
+                    {activePhoneCategory?.name ||
+                      (phoneShopPending ? "Loading…" : "")}
                   </h2>
                 </div>
-                <span className="storefront-phone-products-count">
-                  {activePhoneCategory?.productCountLabel ||
-                    `${phoneCategoryProducts.length} products`}
-                </span>
+                {activePhoneCategory ? (
+                  <span className="storefront-phone-products-count">
+                    {activePhoneCategory.productCountLabel}
+                  </span>
+                ) : null}
               </div>
 
-              {phoneCategoryProducts.length ? (
+              {phoneShopPending ? (
+                <p className="storefront-loading-copy">Loading storefront products...</p>
+              ) : phoneCategoryProducts.length ? (
                 <div className="storefront-phone-product-grid">
                   {phoneCategoryProducts.map((product, index) => {
                     const renderIdentity = buildStorefrontRenderIdentity(product, index);
@@ -296,10 +314,16 @@ export default function Home() {
                     );
                   })}
                 </div>
-              ) : (
+              ) : activePhoneCategory ? (
                 <div className="storefront-empty-merch-state">
                   <strong>No products in this category yet.</strong>
                   <p>Choose another category from the rail.</p>
+                </div>
+              ) : storefrontProducts.length ? (
+                <p className="storefront-loading-copy">Loading storefront products...</p>
+              ) : (
+                <div className="storefront-empty-merch-state">
+                  <strong>No storefront products available yet.</strong>
                 </div>
               )}
             </div>

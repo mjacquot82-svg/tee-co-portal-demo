@@ -446,6 +446,14 @@ export function buildStorefrontCategories(products = [], storefrontCategories = 
     .sort(sortStorefrontCategories);
 }
 
+export function getFirstPopulatedStorefrontCategoryId(categories = []) {
+  const list = Array.isArray(categories) ? categories : [];
+  const match = list.find(
+    (category) => Number(category?.productCount) > 0 && normalizeText(category?.id)
+  );
+  return match?.id || null;
+}
+
 export function getStorefrontCategoryById(
   products = [],
   categoryId = "",
