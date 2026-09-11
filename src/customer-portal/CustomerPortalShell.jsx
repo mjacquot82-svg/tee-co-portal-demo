@@ -17,9 +17,12 @@ import {
   isPortalOrderingPath,
   isPortalOrderingWorkflowPath,
   PORTAL_ORDER_CATALOG_PATH,
+  PORTAL_REQUEST_ORDER_PATH,
   START_NEW_PORTAL_ORDER_STATE,
 } from "./customerPortalStartOrderRoute";
 import { usePaymentReconciliationRefresh } from "../lib/usePaymentReconciliationRefresh";
+import { getPendingCustomerRequest } from "../lib/pendingCustomerRequestStore";
+import OrderCart from "../components/OrderCart";
 
 const LOGO_SRC = "/tee&co512x512.png";
 
@@ -244,6 +247,12 @@ export default function CustomerPortalShell() {
               isOrderingCatalog ? "customer-portal-ordering" : ""
             } ${isOrderingWorkflow ? "customer-portal-ordering-flow" : ""}`}
           >
+            {isOrderingCatalog ? (
+              <OrderCart
+                lineItems={getPendingCustomerRequest()?.lineItems || []}
+                onReviewRequest={() => navigate(PORTAL_REQUEST_ORDER_PATH)}
+              />
+            ) : null}
             <Outlet context={{ customerSession }} />
           </div>
         </div>

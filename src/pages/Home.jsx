@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
 import { clearPendingCustomerRequest } from "../lib/pendingCustomerRequestStore";
 import { clearPendingCustomerArtwork } from "../lib/pendingCustomerArtworkStore";
@@ -111,6 +111,20 @@ export default function Home() {
     [storefrontCategories]
   );
 
+  const phoneCategories = useMemo(
+    () => storefrontCategories.filter((category) => category?.productCount > 0),
+    [storefrontCategories]
+  );
+  const [selectedPhoneCategoryId, setSelectedPhoneCategoryId] = useState(null);
+  const activePhoneCategoryId =
+    selectedPhoneCategoryId &&
+    phoneCategories.some((category) => category.id === selectedPhoneCategoryId)
+      ? selectedPhoneCategoryId
+      : phoneCategories[0]?.id || null;
+  const activePhoneCategory =
+    phoneCategories.find((category) => category.id === activePhoneCategoryId) || null;
+  const phoneCategoryProducts = activePhoneCategory?.products || [];
+
   const primaryCollection = collectionHighlights[0] || null;
   const heroProduct =
     heroFeaturedProduct || primaryCollection?.products?.[0] || storefrontProducts[0] || null;
@@ -181,6 +195,116 @@ export default function Home() {
         </aside>
 
         <main className="storefront-merch">
+          <section
+            className="storefront-phone-shop"
+            aria-label="Shop by category"
+            data-testid="storefront-phone-shop"
+          >
+            <aside
+              className="storefront-phone-category-rail"
+              aria-label="Category rail"
+            >
+              <nav className="storefront-phone-category-rail-nav">
+                {phoneCategories.map((category) => {
+                  const selected = category.id === activePhoneCategoryId;
+                  return (
+                    <button
+                      key={category.id}
+                      type="button"
+                      className={`storefront-phone-category-rail-item${
+                        selected ? " is-selected" : ""
+                      }`}
+                      aria-pressed={selected}
+                      aria-current={selected ? "true" : undefined}
+                      onClick={() => setSelectedPhoneCategoryId(category.id)}
+                      title={category.name}
+                    >
+                      <span className="storefront-phone-category-rail-name">
+                        {category.name}
+                      </span>
+                      <span className="storefront-phone-category-rail-count">
+                        {category.productCount}
+                      </span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </aside>
+
+            <div className="storefront-phone-products" data-testid="storefront-phone-products">
+              <div className="storefront-phone-products-header">
+                <div>
+                  <p className="storefront-section-kicker">Selected category</p>
+                  <h2 className="storefront-phone-products-title">
+                    {activePhoneCategory?.name || "Products"}
+                  </h2>
+                </div>
+                <span className="storefront-phone-products-count">
+                  {activePhoneCategory?.productCountLabel ||
+                    `${phoneCategoryProducts.length} products`}
+                </span>
+              </div>
+
+              {phoneCategoryProducts.length ? (
+                <div className="storefront-phone-product-grid">
+                  {phoneCategoryProducts.map((product, index) => {
+                    const renderIdentity = buildStorefrontRenderIdentity(product, index);
+                    const productImage = resolveStorefrontProductImage(product, {
+                      size: "thumb",
+                    });
+
+                    return (
+                      <Link
+                        key={renderIdentity.key}
+                        to={orderingPaths.garment(product.id)}
+                        className="storefront-featured-card storefront-phone-product-card"
+                      >
+                        <div className="storefront-featured-image-shell">
+                          {productImage.src ? (
+                            <img
+                              src={productImage.src}
+                              alt={productImage.alt}
+                              className="storefront-featured-image"
+                              width="320"
+                              height="320"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          ) : (
+                            <NoImagePlaceholder
+                              style={{ borderRadius: "16px", width: "100%", height: "100%" }}
+                              titleStyle={{ fontSize: "13px" }}
+                              subtitleStyle={{ fontSize: "11px" }}
+                            />
+                          )}
+                        </div>
+
+                        <div className="storefront-featured-copy">
+                          <span className="storefront-featured-category">
+                            {activePhoneCategory?.name || "Catalog"}
+                          </span>
+                          <h3 className="storefront-featured-title">
+                            {product?.name || "Catalog Product"}
+                          </h3>
+                          <div className="storefront-product-card-meta">
+                            <span>{formatBasePrice(resolveProductBasePrice(product))}</span>
+                            <span>{formatOptionCount(product?.colors, "color")}</span>
+                            <span>{formatOptionCount(product?.sizes, "size")}</span>
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="storefront-empty-merch-state">
+                  <strong>No products in this category yet.</strong>
+                  <p>Choose another category from the rail.</p>
+                </div>
+              )}
+            </div>
+          </section>
+
           <section className="storefront-merch-hero">
             <div className="storefront-merch-hero-copy">
               <p className="storefront-eyebrow">Curated Storefront</p>
