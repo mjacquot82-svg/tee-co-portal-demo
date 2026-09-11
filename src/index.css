@@ -2505,6 +2505,11 @@ aside img:not(.tee-co-logo) {
     padding: 0;
   }
 
+  /* Hide empty Current Order completely on phone; desktop empty state stays elsewhere */
+  .order-cart.is-empty {
+    display: none;
+  }
+
   .order-cart-desktop {
     display: none;
   }
@@ -2585,24 +2590,40 @@ aside img:not(.tee-co-logo) {
   }
 
   .storefront-phone-category-rail {
+    /* Stay visible while products scroll; inner nav owns vertical scroll */
+    --phone-category-rail-top: calc(56px + env(safe-area-inset-top, 0px) + 8px);
+    --phone-category-rail-bottom-chrome: calc(80px + env(safe-area-inset-bottom, 0px));
     position: sticky;
-    top: 8px;
+    top: var(--phone-category-rail-top);
     align-self: start;
-    max-height: calc(100dvh - 170px);
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
+    z-index: 5;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    /* Scrollport ends above fixed bottom nav / home indicator */
+    max-height: calc(100dvh - var(--phone-category-rail-top) - var(--phone-category-rail-bottom-chrome));
+    overflow: hidden;
     border-radius: 16px;
     border: 1px solid #e2e8f0;
     background: #ffffff;
     box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
-    -webkit-overflow-scrolling: touch;
   }
 
   .storefront-phone-category-rail-nav {
     display: grid;
     gap: 4px;
-    padding: 6px;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 100%;
+    padding: 6px 6px 16px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
   }
 
   .storefront-phone-category-rail-item {
@@ -2662,8 +2683,11 @@ aside img:not(.tee-co-logo) {
 
   .storefront-phone-products {
     min-width: 0;
+    max-width: 100%;
     display: grid;
     gap: 10px;
+    /* Page/right column scrolls products; rail handles its own overflow */
+    overscroll-behavior: contain;
   }
 
   .storefront-phone-products-header {
