@@ -446,12 +446,30 @@ export function buildStorefrontCategories(products = [], storefrontCategories = 
     .sort(sortStorefrontCategories);
 }
 
+/**
+ * Pick the live storefront category to auto-select on phone Shop.
+ * Uses the active category with the most active products (productCount).
+ * Ties keep the earlier category in existing catalog/category order.
+ * Derives from the category list passed in; does not hard-code names.
+ */
 export function getFirstPopulatedStorefrontCategoryId(categories = []) {
   const list = Array.isArray(categories) ? categories : [];
-  const match = list.find(
-    (category) => Number(category?.productCount) > 0 && normalizeText(category?.id)
-  );
-  return match?.id || null;
+  let bestCategory = null;
+  let bestProductCount = 0;
+
+  for (const category of list) {
+    if (category?.active === false) continue;
+    const id = normalizeText(category?.id);
+    if (!id) continue;
+    const productCount = Number(category?.productCount);
+    if (!Number.isFinite(productCount) || productCount <= 0) continue;
+    if (!bestCategory || productCount > bestProductCount) {
+      bestCategory = category;
+      bestProductCount = productCount;
+    }
+  }
+
+  return bestCategory?.id || null;
 }
 
 export function getStorefrontCategoryById(

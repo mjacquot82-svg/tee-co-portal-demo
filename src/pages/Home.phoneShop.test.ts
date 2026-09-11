@@ -16,7 +16,7 @@ describe("Home phone shop source guards", () => {
     expect(homeSource).toContain("storefront-rail-count");
   });
 
-  it("auto-selects the first live populated category instead of a Products/0 fallback", () => {
+  it("auto-selects the live category with the most products instead of a Products/0 fallback", () => {
     expect(homeSource).toContain("getFirstPopulatedStorefrontCategoryId");
     expect(homeSource).toContain("setSelectedPhoneCategoryId(initialPhoneCategoryId)");
     expect(homeSource).not.toContain('| "Products"');

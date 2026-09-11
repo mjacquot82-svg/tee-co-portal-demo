@@ -138,7 +138,7 @@ export default function Home() {
       selectedPhoneCategoryId &&
       phoneCategories.some((category) => category.id === selectedPhoneCategoryId);
     if (selectionStillValid) return;
-    // Derive from live catalog: first populated category in existing ordering.
+    // Derive from live catalog: active category with the most products (first wins on tie).
     setSelectedPhoneCategoryId(initialPhoneCategoryId);
   }, [initialPhoneCategoryId, phoneCategories, selectedPhoneCategoryId]);
 
