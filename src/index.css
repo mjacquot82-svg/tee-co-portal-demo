@@ -415,6 +415,58 @@ aside img:not(.tee-co-logo) {
   display: grid;
 }
 
+.customer-portal-app {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at top left, rgba(191, 219, 254, 0.22), transparent 30%),
+    radial-gradient(circle at bottom right, rgba(167, 243, 208, 0.2), transparent 28%),
+    linear-gradient(180deg, #f8fafc 0%, #f5f7f9 100%);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.customer-portal-loading {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.customer-portal-loading-card {
+  width: min(100%, 420px);
+  border-radius: 28px;
+  border: 1px solid #dbe4ee;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 28px;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.08);
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.customer-portal-loading-card h1 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.customer-portal-loading-card > p:last-child {
+  margin: 0;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.customer-portal-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  backdrop-filter: blur(18px);
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
 .customer-portal-layout {
   display: grid;
   grid-template-columns: 232px minmax(0, 1fr);
@@ -430,21 +482,158 @@ aside img:not(.tee-co-logo) {
 }
 
 .customer-portal-header-inner {
-  padding: 16px clamp(20px, 2.4vw, 36px);
+  padding: 12px clamp(16px, 2.4vw, 36px);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  min-height: 64px;
+}
+
+.customer-portal-brand-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.customer-portal-brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  object-fit: contain;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  flex-shrink: 0;
+  display: block;
+}
+
+.customer-portal-brand-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.customer-portal-brand-kicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #0f766e;
+}
+
+.customer-portal-brand-title {
+  color: #0f172a;
+  font-size: 22px;
+  line-height: 1.1;
+  font-weight: 800;
+}
+
+.customer-portal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.customer-portal-primary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border-radius: 999px;
+  padding: 11px 18px;
+  text-decoration: none;
+  font-weight: 800;
+  background: #0f766e;
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(15, 118, 110, 0.18);
+}
+
+.customer-portal-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.customer-portal-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: #ccfbf1;
+  color: #115e59;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.customer-portal-identity-text {
+  min-width: 160px;
+}
+
+.customer-portal-identity-name {
+  margin: 0;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.customer-portal-identity-email {
+  margin: 2px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.customer-portal-signout {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 999px;
+  padding: 11px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 44px;
 }
 
 .customer-portal-workspace {
-  padding: 24px clamp(20px, 2.4vw, 36px) 52px;
+  padding: 24px clamp(16px, 2.4vw, 36px) 52px;
 }
 
 .customer-portal-sidebar {
   position: sticky;
   top: 100px;
+  border-radius: 24px;
+  border: 1px solid #dbe4ee;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.06);
+  padding: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.customer-portal-sidebar-label {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.customer-portal-sidebar-label + .customer-portal-sidebar-label,
+.customer-portal-sidebar-start + .customer-portal-sidebar-label {
+  margin-top: 8px;
 }
 
 .customer-portal-content {
   min-width: 0;
   width: 100%;
+}
+
+.customer-portal-bottom-nav {
+  display: none;
 }
 
 .customer-portal-ordering .storefront-home {
@@ -459,6 +648,377 @@ aside img:not(.tee-co-logo) {
 }
 
 .customer-portal-ordering .storefront-rail {
+  display: none;
+}
+
+.customer-portal-ordering .storefront-mobile-category-nav {
+  display: grid;
+}
+
+.customer-portal-ordering .storefront-featured-grid-wide,
+.customer-portal-ordering .storefront-category-row-grid,
+.customer-portal-ordering .storefront-category-product-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  justify-content: stretch;
+}
+
+.customer-portal-ordering .storefront-featured-card,
+.customer-portal-ordering .storefront-category-product-card {
+  max-width: none;
+}
+
+.customer-portal-ordering .storefront-category-page,
+.customer-portal-ordering .storefront-garment-page {
+  width: 100%;
+  max-width: none !important;
+  margin: 0 !important;
+  box-sizing: border-box;
+}
+
+.portal-consumer-order-thumb,
+.portal-request-line-thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  border: 1px solid #e2e8f0;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.portal-request-line-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+}
+
+.portal-consumer-order-thumb img,
+.portal-request-line-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.portal-consumer-order-thumb-fallback,
+.portal-request-line-thumb span {
+  color: #0f766e;
+  font-weight: 900;
+  font-size: 22px;
+}
+
+.portal-touch-button {
+  min-height: 44px;
+  border-radius: 999px;
+  border: 1px solid #0f766e;
+  background: #0f766e;
+  color: #ffffff;
+  padding: 10px 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.portal-touch-button-secondary {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+@media (max-width: 560px) {
+  .portal-compact-order-summary {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .portal-compact-order-summary > div:last-child {
+    justify-items: start !important;
+    min-width: 0 !important;
+    width: 100%;
+  }
+}
+
+@media (max-width: 900px) {
+  .customer-portal-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .customer-portal-sidebar {
+    position: static;
+    display: flex !important;
+    align-items: center;
+    gap: 8px !important;
+    overflow-x: auto;
+    padding: 12px !important;
+    border-radius: 20px !important;
+    scrollbar-width: thin;
+  }
+
+  .customer-portal-sidebar > p,
+  .customer-portal-sidebar-label {
+    display: none;
+  }
+
+  .customer-portal-primary-action,
+  .customer-portal-section-link {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .customer-portal-primary-action {
+    padding: 12px 16px !important;
+  }
+
+  .customer-portal-section-link {
+    padding: 11px 14px !important;
+  }
+
+  .customer-portal-workspace {
+    padding-top: 18px;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1180px) {
+  .customer-portal-layout {
+    grid-template-columns: 210px minmax(0, 1fr);
+  }
+}
+
+
+.customer-portal-app,
+.customer-portal-workspace,
+.customer-portal-content,
+.portal-page {
+  overflow-x: clip;
+  max-width: 100%;
+}
+
+.storefront-home-portal .storefront-merch-hero-title {
+  letter-spacing: -0.03em;
+}
+
+/* Phone shopping shell: hide desktop portal chrome, use bottom nav */
+@media (max-width: 700px) {
+  .customer-portal-app {
+    background: #f7f8fa;
+  }
+
+  .customer-portal-header-inner {
+    padding: 10px 14px;
+    flex-wrap: nowrap;
+    min-height: 56px;
+    gap: 10px;
+  }
+
+  .customer-portal-brand-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+
+  .customer-portal-brand-title {
+    /* Keep in DOM for desktop tests; hide portal wording on phone */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .customer-portal-brand-kicker {
+    font-size: 13px;
+    letter-spacing: 0.08em;
+  }
+
+  .customer-portal-identity-text,
+  .customer-portal-signout {
+    display: none !important;
+  }
+
+  .customer-portal-identity {
+    gap: 0;
+  }
+
+  .customer-portal-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 12px;
+  }
+
+  .customer-portal-primary-action {
+    min-height: 40px;
+    padding: 8px 12px !important;
+    font-size: 13px;
+    box-shadow: none;
+  }
+
+  .customer-portal-sidebar {
+    display: none !important;
+  }
+
+  .customer-portal-workspace {
+    padding: 14px 14px calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .customer-portal-bottom-nav {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(16px);
+    border-top: 1px solid #e2e8f0;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.06);
+  }
+
+  .customer-portal-bottom-nav-link {
+    display: grid;
+    gap: 2px;
+    justify-items: center;
+    align-content: center;
+    min-height: 52px;
+    padding: 6px 4px;
+    border-radius: 14px;
+    text-decoration: none;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+  }
+
+  .customer-portal-bottom-nav-link.is-active {
+    color: #0f766e;
+    background: #ecfdf5;
+  }
+
+  .customer-portal-bottom-nav-icon {
+    font-size: 15px;
+    line-height: 1;
+  }
+
+  .portal-page {
+    gap: 16px !important;
+  }
+
+  .portal-page-title {
+    font-size: 26px !important;
+    letter-spacing: -0.02em !important;
+  }
+
+  .portal-page-description {
+    font-size: 14px;
+    line-height: 1.5 !important;
+  }
+
+  .portal-orders-primary-cta .portal-full-width-action,
+  .portal-full-width-action {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .portal-consumer-order-card {
+    border-radius: 20px !important;
+  }
+
+  .portal-consumer-order-thumb {
+    width: 64px;
+    height: 64px;
+  }
+
+  .customer-portal-ordering .storefront-merch-hero-body,
+  .customer-portal-ordering .storefront-section-note,
+  .storefront-home-portal .storefront-merch-hero-body {
+    display: none;
+  }
+
+  .storefront-home-portal .storefront-merch-hero {
+    gap: 16px;
+  }
+
+  .customer-portal-ordering .storefront-merch-hero-title {
+    font-size: 28px;
+    line-height: 1.05;
+  }
+
+  .customer-portal-ordering .storefront-eyebrow {
+    color: #0f766e;
+  }
+
+  .customer-portal-ordering .storefront-featured-card-vertical,
+  .customer-portal-ordering .storefront-category-product-card {
+    min-height: 0;
+    padding: 12px;
+    border-radius: 20px;
+  }
+
+  .customer-portal-ordering .storefront-featured-image-shell-large,
+  .customer-portal-ordering .storefront-featured-image-shell {
+    min-height: 180px;
+    aspect-ratio: 1 / 1;
+  }
+
+  .customer-portal-ordering .storefront-featured-title,
+  .customer-portal-ordering .storefront-category-product-title {
+    font-size: 17px;
+  }
+
+  .customer-portal-ordering .storefront-featured-grid-wide,
+  .customer-portal-ordering .storefront-category-row-grid,
+  .customer-portal-ordering .storefront-category-product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .customer-portal-ordering .storefront-mobile-category-link,
+  .customer-portal-ordering .storefront-merch-primary-link,
+  .customer-portal-ordering .storefront-chip-link {
+    min-height: 44px;
+  }
+
+  .portal-request-order .portal-page-description {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .portal-request-line-actions {
+    width: 100%;
+  }
+
+  .portal-request-line-actions .portal-touch-button {
+    flex: 1 1 auto;
+  }
+
+  .portal-request-order button[type="submit"],
+  .portal-request-order .portal-touch-button {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+@media (max-width: 390px) {
+  .customer-portal-ordering .storefront-featured-grid-wide,
+  .customer-portal-ordering .storefront-category-row-grid,
+  .customer-portal-ordering .storefront-category-product-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .customer-portal-primary-action {
+    padding: 8px 10px !important;
+    font-size: 12px;
+  }
+}
+
+.storefront-rail {
   display: none;
 }
 

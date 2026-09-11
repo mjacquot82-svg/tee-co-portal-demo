@@ -49,9 +49,10 @@ function getStableStatusBadge(label, tone = "neutral") {
 
 export function PortalPage({ eyebrow, title, description, children }) {
   return (
-    <section style={{ display: "grid", gap: "24px" }}>
-      <div style={{ display: "grid", gap: "8px" }}>
+    <section className="portal-page" style={{ display: "grid", gap: "24px" }}>
+      <div className="portal-page-header" style={{ display: "grid", gap: "8px" }}>
         <p
+          className="portal-page-eyebrow"
           style={{
             margin: 0,
             fontSize: "12px",
@@ -64,6 +65,7 @@ export function PortalPage({ eyebrow, title, description, children }) {
           {eyebrow}
         </p>
         <h1
+          className="portal-page-title"
           style={{
             margin: 0,
             fontSize: "34px",
@@ -74,7 +76,10 @@ export function PortalPage({ eyebrow, title, description, children }) {
         >
           {title}
         </h1>
-        <p style={{ margin: 0, maxWidth: "720px", color: "#475569", lineHeight: 1.7 }}>
+        <p
+          className="portal-page-description"
+          style={{ margin: 0, maxWidth: "720px", color: "#475569", lineHeight: 1.7 }}
+        >
           {description}
         </p>
       </div>

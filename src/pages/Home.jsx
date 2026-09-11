@@ -158,7 +158,7 @@ export default function Home() {
   }
 
   return (
-    <div className="storefront-home">
+    <div className={`storefront-home${orderingPaths.portalOrdering ? " storefront-home-portal" : ""}`}>
       <div className="storefront-shell">
         <aside className="storefront-rail" aria-label="Storefront category navigation">
           <nav className="storefront-rail-card storefront-rail-nav">

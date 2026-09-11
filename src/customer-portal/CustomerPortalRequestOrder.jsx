@@ -634,6 +634,7 @@ export default function CustomerPortalRequestOrder() {
   }
 
   return (
+    <div className="portal-request-order">
     <PortalPage
       eyebrow="Final Review"
       title="Review and Submit Your Request"
@@ -663,13 +664,23 @@ export default function CustomerPortalRequestOrder() {
 
           {lineItems.map((lineItem, index) => {
             const product = storefrontProducts.find((item) => item.id === lineItem.product_id);
+            const imageSrc = lineItem.product_image || getStorefrontProductImage(product) || "";
             return (
-              <article key={lineItem.id} data-testid="customer-order-line-item" style={{ display: "grid", gap: "14px", border: "1px solid #dbe4ee", borderRadius: "18px", padding: "18px", marginBottom: "16px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-                  <strong>Line Item {index + 1}: {product?.name || lineItem.garment || "Custom garment"}</strong>
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <button type="button" onClick={() => { const editItem = { ...pendingRequest.lineItems[index], productId: lineItem.product_id, artworkId: lineItem.artwork_id, artworkName: lineItem.artwork_name }; navigate(`${PORTAL_ORDER_CATALOG_PATH}/order-preview`, { state: { ...editItem, lineItem: editItem } }); }}>Edit Garment</button>
-                    {lineItems.length > 1 ? <button type="button" onClick={() => removeReviewedGarment(lineItem.id)}>Remove Garment</button> : null}
+              <article key={lineItem.id} data-testid="customer-order-line-item" className="portal-request-line-item" style={{ display: "grid", gap: "14px", border: "1px solid #dbe4ee", borderRadius: "18px", padding: "18px", marginBottom: "16px" }}>
+                <div className="portal-request-line-header" style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+                  <div className="portal-request-line-identity" style={{ display: "flex", gap: "12px", alignItems: "center", minWidth: 0 }}>
+                    <div className="portal-request-line-thumb" aria-hidden="true">
+                      {imageSrc ? (
+                        <img src={imageSrc} alt="" width="64" height="64" loading="lazy" decoding="async" />
+                      ) : (
+                        <span>{(product?.name || lineItem.garment || "G").slice(0, 1)}</span>
+                      )}
+                    </div>
+                    <strong>Line Item {index + 1}: {product?.name || lineItem.garment || "Custom garment"}</strong>
+                  </div>
+                  <div className="portal-request-line-actions" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    <button type="button" className="portal-touch-button" onClick={() => { const editItem = { ...pendingRequest.lineItems[index], productId: lineItem.product_id, artworkId: lineItem.artwork_id, artworkName: lineItem.artwork_name }; navigate(`${PORTAL_ORDER_CATALOG_PATH}/order-preview`, { state: { ...editItem, lineItem: editItem } }); }}>Edit Garment</button>
+                    {lineItems.length > 1 ? <button type="button" className="portal-touch-button portal-touch-button-secondary" onClick={() => removeReviewedGarment(lineItem.id)}>Remove Garment</button> : null}
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "12px" }}>
@@ -683,7 +694,7 @@ export default function CustomerPortalRequestOrder() {
               </article>
             );
           })}
-          <button type="button" onClick={() => navigate(PORTAL_ORDER_CATALOG_PATH, { state: { addingAnotherGarment: true } })}>Add Another Garment</button>
+          <button type="button" className="portal-touch-button portal-touch-button-secondary" onClick={() => navigate(PORTAL_ORDER_CATALOG_PATH, { state: { addingAnotherGarment: true } })}>Add Another Garment</button>
           <div style={{ marginTop: "16px", borderRadius: "16px", background: "#f8fafc", border: "1px solid #e2e8f0", padding: "14px 16px" }}>
             <ReviewItem label="Order Summary" value={`${lineItems.length} garment line ${lineItems.length === 1 ? "item" : "items"} · ${orderQuantity} total pieces`} />
             <ReviewItem label="Estimated Pricing" value={estimatedOrderQuote?.total !== null && estimatedOrderQuote?.total !== undefined ? `${formatMoney(estimatedOrderQuote.total)} estimated total` : "Pricing confirmed after review"} />
@@ -1009,5 +1020,6 @@ export default function CustomerPortalRequestOrder() {
           </div>
         ) : null}
     </PortalPage>
+    </div>
   );
 }
