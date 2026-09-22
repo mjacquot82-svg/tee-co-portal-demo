@@ -260,7 +260,7 @@ export default function CustomerPortalRequestOrder() {
   }, [draftRecoveryRequired, pendingRequest, quantity, resolvedColor, resolvedPlacement, resolvedSize, selectedProduct]);
 
   const resolvedDraftProducts = lineItems.map((lineItem) =>
-    resolveDraftProduct(lineItem, storefrontProducts)
+    resolveDraftProduct(lineItem, products)
   );
   const configuredLineItems = lineItems.map((lineItem, index) => {
     const product = resolvedDraftProducts[index];
@@ -303,7 +303,7 @@ export default function CustomerPortalRequestOrder() {
     if (!productsReady || !storefrontProducts.length || !lineItems.length) return;
 
     const repairedLineItems = lineItems.map((lineItem) => {
-      const resolvedProduct = resolveDraftProduct(lineItem, storefrontProducts);
+      const resolvedProduct = resolveDraftProduct(lineItem, products);
       if (!resolvedProduct || resolvedProduct.id === lineItem.product_id) {
         return lineItem;
       }
@@ -331,7 +331,7 @@ export default function CustomerPortalRequestOrder() {
         setPendingRequest(nextPendingRequest);
       }
     }
-  }, [lineItems, pendingRequest, productsReady, storefrontProducts]);
+  }, [lineItems, pendingRequest, products, productsReady]);
 
   useEffect(() => {
     if (!pendingRequest || !storefrontProducts.length) return;
@@ -340,8 +340,14 @@ export default function CustomerPortalRequestOrder() {
     const pendingKey = `${pendingRequest.created_at || ""}:${pendingRequest.productId || ""}`;
     if (appliedPendingRequestRef.current === pendingKey) return;
 
-    const matchedProduct = storefrontProducts.find(
-      (product) => product.id === pendingRequest.productId
+    const matchedProduct = resolveDraftProduct(
+      {
+        productId: pendingRequest.productId,
+        garmentId: pendingRequest.garmentId,
+        garmentName: pendingRequest.garmentName,
+        brand: pendingRequest.brand,
+      },
+      products
     );
 
     if (matchedProduct) {
@@ -365,7 +371,7 @@ export default function CustomerPortalRequestOrder() {
       setNotes([pendingRequest.notes, artworkNote].filter(Boolean).join("\n\n"));
     }
     appliedPendingRequestRef.current = pendingKey;
-  }, [draftRecoveryRequired, pendingRequest, storefrontCategories, storefrontProducts]);
+  }, [draftRecoveryRequired, pendingRequest, products, storefrontCategories, storefrontProducts]);
 
   useEffect(() => {
     if (draftRecoveryRequired) return undefined;
