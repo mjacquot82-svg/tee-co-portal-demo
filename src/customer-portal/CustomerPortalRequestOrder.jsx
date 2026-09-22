@@ -94,6 +94,47 @@ function ReviewItem({ label, value }) {
   );
 }
 
+function normalizeMatchText(value) {
+  return normalizeText(value).toLowerCase();
+}
+
+function resolveDraftProduct(lineItem = {}, products = []) {
+  const productId = normalizeText(lineItem.product_id || lineItem.productId);
+  const garmentId = normalizeText(lineItem.garmentId || lineItem.garment_id);
+  const garmentName = normalizeMatchText(lineItem.garmentName || lineItem.garment);
+  const brand = normalizeMatchText(lineItem.brand);
+
+  const directMatch = products.find((product) => {
+    const ids = [
+      product?.id,
+      product?.legacy_product_id,
+      product?.garment_library_item_id,
+      product?.garment_model_lookup_id,
+    ].map(normalizeText).filter(Boolean);
+    return Boolean(
+      (productId && ids.includes(productId)) ||
+      (garmentId && ids.includes(garmentId))
+    );
+  });
+  if (directMatch) return directMatch;
+
+  if (!garmentName) return null;
+
+  const nameMatches = products.filter(
+    (product) => normalizeMatchText(product?.name) === garmentName
+  );
+  if (nameMatches.length === 1) return nameMatches[0];
+
+  if (brand) {
+    const nameAndBrandMatches = nameMatches.filter(
+      (product) => normalizeMatchText(product?.brand) === brand
+    );
+    if (nameAndBrandMatches.length === 1) return nameAndBrandMatches[0];
+  }
+
+  return null;
+}
+
 export default function CustomerPortalRequestOrder() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -214,8 +255,11 @@ export default function CustomerPortalRequestOrder() {
     initializedLineItemsRef.current = true;
   }, [draftRecoveryRequired, pendingRequest, quantity, resolvedColor, resolvedPlacement, resolvedSize, selectedProduct]);
 
-  const configuredLineItems = lineItems.map((lineItem) => {
-    const product = storefrontProducts.find((item) => item.id === lineItem.product_id);
+  const resolvedDraftProducts = lineItems.map((lineItem) =>
+    resolveDraftProduct(lineItem, storefrontProducts)
+  );
+  const configuredLineItems = lineItems.map((lineItem, index) => {
+    const product = resolvedDraftProducts[index];
     const quantityFromSizes = getLineItemQuantity(lineItem);
     const placement = lineItem.placement || getProductPlacementConfig(product)[0]?.label || "";
     const decorationType = lineItem.decoration_type || getDefaultDecorationType(product);
@@ -233,9 +277,7 @@ export default function CustomerPortalRequestOrder() {
     };
   });
   const unresolvedLineItems = lineItems.filter(
-    (lineItem) =>
-      lineItem.product_id &&
-      !storefrontProducts.some((product) => product.id === lineItem.product_id)
+    (_lineItem, index) => !resolvedDraftProducts[index]
   );
   const hasUnresolvedProducts = productsReady && unresolvedLineItems.length > 0;
   const orderQuantity = configuredLineItems.reduce((total, item) => total + item.quantity, 0);
@@ -252,6 +294,40 @@ export default function CustomerPortalRequestOrder() {
       setLineItems((current) => current.filter((item) => item.id !== lineItemId));
     }
   }
+
+  useEffect(() => {
+    if (!productsReady || !storefrontProducts.length || !lineItems.length) return;
+
+    const repairedLineItems = lineItems.map((lineItem) => {
+      const resolvedProduct = resolveDraftProduct(lineItem, storefrontProducts);
+      if (!resolvedProduct || resolvedProduct.id === lineItem.product_id) {
+        return lineItem;
+      }
+      return {
+        ...lineItem,
+        product_id: resolvedProduct.id,
+      };
+    });
+
+    const changed = repairedLineItems.some(
+      (lineItem, index) => lineItem.product_id !== lineItems[index]?.product_id
+    );
+    if (!changed) return;
+
+    setLineItems(repairedLineItems);
+    if (pendingRequest?.lineItems?.length) {
+      const nextPendingRequest = {
+        ...pendingRequest,
+        lineItems: pendingRequest.lineItems.map((item, index) => ({
+          ...item,
+          productId: repairedLineItems[index]?.product_id || item.productId,
+        })),
+      };
+      if (savePendingCustomerRequest(nextPendingRequest)) {
+        setPendingRequest(nextPendingRequest);
+      }
+    }
+  }, [lineItems, pendingRequest, productsReady, storefrontProducts]);
 
   useEffect(() => {
     if (!pendingRequest || !storefrontProducts.length) return;
