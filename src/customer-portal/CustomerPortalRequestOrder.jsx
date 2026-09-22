@@ -94,6 +94,47 @@ function ReviewItem({ label, value }) {
   );
 }
 
+function normalizeMatchText(value) {
+  return normalizeText(value).toLowerCase();
+}
+
+function resolveDraftProduct(lineItem = {}, products = []) {
+  const productId = normalizeText(lineItem.product_id || lineItem.productId);
+  const garmentId = normalizeText(lineItem.garmentId || lineItem.garment_id);
+  const garmentName = normalizeMatchText(lineItem.garmentName || lineItem.garment);
+  const brand = normalizeMatchText(lineItem.brand);
+
+  const directMatch = products.find((product) => {
+    const ids = [
+      product?.id,
+      product?.legacy_product_id,
+      product?.garment_library_item_id,
+      product?.garment_model_lookup_id,
+    ].map(normalizeText).filter(Boolean);
+    return Boolean(
+      (productId && ids.includes(productId)) ||
+      (garmentId && ids.includes(garmentId))
+    );
+  });
+  if (directMatch) return directMatch;
+
+  if (!garmentName) return null;
+
+  const nameMatches = products.filter(
+    (product) => normalizeMatchText(product?.name) === garmentName
+  );
+  if (nameMatches.length === 1) return nameMatches[0];
+
+  if (brand) {
+    const nameAndBrandMatches = nameMatches.filter(
+      (product) => normalizeMatchText(product?.brand) === brand
+    );
+    if (nameAndBrandMatches.length === 1) return nameAndBrandMatches[0];
+  }
+
+  return null;
+}
+
 export default function CustomerPortalRequestOrder() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -187,6 +228,10 @@ export default function CustomerPortalRequestOrder() {
       setLineItems(pendingRequest.lineItems.map((item) => ({
         id: item.id,
         product_id: item.productId,
+        garmentId: item.garmentId || "",
+        garmentName: item.garmentName || "",
+        brand: item.brand || "",
+        category: item.category || "",
         selected_color: item.selectedColor,
         placement: item.placement,
         decoration_type: item.decorationType,
@@ -214,8 +259,11 @@ export default function CustomerPortalRequestOrder() {
     initializedLineItemsRef.current = true;
   }, [draftRecoveryRequired, pendingRequest, quantity, resolvedColor, resolvedPlacement, resolvedSize, selectedProduct]);
 
-  const configuredLineItems = lineItems.map((lineItem) => {
-    const product = storefrontProducts.find((item) => item.id === lineItem.product_id);
+  const resolvedDraftProducts = lineItems.map((lineItem) =>
+    resolveDraftProduct(lineItem, products)
+  );
+  const configuredLineItems = lineItems.map((lineItem, index) => {
+    const product = resolvedDraftProducts[index];
     const quantityFromSizes = getLineItemQuantity(lineItem);
     const placement = lineItem.placement || getProductPlacementConfig(product)[0]?.label || "";
     const decorationType = lineItem.decoration_type || getDefaultDecorationType(product);
@@ -232,6 +280,10 @@ export default function CustomerPortalRequestOrder() {
       quantity: quantityFromSizes,
     };
   });
+  const unresolvedLineItems = lineItems.filter(
+    (_lineItem, index) => !resolvedDraftProducts[index]
+  );
+  const hasUnresolvedProducts = productsReady && unresolvedLineItems.length > 0;
   const orderQuantity = configuredLineItems.reduce((total, item) => total + item.quantity, 0);
   const estimatedOrderQuote = configuredLineItems.length
     ? generateOrderQuoteSnapshot({ line_items: configuredLineItems }, storefrontProducts)
@@ -248,14 +300,54 @@ export default function CustomerPortalRequestOrder() {
   }
 
   useEffect(() => {
+    if (!productsReady || !storefrontProducts.length || !lineItems.length) return;
+
+    const repairedLineItems = lineItems.map((lineItem) => {
+      const resolvedProduct = resolveDraftProduct(lineItem, products);
+      if (!resolvedProduct || resolvedProduct.id === lineItem.product_id) {
+        return lineItem;
+      }
+      return {
+        ...lineItem,
+        product_id: resolvedProduct.id,
+      };
+    });
+
+    const changed = repairedLineItems.some(
+      (lineItem, index) => lineItem.product_id !== lineItems[index]?.product_id
+    );
+    if (!changed) return;
+
+    setLineItems(repairedLineItems);
+    if (pendingRequest?.lineItems?.length) {
+      const nextPendingRequest = {
+        ...pendingRequest,
+        lineItems: pendingRequest.lineItems.map((item, index) => ({
+          ...item,
+          productId: repairedLineItems[index]?.product_id || item.productId,
+        })),
+      };
+      if (savePendingCustomerRequest(nextPendingRequest)) {
+        setPendingRequest(nextPendingRequest);
+      }
+    }
+  }, [lineItems, pendingRequest, products, productsReady]);
+
+  useEffect(() => {
     if (!pendingRequest || !storefrontProducts.length) return;
     if (draftRecoveryRequired) return;
 
     const pendingKey = `${pendingRequest.created_at || ""}:${pendingRequest.productId || ""}`;
     if (appliedPendingRequestRef.current === pendingKey) return;
 
-    const matchedProduct = storefrontProducts.find(
-      (product) => product.id === pendingRequest.productId
+    const matchedProduct = resolveDraftProduct(
+      {
+        productId: pendingRequest.productId,
+        garmentId: pendingRequest.garmentId,
+        garmentName: pendingRequest.garmentName,
+        brand: pendingRequest.brand,
+      },
+      products
     );
 
     if (matchedProduct) {
@@ -279,7 +371,7 @@ export default function CustomerPortalRequestOrder() {
       setNotes([pendingRequest.notes, artworkNote].filter(Boolean).join("\n\n"));
     }
     appliedPendingRequestRef.current = pendingKey;
-  }, [draftRecoveryRequired, pendingRequest, storefrontCategories, storefrontProducts]);
+  }, [draftRecoveryRequired, pendingRequest, products, storefrontCategories, storefrontProducts]);
 
   useEffect(() => {
     if (draftRecoveryRequired) return undefined;
@@ -341,6 +433,22 @@ export default function CustomerPortalRequestOrder() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+
+    if (hasUnresolvedProducts) {
+      setSubmitState("error");
+      setSubmitMessage(
+        "We couldn't verify one of the products in this order. Return to Shop and reselect the item before submitting."
+      );
+      return;
+    }
+
+    if (!selectedProduct) {
+      setSubmitState("error");
+      setSubmitMessage(
+        "We couldn't load the product catalog for this order. Return to Shop and reselect the item before submitting."
+      );
+      return;
+    }
 
     const identityValidation = validateCustomerIdentity({
       customer_name: normalizeText(contactName) || customerSession.displayName || "",
@@ -859,29 +967,63 @@ export default function CustomerPortalRequestOrder() {
               </div>
             ) : null}
 
-            <div style={{ borderRadius: "18px", border: "1px solid #a7f3d0", background: "#ecfdf5", padding: "16px", color: "#115e59" }}>
-              <strong style={{ display: "block", fontSize: "16px" }}>Ready for final submission</strong>
-              <p style={{ margin: "6px 0 0", lineHeight: 1.6 }}>
-                Submitting sends this request to Tee & Co for review. It does not authorize production or payment.
-              </p>
-              <p style={{ margin: "8px 0 0", lineHeight: 1.6 }}>
-                Next, Tee & Co will review the garment, artwork, pricing, and production requirements. You can track updates in My Orders.
-              </p>
-            </div>
+            {hasUnresolvedProducts || (productsReady && !selectedProduct) ? (
+              <div
+                role="alert"
+                style={{
+                  borderRadius: "18px",
+                  border: "1px solid #fecaca",
+                  background: "#fef2f2",
+                  padding: "16px",
+                  color: "#991b1b",
+                }}
+              >
+                <strong style={{ display: "block", fontSize: "16px" }}>This order needs one quick update</strong>
+                <p style={{ margin: "6px 0 0", lineHeight: 1.6 }}>
+                  We couldn't verify one of the products saved in this order. Return to Shop and reselect the item before submitting.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate(PORTAL_ORDER_CATALOG_PATH, { state: { portalOrderStart: true } })}
+                  style={{
+                    marginTop: "12px",
+                    borderRadius: "999px",
+                    border: "1px solid #991b1b",
+                    background: "#ffffff",
+                    color: "#991b1b",
+                    padding: "10px 15px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  Return to Shop
+                </button>
+              </div>
+            ) : (
+              <div style={{ borderRadius: "18px", border: "1px solid #a7f3d0", background: "#ecfdf5", padding: "16px", color: "#115e59" }}>
+                <strong style={{ display: "block", fontSize: "16px" }}>Ready for final submission</strong>
+                <p style={{ margin: "6px 0 0", lineHeight: 1.6 }}>
+                  Submitting sends this request to Tee & Co for review. It does not authorize production or payment.
+                </p>
+                <p style={{ margin: "8px 0 0", lineHeight: 1.6 }}>
+                  Next, Tee & Co will review the garment, artwork, pricing, and production requirements. You can track updates in My Orders.
+                </p>
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
               <button
                 type="submit"
-                disabled={submitState === "submitting" || !selectedProduct}
+                disabled={submitState === "submitting"}
                 aria-busy={submitState === "submitting"}
                 style={{
                   borderRadius: "999px",
                   border: "none",
-                  background: submitState === "submitting" || !selectedProduct ? "#94a3b8" : "#0f766e",
+                  background: submitState === "submitting" ? "#94a3b8" : "#0f766e",
                   color: "#ffffff",
                   padding: "13px 18px",
                   fontWeight: 800,
-                  cursor: submitState === "submitting" || !selectedProduct ? "not-allowed" : "pointer",
+                  cursor: submitState === "submitting" ? "not-allowed" : "pointer",
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",

@@ -149,6 +149,14 @@ function isUuidLike(value) {
   );
 }
 
+function createPermanentProductId() {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `product-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function normalizeUuidForeignKey(value) {
   const normalizedValue = String(value || "").trim();
   return isUuidLike(normalizedValue) ? normalizedValue : null;
@@ -1149,7 +1157,7 @@ export async function createStoredProduct(productInput) {
     const previousProducts = getStoredProducts();
     const baseLocalProduct = {
       ...product,
-      id: `product-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: product?.id || createPermanentProductId(),
     };
     const nextProducts = applyHeroFeatureRules(
       [baseLocalProduct, ...previousProducts],
@@ -1630,27 +1638,17 @@ export async function updateStoredProduct(productId, updates) {
   return normalizedUpdatedProduct;
 }
 
+export async function archiveStoredProduct(productId) {
+  const product = getStoredProducts().find((entry) => entry.id === productId) || null;
+  if (!product) return null;
+
+  return updateStoredProduct(productId, {
+    status: "Inactive",
+    is_featured: false,
+    is_hero_feature: false,
+  });
+}
+
 export async function deleteStoredProduct(productId) {
-  if (isSupabaseConfigured && supabase) {
-    const primaryFilterColumn = isUuidLike(productId) ? "id" : "legacy_product_id";
-    let { error } = await supabase.from("products").delete().eq(primaryFilterColumn, productId);
-
-    if (error && primaryFilterColumn === "id") {
-      const fallbackResult = await supabase
-        .from("products")
-        .delete()
-        .eq("legacy_product_id", productId);
-      error = fallbackResult.error;
-    }
-
-    if (error) {
-      console.error("Unable to delete Tee & Co product from Supabase", error);
-      throw error;
-    }
-  }
-
-  const nextProducts = getStoredProducts().filter((product) => product.id !== productId);
-  hasLoadedProductsFromSupabase = true;
-  saveStoredProducts(nextProducts);
-  await syncGarmentLinks(nextProducts);
+  return archiveStoredProduct(productId);
 }

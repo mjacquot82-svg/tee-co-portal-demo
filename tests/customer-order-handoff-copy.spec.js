@@ -28,7 +28,12 @@ test("authenticated request form identifies the final submission action", () => 
   expect(source).toContain('"Submit Order Request"');
   expect(source).toContain('aria-busy={submitState === "submitting"}');
   expect(source).toContain('"Submitting Order..."');
-  expect(source).toContain('disabled={submitState === "submitting" || !selectedProduct}');
+  expect(source).toContain('disabled={submitState === "submitting"}');
+  expect(source).toContain("This order needs one quick update");
+  expect(source).toContain("We couldn't verify one of the products saved in this order.");
+  expect(source).toContain("Return to Shop");
+  expect(source).toContain("hasUnresolvedProducts");
+  expect(source).not.toContain('disabled={submitState === "submitting" || !selectedProduct}');
 });
 
 test("authenticated request form reviews the prior selection instead of reopening the catalog", () => {
@@ -130,4 +135,18 @@ test("a persistent order cart communicates the request while customers keep shop
   expect(configurationSource).toContain('"Save Garment"');
   expect(configurationSource).toContain("Continue Shopping");
   expect(reviewSource).toContain("Add Another Garment");
+});
+
+
+test("authenticated request form automatically reconciles stale draft product references", () => {
+  const source = readSource("src/customer-portal/CustomerPortalRequestOrder.jsx");
+
+  expect(source).toContain("function resolveDraftProduct");
+  expect(source).toContain("product?.legacy_product_id");
+  expect(source).toContain("product?.garment_library_item_id");
+  expect(source).toContain("garmentName: item.garmentName ||");
+  expect(source).toContain("brand: item.brand ||");
+  expect(source).toContain("const repairedLineItems = lineItems.map");
+  expect(source).toContain("productId: repairedLineItems[index]?.product_id");
+  expect(source).toContain("savePendingCustomerRequest(nextPendingRequest)");
 });

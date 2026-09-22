@@ -18,7 +18,7 @@ import {
   buildPlacementConfig,
   areStoredProductsReady,
   createStoredProduct,
-  deleteStoredProduct,
+  archiveStoredProduct,
   getProductPlacementConfig,
   refreshStoredProducts,
   updateStoredProduct,
@@ -1706,7 +1706,7 @@ export default function Products() {
       if (!productId) return;
 
       setIsRemovingProduct(true);
-      await deleteStoredProduct(productId);
+      await archiveStoredProduct(productId);
       if (editingProductId === productId) {
         resetForm();
       } else {
@@ -3005,13 +3005,12 @@ export default function Products() {
           >
             <div className="products-confirmation-copy">
               <p className="products-confirmation-kicker">Storefront Catalog</p>
-              <h2 id="remove-product-dialog-title">Remove Product?</h2>
+              <h2 id="remove-product-dialog-title">Archive Product?</h2>
               <p id="remove-product-dialog-description">
-                Are you sure you want to remove this product from the customer catalog?
+                Archive this product and remove it from the customer catalog?
               </p>
               <p className="products-confirmation-secondary">
-                This will remove the storefront product but will NOT delete the original garment
-                template.
+                The product record and permanent ID will be kept so existing drafts and orders remain linked. New shoppers will no longer see it.
               </p>
             </div>
 
@@ -3032,7 +3031,7 @@ export default function Products() {
                 onClick={() => handleDelete(productPendingRemoval?.id)}
                 disabled={isRemovingProduct}
               >
-                {isRemovingProduct ? "Removing..." : "Remove Product"}
+                {isRemovingProduct ? "Archiving..." : "Archive Product"}
               </button>
             </div>
           </div>
