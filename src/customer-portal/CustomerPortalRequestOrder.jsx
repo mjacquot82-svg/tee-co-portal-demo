@@ -228,6 +228,10 @@ export default function CustomerPortalRequestOrder() {
       setLineItems(pendingRequest.lineItems.map((item) => ({
         id: item.id,
         product_id: item.productId,
+        garmentId: item.garmentId || "",
+        garmentName: item.garmentName || "",
+        brand: item.brand || "",
+        category: item.category || "",
         selected_color: item.selectedColor,
         placement: item.placement,
         decoration_type: item.decorationType,
