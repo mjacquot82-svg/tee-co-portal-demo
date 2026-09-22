@@ -232,6 +232,12 @@ export default function CustomerPortalRequestOrder() {
       quantity: quantityFromSizes,
     };
   });
+  const unresolvedLineItems = lineItems.filter(
+    (lineItem) =>
+      lineItem.product_id &&
+      !storefrontProducts.some((product) => product.id === lineItem.product_id)
+  );
+  const hasUnresolvedProducts = productsReady && unresolvedLineItems.length > 0;
   const orderQuantity = configuredLineItems.reduce((total, item) => total + item.quantity, 0);
   const estimatedOrderQuote = configuredLineItems.length
     ? generateOrderQuoteSnapshot({ line_items: configuredLineItems }, storefrontProducts)
@@ -341,6 +347,22 @@ export default function CustomerPortalRequestOrder() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+
+    if (hasUnresolvedProducts) {
+      setSubmitState("error");
+      setSubmitMessage(
+        "We couldn't verify one of the products in this order. Return to Shop and reselect the item before submitting."
+      );
+      return;
+    }
+
+    if (!selectedProduct) {
+      setSubmitState("error");
+      setSubmitMessage(
+        "We couldn't load the product catalog for this order. Return to Shop and reselect the item before submitting."
+      );
+      return;
+    }
 
     const identityValidation = validateCustomerIdentity({
       customer_name: normalizeText(contactName) || customerSession.displayName || "",
@@ -859,29 +881,63 @@ export default function CustomerPortalRequestOrder() {
               </div>
             ) : null}
 
-            <div style={{ borderRadius: "18px", border: "1px solid #a7f3d0", background: "#ecfdf5", padding: "16px", color: "#115e59" }}>
-              <strong style={{ display: "block", fontSize: "16px" }}>Ready for final submission</strong>
-              <p style={{ margin: "6px 0 0", lineHeight: 1.6 }}>
-                Submitting sends this request to Tee & Co for review. It does not authorize production or payment.
-              </p>
-              <p style={{ margin: "8px 0 0", lineHeight: 1.6 }}>
-                Next, Tee & Co will review the garment, artwork, pricing, and production requirements. You can track updates in My Orders.
-              </p>
-            </div>
+            {hasUnresolvedProducts || (productsReady && !selectedProduct) ? (
+              <div
+                role="alert"
+                style={{
+                  borderRadius: "18px",
+                  border: "1px solid #fecaca",
+                  background: "#fef2f2",
+                  padding: "16px",
+                  color: "#991b1b",
+                }}
+              >
+                <strong style={{ display: "block", fontSize: "16px" }}>This order needs one quick update</strong>
+                <p style={{ margin: "6px 0 0", lineHeight: 1.6 }}>
+                  We couldn't verify one of the products saved in this order. Return to Shop and reselect the item before submitting.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate(PORTAL_ORDER_CATALOG_PATH, { state: { portalOrderStart: true } })}
+                  style={{
+                    marginTop: "12px",
+                    borderRadius: "999px",
+                    border: "1px solid #991b1b",
+                    background: "#ffffff",
+                    color: "#991b1b",
+                    padding: "10px 15px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  Return to Shop
+                </button>
+              </div>
+            ) : (
+              <div style={{ borderRadius: "18px", border: "1px solid #a7f3d0", background: "#ecfdf5", padding: "16px", color: "#115e59" }}>
+                <strong style={{ display: "block", fontSize: "16px" }}>Ready for final submission</strong>
+                <p style={{ margin: "6px 0 0", lineHeight: 1.6 }}>
+                  Submitting sends this request to Tee & Co for review. It does not authorize production or payment.
+                </p>
+                <p style={{ margin: "8px 0 0", lineHeight: 1.6 }}>
+                  Next, Tee & Co will review the garment, artwork, pricing, and production requirements. You can track updates in My Orders.
+                </p>
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
               <button
                 type="submit"
-                disabled={submitState === "submitting" || !selectedProduct}
+                disabled={submitState === "submitting"}
                 aria-busy={submitState === "submitting"}
                 style={{
                   borderRadius: "999px",
                   border: "none",
-                  background: submitState === "submitting" || !selectedProduct ? "#94a3b8" : "#0f766e",
+                  background: submitState === "submitting" ? "#94a3b8" : "#0f766e",
                   color: "#ffffff",
                   padding: "13px 18px",
                   fontWeight: 800,
-                  cursor: submitState === "submitting" || !selectedProduct ? "not-allowed" : "pointer",
+                  cursor: submitState === "submitting" ? "not-allowed" : "pointer",
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
