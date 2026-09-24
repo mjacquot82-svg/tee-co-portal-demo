@@ -15,6 +15,7 @@ import {
 import { getOrderLineItems } from "../lib/orderLineItems";
 import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
 import { recordOrderTransitionDiagnostic } from "../lib/orderTransitionDiagnostics";
+import { refreshArtworkAccessUrls } from "../services/customerArtworkService";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
 import { normalizeOrderFinancials } from "../orders/orderFinancials";
 import {
@@ -710,7 +711,32 @@ function IntakeReviewScreen({
   const [priceError, setPriceError] = useState("");
   const [priceSaving, setPriceSaving] = useState(false);
   const submittedAt = formatDateTime(order.created_at, " • ");
-  const artworkFiles = getUploadedOrderArtworkFiles(order);
+  const storedArtworkFiles = getUploadedOrderArtworkFiles(order);
+  const [artworkFiles, setArtworkFiles] = useState(storedArtworkFiles);
+
+  useEffect(() => {
+    let active = true;
+    setArtworkFiles(storedArtworkFiles);
+
+    if (!storedArtworkFiles.length) {
+      return () => {
+        active = false;
+      };
+    }
+
+    refreshArtworkAccessUrls(storedArtworkFiles)
+      .then((refreshedFiles) => {
+        if (active) setArtworkFiles(refreshedFiles);
+      })
+      .catch((error) => {
+        console.error("Unable to refresh artwork access links", error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [order.order_number, order.updated_at]);
+
   const artworkReferenceNames = getOrderArtworkReferenceNames(order);
   const attentionItems = getOutstandingIntakeRequirements(order);
   const completedActions = getCompletedIntakeActions(order);
