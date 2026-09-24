@@ -539,6 +539,55 @@ export function getArtworkUploadAcceptValue() {
   return ".png,.jpg,.jpeg,.pdf,.svg,.ai,image/png,image/jpeg,application/pdf,image/svg+xml";
 }
 
+export async function refreshArtworkAccessUrls(artworkFiles = []) {
+  ensureSupabaseArtworkReady();
+
+  const files = Array.isArray(artworkFiles) ? artworkFiles : [];
+  return Promise.all(
+    files.map(async (file) => {
+      const normalized = normalizeArtworkRecord(file);
+      const storagePath =
+        String(
+          normalized?.storage_path ||
+            normalized?.storage_reference ||
+            normalized?.asset_reference ||
+            ""
+        ).trim();
+
+      // Only permanent storage references can be refreshed. Legacy records
+      // without one keep their existing URL so they remain backwards compatible.
+      if (!storagePath || storagePath.startsWith("http")) {
+        return normalized;
+      }
+
+      const signedUrl = await createSignedUrl(storagePath);
+      if (!signedUrl) return normalized;
+
+      const fileName =
+        normalized?.file_name ||
+        normalized?.original_filename ||
+        normalized?.display_name ||
+        normalized?.name ||
+        "";
+      const previewUrl = isPreviewableImage(fileName) ? signedUrl : "";
+
+      return normalizeArtworkRecord({
+        ...normalized,
+        storage_path: normalized?.storage_path || storagePath,
+        storage_reference: normalized?.storage_reference || storagePath,
+        asset_reference: storagePath,
+        asset_url: signedUrl,
+        source_url: signedUrl,
+        url: signedUrl,
+        open_url: signedUrl,
+        download_url: signedUrl,
+        preview: previewUrl,
+        preview_url: previewUrl,
+      });
+    })
+  );
+}
+
 export async function listCustomerArtwork(customerId) {
   ensureSupabaseArtworkReady();
 
