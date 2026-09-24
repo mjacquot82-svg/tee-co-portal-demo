@@ -102,3 +102,21 @@ test("production tickets present the artwork assigned to each garment", async ()
     expect(source).toContain("Artwork");
   }
 });
+
+
+test("staff intake refreshes persisted artwork access instead of trusting saved signed URLs", async () => {
+  const fs = await import("node:fs/promises");
+  const [serviceSource, intakeSource, requestSource] = await Promise.all([
+    fs.readFile(new URL("../src/services/customerArtworkService.js", import.meta.url), "utf8"),
+    fs.readFile(new URL("../src/admin/QuoteDetail.jsx", import.meta.url), "utf8"),
+    fs.readFile(new URL("../src/customer-portal/CustomerPortalRequestOrder.jsx", import.meta.url), "utf8"),
+  ]);
+
+  expect(serviceSource).toContain("export async function refreshArtworkAccessUrls");
+  expect(serviceSource).toContain("normalized?.storage_reference");
+  expect(serviceSource).toContain("createSignedUrl(storagePath)");
+  expect(serviceSource).toContain("open_url: signedUrl");
+  expect(serviceSource).toContain("download_url: signedUrl");
+  expect(intakeSource).toContain("refreshArtworkAccessUrls(storedArtworkFiles)");
+  expect(requestSource).toContain("storage_reference: uploaded?.storage_path");
+});
