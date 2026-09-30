@@ -12,6 +12,7 @@ import {
 } from "../lib/customerIds";
 import { addCustomerTimelineEvent } from "../lib/customerTimelineStore";
 import { getOperationalAuthUser } from "../lib/operationalAuthStore";
+import { getActiveStaffUploadCredential } from "../lib/staffUsersStore";
 import { getArtworkDisplayName } from "../lib/orderArtwork";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 
@@ -20,6 +21,45 @@ export const CUSTOMER_ARTWORK_TABLE = "customer_artwork";
 
 const SUPPORTED_ARTWORK_EXTENSIONS = new Set(["png", "jpg", "jpeg", "pdf", "svg", "ai"]);
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
+const STAFF_ARTWORK_UPLOAD_ENDPOINT = "/.netlify/functions/customer-artwork-upload";
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Unable to read artwork file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadCustomerArtworkAsStaff(customerId, file, options, credential) {
+  const fileData = await readFileAsDataUrl(file);
+  const response = await fetch(STAFF_ARTWORK_UPLOAD_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      staffUserId: credential.staffUserId,
+      pin: credential.pin,
+      customerId,
+      fileName: options.fileName || file.name,
+      fileType: file.type || options.fileType || "",
+      fileData,
+      displayName: options.displayName || file.name,
+      originalFilename: options.originalFilename || file.name,
+      placementHint: options.placementHint || "",
+      notes: options.notes || "",
+      linkedOrderIds: normalizeOperationalIds(options.linkedOrderIds),
+      linkedQuoteIds: normalizeOperationalIds(options.linkedQuoteIds),
+      lastUsedAt: options.lastUsedAt || null,
+    }),
+  });
+  let payload = null;
+  try { payload = await response.json(); } catch { payload = null; }
+  if (!response.ok || !payload?.ok || !payload?.artwork) {
+    throw new Error(payload?.message || "Unable to upload artwork file.");
+  }
+  return normalizeArtworkRecord(payload.artwork);
+}
 
 function ensureSupabaseArtworkReady() {
   if (!isSupabaseConfigured || !supabase) {
@@ -629,6 +669,16 @@ export async function uploadCustomerArtwork(customerId, file, options = {}) {
   const normalizedCustomerId = normalizeCustomerId(customerId);
   if (!normalizedCustomerId) {
     throw new Error("A canonical customer ID is required before artwork can be uploaded.");
+  }
+
+  const staffUploadCredential = getActiveStaffUploadCredential();
+  if (staffUploadCredential) {
+    return uploadCustomerArtworkAsStaff(
+      normalizedCustomerId,
+      file,
+      options,
+      staffUploadCredential
+    );
   }
 
   const storagePath = buildStoragePath(normalizedCustomerId, options.fileName || file.name);
