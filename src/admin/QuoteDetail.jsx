@@ -1719,6 +1719,11 @@ export default function QuoteDetail() {
   }
 
   async function handleOwnerNextAction(actionKey) {
+    if (actionKey === "approve_request") {
+      await handleApproveRequest();
+      return;
+    }
+
     if (actionKey === "release_to_production") {
       await handleReleaseToProduction();
       return;
