@@ -263,6 +263,8 @@ export function deriveOwnerQuoteNextAction(order = {}, productionReadiness = nul
           : `${productionReadiness.remainingRequirements || 0} requirement${productionReadiness.remainingRequirements === 1 ? "" : "s"} remain before production release.`,
       tone: "danger",
       href: quoteHref,
+      actionKey: staffReviewOnly ? "approve_request" : "",
+      actionLabel: staffReviewOnly ? "Approve Request for Production" : "",
       blockers: failedChecks.map((check) => ({
         label: check.label,
         status: check.detail,
