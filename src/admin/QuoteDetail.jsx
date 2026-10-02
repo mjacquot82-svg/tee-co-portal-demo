@@ -701,6 +701,7 @@ function IntakeReviewScreen({
   onRequireDeposit,
   onMarkDepositNotRequired,
   onUpdatePrice,
+  onUpdateOrderDetails,
   onRejectRequest,
   onArchiveRequest,
 }) {
@@ -710,6 +711,10 @@ function IntakeReviewScreen({
   const [priceDraft, setPriceDraft] = useState("");
   const [priceError, setPriceError] = useState("");
   const [priceSaving, setPriceSaving] = useState(false);
+  const [detailsEditing, setDetailsEditing] = useState(false);
+  const [detailsSaving, setDetailsSaving] = useState(false);
+  const [detailsError, setDetailsError] = useState("");
+  const [detailsDraft, setDetailsDraft] = useState({ color: "", notes: "" });
   const submittedAt = formatDateTime(order.created_at, " • ");
   const storedArtworkFiles = getUploadedOrderArtworkFiles(order);
   const [artworkFiles, setArtworkFiles] = useState(storedArtworkFiles);
@@ -751,6 +756,28 @@ function IntakeReviewScreen({
     completedActions.approveArtwork ? "Artwork Approved" : null,
   ].filter(Boolean);
   const orderLineItems = getOrderLineItems(order);
+  function beginDetailsEdit() {
+    const firstItem = orderLineItems[0] || {};
+    setDetailsDraft({
+      color: firstItem.selected_color || "",
+      notes: customerNotes || "",
+    });
+    setDetailsError("");
+    setDetailsEditing(true);
+  }
+
+  async function saveDetailsEdit() {
+    setDetailsSaving(true);
+    setDetailsError("");
+    try {
+      await onUpdateOrderDetails(detailsDraft);
+      setDetailsEditing(false);
+    } catch (error) {
+      setDetailsError(error?.message || "Unable to save order details.");
+    } finally {
+      setDetailsSaving(false);
+    }
+  }
   const pricingAttentionReason = getPricingAttentionReason(order, financials);
   const requiresArtworkUpload = attentionItems.includes("Artwork Needed");
   const requiresCustomerResponse = attentionItems.includes("Customer Response");
@@ -1170,6 +1197,51 @@ function IntakeReviewScreen({
             description="Garments and configurations exactly as the customer submitted them."
             className="production-console-card production-console-garments intake-console-garments"
           >
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
+              <button
+                type="button"
+                onClick={beginDetailsEdit}
+                disabled={detailsSaving}
+                style={{ border: "1px solid #cbd5e1", background: "#ffffff", color: "#0f172a", borderRadius: "10px", padding: "9px 12px", fontWeight: 800, cursor: "pointer" }}
+              >
+                Edit Order Details
+              </button>
+            </div>
+            {detailsEditing ? (
+              <div style={{ border: "1px solid #cbd5e1", borderRadius: "14px", padding: "14px", marginBottom: "16px", display: "grid", gap: "12px", background: "#f8fafc" }}>
+                <strong>Correct submitted order details</strong>
+                <label style={{ display: "grid", gap: "6px", fontWeight: 700 }}>
+                  Garment colour
+                  <input
+                    value={detailsDraft.color}
+                    onChange={(event) => setDetailsDraft((current) => ({ ...current, color: event.target.value }))}
+                    placeholder="Enter colour"
+                    style={{ border: "1px solid #cbd5e1", borderRadius: "10px", padding: "10px 12px" }}
+                  />
+                </label>
+                <label style={{ display: "grid", gap: "6px", fontWeight: 700 }}>
+                  Order notes
+                  <textarea
+                    value={detailsDraft.notes}
+                    onChange={(event) => setDetailsDraft((current) => ({ ...current, notes: event.target.value }))}
+                    rows={3}
+                    style={{ border: "1px solid #cbd5e1", borderRadius: "10px", padding: "10px 12px", resize: "vertical" }}
+                  />
+                </label>
+                {orderLineItems.length > 1 ? (
+                  <p style={{ margin: 0, color: "#9a3412", fontWeight: 700 }}>This quick correction updates the first garment only. Multi-garment editing stays protected for now.</p>
+                ) : null}
+                {detailsError ? <p role="alert" style={{ margin: 0, color: "#b91c1c", fontWeight: 700 }}>{detailsError}</p> : null}
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  <button type="button" onClick={saveDetailsEdit} disabled={detailsSaving} style={{ border: 0, background: "#0f172a", color: "#ffffff", borderRadius: "10px", padding: "10px 14px", fontWeight: 800 }}>
+                    {detailsSaving ? "Saving..." : "Save Corrections"}
+                  </button>
+                  <button type="button" onClick={() => setDetailsEditing(false)} disabled={detailsSaving} style={{ border: "1px solid #cbd5e1", background: "#ffffff", borderRadius: "10px", padding: "10px 14px", fontWeight: 800 }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <div className="intake-console-table-head" aria-hidden="true">
               <span>Qty</span><span>Garment</span><span>Color</span><span>Sizes</span>
               <span>Placement</span><span>Decoration</span><span>Artwork</span>
@@ -1832,6 +1904,30 @@ export default function QuoteDetail() {
     showWorkflowConfirmation(buildIntakeActionConfirmation("deposit_not_required", { ...order, ...updates }));
   }
 
+  async function handleUpdateOrderDetails({ color = "", notes = "" } = {}) {
+    if (archived || canceled) return;
+
+    const normalizedColor = String(color || "").trim();
+    const normalizedNotes = String(notes || "").trim();
+    const currentItems = getOrderLineItems(order);
+    const firstItem = currentItems[0] || null;
+    if (!firstItem) throw new Error("No garment was found on this request.");
+
+    const nextFirstItem = { ...firstItem, selected_color: normalizedColor };
+    const nextLineItems = Array.isArray(order.line_items) && order.line_items.length
+      ? order.line_items.map((item, index) => index === 0 ? { ...item, selected_color: normalizedColor } : item)
+      : [];
+
+    await updateStoredOrder(order.order_number, {
+      selected_color: normalizedColor,
+      ...(nextLineItems.length ? { line_items: nextLineItems } : {}),
+      notes: normalizedNotes,
+      activity_type: "order_details_corrected",
+      activity_note: `Order details corrected by ${activeStaffUser?.name || "staff"}. Colour: ${normalizedColor || "not recorded"}.`,
+    });
+    showWorkflowConfirmation(`Order details updated for ${order.order_number}.`);
+  }
+
   async function handleUpdatePrice(totalAmount) {
     if (archived || canceled) return;
 
@@ -1890,6 +1986,7 @@ export default function QuoteDetail() {
         onRequireDeposit={handleRequireDeposit}
         onMarkDepositNotRequired={handleMarkDepositNotRequired}
         onUpdatePrice={handleUpdatePrice}
+        onUpdateOrderDetails={handleUpdateOrderDetails}
         onRejectRequest={handleRejectRequest}
         onArchiveRequest={handleArchiveQuote}
       />
