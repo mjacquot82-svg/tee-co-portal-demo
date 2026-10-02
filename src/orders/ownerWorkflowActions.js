@@ -250,20 +250,24 @@ export function deriveOwnerQuoteNextAction(order = {}, productionReadiness = nul
   }
 
   if (productionReadiness && !productionReadiness.ready) {
+    const failedChecks = (productionReadiness.checks || []).filter((check) => !check.passed);
+    const staffReviewOnly =
+      failedChecks.length === 1 && failedChecks[0]?.label === "Staff Review";
+
     return buildAction({
-      label: "Resolve release blockers",
-      detail: `${productionReadiness.remainingRequirements || 0} requirement${
-        productionReadiness.remainingRequirements === 1 ? "" : "s"
-      } remain before production release.`,
+      label: staffReviewOnly ? "Approve request for production" : "Resolve release requirements",
+      detail: staffReviewOnly
+        ? "Staff approval is the only remaining requirement before this request can be released to production."
+        : failedChecks.length
+          ? `Still needed: ${failedChecks.map((check) => `${check.label} (${check.detail})`).join(", ")}.`
+          : `${productionReadiness.remainingRequirements || 0} requirement${productionReadiness.remainingRequirements === 1 ? "" : "s"} remain before production release.`,
       tone: "danger",
       href: quoteHref,
-      blockers: (productionReadiness.checks || [])
-        .filter((check) => check.required && !check.satisfied)
-        .map((check) => ({
-          label: check.label,
-          status: check.status,
-          detail: check.detail,
-        })),
+      blockers: failedChecks.map((check) => ({
+        label: check.label,
+        status: check.detail,
+        detail: check.detail,
+      })),
     });
   }
 
