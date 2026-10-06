@@ -494,6 +494,39 @@ test("Phase 2B row mapping prefers first-class columns over compatibility snapsh
   });
 });
 
+test("order payload strips transient artwork binaries but keeps durable artwork references", () => {
+  const payload = buildSupabaseOrderPayload({
+    order_number: "TC-ARTWORK-SNAPSHOT",
+    customer_name: "Artwork Customer",
+    artwork_files: [{
+      id: "art-1",
+      file_name: "logo.png",
+      storage_reference: "customer-1/logo.png",
+      data_url: "data:image/png;base64,very-large-preview",
+      preview_url: "blob:https://example.test/transient",
+      file: { name: "logo.png" },
+    }],
+    artwork_library: [{
+      id: "art-1",
+      display_name: "Logo",
+      storage_reference: "customer-1/logo.png",
+      dataUrl: "data:image/png;base64,very-large-preview",
+    }],
+  });
+
+  const snapshot = payload.quote.__tee_co_order_snapshot;
+  expect(snapshot.artwork_files[0]).toMatchObject({
+    id: "art-1",
+    file_name: "logo.png",
+    storage_reference: "customer-1/logo.png",
+  });
+  expect(snapshot.artwork_files[0].data_url).toBeUndefined();
+  expect(snapshot.artwork_files[0].preview_url).toBeUndefined();
+  expect(snapshot.artwork_files[0].file).toBeUndefined();
+  expect(snapshot.artwork_library[0].storage_reference).toBe("customer-1/logo.png");
+  expect(snapshot.artwork_library[0].dataUrl).toBeUndefined();
+});
+
 test("Phase 2B hydrated orders preserve portal and workflow fields without reading them from the snapshot", async () => {
   const legacySnapshot = {
     order_number: "TC-P2B-HYDRATE",
