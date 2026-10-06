@@ -370,6 +370,12 @@ export default function CustomerPortalRequestOrder() {
         : "";
       setNotes([pendingRequest.notes, artworkNote].filter(Boolean).join("\n\n"));
     }
+    if (pendingRequest.needByDate) {
+      setNeedByDate(pendingRequest.needByDate);
+    }
+    if (pendingRequest.additionalInstructions) {
+      setAdditionalInstructions(pendingRequest.additionalInstructions);
+    }
     appliedPendingRequestRef.current = pendingKey;
   }, [draftRecoveryRequired, pendingRequest, products, storefrontCategories, storefrontProducts]);
 
@@ -386,6 +392,20 @@ export default function CustomerPortalRequestOrder() {
       active = false;
     };
   }, [draftRecoveryRequired]);
+
+  function persistFinalReviewFields(patch = {}) {
+    if (!pendingRequest) return;
+
+    const nextPendingRequest = {
+      ...pendingRequest,
+      needByDate: patch.needByDate ?? needByDate,
+      additionalInstructions: patch.additionalInstructions ?? additionalInstructions,
+    };
+
+    if (savePendingCustomerRequest(nextPendingRequest)) {
+      setPendingRequest(nextPendingRequest);
+    }
+  }
 
   function handleResumeDraft() {
     setDraftRecoveryState("resume");
@@ -826,7 +846,11 @@ export default function CustomerPortalRequestOrder() {
                 <input
                   type="date"
                   value={needByDate}
-                  onChange={(event) => setNeedByDate(event.target.value)}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setNeedByDate(value);
+                    persistFinalReviewFields({ needByDate: value });
+                  }}
                   style={fieldStyle()}
                 />
               </label>
@@ -878,7 +902,11 @@ export default function CustomerPortalRequestOrder() {
               <textarea
                 rows="4"
                 value={additionalInstructions}
-                onChange={(event) => setAdditionalInstructions(event.target.value)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setAdditionalInstructions(value);
+                  persistFinalReviewFields({ additionalInstructions: value });
+                }}
                 placeholder="Add any final scheduling, artwork, or customization details."
                 style={{ ...fieldStyle(), resize: "vertical" }}
               />
