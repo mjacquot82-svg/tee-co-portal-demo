@@ -113,7 +113,38 @@ function withoutOrderSnapshot(value) {
   return rest;
 }
 
-export function buildSupabaseOrderPayload(order = {}) {
+export function buildPersistedOrderSnapshot(order = {}) {
+  const snapshot = { ...order };
+  // Artwork binaries/data URLs belong in Storage, not inside the orders JSON snapshot.
+  // Keep durable references and display metadata while stripping transient preview payloads.
+  if (Array.isArray(snapshot.artwork_files)) {
+    snapshot.artwork_files = snapshot.artwork_files.map((file = {}) => {
+      const cleaned = { ...file };
+      for (const key of ["data_url", "dataUrl", "preview_url", "previewUrl", "url", "asset_url"]) {
+        const value = String(cleaned[key] || "");
+        if (value.startsWith("data:") || value.startsWith("blob:")) delete cleaned[key];
+      }
+      delete cleaned.file;
+      delete cleaned.blob;
+      return cleaned;
+    });
+  }
+  if (Array.isArray(snapshot.artwork_library)) {
+    snapshot.artwork_library = snapshot.artwork_library.map((file = {}) => {
+      const cleaned = { ...file };
+      for (const key of ["data_url", "dataUrl", "preview_url", "previewUrl", "url", "asset_url"]) {
+        const value = String(cleaned[key] || "");
+        if (value.startsWith("data:") || value.startsWith("blob:")) delete cleaned[key];
+      }
+      delete cleaned.file;
+      delete cleaned.blob;
+      return cleaned;
+    });
+  }
+  return snapshot;
+}
+
+function buildSupabaseOrderPayload(order = {}) {
   const quotePayload =
     order.quote && typeof order.quote === "object" && !Array.isArray(order.quote)
       ? { ...order.quote }
@@ -167,7 +198,7 @@ export function buildSupabaseOrderPayload(order = {}) {
     artwork_reference_names: toJsonArray(order.artwork_reference_names),
     quote: {
       ...quotePayload,
-      [ORDER_SNAPSHOT_KEY]: order,
+      [ORDER_SNAPSHOT_KEY]: buildPersistedOrderSnapshot(order),
     },
     size_breakdown:
       order.size_breakdown && typeof order.size_breakdown === "object"
