@@ -364,6 +364,16 @@ export default function CustomerPortalRequestOrder() {
     if (pendingRequest.selectedColor) setSelectedColor(pendingRequest.selectedColor);
     if (pendingRequest.selectedSize) setSelectedSize(pendingRequest.selectedSize);
     if (pendingRequest.placement) setSelectedPlacement(pendingRequest.placement);
+    if (pendingRequest.needByDate) setNeedByDate(pendingRequest.needByDate);
+    if (pendingRequest.contactName) {
+      setContactName(pendingRequest.contactName);
+      contactNameEditedRef.current = true;
+    }
+    if (pendingRequest.contactPhone) {
+      setContactPhone(pendingRequest.contactPhone);
+      contactPhoneEditedRef.current = true;
+    }
+    if (pendingRequest.additionalInstructions) setAdditionalInstructions(pendingRequest.additionalInstructions);
     if (pendingRequest.notes || pendingRequest.artworkName) {
       const artworkNote = pendingRequest.artworkName
         ? `Artwork reference: ${pendingRequest.artworkName}`
@@ -430,6 +440,36 @@ export default function CustomerPortalRequestOrder() {
       state: { portalOrderStart: true },
     });
   }
+
+  useEffect(() => {
+    if (draftRecoveryRequired || !lineItems.length) return;
+    const currentDraft = pendingRequest || {};
+    const nextDraft = {
+      ...currentDraft,
+      lineItems: lineItems.map((item) => ({
+        id: item.id,
+        productId: item.product_id,
+        garmentId: item.garmentId || "",
+        garmentName: item.garmentName || item.garment || "",
+        brand: item.brand || "",
+        category: item.category || "",
+        selectedColor: item.selected_color || "",
+        placement: item.placement || "",
+        decorationType: item.decoration_type || "",
+        artworkId: item.artwork_id || "",
+        artworkName: item.artwork_name || "",
+        size_breakdown: item.size_breakdown || {},
+        quantity: getLineItemQuantity(item),
+      })),
+      needByDate,
+      notes,
+      additionalInstructions,
+      contactName,
+      contactPhone,
+      artworkLibrary: currentDraft.artworkLibrary || [],
+    };
+    if (savePendingCustomerRequest(nextDraft)) setPendingRequest(nextDraft);
+  }, [additionalInstructions, contactName, contactPhone, draftRecoveryRequired, lineItems, needByDate, notes]);
 
   async function handleSubmit(event) {
     event.preventDefault();
