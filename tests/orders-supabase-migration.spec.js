@@ -540,6 +540,19 @@ test("order payload strips transient artwork binaries but keeps durable artwork 
   });
   expect(nestedPayload.quote.__tee_co_order_snapshot.line_items[0].placements[0].artwork.storage_reference).toBe("customer-1/nested-logo.png");
   expect(nestedPayload.quote.__tee_co_order_snapshot.line_items[0].placements[0].artwork.preview_url).toBeUndefined();
+  expect(nestedPayload.line_items[0].placements[0].artwork.preview_url).toBeUndefined();
+
+  const directPayload = buildSupabaseOrderPayload({
+    order_number: "TC-DIRECT-JSON",
+    customer_name: "Direct JSON Customer",
+    artwork_files: [{ storage_reference: "customer-1/logo.png", data_url: "data:image/png;base64,direct" }],
+    placements: [{ artwork: { storage_reference: "customer-1/logo.png", src: "data:image/png;base64,direct" } }],
+    quote: { preview_url: "data:image/png;base64,direct" },
+  });
+  expect(directPayload.artwork_files[0].storage_reference).toBe("customer-1/logo.png");
+  expect(directPayload.artwork_files[0].data_url).toBeUndefined();
+  expect(directPayload.placements[0].artwork.src).toBeUndefined();
+  expect(directPayload.quote.preview_url).toBeUndefined();
 });
 
 test("Phase 2B hydrated orders preserve portal and workflow fields without reading them from the snapshot", async () => {
