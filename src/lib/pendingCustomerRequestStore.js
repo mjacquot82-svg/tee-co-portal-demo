@@ -143,6 +143,10 @@ export function normalizePendingCustomerRequest(request = {}) {
     placements,
     decorationType: normalizeText(request.decorationType),
     notes: normalizeText(request.notes),
+    needByDate: normalizeText(request.needByDate || request.need_by_date || request.due_date),
+    additionalInstructions: normalizeText(request.additionalInstructions || request.additional_instructions),
+    contactName: normalizeText(request.contactName || request.contact_name),
+    contactPhone: normalizeText(request.contactPhone || request.contact_phone),
     artworkName: normalizeText(request.artworkName),
     artworkLibrary: Array.isArray(request.artworkLibrary || request.artwork_library)
       ? (request.artworkLibrary || request.artwork_library).map(normalizeArtworkAsset)
@@ -155,18 +159,40 @@ export function normalizePendingCustomerRequest(request = {}) {
 
 export function savePendingCustomerRequest(request) {
   if (!hasBrowserStorage()) return false;
-  return setJsonStorageItem(STORAGE_KEY, normalizePendingCustomerRequest(request), {
+  const normalizedRequest = normalizePendingCustomerRequest(request);
+  const localSaved = setJsonStorageItem(STORAGE_KEY, normalizedRequest, {
+    storage: "local",
+  });
+  const sessionSaved = setJsonStorageItem(STORAGE_KEY, normalizedRequest, {
     storage: "session",
   });
+  return localSaved || sessionSaved;
 }
 
 export function getPendingCustomerRequest() {
   if (!hasBrowserStorage()) return null;
-  const request = getJsonStorageItem(STORAGE_KEY, null, { storage: "session" });
-  return request ? normalizePendingCustomerRequest(request) : null;
+
+  // A same-tab legacy draft is the most authoritative source because older
+  // production builds stored drafts only in sessionStorage. Mirror it into
+  // localStorage so a refreshed or second tab can recover the same request.
+  const sessionRequest = getJsonStorageItem(STORAGE_KEY, null, { storage: "session" });
+  if (sessionRequest) {
+    const normalizedRequest = normalizePendingCustomerRequest(sessionRequest);
+    setJsonStorageItem(STORAGE_KEY, normalizedRequest, { storage: "local" });
+    return normalizedRequest;
+  }
+
+  const localRequest = getJsonStorageItem(STORAGE_KEY, null, { storage: "local" });
+  if (!localRequest) return null;
+
+  const normalizedRequest = normalizePendingCustomerRequest(localRequest);
+  setJsonStorageItem(STORAGE_KEY, normalizedRequest, { storage: "session" });
+  return normalizedRequest;
 }
 
 export function clearPendingCustomerRequest() {
   if (!hasBrowserStorage()) return false;
-  return removeStorageItem(STORAGE_KEY, { storage: "session" });
+  const sessionCleared = removeStorageItem(STORAGE_KEY, { storage: "session" });
+  const localCleared = removeStorageItem(STORAGE_KEY, { storage: "local" });
+  return sessionCleared && localCleared;
 }
