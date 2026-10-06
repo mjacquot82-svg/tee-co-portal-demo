@@ -139,8 +139,11 @@ function buildPersistedOrderSnapshot(order = {}) {
 export function buildSupabaseOrderPayload(order = {}) {
   const quotePayload =
     order.quote && typeof order.quote === "object" && !Array.isArray(order.quote)
-      ? { ...order.quote }
+      ? sanitizePersistedValue(order.quote)
       : {};
+  const safePlacements = sanitizePersistedValue(Array.isArray(order.placements) ? order.placements : []);
+  const safeArtworkFiles = sanitizePersistedValue(Array.isArray(order.artwork_files) ? order.artwork_files : []);
+  const safeLineItems = sanitizePersistedValue(Array.isArray(order.line_items) ? order.line_items : []);
 
   return {
     legacy_order_number: order.legacy_order_number || order.order_number || null,
@@ -179,8 +182,8 @@ export function buildSupabaseOrderPayload(order = {}) {
     production_owner_assigned_at: toTimestampOrNull(
       order.production_owner_assigned_at || order.assigned_at
     ),
-    placements: Array.isArray(order.placements) ? order.placements : [],
-    artwork_files: Array.isArray(order.artwork_files) ? order.artwork_files : [],
+    placements: safePlacements,
+    artwork_files: safeArtworkFiles,
     artwork_approval_required: Boolean(order.artwork_approval_required),
     artwork_approval_status: toText(order.artwork_approval_status, "Not Required"),
     artwork_status: toText(order.artwork_status),
@@ -196,7 +199,7 @@ export function buildSupabaseOrderPayload(order = {}) {
       order.size_breakdown && typeof order.size_breakdown === "object"
         ? order.size_breakdown
         : null,
-    line_items: Array.isArray(order.line_items) ? order.line_items : [],
+    line_items: safeLineItems,
     deposit_status: String(
       order.deposit_status || order.deposit_workflow_status || "not_requested"
     ),
