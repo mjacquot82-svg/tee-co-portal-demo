@@ -113,35 +113,27 @@ function withoutOrderSnapshot(value) {
   return rest;
 }
 
-export function buildPersistedOrderSnapshot(order = {}) {
-  const snapshot = { ...order };
-  // Artwork binaries/data URLs belong in Storage, not inside the orders JSON snapshot.
-  // Keep durable references and display metadata while stripping transient preview payloads.
-  if (Array.isArray(snapshot.artwork_files)) {
-    snapshot.artwork_files = snapshot.artwork_files.map((file = {}) => {
-      const cleaned = { ...file };
-      for (const key of ["data_url", "dataUrl", "preview_url", "previewUrl", "url", "asset_url"]) {
-        const value = String(cleaned[key] || "");
-        if (value.startsWith("data:") || value.startsWith("blob:")) delete cleaned[key];
-      }
-      delete cleaned.file;
-      delete cleaned.blob;
-      return cleaned;
-    });
+export function sanitizePersistedValue(value) {
+  if (Array.isArray(value)) return value.map(sanitizePersistedValue);
+  if (!value || typeof value !== "object") return value;
+
+  const cleaned = {};
+  for (const [key, nestedValue] of Object.entries(value)) {
+    if (["file", "blob"].includes(key)) continue;
+    if (["data_url", "dataUrl", "preview_url", "previewUrl", "url", "asset_url", "src"].includes(key)) {
+      const text = String(nestedValue || "");
+      if (text.startsWith("data:") || text.startsWith("blob:")) continue;
+    }
+    cleaned[key] = sanitizePersistedValue(nestedValue);
   }
-  if (Array.isArray(snapshot.artwork_library)) {
-    snapshot.artwork_library = snapshot.artwork_library.map((file = {}) => {
-      const cleaned = { ...file };
-      for (const key of ["data_url", "dataUrl", "preview_url", "previewUrl", "url", "asset_url"]) {
-        const value = String(cleaned[key] || "");
-        if (value.startsWith("data:") || value.startsWith("blob:")) delete cleaned[key];
-      }
-      delete cleaned.file;
-      delete cleaned.blob;
-      return cleaned;
-    });
-  }
-  return snapshot;
+  return cleaned;
+}
+
+function buildPersistedOrderSnapshot(order = {}) {
+  // Customer artwork can appear at several nested levels (line items, placements,
+  // quote details and artwork collections). Recursively strip browser-only binary
+  // previews while retaining durable Storage references and normal metadata.
+  return sanitizePersistedValue(order);
 }
 
 export function buildSupabaseOrderPayload(order = {}) {
