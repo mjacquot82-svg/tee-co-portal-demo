@@ -144,7 +144,7 @@ export function buildPersistedOrderSnapshot(order = {}) {
   return snapshot;
 }
 
-function buildSupabaseOrderPayload(order = {}) {
+export function buildSupabaseOrderPayload(order = {}) {
   const quotePayload =
     order.quote && typeof order.quote === "object" && !Array.isArray(order.quote)
       ? { ...order.quote }
