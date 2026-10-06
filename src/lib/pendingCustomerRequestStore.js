@@ -143,6 +143,10 @@ export function normalizePendingCustomerRequest(request = {}) {
     placements,
     decorationType: normalizeText(request.decorationType),
     notes: normalizeText(request.notes),
+    additionalInstructions: normalizeText(request.additionalInstructions || request.additional_instructions),
+    needByDate: normalizeText(request.needByDate || request.need_by_date),
+    contactName: normalizeText(request.contactName || request.contact_name),
+    contactPhone: normalizeText(request.contactPhone || request.contact_phone),
     artworkName: normalizeText(request.artworkName),
     artworkLibrary: Array.isArray(request.artworkLibrary || request.artwork_library)
       ? (request.artworkLibrary || request.artwork_library).map(normalizeArtworkAsset)
