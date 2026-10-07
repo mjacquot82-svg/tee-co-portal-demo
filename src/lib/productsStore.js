@@ -68,19 +68,6 @@ const LEGACY_PRODUCTS_SELECT_FIELDS = ["id","legacy_product_id","sku","name","ca
 
 const FULL_PRODUCTS_SELECT_FIELDS = ["image", PRODUCTS_SELECT_FIELDS].join(", ");
 
-const LEGACY_PRODUCTS_SELECT_FIELDS_UNUSED = PRODUCTS_SELECT_FIELDS
-  .replace("image_storage_path, ", "")
-  .replace("image_content_type, ", "")
-  .replace("image_file_size, ", "")
-  .replace("image_updated_at, ", "")
-  .replace("image_thumb_storage_path, ", "")
-  .replace("storefront_category, ", "")
-  .replace("storefront_category_lookup_id, ", "")
-  .replace("compare_at_price, ", "")
-  .replace("characteristics, ", "")
-  .replace("is_hero_feature, ", "")
-  .replace("garment_library_item_id, ", "");
-
 function buildSupabaseProductErrorDetails(error, extra = {}) {
   if (!error || typeof error !== "object") {
     return {
