@@ -21,6 +21,21 @@ describe("order discount safeguards", () => {
     expect(normalizeOrderDiscount({ discount_type: "fixed", discount_value: -10 }).value).toBe(0);
   });
 
+  it("caps deposit at discounted total", () => {
+    const financials = deriveOrderFinancials({
+      order_number: "DISCOUNT-DEPOSIT",
+      subtotal: 100,
+      tax_amount: 13,
+      total_amount: 113,
+      deposit_amount: 100,
+      discount_type: "fixed",
+      discount_value: 90,
+    });
+    expect(financials.total_amount).toBe(11.3);
+    expect(financials.deposit_amount).toBe(11.3);
+    expect(financials.deposit_outstanding).toBe(11.3);
+  });
+
   it("retains an owner discount reason", () => {
     expect(normalizeOrderDiscount({
       discount_type: "percent", discount_value: 15, discount_reason: "Bulk order",
