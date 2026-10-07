@@ -842,7 +842,23 @@ export default function CustomerPortalRequestOrder() {
               </article>
             );
           })}
-          <button type="button" className="portal-touch-button portal-touch-button-secondary" onClick={() => navigate(PORTAL_ORDER_CATALOG_PATH, { state: { addingAnotherGarment: true } })}>Add Another Garment</button>
+          <button
+            type="button"
+            className="portal-touch-button"
+            onClick={() => navigate(PORTAL_ORDER_CATALOG_PATH, { state: { addingAnotherGarment: true } })}
+            style={{
+              width: "100%",
+              minHeight: "56px",
+              fontSize: "16px",
+              fontWeight: 800,
+              border: "2px solid #171717",
+              background: "#171717",
+              color: "#ffffff",
+              boxShadow: "0 10px 24px rgba(0,0,0,0.14)",
+            }}
+          >
+            + Add Another Garment to This Order
+          </button>
           <div style={{ marginTop: "16px", borderRadius: "16px", background: "#f8fafc", border: "1px solid #e2e8f0", padding: "14px 16px" }}>
             <ReviewItem label="Order Summary" value={`${lineItems.length} garment line ${lineItems.length === 1 ? "item" : "items"} · ${orderQuantity} total pieces`} />
             <ReviewItem label="Estimated Pricing" value={estimatedOrderQuote?.total !== null && estimatedOrderQuote?.total !== undefined ? `${formatMoney(estimatedOrderQuote.total)} estimated total` : "Pricing confirmed after review"} />
