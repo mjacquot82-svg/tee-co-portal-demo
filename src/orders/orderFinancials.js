@@ -745,14 +745,26 @@ export function deriveOrderFinancials(order = {}, options = {}) {
     resolvedTaxAmount = repairedTotals.tax_amount;
     resolvedTotalAmount = repairedTotals.total_amount;
   }
+  const discount = normalizeOrderDiscount(order);
+  const { discount_amount: discountAmount, discounted_subtotal: discountedSubtotal } =
+    applyOrderDiscount(subtotal, discount);
+  const hasDiscount = discountAmount > 0;
+  const inferredTaxRate =
+    subtotal > 0 && resolvedTaxAmount !== null
+      ? Math.max(resolvedTaxAmount / subtotal, 0)
+      : Number(order.tax_rate ?? order.quote?.tax_rate ?? DEFAULT_SALES_TAX_RATE);
   const taxAmount = normalizeCurrency(
-    resolvedTaxAmount ??
-      (resolvedTotalAmount !== null && resolvedSubtotal !== null
-        ? Math.max(resolvedTotalAmount - resolvedSubtotal, 0)
-        : 0)
+    hasDiscount
+      ? order.tax_exempt === true
+        ? 0
+        : discountedSubtotal * (Number.isFinite(inferredTaxRate) ? inferredTaxRate : DEFAULT_SALES_TAX_RATE)
+      : resolvedTaxAmount ??
+        (resolvedTotalAmount !== null && resolvedSubtotal !== null
+          ? Math.max(resolvedTotalAmount - resolvedSubtotal, 0)
+          : 0)
   );
   const totalAmount = normalizeCurrency(
-    resolvedTotalAmount ?? subtotal + taxAmount
+    hasDiscount ? discountedSubtotal + taxAmount : resolvedTotalAmount ?? subtotal + taxAmount
   );
   const depositAmount = normalizeCurrency(order.deposit_amount ?? order.deposit?.amount);
   const totalPaid = normalizeCurrency(deriveCanonicalTotalPaid({
@@ -841,6 +853,11 @@ export function deriveOrderFinancials(order = {}, options = {}) {
 
   return {
     subtotal,
+    discount_type: discount.type,
+    discount_value: discount.value,
+    discount_reason: discount.reason,
+    discount_amount: discountAmount,
+    discounted_subtotal: discountedSubtotal,
     tax_amount: taxAmount,
     total_amount: totalAmount,
     deposit_amount: depositAmount,
