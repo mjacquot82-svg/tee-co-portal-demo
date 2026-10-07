@@ -42,7 +42,6 @@ const PRODUCTS_SELECT_FIELDS = [
   "status",
   "is_featured",
   "is_hero_feature",
-  "image",
   "image_storage_path",
   "image_content_type",
   "image_file_size",
@@ -65,7 +64,11 @@ const PRODUCTS_SELECT_FIELDS = [
   "notes",
 ].join(", ");
 
-const LEGACY_PRODUCTS_SELECT_FIELDS = PRODUCTS_SELECT_FIELDS
+const LEGACY_PRODUCTS_SELECT_FIELDS = ["id","legacy_product_id","sku","name","category","category_lookup_id","product_type","brand_model","brand_lookup_id","garment_model_lookup_id","status","is_featured","colors","sizes","placements","placement_config","placement_prices","production_methods","decoration_types","production_method_prices","cost_price","markup_percentage","base_garment_price","unit_price","notes"].join(", ");
+
+const FULL_PRODUCTS_SELECT_FIELDS = ["image", PRODUCTS_SELECT_FIELDS].join(", ");
+
+const LEGACY_PRODUCTS_SELECT_FIELDS_UNUSED = PRODUCTS_SELECT_FIELDS
   .replace("image_storage_path, ", "")
   .replace("image_content_type, ", "")
   .replace("image_file_size, ", "")
