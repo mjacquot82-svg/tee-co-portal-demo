@@ -1409,6 +1409,16 @@ function IntakeReviewScreen({
             <div style={{ display: "grid", gap: "14px" }}>
               <DetailItem label="Estimated Total" value={money(financials?.total_amount)} />
               <DetailItem label="Deposit Decision Status" value={depositStatus} />
+              {Number(financials?.discount_amount || 0) > 0 ? (
+                <div data-testid="order-discount-summary" style={{ padding: "10px 12px", borderRadius: "10px", border: "1px solid #dbeafe", background: "#eff6ff" }}>
+                  <strong>Discount applied: {money(financials.discount_amount)}</strong>
+                  <p style={{ margin: "4px 0 0", fontSize: "13px" }}>
+                    {financials.discount_type === "percent" ? `${financials.discount_value}%` : "Fixed amount"}
+                    {financials.discount_reason ? ` · ${financials.discount_reason}` : ""}
+                  </p>
+                </div>
+              ) : null}
+
               {order.pricing_override === true ? <StatusPill tone="warning">Staff Price Override</StatusPill> : null}
               {pricingAttentionReason ? (
                 <div data-testid="intake-pricing-attention" style={{ border: "1px solid #fed7aa", background: "#fff7ed", borderRadius: "12px", padding: "12px" }}>
