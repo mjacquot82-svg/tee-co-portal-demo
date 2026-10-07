@@ -579,66 +579,9 @@ export default function GarmentView() {
             </div>
           </div>
 
-          <div style={{ marginTop: "18px" }}>
-            <p
-              style={{
-                fontWeight: "700",
-                margin: "0 0 6px 0",
-                fontSize: "15px",
-              }}
-            >
-              Decoration Options
-            </p>
-
-            <p
-              style={{
-                margin: "0 0 8px 0",
-              fontSize: "13px",
-              color: "#78716c",
-              lineHeight: 1.4,
-            }}
-          >
-              Decoration details are handled with your order. Pricing does not change by location.
-            </p>
-
-            <div
-              style={{
-                display: "flex",
-                gap: "8px",
-                flexWrap: "wrap",
-              }}
-            >
-              {availablePlacements.map((placement) => (
-                <span
-                  key={placement.id || placement.label}
-                  style={{
-                    fontSize: "12px",
-                    padding: "7px 10px",
-                    borderRadius: "999px",
-                    background: "#fafaf9",
-                    border: "1px solid #e7e5e4",
-                    color: "#44403c",
-                  }}
-                >
-                  {placement.label}
-                </span>
-              ))}
-              {!availablePlacements.length ? (
-                <span
-                  style={{
-                    fontSize: "12px",
-                    padding: "7px 10px",
-                    borderRadius: "999px",
-                    background: "#fafaf9",
-                    border: "1px solid #e7e5e4",
-                    color: "#78716c",
-                  }}
-                >
-                  Decoration details available during order review
-                </span>
-              ) : null}
-            </div>
-          </div>
+          <p style={{ margin: "18px 0 0", fontSize: "13px", color: "#78716c", lineHeight: 1.45 }}>
+            Sizes, quantities, decoration method, placement, and artwork are selected on the next step.
+          </p>
 
           <div
             style={{
