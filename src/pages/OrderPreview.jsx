@@ -112,7 +112,7 @@ export default function OrderPreview() {
     editingLineItem?.decorationType || editingLineItem?.decoration_type || defaultDecorationType
   );
   const [notes, setNotes] = useState("");
-  const [artwork, setArtwork] = useState(null);
+  const [artwork, setArtwork] = useState(null);\n  const [artworkLocation, setArtworkLocation] = useState(editingLineItem?.artworkLocation || editingLineItem?.artwork_location || "Front");\n  const [customArtworkLocation, setCustomArtworkLocation] = useState(editingLineItem?.customArtworkLocation || editingLineItem?.custom_artwork_location || "");
   const [artworkChoice, setArtworkChoice] = useState(
     passedState.artworkAction === "upload"
       ? "upload"
@@ -275,7 +275,7 @@ export default function OrderPreview() {
       placement: selectedPlacements[0] || "",
       decorationType,
       artworkId: selectedArtwork?.id || "",
-      artworkName: selectedArtwork?.displayName || selectedArtwork?.name || "",
+      artworkName: selectedArtwork?.displayName || selectedArtwork?.name || "",\n      artworkLocation: artworkLocation === "Other" ? customArtworkLocation.trim() : artworkLocation,
       estimatedStartingPrice: Number.isFinite(Number(customerTotal)) ? Number(customerTotal) : 0,
     };
   }
@@ -699,6 +699,19 @@ export default function OrderPreview() {
                 {artworkLibraryError}
               </p>
             ) : null}
+
+            <div style={{ display: "grid", gap: "8px", margin: "12px 0" }}>
+              <label style={{ fontWeight: 700, fontSize: "14px" }} htmlFor="artwork-location">Artwork location</label>
+              <select id="artwork-location" value={artworkLocation} onChange={(event) => setArtworkLocation(event.target.value)} style={{ padding: "11px", borderRadius: "12px", border: "1px solid #d6d3d1", background: "#ffffff" }}>
+                <option value="Front">Front</option>
+                <option value="Back">Back</option>
+                <option value="Sleeve">Sleeve</option>
+                <option value="Other">Other / custom</option>
+              </select>
+              {artworkLocation === "Other" ? (
+                <input value={customArtworkLocation} onChange={(event) => setCustomArtworkLocation(event.target.value)} placeholder="e.g. Hat front, left leg, pocket" aria-label="Custom artwork location" style={{ padding: "11px", borderRadius: "12px", border: "1px solid #d6d3d1", background: "#ffffff" }} />
+              ) : null}
+            </div>
 
             {artworkChoice === "upload" ? (
               <button
