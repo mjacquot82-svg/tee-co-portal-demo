@@ -285,6 +285,11 @@ export default function OrderPreview() {
       setSubmitError("Add at least one size and quantity before saving this garment.");
       return;
     }
+    if (artworkLocation === "Other" && !customArtworkLocation.trim()) {
+      setSubmitError("Enter an artwork location.");
+      return;
+    }
+    setSubmitError("");
     const configuredLineItem = buildConfiguredLineItem();
     const existingLineItems = existingRequest.lineItems || [];
     const updatedLineItems = upsertPendingCustomerLineItem(existingLineItems, configuredLineItem);
