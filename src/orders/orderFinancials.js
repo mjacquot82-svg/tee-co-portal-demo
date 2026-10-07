@@ -766,7 +766,8 @@ export function deriveOrderFinancials(order = {}, options = {}) {
   const totalAmount = normalizeCurrency(
     hasDiscount ? discountedSubtotal + taxAmount : resolvedTotalAmount ?? subtotal + taxAmount
   );
-  const depositAmount = normalizeCurrency(order.deposit_amount ?? order.deposit?.amount);
+  const requestedDepositAmount = normalizeCurrency(order.deposit_amount ?? order.deposit?.amount);
+  const depositAmount = hasDiscount ? Math.min(requestedDepositAmount, totalAmount) : requestedDepositAmount;
   const totalPaid = normalizeCurrency(deriveCanonicalTotalPaid({
     ...order,
     payment_history: paymentHistory,
