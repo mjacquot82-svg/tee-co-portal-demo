@@ -25,6 +25,7 @@ let productsLoadPromise = null;
 let hasLoadedProductsFromSupabase = false;
 let refreshSequence = 0;
 
+// Keep routine catalogue reads lightweight: images resolve from Storage metadata, not the legacy inline image payload.
 const PRODUCTS_SELECT_FIELDS = [
   "id",
   "legacy_product_id",
@@ -42,7 +43,6 @@ const PRODUCTS_SELECT_FIELDS = [
   "status",
   "is_featured",
   "is_hero_feature",
-  "image",
   "image_storage_path",
   "image_content_type",
   "image_file_size",
@@ -65,18 +65,9 @@ const PRODUCTS_SELECT_FIELDS = [
   "notes",
 ].join(", ");
 
-const LEGACY_PRODUCTS_SELECT_FIELDS = PRODUCTS_SELECT_FIELDS
-  .replace("image_storage_path, ", "")
-  .replace("image_content_type, ", "")
-  .replace("image_file_size, ", "")
-  .replace("image_updated_at, ", "")
-  .replace("image_thumb_storage_path, ", "")
-  .replace("storefront_category, ", "")
-  .replace("storefront_category_lookup_id, ", "")
-  .replace("compare_at_price, ", "")
-  .replace("characteristics, ", "")
-  .replace("is_hero_feature, ", "")
-  .replace("garment_library_item_id, ", "");
+const LEGACY_PRODUCTS_SELECT_FIELDS = ["id","legacy_product_id","sku","name","category","category_lookup_id","product_type","brand_model","brand_lookup_id","garment_model_lookup_id","status","is_featured","colors","sizes","placements","placement_config","placement_prices","production_methods","decoration_types","production_method_prices","cost_price","markup_percentage","base_garment_price","unit_price","notes"].join(", ");
+
+const FULL_PRODUCTS_SELECT_FIELDS = ["image", PRODUCTS_SELECT_FIELDS].join(", ");
 
 function buildSupabaseProductErrorDetails(error, extra = {}) {
   if (!error || typeof error !== "object") {
