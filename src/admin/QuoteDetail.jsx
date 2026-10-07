@@ -36,6 +36,7 @@ import {
   canManageArchivedQuotes,
   getAdminViewer,
   isStaffWorkspaceView,
+  isOwnerView,
 } from "./adminRoleView";
 import PaymentRequestForm from "./PaymentRequestForm";
 import { requestQuoteDeposit } from "./quoteDepositRequestAction";
@@ -1409,7 +1410,7 @@ function IntakeReviewScreen({
             <div style={{ display: "grid", gap: "14px" }}>
               <DetailItem label="Estimated Total" value={money(financials?.total_amount)} />
               <DetailItem label="Deposit Decision Status" value={depositStatus} />
-              {Number(financials?.discount_amount || 0) > 0 ? (
+              {canManageDiscount && Number(financials?.discount_amount || 0) > 0 ? (
                 <div data-testid="order-discount-summary" style={{ padding: "10px 12px", borderRadius: "10px", border: "1px solid #dbeafe", background: "#eff6ff" }}>
                   <strong>Discount applied: {money(financials.discount_amount)}</strong>
                   <p style={{ margin: "4px 0 0", fontSize: "13px" }}>
@@ -1569,7 +1570,7 @@ export default function QuoteDetail() {
   const activeStaffUser = getActiveStaffUser();
   const viewer = getAdminViewer(activeStaffUser);
   const isStaffWorkspace = isStaffWorkspaceView(activeStaffUser);
-  const canManageArchive = canManageArchivedQuotes(viewer);
+  const canManageArchive = canManageArchivedQuotes(viewer);\n  const canManageDiscount = isOwnerView(activeStaffUser);
   const orders = useStoredOrders();
   const savedOrder = location.state?.savedOrder || null;
   const order = useMemo(
