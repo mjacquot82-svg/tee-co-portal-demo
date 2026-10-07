@@ -688,6 +688,29 @@ export function normalizePaymentHistory(history, order = {}) {
   );
 }
 
+export function normalizeOrderDiscount(order = {}) {
+  const rawType = normalizeLower(order.discount_type || order.discount?.type);
+  const type = rawType === "percent" || rawType === "percentage" ? "percent" : rawType === "fixed" || rawType === "amount" ? "fixed" : "";
+  const value = normalizeCurrency(order.discount_value ?? order.discount?.value ?? order.discount_amount);
+  const reason = normalizeText(order.discount_reason || order.discount?.reason);
+  return { type, value, reason };
+}
+
+export function applyOrderDiscount(subtotal, discount = {}) {
+  const baseSubtotal = normalizeCurrency(subtotal);
+  if (baseSubtotal <= 0 || !discount?.type || discount.value <= 0) {
+    return { discount_amount: 0, discounted_subtotal: baseSubtotal };
+  }
+  const requestedAmount = discount.type === "percent"
+    ? baseSubtotal * Math.min(discount.value, 100) / 100
+    : discount.value;
+  const discountAmount = normalizeCurrency(Math.min(Math.max(requestedAmount, 0), baseSubtotal));
+  return {
+    discount_amount: discountAmount,
+    discounted_subtotal: normalizeCurrency(baseSubtotal - discountAmount),
+  };
+}
+
 export function deriveOrderFinancials(order = {}, options = {}) {
   const paymentHistory = normalizePaymentHistory(order.payment_history, order);
   const {
