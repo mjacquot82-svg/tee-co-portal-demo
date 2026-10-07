@@ -25,6 +25,7 @@ let productsLoadPromise = null;
 let hasLoadedProductsFromSupabase = false;
 let refreshSequence = 0;
 
+// Keep routine catalogue reads lightweight: images resolve from Storage metadata, not the legacy inline image payload.
 const PRODUCTS_SELECT_FIELDS = [
   "id",
   "legacy_product_id",
