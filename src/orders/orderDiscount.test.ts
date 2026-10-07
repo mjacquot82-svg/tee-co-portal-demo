@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyOrderDiscount, normalizeOrderDiscount } from "./orderFinancials";
+import { applyOrderDiscount, deriveOrderFinancials, normalizeOrderDiscount } from "./orderFinancials";
 
 describe("order discount safeguards", () => {
   it("applies a percentage discount before tax", () => {
@@ -25,5 +25,21 @@ describe("order discount safeguards", () => {
     expect(normalizeOrderDiscount({
       discount_type: "percent", discount_value: 15, discount_reason: "Bulk order",
     })).toEqual({ type: "percent", value: 15, reason: "Bulk order" });
+  });
+  it("recalculates tax and outstanding balance from discounted total", () => {
+    const financials = deriveOrderFinancials({
+      order_number: "DISCOUNT-TEST-1",
+      subtotal: 200,
+      tax_amount: 26,
+      total_amount: 226,
+      discount_type: "percent",
+      discount_value: 10,
+      payment_history: [{ amount: 50, method: "Cash", timestamp: "2026-10-07T12:00:00Z" }],
+    });
+    expect(financials.discount_amount).toBe(20);
+    expect(financials.discounted_subtotal).toBe(180);
+    expect(financials.tax_amount).toBe(23.4);
+    expect(financials.total_amount).toBe(203.4);
+    expect(financials.balance_due).toBe(153.4);
   });
 });
