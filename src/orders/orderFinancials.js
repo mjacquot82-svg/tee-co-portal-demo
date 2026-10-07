@@ -691,14 +691,14 @@ export function normalizePaymentHistory(history, order = {}) {
 export function normalizeOrderDiscount(order = {}) {
   const rawType = normalizeLower(order.discount_type || order.discount?.type);
   const type = rawType === "percent" || rawType === "percentage" ? "percent" : rawType === "fixed" || rawType === "amount" ? "fixed" : "";
-  const value = normalizeCurrency(order.discount_value ?? order.discount?.value ?? order.discount_amount);
+  const rawValue = parseCurrency(order.discount_value ?? order.discount?.value ?? order.discount_amount);\n  const value = rawValue !== null && rawValue > 0 ? normalizeCurrency(rawValue) : 0;
   const reason = normalizeText(order.discount_reason || order.discount?.reason);
   return { type, value, reason };
 }
 
 export function applyOrderDiscount(subtotal, discount = {}) {
   const baseSubtotal = normalizeCurrency(subtotal);
-  if (baseSubtotal <= 0 || !discount?.type || discount.value <= 0) {
+  if (baseSubtotal <= 0 || !["percent", "fixed"].includes(discount?.type) || !Number.isFinite(Number(discount.value)) || discount.value <= 0) {
     return { discount_amount: 0, discounted_subtotal: baseSubtotal };
   }
   const requestedAmount = discount.type === "percent"
