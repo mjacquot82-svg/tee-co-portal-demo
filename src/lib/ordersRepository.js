@@ -233,7 +233,19 @@ export function buildSupabaseOrderPayload(order = {}) {
     is_rush: Boolean(order.is_rush),
     decoration_type: toText(order.decoration_type || order.production_type),
     placement: toText(order.placement),
-    order_metadata: { ...toJsonObject(order.order_metadata), ...(order.discount_type ? { owner_discount: { type: order.discount_type, value: order.discount_value, reason: order.discount_reason || "" } } : {}) },
+    order_metadata: (() => {
+      const metadata = { ...toJsonObject(order.order_metadata) };
+      if (order.discount_type && Number(order.discount_value) > 0) {
+        metadata.owner_discount = {
+          type: order.discount_type,
+          value: Number(order.discount_value),
+          reason: order.discount_reason || "",
+        };
+      } else {
+        delete metadata.owner_discount;
+      }
+      return metadata;
+    })(),
     notes: String(order.notes || ""),
     internal_notes: String(order.internal_notes || ""),
     activity_log: Array.isArray(order.activity_log) ? order.activity_log : [],
