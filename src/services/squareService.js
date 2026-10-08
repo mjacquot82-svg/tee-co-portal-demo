@@ -137,7 +137,7 @@ export function hasProviderCheckoutUrl(paymentRequest = {}) {
 export function buildSquarePaymentLinkPayload(paymentRequest = {}) {
   const amountRequested = normalizeAmount(paymentRequest.amount_requested);
   const remainingAmount = Math.max(0, amountRequested - normalizeAmount(paymentRequest.amount_paid));
-  const amount = remainingAmount || amountRequested;
+  const amount = remainingAmount;
 
   return {
     idempotency_key: buildIdempotencyKey(paymentRequest),

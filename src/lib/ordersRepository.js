@@ -137,8 +137,8 @@ function buildPersistedOrderSnapshot(order = {}) {
 }
 
 export function buildSupabaseOrderPayload(order = {}) {
-  // Owner discount writes remain disabled until server-side role authorization is enforced.
-  // Do not allow ordinary order updates to introduce or change discount metadata.
+  // This serializer preserves discount metadata; it does not authorize writes.
+  // Owner discount editing must stay disabled until database authorization is deployed.
 
   const quotePayload =
     order.quote && typeof order.quote === "object" && !Array.isArray(order.quote)

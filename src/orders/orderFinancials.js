@@ -691,7 +691,8 @@ export function normalizePaymentHistory(history, order = {}) {
 export function normalizeOrderDiscount(order = {}) {
   const rawType = normalizeLower(order.discount_type || order.discount?.type);
   const type = rawType === "percent" || rawType === "percentage" ? "percent" : rawType === "fixed" || rawType === "amount" ? "fixed" : "";
-  const rawValue = parseCurrency(order.discount_value ?? order.discount?.value ?? order.discount_amount);\n  const value = rawValue !== null && rawValue > 0 ? normalizeCurrency(rawValue) : 0;
+  const rawValue = parseCurrency(order.discount_value ?? order.discount?.value ?? order.discount_amount);
+  const value = rawValue !== null && rawValue > 0 ? normalizeCurrency(rawValue) : 0;
   const reason = normalizeText(order.discount_reason || order.discount?.reason);
   return { type, value, reason };
 }

@@ -33,6 +33,7 @@ export function normalizeOrderLineItem(lineItem = {}, index = 0) {
     decoration_type: lineItem.decoration_type || "",
     artwork_id: lineItem.artwork_id || lineItem.artworkId || "",
     artwork_name: lineItem.artwork_name || lineItem.artworkName || "",
+    artwork_location: lineItem.artwork_location || lineItem.artworkLocation || "",
     placement: lineItem.placement || placements[0]?.placement || "",
     placements,
     production_notes: lineItem.production_notes || "",

@@ -695,6 +695,7 @@ function IntakeReviewScreen({
   depositStatus,
   historyEvents,
   canManageArchive,
+  canManageDiscount,
   onApproveRequest,
   onApproveArtwork,
   onRequestArtwork,
@@ -1570,7 +1571,8 @@ export default function QuoteDetail() {
   const activeStaffUser = getActiveStaffUser();
   const viewer = getAdminViewer(activeStaffUser);
   const isStaffWorkspace = isStaffWorkspaceView(activeStaffUser);
-  const canManageArchive = canManageArchivedQuotes(viewer);\n  const canManageDiscount = isOwnerView(activeStaffUser);
+  const canManageArchive = canManageArchivedQuotes(viewer);
+  const canManageDiscount = isOwnerView(activeStaffUser);
   const orders = useStoredOrders();
   const savedOrder = location.state?.savedOrder || null;
   const order = useMemo(
@@ -1995,6 +1997,7 @@ export default function QuoteDetail() {
         depositStatus={depositStatus}
         historyEvents={historyEvents}
         canManageArchive={canManageArchive}
+        canManageDiscount={canManageDiscount}
         onApproveRequest={handleApproveRequest}
         onApproveArtwork={handleApproveArtwork}
         onRequestArtwork={handleRequestArtwork}

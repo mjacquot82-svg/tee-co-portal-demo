@@ -237,6 +237,7 @@ export default function CustomerPortalRequestOrder() {
         decoration_type: item.decorationType,
         artwork_id: item.artworkId || "",
         artwork_name: item.artworkName || "",
+        artwork_location: item.artworkLocation || "",
         size_breakdown: item.size_breakdown,
         quantity: item.quantity,
       })));
@@ -458,6 +459,7 @@ export default function CustomerPortalRequestOrder() {
         decorationType: item.decoration_type || "",
         artworkId: item.artwork_id || "",
         artworkName: item.artwork_name || "",
+        artworkLocation: item.artwork_location || "",
         size_breakdown: item.size_breakdown || {},
         quantity: getLineItemQuantity(item),
       })),
@@ -838,6 +840,7 @@ export default function CustomerPortalRequestOrder() {
                   <ReviewItem label="Placement" value={lineItem.placement || "Confirm later"} />
                   <ReviewItem label="Decoration" value={lineItem.decoration_type || "Confirm later"} />
                   <ReviewItem label="Artwork" value={lineItem.artwork_name || "No artwork selected for this garment"} />
+                  {lineItem.artwork_location ? <ReviewItem label="Artwork location" value={lineItem.artwork_location} /> : null}
                 </div>
               </article>
             );

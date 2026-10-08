@@ -112,7 +112,15 @@ export default function OrderPreview() {
     editingLineItem?.decorationType || editingLineItem?.decoration_type || defaultDecorationType
   );
   const [notes, setNotes] = useState("");
-  const [artwork, setArtwork] = useState(null);\n  const [artworkLocation, setArtworkLocation] = useState(editingLineItem?.artworkLocation || editingLineItem?.artwork_location || "Front");\n  const [customArtworkLocation, setCustomArtworkLocation] = useState(editingLineItem?.customArtworkLocation || editingLineItem?.custom_artwork_location || "");
+  const [artwork, setArtwork] = useState(null);
+  const savedArtworkLocation = editingLineItem?.artworkLocation || editingLineItem?.artwork_location || "Front";
+  const [artworkLocation, setArtworkLocation] = useState(
+    ["Front", "Back", "Sleeve", "Other"].includes(savedArtworkLocation) ? savedArtworkLocation : "Other"
+  );
+  const [customArtworkLocation, setCustomArtworkLocation] = useState(
+    editingLineItem?.customArtworkLocation || editingLineItem?.custom_artwork_location ||
+    (!["Front", "Back", "Sleeve", "Other"].includes(savedArtworkLocation) ? savedArtworkLocation : "")
+  );
   const [artworkChoice, setArtworkChoice] = useState(
     passedState.artworkAction === "upload"
       ? "upload"
@@ -275,7 +283,8 @@ export default function OrderPreview() {
       placement: selectedPlacements[0] || "",
       decorationType,
       artworkId: selectedArtwork?.id || "",
-      artworkName: selectedArtwork?.displayName || selectedArtwork?.name || "",\n      artworkLocation: artworkLocation === "Other" ? customArtworkLocation.trim() : artworkLocation,
+      artworkName: selectedArtwork?.displayName || selectedArtwork?.name || "",
+      artworkLocation: artworkLocation === "Other" ? customArtworkLocation.trim() : artworkLocation,
       estimatedStartingPrice: Number.isFinite(Number(customerTotal)) ? Number(customerTotal) : 0,
     };
   }
