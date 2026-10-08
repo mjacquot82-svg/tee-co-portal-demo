@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, cleanup } from '@testing-library/re
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, test, vi } from 'vitest';
 import NewOrder from './NewOrder';
+import { buildSupabaseOrderPayload, mapSupabaseOrderRowToOrder } from '../lib/ordersRepository';
 const mocks = vi.hoisted(() => ({ save: vi.fn(async (order) => ({ ...order, order_number: 'TEST-1' })) }));
 vi.mock('../lib/productsStore', async (importOriginal) => ({ ...(await importOriginal()), useStoredProducts: () => [
   { id: 'shirt', name: 'T-shirt', colors: ['Black', 'Red'], sizes: ['M', 'L'], base_garment_price: 10, status: 'Active' },
@@ -34,7 +35,10 @@ test('saves different colours and products in one staff order, including the cur
  expect(order.line_items.map((item) => item.selected_color)).toEqual(['Black', 'Red', 'Blue']);
  expect(order.line_items.map((item) => item.size_breakdown)).toEqual([{ M: 0, L: 3 }, { M: 2, L: 0 }, { XL: 1 }]);
  expect(order.quote.quantity).toBe(6);
- expect(order.quote.total).toBe(84.75); 
+ expect(order.quote.total).toBe(84.75);
+ const restored = mapSupabaseOrderRowToOrder(buildSupabaseOrderPayload({ ...order, order_number: 'TEST-1' }));
+ expect(restored.line_items.map((item) => item.selected_color)).toEqual(['Black', 'Red', 'Blue']);
+ expect(restored.qty).toBe(6); 
 });
 test('rejects fractional quantities and allows removal of added items', () => {
  render(<MemoryRouter><NewOrder /></MemoryRouter>);
@@ -45,4 +49,20 @@ test('rejects fractional quantities and allows removal of added items', () => {
  fireEvent.click(screen.getByText('Add Another Item'));
  fireEvent.click(screen.getByLabelText('Remove item 1'));
  expect(screen.queryByLabelText('Remove item 1')).toBeNull();
+});
+
+test('saves an added item with a deposit when the next item is still blank', async () => {
+ render(<MemoryRouter><NewOrder /></MemoryRouter>);
+ fireEvent.change(screen.getByTestId('new-order-customer-name-input'), { target: { value: 'Test Customer' } });
+ fireEvent.change(screen.getByTestId('new-order-customer-phone-input'), { target: { value: '5195551234' } });
+ select('shirt', '3', 'L');
+ fireEvent.click(screen.getByText('Add Another Item'));
+ fireEvent.click(screen.getByTestId('new-order-deposit-required-radio'));
+ fireEvent.click(screen.getByTestId('new-order-save-button'));
+ await waitFor(() => expect(mocks.save).toHaveBeenCalledOnce());
+ const order = mocks.save.mock.calls[0][0];
+ expect(order.line_items).toHaveLength(1);
+ expect(order.qty).toBe(3);
+ expect(order.deposit_amount).toBe(16.95);
+ expect(order.quote.total).toBe(33.9);
 });
