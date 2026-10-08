@@ -12,6 +12,7 @@ import {
   supabaseDiagnostics,
 } from "./supabaseClient";
 import { getProductCharacteristics } from "../products/productCharacteristics";
+import { hydrateLegacyProductImages } from "./productImageReads";
 
 const STORAGE_KEY = "teeCoProducts";
 const PRODUCTS_CACHE_MAX_BYTES = 1_000_000;
@@ -66,8 +67,6 @@ const PRODUCTS_SELECT_FIELDS = [
 ].join(", ");
 
 const LEGACY_PRODUCTS_SELECT_FIELDS = ["id","legacy_product_id","sku","name","category","category_lookup_id","product_type","brand_model","brand_lookup_id","garment_model_lookup_id","status","is_featured","colors","sizes","placements","placement_config","placement_prices","production_methods","decoration_types","production_method_prices","cost_price","markup_percentage","base_garment_price","unit_price","notes"].join(", ");
-
-const FULL_PRODUCTS_SELECT_FIELDS = ["image", PRODUCTS_SELECT_FIELDS].join(", ");
 
 function buildSupabaseProductErrorDetails(error, extra = {}) {
   if (!error || typeof error !== "object") {
@@ -960,6 +959,12 @@ async function fetchProductsFromSupabase() {
     });
     throw error;
   }
+
+  data = await hydrateLegacyProductImages(supabase, Array.isArray(data) ? data : [], (imageError, ids) => {
+    logSupabaseProductError("Unable to fetch legacy product images", imageError, {
+      table: "products", action: "select-images", productIds: ids,
+    });
+  });
 
   const localProductsSnapshot = getLocalProductsSnapshot();
   const normalizedProducts = mergeRemoteProductsWithLocalSnapshot(
