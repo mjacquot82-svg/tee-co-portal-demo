@@ -593,7 +593,7 @@ export async function createStoredCustomer(customerInput) {
 
   try {
     const customer = normalizeCustomer({
-      id: ensureCanonicalCustomerId(customerInput.id, createdAt),
+      id: ensureCanonicalCustomerId(customerInput.id || globalThis.crypto.randomUUID(), createdAt),
       name: customerInput.name || "New Customer",
       company: customerInput.company || "",
       phone: customerInput.phone || "",
