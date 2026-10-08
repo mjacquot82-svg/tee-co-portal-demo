@@ -18,7 +18,7 @@ import {
 import { customerIdsEqual } from "../lib/customerIds";
 import { createStoredOrder } from "../lib/ordersStore";
 import { useStoredProducts } from "../lib/productsStore";
-import { generateQuoteSnapshot } from "../lib/quoteEngine";
+import { generateOrderQuoteSnapshot, generateQuoteSnapshot } from "../lib/quoteEngine";
 import { uploadCustomerArtwork } from "../services/customerArtworkService";
 import { resolveCustomerIdentity, validateCustomerIdentity } from "../lib/customerIdentity";
 import { getCustomerDisplayName } from "../lib/customerRecordMatching";
@@ -172,6 +172,7 @@ export default function NewOrder() {
     notes: "",
     source: "Walk-in",
   });
+  const [additionalItems, setAdditionalItems] = useState([]);
   const [sizes, setSizes] = useState(buildSizeState(fallbackSizeKeys));
   const [submitState, setSubmitState] = useState("idle");
   const [submitMessage, setSubmitMessage] = useState("");
@@ -228,8 +229,41 @@ export default function NewOrder() {
       selectedProduct
     );
   }, [form, normalizedDecorationType, selectedPlacements, selectedProduct, totalQty]);
+  function currentItem() {
+    return {
+      product_id: selectedProductId,
+      garment: form.garment,
+      category: form.garment_category,
+      product_image: selectedProduct?.image || "",
+      selected_color: form.garment_color,
+      decoration_type: normalizedDecorationType,
+      size_breakdown: Object.fromEntries(Object.entries(sizes).map(([size, value]) => [size, Number(value) || 0])),
+      placements: selectedPlacements.map((placement) => ({ placement, decoration_type: normalizedDecorationType })),
+      artworkUpload,
+    };
+  }
+
+  const orderItems = [...additionalItems, ...(selectedProductId && totalQty > 0 ? [currentItem()] : [])];
+  const orderQty = additionalItems.reduce((sum, item) => sum + Object.values(item.size_breakdown).reduce((n, qty) => n + Number(qty || 0), 0), totalQty);
+  const orderQuote = additionalItems.length
+    ? generateOrderQuoteSnapshot({ ...form, line_items: orderItems, setup_fees: [] }, products)
+    : liveQuote;
+
+  function addAnotherItem() {
+    if (!selectedProductId || totalQty <= 0 || Object.values(sizes).some((qty) => !Number.isInteger(Number(qty)) || Number(qty) < 0)) {
+      setSubmitState("validation");
+      setSubmitMessage("Select a product and enter whole, positive quantities before adding another item.");
+      focusFeedback(productSelectRef);
+      return;
+    }
+    setAdditionalItems((items) => [...items, { ...currentItem(), id: crypto.randomUUID() }]);
+    selectProduct({ target: { value: "" } });
+    resetArtworkUpload();
+    productSelectRef.current?.focus();
+  }
+
   const financialPreview = useMemo(() => {
-    const totalAmount = roundCurrency(liveQuote?.total || 0);
+    const totalAmount = roundCurrency(orderQuote?.total || 0);
     const depositAmount =
       depositRequirement === "required" ? calculateDepositTarget(totalAmount) : 0;
     const balanceDue = Math.max(roundCurrency(totalAmount - depositAmount), 0);
@@ -240,7 +274,7 @@ export default function NewOrder() {
       balanceDue,
       amountDueNow: depositRequirement === "required" ? depositAmount : totalAmount,
     };
-  }, [depositRequirement, liveQuote]);
+  }, [depositRequirement, orderQuote]);
 
   function clearSubmitFeedback() {
     setSubmitState("idle");
@@ -286,13 +320,13 @@ export default function NewOrder() {
       firstInvalidRef ||= customerPhoneInputRef;
     }
 
-    if (!selectedProductId || !String(form.garment || "").trim()) {
+    if ((!selectedProductId || !String(form.garment || "").trim()) && !additionalItems.length) {
       messages.push("Select a garment or product before saving the quote.");
       fields.product_id = true;
       firstInvalidRef ||= productSelectRef;
     }
 
-    if (totalQty <= 0) {
+    if ((selectedProductId && totalQty <= 0) || orderQty <= 0 || Object.values(sizes).some((qty) => !Number.isInteger(Number(qty)) || Number(qty) < 0)) {
       messages.push("Add at least one unit in the size breakdown before saving the quote.");
       fields.size_breakdown = true;
       firstInvalidRef ||= sizeSectionRef;
@@ -477,14 +511,14 @@ export default function NewOrder() {
     return customer.id;
   }
 
-  async function buildArtworkPayload(customerId) {
-    if (!artworkUpload) return null;
+  async function buildArtworkPayload(customerId, upload = artworkUpload, item = currentItem()) {
+    if (!upload) return null;
 
-    return uploadCustomerArtwork(customerId, artworkUpload.file, {
-      displayName: artworkUpload.name,
-      originalFilename: artworkUpload.file_name || artworkUpload.name,
-      placementHint: selectedPlacements.join(", "),
-      notes: `Uploaded during order intake for ${form.garment || "custom garment"}.`,
+    return uploadCustomerArtwork(customerId, upload.file, {
+      displayName: upload.name,
+      originalFilename: upload.file_name || upload.name,
+      placementHint: item.placements.map((entry) => entry.placement).join(", "),
+      notes: `Uploaded during order intake for ${item.garment || "custom garment"}.`,
     });
   }
 
@@ -563,6 +597,16 @@ export default function NewOrder() {
         selectedProduct
       );
 
+      const submittedLineItems = [];
+      const allArtworkFiles = [...artworkFiles];
+      for (const item of additionalItems) {
+        const asset = await buildArtworkPayload(customerId, item.artworkUpload, item);
+        if (asset) allArtworkFiles.push(asset);
+        submittedLineItems.push({ ...item, artworkUpload: undefined, artwork_id: asset?.id || "", artwork_name: asset?.name || "",
+          placements: item.placements.map((placement) => ({ ...placement, artwork_id: asset?.id || "", artwork_name: asset?.name || "" })) });
+      }
+      if (selectedProductId && totalQty > 0) submittedLineItems.push({ ...currentItem(), artworkUpload: undefined, size_breakdown: normalizedSizes, placements, artwork_id: savedArtwork?.id || "", artwork_name: savedArtwork?.name || "" });
+      const combinedQuote = additionalItems.length ? generateOrderQuoteSnapshot({ ...form, line_items: submittedLineItems, setup_fees: [] }, products) : quote;
       const order = await createStoredOrder({
         ...form,
         customer_id: customerId,
@@ -571,12 +615,14 @@ export default function NewOrder() {
         production_ready: false,
         product_image: selectedProduct?.image || "",
         product_notes: selectedProduct?.notes || "",
-        qty: totalQty,
+        qty: orderQty,
+        line_items: submittedLineItems,
+        garment: submittedLineItems.map((item) => item.garment).join(", "),
         size_breakdown: normalizedSizes,
         placement: selectedPlacements[0] || "",
         placements,
         decoration_type: normalizeProductionType(form.decoration_type),
-        artwork_files: artworkFiles,
+        artwork_files: allArtworkFiles,
         customer_artwork_id: savedArtwork?.id || "",
         customer_artwork_name: savedArtwork?.name || "",
         deposit_requirement: depositRequirement,
@@ -594,7 +640,7 @@ export default function NewOrder() {
         total_paid: 0,
         amount_paid: 0,
         balance_due: financialPreview.totalAmount,
-        quote,
+        quote: combinedQuote,
       });
 
       await linkOrderToCustomer(customerId, order.order_number);
@@ -824,6 +870,18 @@ export default function NewOrder() {
             ) : null}
           </section>
         )}
+
+        <section className="new-order-card" aria-label="Order items">
+          <h2>Items in This Order</h2>
+          {additionalItems.map((item, index) => (
+            <div key={item.id} style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
+              <span>{item.garment} — {item.selected_color} — {Object.entries(item.size_breakdown).filter(([, qty]) => Number(qty) > 0).map(([size, qty]) => `${size}: ${qty}`).join(", ")}</span>
+              <button type="button" aria-label={`Remove item ${index + 1}`} onClick={() => { setAdditionalItems((items) => items.filter((_, i) => i !== index)); clearSubmitFeedback(); }}>Remove</button>
+            </div>
+          ))}
+          <p>Configure an item below, then add another colour or product. Save Order includes the current item too.</p>
+          <button type="button" onClick={addAnotherItem} disabled={submitState === "saving"}>Add Another Item</button>
+        </section>
 
         <section className="new-order-production-shell">
           <div className="new-order-config-panel">
@@ -1158,7 +1216,7 @@ export default function NewOrder() {
               </div>
 
               <div className="new-order-summary-shell">
-                <PricingSummary quote={liveQuote} quantity={totalQty} />
+                <PricingSummary quote={orderQuote} quantity={orderQty} />
               </div>
             </section>
           </div>

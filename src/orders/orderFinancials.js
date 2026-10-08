@@ -658,7 +658,7 @@ export function normalizePaymentHistory(history, order = {}) {
         .map((entry, index) => ({
           id:
             entry.id ||
-            `payment-${order?.order_number || "order"}-${index}-${normalizeText(entry.timestamp, Date.now())}`,
+            `legacy-payment-${index}`,
           amount: normalizeCurrency(entry.amount),
           method: normalizePaymentMethod(entry.method),
           timestamp:
