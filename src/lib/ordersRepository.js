@@ -233,7 +233,7 @@ export function buildSupabaseOrderPayload(order = {}) {
     is_rush: Boolean(order.is_rush),
     decoration_type: toText(order.decoration_type || order.production_type),
     placement: toText(order.placement),
-    order_metadata: toJsonObject(order.order_metadata),
+    order_metadata: { ...toJsonObject(order.order_metadata), ...(order.discount_type ? { owner_discount: { type: order.discount_type, value: order.discount_value, reason: order.discount_reason || "" } } : {}) },
     notes: String(order.notes || ""),
     internal_notes: String(order.internal_notes || ""),
     activity_log: Array.isArray(order.activity_log) ? order.activity_log : [],
