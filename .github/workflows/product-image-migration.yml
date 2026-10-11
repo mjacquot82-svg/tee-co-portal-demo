@@ -105,7 +105,8 @@ jobs:
             });
             const start=Date.now();
             await page.goto('https://teeandco.jdsstudio.ca/',{waitUntil:'domcontentloaded'});
-            await page.getByRole('heading',{name:'Shop Tee & Co collections',exact:true}).waitFor();
+            if(width===390) await page.getByTestId('storefront-phone-products').locator('.storefront-phone-product-card').first().waitFor();
+            else await page.getByRole('heading',{name:'Shop Tee & Co collections',exact:true}).waitFor();
             const catalogMs=Date.now()-start;
             await page.waitForFunction(()=>{
               const imgs=[...document.querySelectorAll('img')].filter(i=>i.alt!=='Tee & Co'&&i.getBoundingClientRect().height>0&&i.getBoundingClientRect().top<innerHeight&&i.getBoundingClientRect().bottom>0);
@@ -135,6 +136,7 @@ jobs:
             await page.getByText('$40.00',{exact:true}).first().waitFor();
             assert.equal(inlineReads,0);
             results.push({width,catalogMs,visibleImagesMs,homepageMetadataBytes,visibleProductImages:visible.length,inlineReads,ordering:'2 x $20 = $40; no submission'});
+            await Promise.all(pending);
             await context.close();
           }
           await browser.close();await fs.writeFile('live-image-performance.json',JSON.stringify(results,null,2));console.log(JSON.stringify(results,null,2));
