@@ -27,8 +27,25 @@ jobs:
         node-version: lts/*
     - name: Install dependencies
       run: npm ci
+    - name: Atomic migration and guarded rollback tests
+      run: node --test scripts/test-product-image-migration.mjs
     - name: Focused catalog and image tests
       run: npx vitest run src/lib/productImageReads.test.ts src/lib/storefrontCatalog.phoneCategory.test.ts --passWithNoTests=false
+  storage-image-browser:
+    timeout-minutes: 12
+    runs-on: ubuntu-latest
+    env:
+      VITE_SUPABASE_URL: https://image-tests.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_image_test_fixture
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: lts/*
+    - run: npm ci
+    - run: npx playwright install --with-deps chromium
+    - name: Desktop and phone Storage-image ordering regression
+      run: npx playwright test tests/product-image-storage-performance.spec.js --project=chromium --workers=1 --retries=0
   storefront-smoke:
     timeout-minutes: 15
     runs-on: ubuntu-latest
