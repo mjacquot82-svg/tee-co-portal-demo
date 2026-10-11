@@ -46,7 +46,7 @@ jobs:
         with:
           name: tee-co-original-image-backup-${{ github.run_id }}
           path: migration-output/originals/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
       - name: Generate WebP thumbnails
         run: python scripts/prepare-product-thumbnails.py --manifest migration-output/originals/originals.json --output-dir migration-output/thumbnails
