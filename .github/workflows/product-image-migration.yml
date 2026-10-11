@@ -11,7 +11,7 @@ concurrency:
 jobs:
   prepare-or-pilot:
     if: >-
-      github.event.pull_request.number == 66 &&
+      github.event.pull_request.number == 67 &&
       github.event.pull_request.head.repo.full_name == 'mjacquot82-svg/tee-co-portal-demo' &&
       github.event.pull_request.head.ref == 'fix/nonblocking-catalog-images-20261011' &&
       (github.event.label.name == 'tee-image-prepare' || github.event.label.name == 'tee-image-pilot' || github.event.label.name == 'tee-image-batch')
