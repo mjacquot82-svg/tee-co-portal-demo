@@ -29,6 +29,31 @@ describe("legacy product image reads", () => {
     expect(rows[0]).not.toHaveProperty("image");
   });
 
+  it("publishes each completed image group without changing product identities", async () => {
+    const rows = Array.from({ length: 17 }, (_, i) => ({ id: String(i), name: `Garment ${i}` }));
+    const snapshots: Array<Array<{ id: string; name: string; image?: string }>> = [];
+    const client = {
+      from: () => ({
+        select: () => ({
+          in: async (_column: string, ids: string[]) => ({
+            data: ids.map((id) => ({ id, image: `image-for-${id}` })),
+            error: null,
+          }),
+        }),
+      }),
+    };
+    const finalRows = await hydrateLegacyProductImages(client, rows, () => {}, (snapshot) => {
+      snapshots.push(snapshot);
+    });
+    expect(snapshots).toHaveLength(2);
+    expect(snapshots[0].filter((row) => row.image)).toHaveLength(12);
+    expect(snapshots[1].filter((row) => row.image)).toHaveLength(17);
+    for (const snapshot of [...snapshots, finalRows]) {
+      expect(snapshot.map((row) => row.name)).toEqual(rows.map((row) => row.name));
+      expect(snapshot.every((row) => !row.image || row.image === `image-for-${row.id}`)).toBe(true);
+    }
+  });
+
   it("leaves Storage images and existing inline images alone", async () => {
     const client = { from: vi.fn() };
     const rows = [{ id: "storage", image_storage_path: "photo.png" }, { id: "inline", image: "data:image/png;base64,abc" }];
