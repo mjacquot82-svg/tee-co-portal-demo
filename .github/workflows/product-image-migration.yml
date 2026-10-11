@@ -40,7 +40,7 @@ jobs:
         env:
           SUPABASE_URL: https://iwbajhxrgyjferbkibkl.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEE_CO_MIGRATION_SERVICE_ROLE_KEY }}
-        run: node scripts/migrate-product-images-to-storage.mjs --export --output-dir migration-output/originals
+        run: node scripts/migrate-product-images-to-storage.mjs --export --page-size 1 --output-dir migration-output/originals
       - name: Preserve original backup before any image mutation
         uses: actions/upload-artifact@v4
         with:
@@ -55,7 +55,7 @@ jobs:
         env:
           SUPABASE_URL: https://iwbajhxrgyjferbkibkl.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEE_CO_MIGRATION_SERVICE_ROLE_KEY }}
-        run: node scripts/migrate-product-images-to-storage.mjs --execute --thumbnail-manifest migration-output/thumbnails/thumbnail-manifest.json --batch-size 3 --output-dir migration-output/pilot
+        run: node scripts/migrate-product-images-to-storage.mjs --execute --page-size 1 --thumbnail-manifest migration-output/thumbnails/thumbnail-manifest.json --batch-size 3 --output-dir migration-output/pilot
       - name: Preserve preparation evidence and guarded rollback journal
         if: always()
         uses: actions/upload-artifact@v4
