@@ -1007,11 +1007,7 @@ export async function refreshStoredProducts() {
   const snapshot = setProductsSnapshot(remoteProducts);
   // The catalogue must be usable before legacy inline images finish downloading.
   // Only publish image results into the same refresh to avoid overwriting newer edits.
-  void hydrateLegacyProductImages(supabase, remoteProducts, (imageError, ids) => {
-    logSupabaseProductError("Unable to fetch legacy product images", imageError, {
-      table: "products", action: "select-images", productIds: ids,
-    });
-  }).then((withImages) => {
+  const publishLoadedImages = (withImages) => {
     if (refreshId !== refreshSequence) return;
     const imageById = new Map(withImages.filter((p) => p.image).map((p) => [p.id, p.image]));
     if (!imageById.size) return;
@@ -1024,7 +1020,12 @@ export async function refreshStoredProducts() {
       return { ...product, image };
     });
     if (changed) setProductsSnapshot(enriched);
-  }).catch((error) => {
+  };
+  void hydrateLegacyProductImages(supabase, remoteProducts, (imageError, ids) => {
+    logSupabaseProductError("Unable to fetch legacy product images", imageError, {
+      table: "products", action: "select-images", productIds: ids,
+    });
+  }, publishLoadedImages).catch((error) => {
     console.error("[productsStore] Background legacy image hydration failed", error);
   });
   console.info("[productsStore] Published storefront product snapshot after refresh", {
