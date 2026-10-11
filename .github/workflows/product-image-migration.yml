@@ -1,0 +1,66 @@
+name: Protected product image preparation
+on:
+  pull_request:
+    types: [labeled]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: tee-co-production-image-migration
+  cancel-in-progress: false
+jobs:
+  prepare-or-pilot:
+    if: >-
+      github.event.pull_request.number == 66 &&
+      github.event.pull_request.head.repo.full_name == 'mjacquot82-svg/tee-co-portal-demo' &&
+      github.event.pull_request.head.ref == 'fix/nonblocking-catalog-images-20261011' &&
+      (github.event.label.name == 'tee-image-prepare' || github.event.label.name == 'tee-image-pilot')
+    environment: tee-co-image-migration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 7b5e3bd8ee07081cac493ebd106ef1afad0075cf
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: python -m pip install 'Pillow>=11,<13'
+      - name: Verify atomic safeguards and generator
+        run: |
+          node --test scripts/test-product-image-migration.mjs
+          python -m unittest discover -s scripts -p test_prepare_product_thumbnails.py
+          npx vitest run src/lib/productImageReads.test.ts src/lib/storefrontCatalog.phoneCategory.test.ts
+      - name: Export original bytes and complete image metadata (read only)
+        env:
+          SUPABASE_URL: https://iwbajhxrgyjferbkibkl.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEE_CO_MIGRATION_SERVICE_ROLE_KEY }}
+        run: node scripts/migrate-product-images-to-storage.mjs --export --output-dir migration-output/originals
+      - name: Preserve original backup before any image mutation
+        uses: actions/upload-artifact@v4
+        with:
+          name: tee-co-original-image-backup-${{ github.run_id }}
+          path: migration-output/originals/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Generate WebP thumbnails
+        run: python scripts/prepare-product-thumbnails.py --manifest migration-output/originals/originals.json --output-dir migration-output/thumbnails
+      - name: Three-product pilot (explicit pilot label only)
+        if: github.event.label.name == 'tee-image-pilot'
+        env:
+          SUPABASE_URL: https://iwbajhxrgyjferbkibkl.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEE_CO_MIGRATION_SERVICE_ROLE_KEY }}
+        run: node scripts/migrate-product-images-to-storage.mjs --execute --thumbnail-manifest migration-output/thumbnails/thumbnail-manifest.json --batch-size 3 --output-dir migration-output/pilot
+      - name: Preserve preparation evidence and guarded rollback journal
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tee-co-image-migration-evidence-${{ github.run_id }}
+          path: migration-output/
+          if-no-files-found: warn
+          retention-days: 90
