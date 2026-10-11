@@ -11,10 +11,10 @@ concurrency:
 jobs:
   prepare-or-pilot:
     if: >-
-      github.event.pull_request.number == 66 &&
+      github.event.pull_request.number == 67 &&
       github.event.pull_request.head.repo.full_name == 'mjacquot82-svg/tee-co-portal-demo' &&
       github.event.pull_request.head.ref == 'fix/nonblocking-catalog-images-20261011' &&
-      (github.event.label.name == 'tee-image-prepare' || github.event.label.name == 'tee-image-pilot')
+      (github.event.label.name == 'tee-image-prepare' || github.event.label.name == 'tee-image-pilot' || github.event.label.name == 'tee-image-batch')
     environment: tee-co-image-migration
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -50,12 +50,12 @@ jobs:
           retention-days: 90
       - name: Generate WebP thumbnails
         run: python scripts/prepare-product-thumbnails.py --manifest migration-output/originals/originals.json --output-dir migration-output/thumbnails
-      - name: Three-product pilot (explicit pilot label only)
-        if: github.event.label.name == 'tee-image-pilot'
+      - name: Bounded image migration (explicit migration label only)
+        if: github.event.label.name == 'tee-image-pilot' || github.event.label.name == 'tee-image-batch'
         env:
           SUPABASE_URL: https://iwbajhxrgyjferbkibkl.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEE_CO_MIGRATION_SERVICE_ROLE_KEY }}
-        run: node scripts/migrate-product-images-to-storage.mjs --execute --page-size 1 --thumbnail-manifest migration-output/thumbnails/thumbnail-manifest.json --batch-size 3 --output-dir migration-output/pilot
+        run: node scripts/migrate-product-images-to-storage.mjs --execute --page-size 1 --thumbnail-manifest migration-output/thumbnails/thumbnail-manifest.json --batch-size ${{ github.event.label.name == 'tee-image-batch' && '10' || '3' }} --output-dir migration-output/pilot
       - name: Preserve preparation evidence and guarded rollback journal
         if: always()
         uses: actions/upload-artifact@v4
@@ -63,4 +63,97 @@ jobs:
           name: tee-co-image-migration-evidence-${{ github.run_id }}
           path: migration-output/
           if-no-files-found: warn
+          retention-days: 90
+  live-browser:
+    if: >-
+      github.event.pull_request.number == 67 &&
+      github.event.pull_request.head.repo.full_name == 'mjacquot82-svg/tee-co-portal-demo' &&
+      github.event.pull_request.head.ref == 'fix/nonblocking-catalog-images-20261011' &&
+      github.event.label.name == 'tee-image-verify'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 7b5e3bd8ee07081cac493ebd106ef1afad0075cf
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Fresh live phone and desktop image and ordering checks
+        run: |
+          node --input-type=module <<'JS'
+          import { chromium } from 'playwright';
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs/promises';
+          const browser = await chromium.launch();
+          const results = [];let activePage;
+          try {
+          for (const width of [390,1280]) {
+            const context = await browser.newContext({viewport:{width,height:900}});
+            const page = await context.newPage();activePage=page;
+            page.on('requestfailed',r=>console.log('REQUEST_FAILED',r.method(),new URL(r.url()).pathname,r.failure()?.errorText));
+            page.on('console',message=>{if(message.type()==='error')console.log('BROWSER_ERROR',message.text());});
+            let inlineReads=0,metadataBytes=0;const pending=[];
+            await page.route('**/*',route=>['GET','HEAD','OPTIONS'].includes(route.request().method())?route.continue():route.abort());
+            page.on('request',request=>{
+              const url=new URL(request.url());
+              if(url.hostname==='iwbajhxrgyjferbkibkl.supabase.co'&&url.pathname.endsWith('/products')&&(url.searchParams.get('select')||'').split(/,\s*/).includes('image'))inlineReads++;
+            });
+            page.on('response',response=>{
+              const url=new URL(response.url());
+              if(url.hostname==='iwbajhxrgyjferbkibkl.supabase.co'&&url.pathname.endsWith('/products')&&response.ok())pending.push(response.body().then(bytes=>{metadataBytes+=bytes.length;}));
+            });
+            const start=Date.now();
+            await page.goto('https://teeandco.jdsstudio.ca/',{waitUntil:'domcontentloaded'});
+            if(width===390) await page.getByTestId('storefront-phone-products').locator('.storefront-phone-product-card').first().waitFor();
+            else await page.getByRole('heading',{name:'Shop Tee & Co collections',exact:true}).waitFor();
+            const catalogMs=Date.now()-start;
+            await page.waitForFunction(()=>{
+              const imgs=[...document.querySelectorAll('img')].filter(i=>i.alt!=='Tee & Co'&&i.getBoundingClientRect().height>0&&i.getBoundingClientRect().top<innerHeight&&i.getBoundingClientRect().bottom>0);
+              return imgs.length>0&&imgs.every(i=>i.complete&&i.naturalWidth>0);
+            },null,{timeout:30000});
+            const visibleImagesMs=Date.now()-start;
+            const visible=await page.locator('img').evaluateAll(imgs=>imgs.filter(i=>i.alt!=='Tee & Co'&&i.getBoundingClientRect().height>0&&i.getBoundingClientRect().top<innerHeight&&i.getBoundingClientRect().bottom>0).map(i=>({alt:i.alt,src:i.getAttribute('src'),loaded:i.complete&&i.naturalWidth>0})));
+            assert(visible.every(i=>i.loaded&&i.src.includes('/storage/v1/object/public/product-images/')));
+            await Promise.all(pending);const homepageMetadataBytes=metadataBytes;
+            await page.goto('https://teeandco.jdsstudio.ca/category/youth');
+            for(const name of ['Gildan Toddler Heavy Cotton™ T-Shirt - 5100P','Rabbit Skins Toddler Fleece Crewneck Sweatshirt - 3317']){
+              const image=page.getByRole('img',{name,exact:true});await image.scrollIntoViewIfNeeded();
+              await image.waitFor();assert((await image.getAttribute('src')).endsWith('.webp'));
+              await page.waitForFunction(name=>{const i=[...document.querySelectorAll('img')].find(i=>i.alt===name);return i?.complete&&i.naturalWidth>0;},name);
+            }
+            for(const [id,name] of [
+              ['04bce16c-90bd-4b05-8369-b8a03e0cdbd7','L7260Y - Balmy - Youth Softshell Jacket'],
+              ['06add7ee-eeba-406a-8e26-926866027765','Rabbit Skins Toddler Fleece Crewneck Sweatshirt - 3317'],
+              ['0782124d-d98f-4f98-89ce-d53f2fbf3246','Gildan Toddler Heavy Cotton™ T-Shirt - 5100P']]){
+              await page.waitForLoadState('networkidle');
+              await page.goto(`https://teeandco.jdsstudio.ca/garment/${id}`);
+              await page.waitForLoadState('networkidle');
+              const image=page.getByRole('img',{name,exact:true});await image.waitFor();
+              assert((await image.getAttribute('src')).includes('/storage/v1/object/public/product-images/'));
+              await page.waitForFunction(name=>{const i=[...document.querySelectorAll('img')].find(i=>i.alt===name);return i?.complete&&i.naturalWidth>0;},name);
+            }
+            await page.getByRole('link',{name:'Continue to Configure Garment',exact:true}).click();
+            await page.getByRole('spinbutton',{name:'2T quantity',exact:true}).fill('2');
+            await page.getByText('$40.00',{exact:true}).first().waitFor();
+            assert.equal(inlineReads,0);
+            results.push({width,catalogMs,visibleImagesMs,homepageMetadataBytes,visibleProductImages:visible.length,inlineReads,ordering:'2 x $20 = $40; no submission'});
+            await Promise.all(pending);
+            await context.close();
+          }
+          } catch(error) {console.log('LIVE_FAILURE', await activePage.locator('body').innerText());await activePage.screenshot({path:'live-failure.png',fullPage:true});await fs.writeFile('live-failure.html',await activePage.content());throw error;} finally {await browser.close();}
+          await fs.writeFile('live-image-performance.json',JSON.stringify(results,null,2));console.log(JSON.stringify(results,null,2));
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tee-co-live-image-verification-${{ github.run_id }}
+          path: |
+            live-image-performance.json
+            live-failure.png
+            live-failure.html
+          if-no-files-found: error
           retention-days: 90
