@@ -14,11 +14,31 @@ from pathlib import Path
 from PIL import Image, ImageOps
 
 def prepare(manifest_path: Path, output_dir: Path, max_edge: int, quality: int):
+    if not 100 <= max_edge <= 1600 or not 1 <= quality <= 100:
+        raise ValueError("max-edge must be 100..1600 and quality must be 1..100")
     records = json.loads(manifest_path.read_text(encoding="utf-8"))
     if not isinstance(records, list):
         raise ValueError("Manifest must be an array")
     output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / "thumbnail-manifest.json"
+    if report_path.exists():
+        raise FileExistsError(f"Refusing to overwrite {report_path}")
     report = []
+    targets = set()
+    # Validate the entire batch before creating any thumbnail.
+    for record in records:
+        source = Path(record["source"]).resolve()
+        product_id = str(record["id"])
+        safe_id = "".join(c for c in product_id if c.isalnum() or c in "-_")[:80]
+        if not safe_id:
+            raise ValueError("Product ID must contain a filename-safe character")
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()[:16]
+        target = output_dir / f"{safe_id}-{digest}.webp"
+        if target.resolve() == source or target.exists() or target in targets:
+            raise FileExistsError(f"Refusing to overwrite or duplicate {target}")
+        targets.add(target)
+        with Image.open(source) as original:
+            original.verify()
     for record in records:
         product_id = str(record["id"])
         source = Path(record["source"]).resolve()
@@ -30,7 +50,7 @@ def prepare(manifest_path: Path, output_dir: Path, max_edge: int, quality: int):
             image = ImageOps.exif_transpose(original)
             image.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
             if image.mode not in ("RGB", "RGBA"):
-                image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+                image = image.convert("RGBA" if "A" in image.getbands() or "transparency" in image.info else "RGB")
             digest = hashlib.sha256(source.read_bytes()).hexdigest()[:16]
             safe_id = "".join(c for c in product_id if c.isalnum() or c in "-_")[:80]
             target = output_dir / f"{safe_id}-{digest}.webp"
