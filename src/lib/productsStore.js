@@ -12,7 +12,7 @@ import {
   supabaseDiagnostics,
 } from "./supabaseClient";
 import { getProductCharacteristics } from "../products/productCharacteristics";
-import { hydrateLegacyProductImages } from "./productImageReads";
+import { hydrateLegacyProductImages, resolveStorageProductImages } from "./productImageReads";
 
 const STORAGE_KEY = "teeCoProducts";
 const PRODUCTS_CACHE_MAX_BYTES = 1_000_000;
@@ -400,6 +400,7 @@ function normalizeProduct(product) {
 
   return {
     ...product,
+    ...resolveStorageProductImages(supabase, product),
     status: buildPersistentStatus(
       product?.status ?? (product?.active === false ? "Inactive" : "Active")
     ),
