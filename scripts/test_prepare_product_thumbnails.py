@@ -41,5 +41,34 @@ class ThumbnailPreparationTests(unittest.TestCase):
                 thumbnailer.prepare(manifest, output, 480, 78)
 
 
+    def test_invalid_later_source_does_not_write_partial_batch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "original.png"
+            Image.new("RGB", (600, 400)).save(source)
+            manifest = root / "images.json"
+            manifest.write_text(json.dumps([
+                {"id": "one", "source": str(source)},
+                {"id": "two", "source": str(root / "missing.png")},
+            ]))
+            output = root / "output"
+            with self.assertRaises(FileNotFoundError):
+                thumbnailer.prepare(manifest, output, 480, 78)
+            self.assertEqual(list(output.iterdir()), [])
+
+    def test_transparency_is_preserved_and_small_images_are_not_upscaled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "original.png"
+            Image.new("RGBA", (80, 60), (200, 0, 0, 0)).save(source)
+            manifest = root / "images.json"
+            manifest.write_text(json.dumps([{"id": "one", "source": str(source)}]))
+            output = root / "output"
+            thumbnailer.prepare(manifest, output, 480, 78)
+            report = json.loads((output / "thumbnail-manifest.json").read_text())
+            with Image.open(report[0]["thumbnail"]) as image:
+                self.assertEqual(image.size, (80, 60))
+                self.assertEqual(image.getpixel((0, 0))[3], 0)
+
 if __name__ == "__main__":
     unittest.main()
