@@ -17,6 +17,22 @@ jobs:
       run: npm ci
     - name: Focused catalog and image tests
       run: npx vitest run src/lib/productImageReads.test.ts src/lib/productsStore.test.ts --passWithNoTests=false
+  storefront-smoke:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BASE_URL: http://localhost:4173
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: lts/*
+    - name: Install dependencies
+      run: npm ci
+    - name: Install Chromium
+      run: npx playwright install --with-deps chromium
+    - name: Run storefront and ordering smoke tests
+      run: npx playwright test tests/customer-order-handoff-copy.spec.js tests/customer-portal-start-order-route.spec.js --project=chromium --workers=1 --retries=0
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
