@@ -66,7 +66,7 @@ test("garments are configured while shopping and final review uses explicit edit
   expect(configurationSource).toContain("Decoration Method");
   expect(configurationSource).toContain('saveConfiguredGarment("catalogue")');
   expect(reviewSource).toContain("Edit Garment");
-  expect(reviewSource).toContain('navigate("/order-preview"');
+  expect(reviewSource).toContain('navigate(`${PORTAL_ORDER_CATALOG_PATH}/order-preview`');
   expect(reviewSource).not.toContain("Add Another Size");
   expect(reviewSource).not.toContain("Remove Size");
 });
