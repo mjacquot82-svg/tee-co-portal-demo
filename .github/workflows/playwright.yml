@@ -28,7 +28,7 @@ jobs:
     - name: Install dependencies
       run: npm ci
     - name: Focused catalog and image tests
-      run: npx vitest run src/lib/productImageReads.test.ts src/lib/productsStore.test.ts --passWithNoTests=false
+      run: npx vitest run src/lib/productImageReads.test.ts src/lib/storefrontCatalog.phoneCategory.test.ts --passWithNoTests=false
   storefront-smoke:
     timeout-minutes: 15
     runs-on: ubuntu-latest
