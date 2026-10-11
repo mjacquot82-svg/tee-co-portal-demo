@@ -94,6 +94,8 @@ jobs:
           for (const width of [390,1280]) {
             const context = await browser.newContext({viewport:{width,height:900}});
             const page = await context.newPage();activePage=page;
+            page.on('requestfailed',r=>console.log('REQUEST_FAILED',r.method(),new URL(r.url()).pathname,r.failure()?.errorText));
+            page.on('console',message=>{if(message.type()==='error')console.log('BROWSER_ERROR',message.text());});
             let inlineReads=0,metadataBytes=0;const pending=[];
             await page.route('**/*',route=>['GET','HEAD','OPTIONS'].includes(route.request().method())?route.continue():route.abort());
             page.on('request',request=>{
@@ -127,7 +129,9 @@ jobs:
               ['04bce16c-90bd-4b05-8369-b8a03e0cdbd7','L7260Y - Balmy - Youth Softshell Jacket'],
               ['06add7ee-eeba-406a-8e26-926866027765','Rabbit Skins Toddler Fleece Crewneck Sweatshirt - 3317'],
               ['0782124d-d98f-4f98-89ce-d53f2fbf3246','Gildan Toddler Heavy Cotton™ T-Shirt - 5100P']]){
+              await page.waitForLoadState('networkidle');
               await page.goto(`https://teeandco.jdsstudio.ca/garment/${id}`);
+              await page.waitForLoadState('networkidle');
               const image=page.getByRole('img',{name,exact:true});await image.waitFor();
               assert((await image.getAttribute('src')).includes('/storage/v1/object/public/product-images/'));
               await page.waitForFunction(name=>{const i=[...document.querySelectorAll('img')].find(i=>i.alt===name);return i?.complete&&i.naturalWidth>0;},name);
