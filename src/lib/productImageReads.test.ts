@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { hydrateLegacyProductImages } from "./productImageReads";
+import { hydrateLegacyProductImages, resolveStorageProductImages } from "./productImageReads";
 
 describe("legacy product image reads", () => {
   it("restores images without including them in the large metadata response", async () => {
@@ -68,5 +68,21 @@ describe("legacy product image reads", () => {
     const rows = [{ id: "one", unit_price: 50 }];
     expect(await hydrateLegacyProductImages(client, rows, onError)).toEqual(rows);
     expect(onError).toHaveBeenCalledWith(error, ["one"]);
+  });
+});
+
+
+describe("Storage image metadata", () => {
+  it("resolves original and thumbnail paths and replaces stale inline cache", () => {
+    const client = { storage: { from: () => ({ getPublicUrl: (path: string) => ({ data: { publicUrl: `https://example.test/${path}` } }) }) } };
+    const row = resolveStorageProductImages(client, { id: "one", image: "data:image/png;base64,old", image_storage_path: "original.png", image_thumb_storage_path: "thumb.webp" });
+    expect(row.image).toBe("https://example.test/original.png");
+    expect(row.image_original_url).toBe(row.image);
+    expect(row.image_thumb_url).toBe("https://example.test/thumb.webp");
+    expect(row.id).toBe("one");
+  });
+  it("preserves legacy images when Storage is absent", () => {
+    const product = { image: "data:image/png;base64,original" };
+    expect(resolveStorageProductImages(null, product)).toBe(product);
   });
 });
