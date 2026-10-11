@@ -30,3 +30,12 @@ dist-ssr
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Image migration originals, rollback journals and server-only secrets
+migration-output/
+__pycache__/
+.env
+.env.*
+!.env.example
+
+supabase/.temp/

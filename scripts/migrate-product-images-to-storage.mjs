@@ -4,6 +4,8 @@ import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
+import { atomicImageSwap, guardedRollback, imageSnapshot, sha256, verifyPublicImage, verifyLiveStorageReader } from "./product-image-migration-safety.mjs";
 import { createClient } from "@supabase/supabase-js";
 
 const PRODUCT_IMAGES_BUCKET = "product-images";
@@ -22,6 +24,7 @@ const PRODUCTS_SELECT_FIELDS = [
   "image_content_type",
   "image_file_size",
   "image_updated_at",
+  "image_thumb_storage_path",
 ].join(", ");
 
 function parseArgs(argv) {
@@ -34,6 +37,7 @@ function parseArgs(argv) {
     rollbackFile: "",
     rollbackRemoveStorage: false,
     verify: true,
+    thumbnailManifest: "",
     help: false,
   };
 
@@ -45,6 +49,8 @@ function parseArgs(argv) {
     };
 
     if (arg === "--help" || arg === "-h") args.help = true;
+    else if (arg === "--export") args.mode = "export";
+    else if (arg === "--thumbnail-manifest") args.thumbnailManifest = nextValue();
     else if (arg === "--execute") args.mode = "execute";
     else if (arg === "--dry-run") args.mode = "dry-run";
     else if (arg === "--rollback") args.mode = "rollback";
@@ -60,7 +66,7 @@ function parseArgs(argv) {
     else if (arg.startsWith("--rollback-file=")) {
       args.rollbackFile = arg.slice("--rollback-file=".length);
     } else if (arg === "--rollback-remove-storage") args.rollbackRemoveStorage = true;
-    else if (arg === "--no-verify") args.verify = false;
+    else if (arg === "--no-verify") throw new Error("Verification cannot be disabled");
     else throw new Error(`Unknown argument: ${arg}`);
   }
 
@@ -72,6 +78,8 @@ function parseArgs(argv) {
     throw new Error("--page-size must be a positive number.");
   }
 
+  if (args.rollbackRemoveStorage) throw new Error("Deleting migration originals or thumbnails is prohibited");
+  if (args.mode === "execute" && !args.thumbnailManifest) throw new Error("--thumbnail-manifest is required for execute");
   args.batchSize = Math.floor(args.batchSize);
   args.pageSize = Math.floor(args.pageSize);
   return args;
@@ -85,12 +93,14 @@ Default mode is read-only dry-run.
 
 Usage:
   node scripts/migrate-product-images-to-storage.mjs --dry-run
-  node scripts/migrate-product-images-to-storage.mjs --execute --batch-size 10
-  node scripts/migrate-product-images-to-storage.mjs --execute --resume-dir migration-output/product-image-storage-migration-...
+  node scripts/migrate-product-images-to-storage.mjs --execute --thumbnail-manifest thumbnails/thumbnail-manifest.json --batch-size 3
+  node scripts/migrate-product-images-to-storage.mjs --execute --thumbnail-manifest thumbnails/thumbnail-manifest.json --resume-dir migration-output/product-image-storage-migration-...
   node scripts/migrate-product-images-to-storage.mjs --rollback --rollback-file migration-output/.../rollback.jsonl
 
 Options:
-  --execute                  Upload and update products. Requires SUPABASE_SERVICE_ROLE_KEY.
+  --export                   Export original images and preparation manifest without remote writes.
+  --thumbnail-manifest <p>   Verified generator manifest, required for execute.
+  --execute                  Upload original + thumbnail and atomically update products.
   --dry-run                  Report eligible products without writing data. This is the default.
   --rollback                 Restore products.image and image metadata from a rollback JSONL file.
   --batch-size <n>           Maximum eligible products to process in this run. Default: ${DEFAULT_BATCH_SIZE}.
@@ -98,8 +108,7 @@ Options:
   --output-dir <path>        Output directory for rollback and manifest files.
   --resume-dir <path>        Reuse an existing output directory and skip already migrated IDs.
   --rollback-file <path>     Rollback JSONL file. Defaults to <resume-dir>/rollback.jsonl.
-  --rollback-remove-storage  During rollback, also remove Storage objects recorded in the manifest.
-  --no-verify                Skip post-update public URL and row verification.
+  Originals and thumbnails are never deleted. Verification cannot be disabled.
 
 Environment:
   VITE_SUPABASE_URL or SUPABASE_URL
@@ -117,7 +126,7 @@ async function loadDotEnv(filePath = ".env") {
       const separatorIndex = trimmed.indexOf("=");
       if (separatorIndex < 0) return;
       const key = trimmed.slice(0, separatorIndex).trim();
-      const value = trimmed.slice(separatorIndex + 1).trim();
+      const value = trimmed.slice(separatorIndex + 1).trim().replace(/^([\'\"])(.*)\1$/, "$2");
       if (key && !Object.prototype.hasOwnProperty.call(process.env, key)) {
         process.env[key] = value;
       }
@@ -136,6 +145,10 @@ function getSupabaseClient({ requireServiceRole = false } = {}) {
 
   if (!supabaseUrl || !key) {
     throw new Error("Missing Supabase URL/key environment variables.");
+  }
+
+  if (requireServiceRole && supabaseUrl !== "https://iwbajhxrgyjferbkibkl.supabase.co") {
+    throw new Error("Refusing image writes outside the expected Tee & Co production project");
   }
 
   if (requireServiceRole && !serviceRoleKey) {
@@ -229,7 +242,9 @@ function buildStoragePath(product, contentType, buffer) {
 }
 
 async function appendJsonLine(filePath, value) {
-  await fs.appendFile(filePath, `${JSON.stringify(value)}\n`, "utf8");
+  const file = await fs.open(filePath, "a", 0o600);
+  try { await file.writeFile(`${JSON.stringify(value)}\n`, "utf8"); await file.sync(); }
+  finally { await file.close(); }
 }
 
 async function readJsonLines(filePath) {
@@ -261,6 +276,7 @@ async function fetchProducts(supabase, pageSize) {
     const { data, error } = await supabase
       .from("products")
       .select(PRODUCTS_SELECT_FIELDS)
+      .order("id")
       .range(from, from + pageSize - 1);
 
     if (error) throw error;
@@ -314,10 +330,18 @@ async function dryRun(args) {
   }, null, 2));
 }
 
-async function executeMigration(args) {
-  const supabase = getSupabaseClient({ requireServiceRole: true });
+export async function executeMigration(args, dependencies = {}) {
+  const supabase = dependencies.client || getSupabaseClient({ requireServiceRole: true });
+  const fetchImpl = dependencies.fetch || fetch;
+  await verifyLiveStorageReader(fetchImpl);
+  // Probe the RPC with identical states: this call can never mutate an image.
+  await atomicImageSwap(supabase, "00000000-0000-0000-0000-000000000000", imageSnapshot({}), imageSnapshot({}));
   const outputDir = buildOutputDir(args);
-  await fs.mkdir(outputDir, { recursive: true });
+  await fs.mkdir(outputDir, { recursive: true, mode: 0o700 });
+  const thumbnails = JSON.parse(await fs.readFile(args.thumbnailManifest, "utf8"));
+  if (!Array.isArray(thumbnails)) throw new Error("Thumbnail manifest must be an array");
+  const thumbnailsById = new Map(thumbnails.map((entry) => [entry.id, entry]));
+  if (thumbnailsById.size !== thumbnails.length) throw new Error("Duplicate thumbnail product IDs");
 
   const rollbackFile = path.join(outputDir, "rollback.jsonl");
   const manifestFile = path.join(outputDir, "manifest.jsonl");
@@ -367,46 +391,26 @@ async function executeMigration(args) {
     }
 
     const storagePath = buildStoragePath(product, detectedContentType, parsed.buffer);
-    const rollbackEntry = {
-      productId: product.id,
-      legacyProductId: product.legacy_product_id,
-      name: product.name,
-      previous: {
-        image: product.image,
-        image_storage_path: product.image_storage_path,
-        image_content_type: product.image_content_type,
-        image_file_size: product.image_file_size,
-        image_updated_at: product.image_updated_at,
-      },
-      migration: {
-        storagePath,
-        contentType: detectedContentType,
-        fileSize: parsed.buffer.length,
-        startedAt,
-      },
-    };
+    const thumbnailRecord = thumbnailsById.get(product.id);
+    if (!thumbnailRecord || thumbnailRecord.sha256_original !== sha256(parsed.buffer)) {
+      throw new Error("Thumbnail preparation does not match the current original; no writes performed for this product");
+    }
+    const thumbnailBytes = await fs.readFile(thumbnailRecord.thumbnail);
+    if (sha256(thumbnailBytes) !== thumbnailRecord.sha256_thumbnail || detectImageContentType(thumbnailBytes) !== "image/webp") {
+      throw new Error("Thumbnail hash or format mismatch");
+    }
+    const thumbnailPath = `products/${normalizePathSegment(product.id)}/thumb-${sha256(thumbnailBytes)}.webp`;
+    const publicUrl = supabase.storage.from(PRODUCT_IMAGES_BUCKET).getPublicUrl(storagePath).data.publicUrl;
+    const thumbnailUrl = supabase.storage.from(PRODUCT_IMAGES_BUCKET).getPublicUrl(thumbnailPath).data.publicUrl;
+    const replacement = imageSnapshot({ image: publicUrl, image_storage_path: storagePath,
+      image_thumb_storage_path: thumbnailPath, image_content_type: detectedContentType,
+      image_file_size: parsed.buffer.length, image_updated_at: new Date().toISOString() });
+    const rollbackEntry = { version: 2, productId: product.id, name: product.name,
+      previous: imageSnapshot(product), expectedAfter: replacement,
+      originalSha256: sha256(parsed.buffer), thumbnailSha256: sha256(thumbnailBytes),
+      migration: { storagePath, thumbnailPath, publicUrl, thumbnailUrl, startedAt } };
 
     try {
-      const { data: currentProduct, error: currentError } = await supabase
-        .from("products")
-        .select("id,image")
-        .eq("id", product.id)
-        .maybeSingle();
-
-      if (currentError) throw currentError;
-      if (!currentProduct || currentProduct.image !== product.image) {
-        summary.skipped += 1;
-        await appendJsonLine(manifestFile, {
-          status: "skipped-concurrent-change",
-          productId: product.id,
-          name: product.name,
-          storagePath,
-          startedAt,
-          finishedAt: new Date().toISOString(),
-        });
-        continue;
-      }
-
       await appendJsonLine(rollbackFile, rollbackEntry);
 
       const { error: uploadError } = await supabase.storage
@@ -419,50 +423,27 @@ async function executeMigration(args) {
 
       if (uploadError) throw uploadError;
 
-      const { data: publicUrlData } = supabase.storage
-        .from(PRODUCT_IMAGES_BUCKET)
-        .getPublicUrl(storagePath);
-      const publicUrl = publicUrlData?.publicUrl || "";
-      if (!publicUrl) throw new Error("Unable to generate public URL after upload.");
-
-      const imageUpdatedAt = new Date().toISOString();
-      const { error: updateError } = await supabase
-        .from("products")
-        .update({
-          image: publicUrl,
-          image_storage_path: storagePath,
-          image_content_type: detectedContentType,
-          image_file_size: parsed.buffer.length,
-          image_updated_at: imageUpdatedAt,
-        })
-        .eq("id", product.id);
-
-      if (updateError) throw updateError;
-
-      if (args.verify) {
-        const [publicResponse, productResult] = await Promise.all([
-          fetch(publicUrl),
-          supabase
-            .from("products")
-            .select("id,image,image_storage_path,image_content_type,image_file_size,image_updated_at")
-            .eq("id", product.id)
-            .maybeSingle(),
-        ]);
-
-        if (!publicResponse.ok) {
-          throw new Error(`Public image URL verification failed: ${publicResponse.status}`);
-        }
-
-        if (productResult.error) throw productResult.error;
-        if (
-          productResult.data?.image !== publicUrl ||
-          productResult.data?.image_storage_path !== storagePath ||
-          productResult.data?.image_content_type !== detectedContentType ||
-          Number(productResult.data?.image_file_size) !== parsed.buffer.length ||
-          !productResult.data?.image_updated_at
-        ) {
-          throw new Error("Post-update product row verification failed.");
-        }
+      const { error: thumbUploadError } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET)
+        .upload(thumbnailPath, thumbnailBytes, { cacheControl: "31536000", contentType: "image/webp", upsert: false });
+      // A previous interrupted run can leave the same immutable thumbnail.
+      // Never overwrite it; exact public byte verification below is mandatory.
+      if (thumbUploadError && String(thumbUploadError.statusCode) !== "409") throw thumbUploadError;
+      await verifyPublicImage(publicUrl, parsed.buffer, detectedContentType, fetchImpl);
+      await verifyPublicImage(thumbnailUrl, thumbnailBytes, "image/webp", fetchImpl);
+      const status = await atomicImageSwap(supabase, product.id, rollbackEntry.previous, replacement);
+      if (status === "conflict" || status === "missing") {
+        summary.skipped += 1;
+        await appendJsonLine(manifestFile, { status: "skipped-concurrent-change", productId: product.id, storagePath, thumbnailPath });
+        continue;
+      }
+      const { data: verified, error: verifyError } = await supabase.from("products")
+        .select("id,image,image_storage_path,image_thumb_storage_path,image_content_type,image_file_size,image_updated_at")
+        .eq("id", product.id).single();
+      if (verifyError || verified.image !== replacement.image || verified.image_thumb_storage_path !== thumbnailPath ||
+          verified.image_storage_path !== storagePath || verified.image_content_type !== detectedContentType ||
+          Number(verified.image_file_size) !== parsed.buffer.length ||
+          Date.parse(verified.image_updated_at) !== Date.parse(replacement.image_updated_at)) {
+        throw new Error("Post-update image verification failed; stop and use guarded rollback if needed");
       }
 
       summary.migrated += 1;
@@ -471,6 +452,8 @@ async function executeMigration(args) {
         productId: product.id,
         name: product.name,
         publicUrl,
+        thumbnailUrl,
+        thumbnailPath,
         storagePath,
         contentType: detectedContentType,
         fileSize: parsed.buffer.length,
@@ -488,13 +471,15 @@ async function executeMigration(args) {
         startedAt,
         finishedAt: new Date().toISOString(),
       });
+      throw new Error("Migration stopped after failure; inspect manifest before resuming");
     }
   }
 
   console.log(JSON.stringify(summary, null, 2));
+  return summary;
 }
 
-async function rollbackMigration(args) {
+export async function rollbackMigration(args) {
   const supabase = getSupabaseClient({ requireServiceRole: true });
   const rollbackFile = args.rollbackFile ||
     (args.resumeDir ? path.join(args.resumeDir, "rollback.jsonl") : "");
@@ -516,27 +501,13 @@ async function rollbackMigration(args) {
 
   for (const entry of selectedRows) {
     try {
-      const { error } = await supabase
-        .from("products")
-        .update({
-          image: entry.previous.image,
-          image_storage_path: entry.previous.image_storage_path,
-          image_content_type: entry.previous.image_content_type,
-          image_file_size: entry.previous.image_file_size,
-          image_updated_at: entry.previous.image_updated_at,
-        })
-        .eq("id", entry.productId);
-
-      if (error) throw error;
+      const status = await guardedRollback(supabase, entry);
+      if (status === "conflict" || status === "missing") {
+        summary.skipped = (summary.skipped || 0) + 1;
+        continue;
+      }
       summary.restored += 1;
 
-      if (args.rollbackRemoveStorage && entry.migration?.storagePath) {
-        const { error: removeError } = await supabase.storage
-          .from(PRODUCT_IMAGES_BUCKET)
-          .remove([entry.migration.storagePath]);
-        if (removeError) throw removeError;
-        summary.storageObjectsRemoved += 1;
-      }
     } catch (error) {
       summary.failed += 1;
       console.error(JSON.stringify({
@@ -549,6 +520,24 @@ async function rollbackMigration(args) {
   }
 
   console.log(JSON.stringify(summary, null, 2));
+  if (summary.failed) throw new Error("Some rollback records failed; no unguarded updates attempted");
+}
+
+async function exportOriginals(args) {
+  const products = (await fetchProducts(getSupabaseClient(), args.pageSize)).filter((row) => isBase64ProductImage(row.image));
+  const outputDir = buildOutputDir(args);
+  await fs.mkdir(outputDir, { recursive: true, mode: 0o700 });
+  const records = [];
+  for (const product of products) {
+    const parsed = parseDataUri(product.image);
+    if (detectImageContentType(parsed?.buffer) !== parsed?.contentType) throw new Error("Invalid original image");
+    const source = path.resolve(outputDir, `${product.id}-${sha256(parsed.buffer)}.${extensionForContentType(parsed.contentType)}`);
+    await fs.writeFile(source, parsed.buffer, { flag: "wx", mode: 0o600 });
+    records.push({ id: product.id, source, sha256_original: sha256(parsed.buffer) });
+  }
+  await fs.writeFile(path.join(outputDir, "image-backup.json"), JSON.stringify(products.map((row) => ({ productId: row.id, previous: imageSnapshot(row), originalSha256: sha256(parseDataUri(row.image).buffer) })), null, 2), { flag: "wx", mode: 0o600 });
+  await fs.writeFile(path.join(outputDir, "originals.json"), JSON.stringify(records, null, 2), { flag: "wx", mode: 0o600 });
+  console.log(JSON.stringify({ exported: records.length, outputDir }));
 }
 
 async function main() {
@@ -560,7 +549,9 @@ async function main() {
     return;
   }
 
-  if (args.mode === "dry-run") {
+  if (args.mode === "export") {
+    await exportOriginals(args);
+  } else if (args.mode === "dry-run") {
     await dryRun(args);
   } else if (args.mode === "execute") {
     await executeMigration(args);
@@ -571,7 +562,7 @@ async function main() {
   }
 }
 
-main().catch((error) => {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch((error) => {
   console.error(error?.stack || error?.message || String(error));
   process.exitCode = 1;
 });

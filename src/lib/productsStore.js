@@ -12,7 +12,7 @@ import {
   supabaseDiagnostics,
 } from "./supabaseClient";
 import { getProductCharacteristics } from "../products/productCharacteristics";
-import { hydrateLegacyProductImages } from "./productImageReads";
+import { hydrateLegacyProductImages, resolveStorageProductImages } from "./productImageReads";
 
 const STORAGE_KEY = "teeCoProducts";
 const PRODUCTS_CACHE_MAX_BYTES = 1_000_000;
@@ -400,6 +400,7 @@ function normalizeProduct(product) {
 
   return {
     ...product,
+    ...resolveStorageProductImages(supabase, product),
     status: buildPersistentStatus(
       product?.status ?? (product?.active === false ? "Inactive" : "Active")
     ),
@@ -960,12 +961,6 @@ async function fetchProductsFromSupabase() {
     throw error;
   }
 
-  data = await hydrateLegacyProductImages(supabase, Array.isArray(data) ? data : [], (imageError, ids) => {
-    logSupabaseProductError("Unable to fetch legacy product images", imageError, {
-      table: "products", action: "select-images", productIds: ids,
-    });
-  });
-
   const localProductsSnapshot = getLocalProductsSnapshot();
   const normalizedProducts = mergeRemoteProductsWithLocalSnapshot(
     Array.isArray(data) ? data.map(normalizeSupabaseProduct).filter(Boolean) : [],
@@ -1011,6 +1006,29 @@ export async function refreshStoredProducts() {
 
   hasLoadedProductsFromSupabase = true;
   const snapshot = setProductsSnapshot(remoteProducts);
+  // The catalogue must be usable before legacy inline images finish downloading.
+  // Only publish image results into the same refresh to avoid overwriting newer edits.
+  const publishLoadedImages = (withImages) => {
+    if (refreshId !== refreshSequence) return;
+    const imageById = new Map(withImages.filter((p) => p.image).map((p) => [p.id, p.image]));
+    if (!imageById.size) return;
+    const current = getStoredProducts();
+    let changed = false;
+    const enriched = current.map((product) => {
+      const image = imageById.get(product.id);
+      if (!image || product.image || product.image_storage_path) return product;
+      changed = true;
+      return { ...product, image };
+    });
+    if (changed) setProductsSnapshot(enriched);
+  };
+  void hydrateLegacyProductImages(supabase, remoteProducts, (imageError, ids) => {
+    logSupabaseProductError("Unable to fetch legacy product images", imageError, {
+      table: "products", action: "select-images", productIds: ids,
+    });
+  }, publishLoadedImages).catch((error) => {
+    console.error("[productsStore] Background legacy image hydration failed", error);
+  });
   console.info("[productsStore] Published storefront product snapshot after refresh", {
     refreshId,
     remoteCount: remoteProducts.length,

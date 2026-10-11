@@ -5,6 +5,63 @@ on:
   pull_request:
     branches: [ main, master ]
 jobs:
+  thumbnail-safety:
+    timeout-minutes: 8
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Install Pillow
+      run: python -m pip install 'Pillow>=11,<13'
+    - name: Verify original preservation and WebP output
+      run: python -m unittest discover -s scripts -p 'test_prepare_product_thumbnails.py'
+  focused-catalog:
+    timeout-minutes: 12
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: lts/*
+    - name: Install dependencies
+      run: npm ci
+    - name: Atomic migration and guarded rollback tests
+      run: node --test scripts/test-product-image-migration.mjs
+    - name: Focused catalog and image tests
+      run: npx vitest run src/lib/productImageReads.test.ts src/lib/storefrontCatalog.phoneCategory.test.ts --passWithNoTests=false
+  storage-image-browser:
+    timeout-minutes: 12
+    runs-on: ubuntu-latest
+    env:
+      VITE_SUPABASE_URL: https://image-tests.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_image_test_fixture
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: lts/*
+    - run: npm ci
+    - run: npx playwright install --with-deps chromium
+    - name: Desktop and phone Storage-image ordering regression
+      run: npx playwright test tests/product-image-storage-performance.spec.js --project=chromium --workers=1 --retries=0
+  storefront-smoke:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BASE_URL: http://localhost:4173
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: lts/*
+    - name: Install dependencies
+      run: npm ci
+    - name: Install Chromium
+      run: npx playwright install --with-deps chromium
+    - name: Run storefront and ordering smoke tests
+      run: npx playwright test tests/customer-order-handoff-copy.spec.js tests/customer-portal-start-order-route.spec.js --project=chromium --workers=1 --retries=0
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
