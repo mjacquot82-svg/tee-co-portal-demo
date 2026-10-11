@@ -30,7 +30,7 @@ jobs:
     - name: Atomic migration and guarded rollback tests
       run: node --test scripts/test-product-image-migration.mjs
     - name: Focused catalog and image tests
-      run: npx vitest run src/lib/productImageReads.test.ts src/lib/storefrontCatalog.phoneCategory.test.ts --passWithNoTests=false
+      run: npx vitest run src/lib/productImageReads.test.ts src/lib/storefrontCatalog.phoneCategory.test.ts src/lib/productsStore.cachedReadiness.test.tsx --passWithNoTests=false
   storage-image-browser:
     timeout-minutes: 12
     runs-on: ubuntu-latest

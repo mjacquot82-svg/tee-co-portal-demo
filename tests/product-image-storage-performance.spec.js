@@ -38,6 +38,11 @@ for (const width of [390, 1280]) {
     const detailImage = page.locator('img[alt="Migration Test Tee"]').first();
     await expect(detailImage).toHaveAttribute("src", /original\.png$/);
     await expect.poll(() => detailImage.evaluate(i => i.complete && i.naturalWidth > 0)).toBe(true);
+    // Storage metadata fits in browser cache; an identical refresh must still
+    // publish readiness so a returning visitor can open the garment.
+    await page.reload();
+    await expect(detailImage).toBeVisible();
+    await expect.poll(() => detailImage.evaluate(i => i.complete && i.naturalWidth > 0)).toBe(true);
     await page.getByRole("link", { name: "Continue to Configure Garment" }).click();
     await page.getByRole("spinbutton", { name: "S quantity" }).fill("2");
     await expect(page.getByText("$50.00", { exact: true }).first()).toBeVisible();

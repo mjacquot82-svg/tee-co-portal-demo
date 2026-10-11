@@ -1004,6 +1004,9 @@ export async function refreshStoredProducts() {
     return getLocalProductsSnapshot();
   }
 
+  // Readiness is part of the external-store state. Even identical cached rows
+  // need a new snapshot on the first remote load so subscribers leave loading.
+  if (!hasLoadedProductsFromSupabase) cachedProductsSnapshotRaw = null;
   hasLoadedProductsFromSupabase = true;
   const snapshot = setProductsSnapshot(remoteProducts);
   // The catalogue must be usable before legacy inline images finish downloading.
