@@ -1,3 +1,16 @@
+// Resolve immutable Storage paths without downloading inline database images.
+export function resolveStorageProductImages(client, product) {
+  if (!client) return product;
+  const urlFor = (path) => path ? client.storage.from("product-images").getPublicUrl(path).data.publicUrl : "";
+  const original = urlFor(product.image_storage_path);
+  const thumbnail = urlFor(product.image_thumb_storage_path);
+  return {
+    ...product,
+    ...(original ? { image: original, image_original_url: original, image_medium_url: original } : {}),
+    ...(thumbnail ? { image_thumb_url: thumbnail } : {}),
+  };
+}
+
 // Legacy inline images can exceed 22 MB across the catalog. Keep them out of
 // the metadata query and read a bounded number at a time until Storage migration.
 export async function hydrateLegacyProductImages(client, products, onError = () => {}, onBatch = () => {}) {
