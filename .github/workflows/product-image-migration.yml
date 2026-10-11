@@ -14,7 +14,7 @@ jobs:
       github.event.pull_request.number == 66 &&
       github.event.pull_request.head.repo.full_name == 'mjacquot82-svg/tee-co-portal-demo' &&
       github.event.pull_request.head.ref == 'fix/nonblocking-catalog-images-20261011' &&
-      (github.event.label.name == 'tee-image-prepare' || github.event.label.name == 'tee-image-pilot')
+      (github.event.label.name == 'tee-image-prepare' || github.event.label.name == 'tee-image-pilot' || github.event.label.name == 'tee-image-batch')
     environment: tee-co-image-migration
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -50,12 +50,12 @@ jobs:
           retention-days: 90
       - name: Generate WebP thumbnails
         run: python scripts/prepare-product-thumbnails.py --manifest migration-output/originals/originals.json --output-dir migration-output/thumbnails
-      - name: Three-product pilot (explicit pilot label only)
-        if: github.event.label.name == 'tee-image-pilot'
+      - name: Bounded image migration (explicit migration label only)
+        if: github.event.label.name == 'tee-image-pilot' || github.event.label.name == 'tee-image-batch'
         env:
           SUPABASE_URL: https://iwbajhxrgyjferbkibkl.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEE_CO_MIGRATION_SERVICE_ROLE_KEY }}
-        run: node scripts/migrate-product-images-to-storage.mjs --execute --page-size 1 --thumbnail-manifest migration-output/thumbnails/thumbnail-manifest.json --batch-size 3 --output-dir migration-output/pilot
+        run: node scripts/migrate-product-images-to-storage.mjs --execute --page-size 1 --thumbnail-manifest migration-output/thumbnails/thumbnail-manifest.json --batch-size ${{ github.event.label.name == 'tee-image-batch' && '10' || '3' }} --output-dir migration-output/pilot
       - name: Preserve preparation evidence and guarded rollback journal
         if: always()
         uses: actions/upload-artifact@v4
