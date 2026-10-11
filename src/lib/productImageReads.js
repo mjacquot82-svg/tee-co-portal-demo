@@ -1,6 +1,6 @@
 // Legacy inline images can exceed 22 MB across the catalog. Keep them out of
 // the metadata query and read a bounded number at a time until Storage migration.
-export async function hydrateLegacyProductImages(client, products, onError = () => {}) {
+export async function hydrateLegacyProductImages(client, products, onError = () => {}, onBatch = () => {}) {
   const missing = products.filter((product) => product.id && !product.image && !product.image_storage_path);
   const images = new Map();
   const batches = [];
@@ -19,6 +19,11 @@ export async function hydrateLegacyProductImages(client, products, onError = () 
         onError(error, ids);
       }
     }));
+    // Release images as each bounded group completes, rather than waiting
+    // for every legacy image in the catalogue.
+    onBatch(products.map((product) => images.has(product.id)
+      ? { ...product, image: images.get(product.id) }
+      : product));
   }
   return products.map((product) => images.has(product.id)
     ? { ...product, image: images.get(product.id) }
