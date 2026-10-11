@@ -5,6 +5,18 @@ on:
   pull_request:
     branches: [ main, master ]
 jobs:
+  thumbnail-safety:
+    timeout-minutes: 8
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Install Pillow
+      run: python -m pip install 'Pillow>=11,<13'
+    - name: Verify original preservation and WebP output
+      run: python -m unittest discover -s scripts -p 'test_prepare_product_thumbnails.py'
   focused-catalog:
     timeout-minutes: 12
     runs-on: ubuntu-latest
