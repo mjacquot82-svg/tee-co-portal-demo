@@ -46,7 +46,7 @@ jobs:
         with:
           name: tee-co-original-image-backup-${{ github.run_id }}
           path: migration-output/originals/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 90
       - name: Generate WebP thumbnails
         run: python scripts/prepare-product-thumbnails.py --manifest migration-output/originals/originals.json --output-dir migration-output/thumbnails
@@ -89,10 +89,11 @@ jobs:
           import assert from 'node:assert/strict';
           import fs from 'node:fs/promises';
           const browser = await chromium.launch();
-          const results = [];
+          const results = [];let activePage;
+          try {
           for (const width of [390,1280]) {
             const context = await browser.newContext({viewport:{width,height:900}});
-            const page = await context.newPage();
+            const page = await context.newPage();activePage=page;
             let inlineReads=0,metadataBytes=0;const pending=[];
             await page.route('**/*',route=>['GET','HEAD','OPTIONS'].includes(route.request().method())?route.continue():route.abort());
             page.on('request',request=>{
@@ -139,11 +140,16 @@ jobs:
             await Promise.all(pending);
             await context.close();
           }
-          await browser.close();await fs.writeFile('live-image-performance.json',JSON.stringify(results,null,2));console.log(JSON.stringify(results,null,2));
+          } catch(error) {console.log('LIVE_FAILURE', await activePage.locator('body').innerText());await activePage.screenshot({path:'live-failure.png',fullPage:true});await fs.writeFile('live-failure.html',await activePage.content());throw error;} finally {await browser.close();}
+          await fs.writeFile('live-image-performance.json',JSON.stringify(results,null,2));console.log(JSON.stringify(results,null,2));
           JS
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: tee-co-live-image-verification-${{ github.run_id }}
-          path: live-image-performance.json
+          path: |
+            live-image-performance.json
+            live-failure.png
+            live-failure.html
           if-no-files-found: error
           retention-days: 90
