@@ -1,0 +1,86 @@
+
+C:\Users\mjacq\Documents\Codex\2026-10-14\task\tee-artwork\src\admin\QuoteDetail.jsx
+   725:5   warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  723 |   useEffect(() => {
+  724 |     let active = true;
+> 725 |     setArtworkFiles(storedArtworkFiles);
+      |     ^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  726 |
+  727 |     if (!storedArtworkFiles.length) {
+  728 |       return () => {  react-hooks/set-state-in-effect
+   744:6   warning  React Hook useEffect has a missing dependency: 'storedArtworkFiles'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             react-hooks/exhaustive-deps
+  1922:11  warning  'nextFirstItem' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     no-unused-vars
+
+C:\Users\mjacq\Documents\Codex\2026-10-14\task\tee-artwork\src\customer-portal\CustomerPortalRequestOrder.jsx
+  231:7   warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  229 |     if (pendingRequest && !appliedPendingRequestRef.current) return;
+  230 |     if (pendingRequest?.lineItems?.length) {
+> 231 |       setLineItems(pendingRequest.lineItems.map((item) => ({
+      |       ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  232 |         id: item.id,
+  233 |         product_id: item.productId,
+  234 |         garmentId: item.garmentId || "",                                                                   react-hooks/set-state-in-effect
+  326:5   warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  324 |     if (!changed) return;
+  325 |
+> 326 |     setLineItems(repairedLineItems);
+      |     ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  327 |     if (pendingRequest?.lineItems?.length) {
+  328 |       const nextPendingRequest = {
+  329 |         ...pendingRequest,                                                                                                                                                                            react-hooks/set-state-in-effect
+  339:6   warning  React Hook useEffect has a missing dependency: 'storefrontProducts.length'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        react-hooks/exhaustive-deps
+  359:7   warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  357 |
+  358 |     if (matchedProduct) {
+> 359 |       setSelectedProductId(matchedProduct.id);
+      |       ^^^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  360 |       const matchedCategory = storefrontCategories.find((category) =>
+  361 |         category.products.some((product) => product.id === matchedProduct.id)
+  362 |       );                                                                                                      react-hooks/set-state-in-effect
+  478:48  warning  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  476 |       artworkLibrary: currentDraft.artworkLibrary || [],
+  477 |     };
+> 478 |     if (savePendingCustomerRequest(nextDraft)) setPendingRequest(nextDraft);
+      |                                                ^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  479 |   }, [additionalInstructions, contactName, contactPhone, draftRecoveryRequired, lineItems, needByDate, notes]);
+  480 |
+  481 |   async function handleSubmit(event) {  react-hooks/set-state-in-effect
+  479:6   warning  React Hook useEffect has a missing dependency: 'pendingRequest'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   react-hooks/exhaustive-deps
+
+Γ£û 9 problems (0 errors, 9 warnings)
+

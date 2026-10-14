@@ -1,0 +1,17 @@
+
+Running 5 tests using 1 worker
+
+
+
+[1A[2K(node:24908) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K(node:24908) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1A[2K[1/5] [chromium] ΓÇ║ tests\customer-order-artwork-requirement.spec.js:14:1 ΓÇ║ decorated order submission requires customer artwork
+[1A[2K[2/5] [chromium] ΓÇ║ tests\customer-order-artwork-requirement.spec.js:19:1 ΓÇ║ selected existing artwork satisfies the decorated order requirement
+[1A[2K[3/5] [chromium] ΓÇ║ tests\customer-order-artwork-requirement.spec.js:32:1 ΓÇ║ newly uploaded artwork satisfies the decorated order requirement
+[1A[2K[4/5] [chromium] ΓÇ║ tests\customer-order-artwork-requirement.spec.js:45:1 ΓÇ║ explicitly undecorated products do not require artwork
+[1A[2K[5/5] [chromium] ΓÇ║ tests\customer-order-artwork-requirement.spec.js:54:1 ΓÇ║ final submission boundary shows the required artwork dialog before order creation
+[1A[2K  5 passed (605ms)
