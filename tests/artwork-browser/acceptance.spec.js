@@ -53,6 +53,8 @@ test('mixed order: upload, switch to design and back, browser Back/Forward, then
  await page.getByLabel(choice).nth(0).check();
  await page.getByLabel(description).fill('Create a red compass');
  await page.getByRole('button', { name: 'Edit Garment' }).nth(1).click();
+ await expect(page.getByRole('button', { name: 'Save Garment Changes' })).toBeVisible();
+ await expect(page.getByLabel(choice)).toHaveCount(1);
  await page.getByLabel(choice).check();
  await page.getByLabel(description).fill('Temporary alternate design');
  await page.reload();
@@ -63,8 +65,10 @@ test('mixed order: upload, switch to design and back, browser Back/Forward, then
  await page.getByRole('button', { name: 'Save Garment Changes' }).click();
  await expect(page.getByRole('button', { name: 'Submit Order Request' })).toBeVisible();
  await page.goBack();
+ await expect(page.getByRole('button', { name: 'Save Garment Changes' })).toBeVisible();
  await expect(page.getByLabel(choice)).not.toBeChecked();
  await page.goForward();
+ await expect(page.getByRole('button', { name: 'Submit Order Request' })).toBeVisible();
  await expect(page.getByLabel(description)).toHaveValue('Create a red compass');
  await page.reload(); await resumeIfNeeded(page);
  await expect(page.getByTestId('customer-order-line-item')).toHaveCount(2);
