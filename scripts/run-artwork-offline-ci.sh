@@ -21,10 +21,12 @@ run_check build node node_modules/vite/bin/vite.js build --config tests/ci/vite.
 run_check vitest node node_modules/vitest/vitest.mjs run --config tests/ci/vitest.config.js --maxWorkers=1 --no-file-parallelism
 run_check playwright node node_modules/@playwright/test/cli.js test --config tests/ci/playwright.config.js --workers=1 --retries=0
 run_check artwork node node_modules/@playwright/test/cli.js test --config tests/ci/artwork.config.js --workers=1 --retries=0
+run_check customer node node_modules/@playwright/test/cli.js test --config tests/ci/customer.config.js --workers=1 --retries=0
+run_check customer-boundary node --test --test-concurrency=1 tests/customer-mock/requestBoundary.node-test.js
 run_check image-atomic node --test scripts/test-product-image-migration.mjs
 run_check thumbnails python -m unittest discover -s scripts -p test_prepare_product_thumbnails.py
 # Only bounded synthetic artwork screenshots, never traces, profiles, env files or dist.
-find test-results/artwork-browser-ci -type f -name '*.png' -size -1024k -print0 2>/dev/null | head -z -n 4 | while IFS= read -r -d '' file; do
+find test-results/artwork-browser-ci test-results/customer-mock-ci -type f -name '*.png' -size -1024k -print0 2>/dev/null | head -z -n 4 | while IFS= read -r -d '' file; do
   cp -- "$file" "ci-artifacts/$(basename "$file")"
 done
 exit "$failed"

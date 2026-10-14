@@ -1,4 +1,5 @@
 import { expect, test } from "./customer-mock/fixture.js";
+import { isCustomerEndpoint, requireCustomerRequest } from "./customer-mock/requestBoundary.js";
 
 const authUserId = "auth-hydration-fallback";
 const customerId = "customer-hydration-fallback";
@@ -21,7 +22,8 @@ test("customer hydration retries missing optional columns and replaces stale loc
     updated_at: "2026-07-27T13:00:00.000Z",
   };
 
-  await page.route("**/rest/v1/customers*", async (route) => {
+  await page.route((url) => isCustomerEndpoint(url.href), async (route) => {
+    await requireCustomerRequest(route, ["GET"]);
     const requestUrl = new URL(route.request().url());
     const select = requestUrl.searchParams.get("select") || "";
     requestedSelects.push(select);
