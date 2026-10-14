@@ -59,13 +59,33 @@ for (const mixed of [false, true]) test(`full app phone ${mixed ? 'mixed upload 
   await page.goto('/portal/order');
   await page.getByRole('link').filter({ hasText: 'Synthetic Shirt' }).first().click();
   await page.getByRole('link', { name: 'Continue to Configure Garment' }).click();
+  await expect(page.getByLabel('M quantity')).toHaveValue('1');
+  if (!mixed) {
+   for (const invalid of ['0', '', '-1']) {
+    await page.getByLabel('M quantity').fill(invalid);
+    await page.reload();
+    await expect(page.getByLabel('M quantity')).toHaveValue(invalid);
+    await page.getByRole('button', { name: 'Save Garment', exact: true }).click();
+    await expect(page.getByText('Add at least one size and quantity before saving this garment.')).toBeVisible();
+    expect(submissions).toHaveLength(0);
+   }
+   await page.getByRole('button', { name: 'Remove Size', exact: true }).click();
+   await page.reload();
+   await expect(page.getByTestId('size-breakdown-row')).toHaveCount(0);
+   await page.getByRole('button', { name: 'Save Garment', exact: true }).click();
+   await expect(page.getByText('Add at least one size and quantity before saving this garment.')).toBeVisible();
+   await page.getByRole('button', { name: '+ Add Size', exact: true }).click();
+   await expect(page.getByLabel('M quantity')).toHaveValue('1');
+  }
   await page.getByLabel('M quantity').fill('2');
   await page.getByLabel(choice).check();
   await page.getByRole('button', { name: 'Save Garment', exact: true }).click();
   await expect(page.getByText('Describe the wording and design wanted for this garment.')).toBeVisible();
   expect(submissions).toHaveLength(0);
   await page.getByLabel(description).fill('Blue compass and TRAIL TEAM');
+  await expect(page.getByLabel('M quantity')).toHaveValue('2');
   await page.reload();
+  await expect(page.getByLabel('M quantity')).toHaveValue('2');
   await expect(page.getByLabel(description)).toHaveValue('Blue compass and TRAIL TEAM');
   await page.getByRole('button', { name: 'Save Garment', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Submit Order Request' })).toBeVisible();
@@ -73,13 +93,18 @@ for (const mixed of [false, true]) test(`full app phone ${mixed ? 'mixed upload 
    await page.getByRole('button', { name: 'Add Another Garment' }).click();
    await page.getByRole('link').filter({ hasText: 'Synthetic Hoodie' }).first().click();
    await page.getByRole('link', { name: 'Continue to Configure Garment' }).click();
-   await page.getByLabel('M quantity').fill('1');
+   await expect(page.getByLabel('M quantity')).toHaveValue('1');
+   await page.getByLabel('M quantity').fill('2');
+   await expect(page.getByLabel('M quantity')).toHaveValue('2');
+   await page.reload();
+   await expect(page.getByLabel('M quantity')).toHaveValue('2');
    await page.getByTestId('order-artwork-upload-input').setInputFiles({ name: 'synthetic.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><circle r="8"/></svg>') });
    await page.getByRole('button', { name: 'Save Garment', exact: true }).click();
    await expect(page.getByRole('button', { name: 'Submit Order Request' })).toBeVisible();
   }
   await page.goBack();
   await expect(page.getByRole('button', { name: 'Save Garment', exact: true })).toBeVisible();
+  await expect(page.getByLabel('M quantity')).toHaveValue('2');
   await page.goForward();
   await expect(page.getByRole('button', { name: 'Submit Order Request' })).toBeVisible();
   await page.reload();
@@ -94,9 +119,12 @@ for (const mixed of [false, true]) test(`full app phone ${mixed ? 'mixed upload 
   expect(submissions[0]).toMatchObject({ customer_id: customer.id, artwork_approval_required: true, artwork_approval_status: 'Pending Review', production_ready: false, operational_visible: false });
   expect(submissions[0].line_items[0]).toMatchObject({ artwork_mode: 'create', artwork_description: 'Blue compass and TRAIL TEAM', artwork_id: '' });
   expect(uploads).toHaveLength(mixed ? 1 : 0);
-  if (mixed) expect(submissions[0].line_items[1]).toMatchObject({ artwork_mode: 'upload', artwork_id: artwork[0].id });
+  if (mixed) expect(submissions[0].line_items[1]).toMatchObject({ artwork_mode: 'upload', artwork_id: artwork[0].id, quantity: 2, size_breakdown: { M: 2 }, product_id: products[1].id });
   await page.screenshot({ path: info.outputPath(`submitted-${mixed ? 'mixed' : 'no-file'}.png`), fullPage: true });
   await writeFile(info.outputPath(`submitted-${mixed ? 'mixed' : 'no-file'}.json`), JSON.stringify(submissions[0], null, 2));
   expect(submissions[0].line_items[0].quantity, 'quantity entered before configuration reload is retained').toBe(2);
+  expect(submissions[0].line_items[0]).toMatchObject({ size_breakdown: { M: 2 }, product_id: products[0].id });
+  expect(submissions[0].qty).toBe(mixed ? 4 : 2);
+  expect(submissions[0].quote.quantity).toBe(mixed ? 4 : 2);
  } finally { expect.soft(unexpected, 'no unexpected service or external requests').toEqual([]); }
 });

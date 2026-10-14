@@ -72,7 +72,7 @@ export default function OrderPreview() {
     ? ""
     : passedState.selectedSize || passedState.availableSizes?.[0] || selectedProduct?.sizes?.[0] || "";
   const [sizeBreakdown, setSizeBreakdown] = useState(
-    editingLineItem?.size_breakdown || (initialSize ? { [initialSize]: Number(passedState.quantity || 1) } : {})
+    passedState.sizeBreakdownDraft ?? editingLineItem?.size_breakdown ?? (initialSize ? { [initialSize]: Number(passedState.quantity || 1) } : {})
   );
   const availableSizes = useMemo(() => {
     const source = editingLineItem?.availableSizes?.length
@@ -251,6 +251,12 @@ export default function OrderPreview() {
       displayName: file.name,
       previewUrl,
     });
+  }
+
+  function updateSizeBreakdown(next) {
+    setSizeBreakdown(next);
+    // Keep unsaved sizes on this garment's history entry across reload and Back/Next.
+    navigate(location.pathname, { replace: true, state: { ...passedState, sizeBreakdownDraft: next } });
   }
 
   function updateArtworkDraft(choice, description = artworkDescription) {
@@ -637,7 +643,7 @@ export default function OrderPreview() {
           <div style={{ marginTop: "18px" }}>
             <p style={{ fontWeight: "700", margin: "0 0 8px 0", fontSize: "15px" }}>Size Breakdown</p>
             <p style={{ margin: "0 0 12px", color: "#78716c", fontSize: "13px" }}>Add every size needed for this garment and set its quantity.</p>
-            <SizeBreakdownEditor availableSizes={availableSizes} value={sizeBreakdown} onChange={setSizeBreakdown} />
+            <SizeBreakdownEditor availableSizes={availableSizes} value={sizeBreakdown} onChange={updateSizeBreakdown} />
           </div>
 
           <div style={{ marginTop: "18px" }}>
