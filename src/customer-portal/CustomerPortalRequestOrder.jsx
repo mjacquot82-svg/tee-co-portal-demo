@@ -1,3 +1,5 @@
+import ArtworkCreationOption from "../components/ArtworkCreationOption";
+import { needsArtworkCreation, getArtworkDescription, describeArtworkRequest } from "../lib/artworkDesignRequest";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { useCatalogLookups } from "../lib/catalogLookupsStore";
@@ -39,6 +41,7 @@ import {
 import { resolveRequestContactDefaults } from "./requestContactDefaults";
 import { useCustomerPortalData } from "./useCustomerPortalData";
 import {
+  hasCustomerOrderArtwork,
   isDecoratedOrderLineItem,
   requiresCustomerOrderArtwork,
 } from "./orderArtworkRequirement";
@@ -237,6 +240,8 @@ export default function CustomerPortalRequestOrder() {
         decoration_type: item.decorationType,
         artwork_id: item.artworkId || "",
         artwork_name: item.artworkName || "",
+        artwork_mode: item.artworkMode || "upload",
+        artwork_description: item.artworkDescription || "",
         size_breakdown: item.size_breakdown,
         quantity: item.quantity,
       })));
@@ -458,6 +463,8 @@ export default function CustomerPortalRequestOrder() {
         decorationType: item.decoration_type || "",
         artworkId: item.artwork_id || "",
         artworkName: item.artwork_name || "",
+        artworkMode: item.artwork_mode || "upload",
+        artworkDescription: item.artwork_description || "",
         size_breakdown: item.size_breakdown || {},
         quantity: getLineItemQuantity(item),
       })),
@@ -512,6 +519,12 @@ export default function CustomerPortalRequestOrder() {
       return;
     }
 
+    if (configuredLineItems.some((item) => needsArtworkCreation(item) && !getArtworkDescription(item))) {
+      setSubmitState("error");
+      setSubmitMessage("Describe the wording and design wanted for each garment that needs Tee & Co to create artwork.");
+      return;
+    }
+
     if (
       requiresCustomerOrderArtwork(
         configuredLineItems,
@@ -540,7 +553,10 @@ export default function CustomerPortalRequestOrder() {
     const primaryLineItem = configuredLineItems[0];
     const primaryProduct = storefrontProducts.find((product) => product.id === primaryLineItem.product_id);
     const decorationType = primaryLineItem.decoration_type;
-    const draftArtworkLibrary = pendingRequest?.artworkLibrary || [];
+    const hasDesignRequest = configuredLineItems.some(needsArtworkCreation);
+    const draftArtworkLibrary = (pendingRequest?.artworkLibrary || []).filter((asset) =>
+      !hasDesignRequest || configuredLineItems.some((item) => !needsArtworkCreation(item) && item.artwork_id === asset.id)
+    );
     const uploadedByDraftId = new Map();
     try {
       for (const draftAsset of draftArtworkLibrary) {
@@ -573,7 +589,7 @@ export default function CustomerPortalRequestOrder() {
     const persistedIdByDraftId = new Map(
       draftArtworkLibrary.map((asset, index) => [asset.id, artworkLibrary[index]?.id || asset.id])
     );
-    const finalNotes = [normalizeText(notes), normalizeText(additionalInstructions)]
+    const finalNotes = [normalizeText(notes), normalizeText(additionalInstructions), ...configuredLineItems.filter(needsArtworkCreation).map((item) => `${item.garment}: ${describeArtworkRequest(item)}`)]
       .filter(Boolean)
       .join("\n\n");
     const artworkFiles = artworkLibrary;
@@ -639,10 +655,10 @@ export default function CustomerPortalRequestOrder() {
         artwork_library: artworkLibrary,
         artwork_files: artworkFiles,
         artwork_reference_names: artworkLibrary.map((asset) => asset.display_name),
-        artwork_requirement: artworkLibrary.length ? "Uploaded" : "Upload Later",
-        artwork_status: artworkLibrary.length ? "Pending Review" : "Missing",
-        artwork_approval_required: artworkLibrary.length > 0,
-        artwork_approval_status: artworkLibrary.length ? "Pending Review" : "Not Required",
+        artwork_requirement: hasDesignRequest ? "Design Requested" : artworkLibrary.length ? "Uploaded" : "Upload Later",
+        artwork_status: hasDesignRequest ? "Design Requested" : artworkLibrary.length ? "Pending Review" : "Missing",
+        artwork_approval_required: hasDesignRequest || artworkLibrary.length > 0,
+        artwork_approval_status: hasDesignRequest || artworkLibrary.length ? "Pending Review" : "Not Required",
         approval_status: "Pending Review",
         due_date: needByDate || "",
         notes: finalNotes,
@@ -700,7 +716,7 @@ export default function CustomerPortalRequestOrder() {
   }
 
   function openArtworkSelection(artworkAction) {
-    const decoratedItemIndex = configuredLineItems.findIndex(isDecoratedOrderLineItem);
+    const decoratedItemIndex = configuredLineItems.findIndex((item) => isDecoratedOrderLineItem(item) && !needsArtworkCreation(item) && !hasCustomerOrderArtwork([item]));
     const lineItemIndex = decoratedItemIndex >= 0 ? decoratedItemIndex : 0;
     const lineItem = configuredLineItems[lineItemIndex];
     const pendingLineItem = pendingRequest?.lineItems?.[lineItemIndex] || {};
@@ -837,8 +853,13 @@ export default function CustomerPortalRequestOrder() {
                   <ReviewItem label="Size" value={Object.entries(lineItem.size_breakdown || {}).map(([size, amount]) => `${size} ×${amount}`).join(" · ") || "Open / mixed sizing"} />
                   <ReviewItem label="Placement" value={lineItem.placement || "Confirm later"} />
                   <ReviewItem label="Decoration" value={lineItem.decoration_type || "Confirm later"} />
-                  <ReviewItem label="Artwork" value={lineItem.artwork_name || "No artwork selected for this garment"} />
+                  <ReviewItem label="Artwork" value={describeArtworkRequest(lineItem) || lineItem.artwork_name || "No artwork selected for this garment"} />
                 </div>
+                {isDecoratedOrderLineItem(configuredLineItems[index]) && <ArtworkCreationOption
+                  checked={needsArtworkCreation(lineItem)} description={lineItem.artwork_description || ""}
+                  onChange={(checked) => setLineItems((items) => items.map((item) => item.id === lineItem.id ? { ...item, artwork_mode: checked ? "create" : "upload", artwork_id: "", artwork_name: "" } : item))}
+                  onDescriptionChange={(value) => setLineItems((items) => items.map((item) => item.id === lineItem.id ? { ...item, artwork_description: value } : item))}
+                />}
               </article>
             );
           })}
@@ -1148,7 +1169,7 @@ export default function CustomerPortalRequestOrder() {
                   style={{ margin: "10px 0 0", color: "#475569", lineHeight: 1.6 }}
                 >
                   Before submitting your order, please upload your artwork or select artwork
-                  you&apos;ve previously uploaded.
+                  you&apos;ve previously uploaded. If you need us to create it, close this message and choose “I need Tee &amp; Co to create my artwork” on each garment that needs design work.
                 </p>
               </div>
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>

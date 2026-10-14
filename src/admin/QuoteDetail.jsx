@@ -1,3 +1,4 @@
+import { describeArtworkRequest } from "../lib/artworkDesignRequest";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./OrderDetail.css";
@@ -1275,7 +1276,7 @@ function IntakeReviewScreen({
                       </div>
                       <DetailItem label="Decoration Method" value={lineItem.decoration_type} />
                       <DetailItem label="Placement" value={lineItem.placement} />
-                      <DetailItem label="Artwork" value={assignedArtwork ? getArtworkDisplayName(assignedArtwork) : lineItem.artwork_name || "No artwork selected"} />
+                      <DetailItem label="Artwork" value={describeArtworkRequest(lineItem) || (assignedArtwork ? getArtworkDisplayName(assignedArtwork) : lineItem.artwork_name || "No artwork selected")} />
                       <DetailItem label="Quantity" value={formatValue(lineItem.quantity, "0")} />
                     </div>
                   </article>

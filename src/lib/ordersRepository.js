@@ -491,6 +491,11 @@ export async function fetchOrdersFromSupabase() {
 }
 
 export async function createOrderInSupabase(order) {
+  if (order.source === "Customer Portal" && (order.line_items || []).some(
+    (item) => item.artwork_mode === "create" && !String(item.artwork_description || "").trim()
+  )) {
+    throw new Error("Describe the wording and design wanted for each garment that needs Tee & Co to create artwork.");
+  }
   const payload = buildSupabaseOrderPayload(order);
   const row = await runOrderQuery(
     "create",

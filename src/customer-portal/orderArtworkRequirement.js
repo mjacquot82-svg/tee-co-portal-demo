@@ -1,3 +1,4 @@
+import { needsArtworkCreation, getArtworkDescription } from "../lib/artworkDesignRequest.js";
 const UNDECORATED_TYPES = new Set([
   "blank",
   "blank garment",
@@ -43,5 +44,10 @@ export function requiresCustomerOrderArtwork(lineItems = [], artworkLibrary = []
     isDecoratedOrderLineItem
   );
 
-  return decoratedItems.length > 0 && !hasCustomerOrderArtwork(decoratedItems, artworkLibrary);
+  if (decoratedItems.some((item) => needsArtworkCreation(item) && !getArtworkDescription(item))) return true;
+  const uploadItems = decoratedItems.filter((item) => !needsArtworkCreation(item));
+  // Legacy single-garment drafts may carry the upload only in the library.
+  // Multiple garments must each explicitly select artwork or request creation.
+  const legacyLibrary = decoratedItems.length === 1 ? artworkLibrary : [];
+  return uploadItems.some((item) => !hasCustomerOrderArtwork([item], legacyLibrary));
 }

@@ -1,3 +1,5 @@
+import ArtworkCreationOption from "../components/ArtworkCreationOption";
+import { needsArtworkCreation, getArtworkDescription } from "../lib/artworkDesignRequest";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
@@ -111,16 +113,20 @@ export default function OrderPreview() {
   const [decorationType, setDecorationType] = useState(
     editingLineItem?.decorationType || editingLineItem?.decoration_type || defaultDecorationType
   );
+  const [lineItemId] = useState(() => editingLineItem?.id || passedState.artworkDraft?.lineItemId || `line-${Date.now()}`);
   const [notes, setNotes] = useState("");
+  const [artworkDescription, setArtworkDescription] = useState(passedState.artworkDraft?.description ?? getArtworkDescription(editingLineItem || {}));
   const [artwork, setArtwork] = useState(null);
   const [artworkChoice, setArtworkChoice] = useState(
-    passedState.artworkAction === "upload"
+    passedState.artworkDraft?.choice || (passedState.artworkAction === "upload"
       ? "upload"
       : passedState.artworkAction === "existing"
       ? "existing"
+      : needsArtworkCreation(editingLineItem || {})
+      ? "create"
       : editingArtworkId || artworkLibrary.length
       ? "existing"
-      : "upload"
+      : "upload")
   );
   const [selectedArtworkId, setSelectedArtworkId] = useState(
     editingArtworkId || artworkLibrary[0]?.id || ""
@@ -136,7 +142,7 @@ export default function OrderPreview() {
   const selectedArtworkDisplayName =
     artworkChoice === "existing"
       ? resolvedExistingArtwork?.displayName || ""
-      : artwork?.name || editingLineItem?.artworkName || "";
+      : artworkChoice === "create" ? "Tee & Co to create artwork" : artwork?.name || editingLineItem?.artworkName || "";
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
   const [submitError, setSubmitError] = useState("");
 
@@ -247,6 +253,12 @@ export default function OrderPreview() {
     });
   }
 
+  function updateArtworkDraft(choice, description = artworkDescription) {
+    setArtworkChoice(choice);
+    setArtworkDescription(description);
+    navigate(location.pathname, { replace: true, state: { ...passedState, artworkDraft: { choice, description, lineItemId: lineItemId } } });
+  }
+
   function handleUpload(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -256,9 +268,9 @@ export default function OrderPreview() {
   }
 
   function buildConfiguredLineItem() {
-    const selectedArtwork = artworkChoice === "existing" ? resolvedExistingArtwork : artwork;
+    const selectedArtwork = artworkChoice === "create" ? null : artworkChoice === "existing" ? resolvedExistingArtwork : artwork;
     return {
-      id: editingLineItem?.id || `line-${Date.now()}`,
+      id: lineItemId,
       garmentId: passedState.garmentId || "",
       productId: selectedProduct?.id || passedState.productId || "",
       garmentName,
@@ -274,6 +286,8 @@ export default function OrderPreview() {
       placements: selectedPlacements,
       placement: selectedPlacements[0] || "",
       decorationType,
+      artworkMode: artworkChoice === "create" ? "create" : "upload",
+      artworkDescription,
       artworkId: selectedArtwork?.id || "",
       artworkName: selectedArtwork?.displayName || selectedArtwork?.name || "",
       estimatedStartingPrice: Number.isFinite(Number(customerTotal)) ? Number(customerTotal) : 0,
@@ -285,10 +299,14 @@ export default function OrderPreview() {
       setSubmitError("Add at least one size and quantity before saving this garment.");
       return;
     }
+    if (artworkChoice === "create" && !artworkDescription.trim()) {
+      setSubmitError("Describe the wording and design wanted for this garment.");
+      return;
+    }
     const configuredLineItem = buildConfiguredLineItem();
     const existingLineItems = existingRequest.lineItems || [];
     const updatedLineItems = upsertPendingCustomerLineItem(existingLineItems, configuredLineItem);
-    const newArtworkAsset = artwork?.file
+    const newArtworkAsset = artworkChoice === "upload" && artwork?.file
       ? {
           id: artwork.id,
           displayName: artwork.displayName,
@@ -321,7 +339,7 @@ export default function OrderPreview() {
       return;
     }
 
-    const artworkSaved = artwork?.file
+    const artworkSaved = artworkChoice === "upload" && artwork?.file
       ? await savePendingCustomerArtworkAsset(artwork.id, artwork.file)
       : nextArtworkLibrary.length
       ? true
@@ -668,7 +686,7 @@ export default function OrderPreview() {
             {artworkLibrary.length ? (
               <div style={{ display: "grid", gap: "8px", marginBottom: "12px" }}>
                 <label style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700 }}>
-                  <input type="radio" name="artwork_choice" checked={artworkChoice === "existing"} onChange={() => setArtworkChoice("existing")} />
+                  <input type="radio" name="artwork_choice" checked={artworkChoice === "existing"} onChange={() => updateArtworkDraft("existing")} />
                   Choose Existing Artwork
                 </label>
                 {artworkChoice === "existing" ? (
@@ -684,7 +702,7 @@ export default function OrderPreview() {
                   </select>
                 ) : null}
                 <label style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700 }}>
-                  <input type="radio" name="artwork_choice" checked={artworkChoice === "upload"} onChange={() => setArtworkChoice("upload")} />
+                  <input type="radio" name="artwork_choice" checked={artworkChoice === "upload"} onChange={() => updateArtworkDraft("upload")} />
                   Upload New Artwork
                 </label>
               </div>
@@ -693,6 +711,10 @@ export default function OrderPreview() {
                 Upload artwork for this garment. You can reuse it on the next garment.
               </p>
             )}
+
+            <ArtworkCreationOption checked={artworkChoice === "create"} description={artworkDescription}
+              onChange={(checked) => updateArtworkDraft(checked ? "create" : "upload")}
+              onDescriptionChange={(value) => updateArtworkDraft(artworkChoice, value)} />
 
             {artworkLibraryError ? (
               <p role="alert" style={{ margin: "0 0 10px", color: "#b91c1c", fontSize: "13px" }}>
