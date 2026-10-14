@@ -5,7 +5,7 @@ const choice = 'I need Tee & Co to create my artwork';
 const description = 'Wording and design wanted (required)';
 const customer = { id: '11111111-1111-4111-8111-111111111111', auth_user_id: 'synthetic-auth', external_reference: 'synthetic-auth', name: 'Synthetic Customer', email: 'synthetic@example.invalid', phone: '+15195550123', company: 'Synthetic Team' };
 const products = ['Synthetic Shirt', 'Synthetic Hoodie'].map((name, i) => ({ id: `22222222-2222-4222-8222-22222222222${i}`, name, status: 'Active', category: 'Apparel', storefront_category: 'Apparel', product_type: 'Apparel', colors: ['Black'], sizes: ['M', 'L'], base_garment_price: 20, unit_price: 20, decoration_types: ['DTF'], production_methods: ['DTF'], placements: ['Front'], is_featured: true }));
-for (const mixed of [false, true]) test(`full app phone ${mixed ? 'mixed upload and design' : 'no-file design'} catalog to submission`, async ({ page, context }, info) => {
+for (const { mixed, editSaved = false } of [{ mixed: false }, { mixed: true }, { mixed: true, editSaved: true }]) test(`full app phone ${editSaved ? 'edit saved design and uploaded lines' : mixed ? 'mixed upload and design' : 'no-file design'} catalog to submission`, async ({ page, context }, info) => {
  test.skip(info.project.name !== 'full-app-mobile', 'Dedicated loopback configuration only.');
  const unexpected = [], submissions = [], uploads = [], artwork = [];
  const reads = { products, customers: [customer], orders: [], customer_artwork: artwork,
@@ -112,6 +112,45 @@ for (const mixed of [false, true]) test(`full app phone ${mixed ? 'mixed upload 
   if (await resume.isVisible()) await resume.click();
   await expect(page.getByLabel(description)).toHaveValue('Blue compass and TRAIL TEAM');
   await expect(page.getByTestId('customer-order-line-item')).toHaveCount(mixed ? 2 : 1);
+  let savedLineIds;
+  if (editSaved) {
+   const readDraft = () => page.evaluate(() => JSON.parse(sessionStorage.getItem('teeCoPendingCustomerRequest')));
+   const before = await readDraft();
+   savedLineIds = before.lineItems.map(line => line.id);
+   expect(new Set(savedLineIds).size).toBe(2);
+   expect(before.lineItems[1].artworkId).toBeTruthy();
+   for (const [index, amount] of [[0, 3], [1, 4]]) {
+    await page.getByRole('button', { name: 'Edit Garment', exact: true }).nth(index).click();
+    await expect(page.getByRole('button', { name: 'Save Garment Changes', exact: true })).toBeVisible();
+    await expect(page.getByLabel('M quantity')).toHaveValue('2');
+    await page.getByLabel('M quantity').fill(String(amount));
+    await expect(page.getByLabel('M quantity')).toHaveValue(String(amount));
+    await page.reload();
+    await expect(page.getByLabel('M quantity')).toHaveValue(String(amount));
+    if (index === 0) {
+     await expect(page.getByLabel(choice)).toBeChecked();
+     await expect(page.getByLabel(description)).toHaveValue('Blue compass and TRAIL TEAM');
+    } else {
+     await expect(page.getByLabel(choice)).not.toBeChecked();
+     await expect(page.getByRole('radio', { name: 'Choose Existing Artwork' })).toBeChecked();
+     await expect(page.getByLabel('Choose existing artwork', { exact: true })).toHaveValue(before.lineItems[1].artworkId);
+    }
+    await page.getByRole('button', { name: 'Save Garment Changes', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Submit Order Request' })).toBeVisible();
+    await expect(page.getByTestId('customer-order-line-item')).toHaveCount(2);
+    await expect(page.getByTestId('customer-order-line-item').nth(index).getByText(`M \u00d7${amount}`, { exact: true })).toBeVisible();
+    const after = await readDraft();
+    expect(after.lineItems.map(line => line.id)).toEqual(savedLineIds);
+    expect(after.lineItems[index]).toMatchObject({ quantity: amount, size_breakdown: { M: amount }, productId: products[index].id });
+    expect(after.lineItems.map(line => line.artworkId)).toEqual(before.lineItems.map(line => line.artworkId));
+    expect(after.lineItems.map(line => line.artworkMode)).toEqual(['create', 'upload']);
+   }
+   await page.reload();
+   if (await resume.isVisible()) await resume.click();
+   await expect(page.getByTestId('customer-order-line-item')).toHaveCount(2);
+   await expect(page.getByTestId('customer-order-line-item').nth(0).getByText('M \u00d73', { exact: true })).toBeVisible();
+   await expect(page.getByTestId('customer-order-line-item').nth(1).getByText('M \u00d74', { exact: true })).toBeVisible();
+  }
   await page.getByRole('button', { name: 'Submit Order Request' }).click();
   await expect.poll(() => submissions.length).toBe(1);
   await expect(page).toHaveURL(/order-submitted/);
@@ -119,12 +158,20 @@ for (const mixed of [false, true]) test(`full app phone ${mixed ? 'mixed upload 
   expect(submissions[0]).toMatchObject({ customer_id: customer.id, artwork_approval_required: true, artwork_approval_status: 'Pending Review', production_ready: false, operational_visible: false });
   expect(submissions[0].line_items[0]).toMatchObject({ artwork_mode: 'create', artwork_description: 'Blue compass and TRAIL TEAM', artwork_id: '' });
   expect(uploads).toHaveLength(mixed ? 1 : 0);
-  if (mixed) expect(submissions[0].line_items[1]).toMatchObject({ artwork_mode: 'upload', artwork_id: artwork[0].id, quantity: 2, size_breakdown: { M: 2 }, product_id: products[1].id });
-  await page.screenshot({ path: info.outputPath(`submitted-${mixed ? 'mixed' : 'no-file'}.png`), fullPage: true });
-  await writeFile(info.outputPath(`submitted-${mixed ? 'mixed' : 'no-file'}.json`), JSON.stringify(submissions[0], null, 2));
+  if (mixed) expect(submissions[0].line_items[1]).toMatchObject({ artwork_mode: 'upload', artwork_id: artwork[0].id, quantity: editSaved ? 4 : 2, size_breakdown: { M: editSaved ? 4 : 2 }, product_id: products[1].id });
+  await page.screenshot({ path: info.outputPath(`submitted-${editSaved ? 'edited' : mixed ? 'mixed' : 'no-file'}.png`), fullPage: true });
+  await writeFile(info.outputPath(`submitted-${editSaved ? 'edited' : mixed ? 'mixed' : 'no-file'}.json`), JSON.stringify(submissions[0], null, 2));
+  if (editSaved) {
+   expect(submissions[0].line_items).toHaveLength(2);
+   expect(submissions[0].line_items.map(line => line.id)).toEqual(savedLineIds);
+   expect(submissions[0].line_items[0]).toMatchObject({ quantity: 3, size_breakdown: { M: 3 }, product_id: products[0].id });
+   expect(submissions[0].qty).toBe(7);
+   expect(submissions[0].quote.quantity).toBe(7);
+  } else {
   expect(submissions[0].line_items[0].quantity, 'quantity entered before configuration reload is retained').toBe(2);
   expect(submissions[0].line_items[0]).toMatchObject({ size_breakdown: { M: 2 }, product_id: products[0].id });
   expect(submissions[0].qty).toBe(mixed ? 4 : 2);
   expect(submissions[0].quote.quantity).toBe(mixed ? 4 : 2);
+  }
  } finally { expect.soft(unexpected, 'no unexpected service or external requests').toEqual([]); }
 });
