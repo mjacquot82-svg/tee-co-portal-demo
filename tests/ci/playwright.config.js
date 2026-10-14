@@ -10,5 +10,5 @@ export default defineConfig({
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ],
-  webServer: { command: 'node node_modules/vite/bin/vite.js --config tests/ci/vite.config.js', url: 'http://127.0.0.1:4173', reuseExistingServer: false, timeout: 30000 },
+  webServer: { cwd: '../..', command: 'node node_modules/vite/bin/vite.js --config tests/ci/vite.config.js', url: 'http://127.0.0.1:4173', reuseExistingServer: false, timeout: 30000 },
 });
