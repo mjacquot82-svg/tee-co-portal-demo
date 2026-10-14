@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./customer-mock/fixture.js";
 
 const authUserId = "auth-hydration-fallback";
 const customerId = "customer-hydration-fallback";

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./customer-mock/fixture.js";
 
 test("authenticated customer edits canonical profile and order defaults consume it", async ({ page }) => {
   const authUserId = "auth-profile-editor";
