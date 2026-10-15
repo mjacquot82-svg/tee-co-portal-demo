@@ -19,7 +19,7 @@ auth_email_counts as (
   group by lower(email)
 ),
 unambiguous_matches as (
-  select customer.id as customer_id, auth_user.id::text as auth_user_id
+  select customer.id as customer_id, auth_user.id as auth_user_id
   from public.customers as customer
   join auth.users as auth_user
     on lower(auth_user.email) = lower(customer.email)
@@ -47,7 +47,7 @@ as $$
     select 1
     from public.customers
     where customers.id::text = target_customer_id
-      and customers.auth_user_id = auth.uid()::text
+      and customers.auth_user_id = auth.uid()
   );
 $$;
 

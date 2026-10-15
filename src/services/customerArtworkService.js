@@ -681,7 +681,12 @@ export async function uploadCustomerArtwork(customerId, file, options = {}) {
     );
   }
 
-  const storagePath = buildStoragePath(normalizedCustomerId, options.fileName || file.name);
+  const requestedStoragePath = String(options.storagePath || "").trim();
+  if (requestedStoragePath && !requestedStoragePath.startsWith(`${normalizedCustomerId}/`)) {
+    throw new Error("Artwork storage path must be inside the customer's folder.");
+  }
+  const storagePath =
+    requestedStoragePath || buildStoragePath(normalizedCustomerId, options.fileName || file.name);
   console.info("[customerArtworkService] uploadCustomerArtwork start", {
     customerId: normalizedCustomerId,
     fileName: file.name,
@@ -792,6 +797,54 @@ export async function uploadCustomerArtwork(customerId, file, options = {}) {
   }
 
   return uploadedArtwork;
+}
+
+export function buildCustomerArtworkStoragePath(customerId, fileName) {
+  return buildStoragePath(customerId, fileName);
+}
+
+// Reconciliation read after a lost upload response. "found" needs the metadata
+// row; "absent" needs both the row and the storage object to be missing.
+// Anything else (row missing but object present, or a failed read) throws so the
+// caller reports an unresolved state instead of re-uploading.
+export async function findCustomerArtworkByStoragePath(customerId, storagePath) {
+  ensureSupabaseArtworkReady();
+  const normalizedCustomerId = normalizeCustomerId(customerId);
+  const { data, error } = await supabase
+    .from(CUSTOMER_ARTWORK_TABLE)
+    .select("*")
+    .eq("customer_id", normalizedCustomerId)
+    .eq("storage_path", storagePath)
+    .maybeSingle();
+  if (error) throw error;
+  if (data) {
+    return { status: "found", artwork: normalizeArtworkRow(data, await createSignedUrl(storagePath)) };
+  }
+  const slash = storagePath.lastIndexOf("/");
+  const folder = storagePath.slice(0, slash);
+  const objectName = storagePath.slice(slash + 1);
+  const { data: objects, error: listError } = await supabase.storage
+    .from(CUSTOMER_ARTWORK_BUCKET)
+    .list(folder, { search: objectName });
+  if (listError) throw listError;
+  if ((objects || []).some((object) => object?.name === objectName)) {
+    throw new Error("Artwork file exists without its metadata record.");
+  }
+  return { status: "absent" };
+}
+
+// Customer-side linking through the ownership-checked RPC
+// (supabase/customer-artwork-link-rpc.sql). Customers have no UPDATE policy
+// on customer_artwork, so they must not use updateArtworkRelationship.
+export async function linkOwnCustomerArtwork(artworkId, orderNumber, relationship = "order") {
+  ensureSupabaseArtworkReady();
+  const { error } = await supabase.rpc("link_customer_artwork_to_order", {
+    p_artwork_id: artworkId,
+    p_order_number: orderNumber,
+    p_relationship: relationship === "quote" ? "quote" : "order",
+  });
+  if (error) throw new Error(error.message || "Unable to link artwork to this order.");
+  return true;
 }
 
 export async function linkCustomerArtworkToOrder(artworkId, orderId) {

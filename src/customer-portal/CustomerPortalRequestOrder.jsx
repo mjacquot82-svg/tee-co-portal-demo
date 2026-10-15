@@ -5,7 +5,17 @@ import { Link, useLocation, useNavigate, useOutletContext } from "react-router-d
 import { useCatalogLookups } from "../lib/catalogLookupsStore";
 import { ensureCustomerProfile } from "../lib/customerProfileStore";
 import { linkOrderToCustomer } from "../lib/customersStore";
-import { createStoredOrder } from "../lib/ordersStore";
+import { createStoredOrderWithArtworkLinkStatus } from "../lib/ordersStore";
+import { findOrderBySubmissionKey } from "../lib/ordersRepository";
+import {
+  buildRecoveryBinding,
+  createRecoveryStore,
+  reconcileExistingOrder,
+  submitOrderWithRecovery,
+  UnresolvedSubmissionError,
+  uploadDraftArtworkWithRecovery,
+  withRecoveryLock,
+} from "../lib/artworkSubmissionRecovery";
 import { validateCustomerIdentity } from "../lib/customerIdentity";
 import { formatNorthAmericanPhoneDisplay } from "../lib/phoneNormalization";
 import { getDefaultDecorationType } from "../lib/orderConfiguration";
@@ -31,7 +41,11 @@ import {
   getProductPlacementConfig,
   useStoredProducts,
 } from "../lib/productsStore";
-import { uploadCustomerArtwork } from "../services/customerArtworkService";
+import {
+  buildCustomerArtworkStoragePath,
+  findCustomerArtworkByStoragePath,
+  uploadCustomerArtwork,
+} from "../services/customerArtworkService";
 import { PortalPage, SectionCard } from "./CustomerPortalShared";
 import {
   PORTAL_ORDER_SUBMITTED_PATH,
@@ -45,6 +59,16 @@ import {
   isDecoratedOrderLineItem,
   requiresCustomerOrderArtwork,
 } from "./orderArtworkRequirement";
+
+function describeArtworkLinkWarning(status) {
+  if (status === "failed") {
+    return "Your order was received, but we couldn't attach your uploaded artwork to it automatically. Tee & Co. will need to connect it. You don't need to submit the order again.";
+  }
+  if (status === "unknown") {
+    return "Your order was received, but we couldn't confirm that your uploaded artwork is attached to it. Tee & Co. will check it. You don't need to submit the order again.";
+  }
+  return "";
+}
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -557,19 +581,82 @@ export default function CustomerPortalRequestOrder() {
     const draftArtworkLibrary = (pendingRequest?.artworkLibrary || []).filter((asset) =>
       !hasDesignRequest || configuredLineItems.some((item) => !needsArtworkCreation(item) && item.artwork_id === asset.id)
     );
-    const uploadedByDraftId = new Map();
+    let recoveryBinding;
     try {
-      for (const draftAsset of draftArtworkLibrary) {
-        const pendingAsset = pendingArtworkAssets.find((asset) => asset.id === draftAsset.id);
-        if (!pendingAsset?.file) continue;
-        const uploaded = await uploadCustomerArtwork(profile?.id || "", pendingAsset.file, {
-          uploadedBy: customerSession.displayName || customerSession.email || "Customer Portal",
-          notes: "Uploaded with customer order request.",
-        });
-        uploadedByDraftId.set(draftAsset.id, uploaded);
-      }
+      recoveryBinding = buildRecoveryBinding({
+        customerId: profile?.id,
+        authUserId: customerSession.id,
+        draftId: pendingRequest?.created_at,
+      });
     } catch (error) {
       setSubmitState("error");
+      setSubmitMessage(error instanceof Error && error.message ? error.message : "We couldn't prepare this order for submission.");
+      return;
+    }
+    const reconcileOrder = (submissionKey) => findOrderBySubmissionKey(profile?.id || "", submissionKey);
+    const showReceiptOnly = (orderResult, extraWarning = "") => {
+      // Recovered order: show only verified facts, never the current (unsaved) draft.
+      navigate(PORTAL_ORDER_SUBMITTED_PATH, {
+        replace: true,
+        state: {
+          receiptOnly: true,
+          createdOrderNumber: orderResult.order?.order_number || "",
+          artworkLinkWarning: describeArtworkLinkWarning(orderResult.artworkLink?.status),
+          recoveryWarning: orderResult.evidenceError
+            ? "This browser couldn't record that the order was sent. Please don't submit it again; check My Orders instead."
+            : extraWarning,
+        },
+      });
+    };
+
+    // All recovery reads/writes for this identity+draft happen under one
+    // exclusive Web Lock (same-browser coordination only; not cross-device).
+    const submitWithinLock = async () => {
+    let recoveryStore;
+    try {
+      recoveryStore = createRecoveryStore(
+        typeof window !== "undefined" ? window.localStorage : null,
+        recoveryBinding
+      );
+      recoveryStore.assertWritable();
+    } catch (error) {
+      setSubmitState("error");
+      setSubmitMessage(error instanceof Error && error.message ? error.message : "We couldn't prepare this order for submission.");
+      return;
+    }
+    // Reconcile any earlier order for this draft BEFORE uploading anything.
+    // The draft (including any edits) is kept; it is not presented as saved.
+    try {
+      const existingOrder = await reconcileExistingOrder(recoveryStore, { reconcileOrder });
+      if (existingOrder) {
+        showReceiptOnly(existingOrder, "This order was already received. Your current draft was not sent again.");
+        return;
+      }
+    } catch (error) {
+      setSubmitState(error instanceof UnresolvedSubmissionError ? "unresolved" : "error");
+      setSubmitMessage(error instanceof Error && error.message ? error.message : "We couldn't confirm your earlier order.");
+      return;
+    }
+    let uploadedByDraftId;
+    try {
+      const uploadableAssets = draftArtworkLibrary
+        .map((draftAsset) => ({
+          id: draftAsset.id,
+          file: pendingArtworkAssets.find((asset) => asset.id === draftAsset.id)?.file,
+        }))
+        .filter((asset) => asset.file);
+      uploadedByDraftId = await uploadDraftArtworkWithRecovery(uploadableAssets, recoveryStore, {
+        buildStoragePath: (asset) => buildCustomerArtworkStoragePath(profile?.id || "", asset.file.name),
+        upload: (asset, { storagePath }) =>
+          uploadCustomerArtwork(profile?.id || "", asset.file, {
+            storagePath,
+            uploadedBy: customerSession.displayName || customerSession.email || "Customer Portal",
+            notes: "Uploaded with customer order request.",
+          }),
+        reconcileUpload: (storagePath) => findCustomerArtworkByStoragePath(profile?.id || "", storagePath),
+      });
+    } catch (error) {
+      setSubmitState(error instanceof UnresolvedSubmissionError ? "unresolved" : "error");
       setSubmitMessage(error instanceof Error && error.message ? error.message : "Artwork could not be uploaded. Please try again.");
       return;
     }
@@ -579,6 +666,7 @@ export default function CustomerPortalRequestOrder() {
       return {
         ...(uploaded || {}),
         id: uploaded?.id || draftAsset.id,
+        persisted: Boolean(uploaded?.id),
         display_name: draftAsset.displayName,
         name: draftAsset.displayName,
         original_filename: draftAsset.originalFilename,
@@ -620,7 +708,15 @@ export default function CustomerPortalRequestOrder() {
     const quote = generateOrderQuoteSnapshot({ line_items: submittedLineItems, setup_fees: [] }, storefrontProducts);
 
     try {
-      const createdOrder = await createStoredOrder({
+      const {
+        order: createdOrder,
+        artworkLink,
+        reused,
+        evidenceError,
+      } = await submitOrderWithRecovery(recoveryStore, {
+        reconcileOrder,
+        create: (submissionKey) => createStoredOrderWithArtworkLinkStatus({
+        order_metadata: { client_submission_key: submissionKey },
         customer_id: profile?.id || "",
         customer_first_name: identityValidation.identity.firstName,
         customer_last_name: identityValidation.identity.lastName,
@@ -675,7 +771,13 @@ export default function CustomerPortalRequestOrder() {
         deposit_workflow_status: "Pending Decision",
         invoice_status: "Draft",
         quote,
+        }),
       });
+
+      if (reused) {
+        showReceiptOnly({ order: createdOrder, artworkLink, evidenceError });
+        return;
+      }
 
       if (profile?.id) {
         try {
@@ -685,10 +787,15 @@ export default function CustomerPortalRequestOrder() {
         }
       }
 
-      if (pendingRequest) {
-        clearPendingCustomerRequest();
+      // Saved-order evidence was written by submitOrderWithRecovery before this
+      // cleanup and is intentionally never cleared: any later submit of this
+      // identity+draft (including a stale tab) returns this order receipt-only.
+      if (pendingRequest) clearPendingCustomerRequest();
+      try {
+        await clearPendingCustomerArtwork();
+      } catch (clearError) {
+        console.error("Order was created but the pending artwork draft could not be cleared", clearError);
       }
-      await clearPendingCustomerArtwork();
 
       navigate(PORTAL_ORDER_SUBMITTED_PATH, {
         replace: true,
@@ -702,16 +809,34 @@ export default function CustomerPortalRequestOrder() {
           artworkName: artworkLibrary.map((asset) => asset.display_name).join(", "),
           notes: finalNotes,
           quote,
+          artworkLinkWarning: artworkLibrary.some((asset) => asset.persisted)
+            ? describeArtworkLinkWarning(artworkLink?.status)
+            : "",
+          recoveryWarning: evidenceError
+            ? "Your order was received, but this browser couldn't record that it was sent. Please don't submit it again; check My Orders instead."
+            : "",
         },
       });
     } catch (error) {
       console.error("Unable to create customer portal order request", error);
-      setSubmitState("error");
+      setSubmitState(error instanceof UnresolvedSubmissionError ? "unresolved" : "error");
       setSubmitMessage(
         error instanceof Error && error.message
           ? error.message
           : "The request could not be sent. Try again."
       );
+    }
+    };
+
+    try {
+      await withRecoveryLock(
+        typeof navigator !== "undefined" ? navigator.locks : null,
+        recoveryBinding,
+        submitWithinLock
+      );
+    } catch (error) {
+      setSubmitState("error");
+      setSubmitMessage(error instanceof Error && error.message ? error.message : "This order could not be submitted safely.");
     }
   }
 

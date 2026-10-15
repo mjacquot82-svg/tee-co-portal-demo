@@ -507,6 +507,26 @@ export async function createOrderInSupabase(order) {
   return row ? mapSupabaseOrderRowToOrder(row) : order;
 }
 
+// Reconciliation read for a customer order whose create response was lost.
+// Resolves { status: "found", order } or { status: "absent" }; throws when the
+// read itself fails so callers treat the outcome as unknown.
+export async function findOrderBySubmissionKey(customerId, submissionKey) {
+  const client = getSupabaseClient();
+  if (!getSupabaseConfigured() || !client || !submissionKey) {
+    throw new Error("Order reconciliation is unavailable.");
+  }
+  const { data, error } = await client
+    .from(ORDERS_TABLE)
+    .select("*")
+    .eq("customer_id", customerId)
+    .eq("order_metadata->>client_submission_key", submissionKey)
+    .limit(2);
+  if (error) throw error;
+  if (!Array.isArray(data)) throw new Error("Unexpected order reconciliation result.");
+  if (data.length > 1) throw new Error("Multiple orders share this submission key.");
+  return data.length ? { status: "found", order: mapSupabaseOrderRowToOrder(data[0]) } : { status: "absent" };
+}
+
 export async function updateOrderInSupabase(orderNumber, order) {
   const payload = buildSupabaseOrderPayload(order);
   const row = await runOrderQuery(

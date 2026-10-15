@@ -34,7 +34,11 @@ import { getCustomerDisplayName, resolveCustomerForRecord } from "./customerReco
 import { requireCustomerIdentity } from "./customerIdentity";
 import { deriveOperationalWorkflowState } from "./operationalWorkflow";
 import { updateArtworkApprovalStatus } from "./customerArtworkStore";
-import { linkCustomerArtworkToOrder, linkCustomerArtworkToQuote } from "../services/customerArtworkService";
+import {
+  linkCustomerArtworkToOrder,
+  linkCustomerArtworkToQuote,
+  linkOwnCustomerArtwork,
+} from "../services/customerArtworkService";
 import { triggerNotificationEvent } from "./notificationDeliveryService";
 import { NOTIFICATION_TYPES } from "./notificationTemplatesStore";
 import { createStaffNotification, STAFF_NOTIFICATION_TYPES } from "./staffNotificationsStore";
@@ -176,12 +180,18 @@ function mergeHydrationWithConfirmedWrites(
 }
 
 function persistArtworkRelationship(promise, context) {
-  Promise.resolve(promise).catch((error) => {
-    console.error("Unable to persist artwork relationship in Supabase", {
-      context,
-      error,
-    });
-  });
+  // Returns a promise resolving to { status: "linked" | "failed", context, error? }
+  // so callers that care can surface failures instead of only logging them.
+  return Promise.resolve(promise).then(
+    () => ({ status: "linked", context }),
+    (error) => {
+      console.error("Unable to persist artwork relationship in Supabase", {
+        context,
+        error,
+      });
+      return { status: "failed", context, error };
+    }
+  );
 }
 
 function persistArtworkApprovalMetadata(artworkIds, approvalStatus) {
@@ -1644,6 +1654,13 @@ export function seedStoredOrders(seedOrders = demoOrders) {
 }
 
 export async function createStoredOrder(orderInput) {
+  const { order } = await createStoredOrderWithArtworkLinkStatus(orderInput);
+  return order;
+}
+
+// Same as createStoredOrder, but waits for artwork linking and reports it:
+// artworkLink.status is "skipped", "linked" or "failed" (the order is saved either way).
+export async function createStoredOrderWithArtworkLinkStatus(orderInput) {
   const currentOrders = getStoredOrders();
   const orderNumber = `TC-${Date.now().toString().slice(-6)}`;
   const createdAt = new Date().toISOString();
@@ -1704,29 +1721,44 @@ export async function createStoredOrder(orderInput) {
 
   await triggerOrderNotification(NOTIFICATION_TYPES.newCustomerRequest, persistedOrder);
 
-  if (persistedOrder.customer_artwork_id) {
-    if (persistedOrder.operational_visible === false || persistedOrder.quote_status !== "Ready For Production") {
-      persistArtworkRelationship(
-        linkCustomerArtworkToQuote(persistedOrder.customer_artwork_id, persistedOrder.order_number),
-        {
-          artworkId: persistedOrder.customer_artwork_id,
-          orderNumber: persistedOrder.order_number,
-          relationship: "quote",
-        }
-      );
-    } else {
-      persistArtworkRelationship(
-        linkCustomerArtworkToOrder(persistedOrder.customer_artwork_id, persistedOrder.order_number),
-        {
-          artworkId: persistedOrder.customer_artwork_id,
-          orderNumber: persistedOrder.order_number,
-          relationship: "order",
-        }
-      );
-    }
-  }
+  const isCustomerPortalOrder = orderInput.source === "Customer Portal";
+  const artworkIdsToLink = Array.from(
+    new Set(
+      [
+        persistedOrder.customer_artwork_id,
+        ...(isCustomerPortalOrder
+          ? (Array.isArray(orderInput.artwork_library) ? orderInput.artwork_library : []).map(
+              (asset) => asset?.persisted ? asset.id : ""
+            )
+          : []),
+      ]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  );
+  const relationship =
+    persistedOrder.operational_visible === false || persistedOrder.quote_status !== "Ready For Production"
+      ? "quote"
+      : "order";
+  const linkResults = await Promise.all(
+    artworkIdsToLink.map((artworkId) => {
+      const context = { artworkId, orderNumber: persistedOrder.order_number, relationship };
+      const linkPromise = isCustomerPortalOrder
+        ? linkOwnCustomerArtwork(artworkId, persistedOrder.order_number, relationship)
+        : relationship === "quote"
+        ? linkCustomerArtworkToQuote(artworkId, persistedOrder.order_number)
+        : linkCustomerArtworkToOrder(artworkId, persistedOrder.order_number);
+      return persistArtworkRelationship(linkPromise, context);
+    })
+  );
+  const failedLinks = linkResults.filter((result) => result.status === "failed");
+  const artworkLink = !linkResults.length
+    ? { status: "skipped" }
+    : failedLinks.length
+    ? { status: "failed", failed: failedLinks.map((result) => result.context) }
+    : { status: "linked" };
 
-  return persistedOrder;
+  return { order: persistedOrder, artworkLink };
 }
 
 export function findStoredOrder(orderNumber) {
