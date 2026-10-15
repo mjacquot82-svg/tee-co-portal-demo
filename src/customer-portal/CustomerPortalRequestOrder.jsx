@@ -604,6 +604,7 @@ export default function CustomerPortalRequestOrder() {
           receiptOnly: true,
           createdOrderNumber: orderResult.order?.order_number || "",
           artworkLinkWarning: describeArtworkLinkWarning(orderResult.artworkLink?.status),
+          followUpWarnings: orderResult.followUpWarnings || [],
           recoveryWarning: orderResult.evidenceError
             ? "This browser couldn't record that the order was sent. Please don't submit it again; check My Orders instead."
             : extraWarning,
@@ -711,6 +712,7 @@ export default function CustomerPortalRequestOrder() {
 
     try {
       let followUpWarnings;
+      let followUpWarningRecordError = false;
       const {
         order: createdOrder,
         artworkLink,
@@ -779,7 +781,7 @@ export default function CustomerPortalRequestOrder() {
 
       followUpWarnings = savedFollowUpWarnings;
       if (reused) {
-        showReceiptOnly({ order: createdOrder, artworkLink, evidenceError });
+        showReceiptOnly({ order: createdOrder, artworkLink, evidenceError, followUpWarnings: savedFollowUpWarnings });
         return;
       }
 
@@ -789,6 +791,15 @@ export default function CustomerPortalRequestOrder() {
         } catch (linkError) {
           console.error("Order was created but the customer summary could not be updated", linkError);
           followUpWarnings = [...followUpWarnings, FOLLOW_UP_WARNINGS.accountSummary];
+          if (!evidenceError) {
+            try {
+              // Still inside the recovery lock; persisted so reopening this draft shows it.
+              recoveryStore.appendFollowUpWarnings([FOLLOW_UP_WARNINGS.accountSummary]);
+            } catch (appendError) {
+              console.error("Could not record the follow-up warning in this browser", appendError);
+              followUpWarningRecordError = true;
+            }
+          }
         }
       }
 
@@ -819,6 +830,8 @@ export default function CustomerPortalRequestOrder() {
             : "",
           recoveryWarning: evidenceError
             ? "Your order was received, but this browser couldn't record that it was sent. Please don't submit it again; check My Orders instead."
+            : followUpWarningRecordError
+            ? "Your order was received. This browser couldn't save the notes below, so they may not appear if you reopen this draft."
             : "",
           followUpWarnings,
         },

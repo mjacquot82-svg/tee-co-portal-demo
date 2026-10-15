@@ -117,8 +117,16 @@ function isValidOrderReceipt(order) {
     isPlainObject(order.order) &&
     nonEmptyString(order.order.order_number) &&
     isPlainObject(order.artworkLink) &&
-    LINK_STATUSES.has(order.artworkLink.status)
+    LINK_STATUSES.has(order.artworkLink.status) &&
+    // Optional (older v3 records lack it and default to []); if present it
+    // must be an array of non-empty strings.
+    (order.followUpWarnings === undefined ||
+      (Array.isArray(order.followUpWarnings) && order.followUpWarnings.every(nonEmptyString)))
   );
+}
+
+function normalizeWarnings(warnings) {
+  return Array.from(new Set((Array.isArray(warnings) ? warnings : []).filter(nonEmptyString).map((w) => w.trim())));
 }
 
 function isValidState(state, binding) {
@@ -276,6 +284,27 @@ export function createRecoveryStore(storage, binding, { keyFactory = defaultKeyF
       state.order = order;
       persist();
     },
+    // Adds post-save follow-up warnings to the confirmed-order receipt.
+    // Call inside the recovery lock; the revision compare-and-set refuses a
+    // stale instance. Throws RecoveryStateError if it can't be recorded.
+    appendFollowUpWarnings(warnings) {
+      assertWritable();
+      if (state.order?.status !== "confirmed") {
+        throw new RecoveryStateError("There is no saved order receipt to update in this browser.");
+      }
+      const previous = state.order;
+      state.order = {
+        ...previous,
+        followUpWarnings: normalizeWarnings([...(previous.followUpWarnings || []), ...normalizeWarnings(warnings)]),
+      };
+      try {
+        persist();
+      } catch (error) {
+        state.order = previous;
+        throw error;
+      }
+      return state.order.followUpWarnings;
+    },
     // Only removes this identity's own record, and only when it holds no
     // unresolved (pending) entries.
     clear() {
@@ -383,7 +412,12 @@ export async function reconcileExistingOrder(store, deps) {
   const existing = store.getOrder();
   if (!existing) return null;
   if (existing.status === "confirmed") {
-    return { order: existing.order, artworkLink: existing.artworkLink, reused: true };
+    return {
+      order: existing.order,
+      artworkLink: existing.artworkLink,
+      followUpWarnings: normalizeWarnings(existing.followUpWarnings),
+      reused: true,
+    };
   }
   const outcome = await safeReconcile(deps.reconcileOrder, existing.submissionKey);
   if (outcome.status !== "found") throw new UnresolvedSubmissionError(ORDER_UNRESOLVED);
@@ -409,22 +443,24 @@ export async function submitOrderWithRecovery(store, deps) {
     }
     return confirmOrder(store, outcome.order, { status: "unknown" }, true);
   }
-  const confirmed = confirmOrder(store, result.order, result.artworkLink || { status: "skipped" }, false);
-  confirmed.followUpWarnings = Array.isArray(result.followUpWarnings) ? result.followUpWarnings : [];
-  return confirmed;
+  return confirmOrder(store, result.order, result.artworkLink || { status: "skipped" }, false, result.followUpWarnings);
 }
 
-function confirmOrder(store, order, artworkLink, reused) {
+// followUpWarnings are only known for a fresh create; a reconciled order never
+// fabricates them (and follow-ups are never rerun to reconstruct them).
+function confirmOrder(store, order, artworkLink, reused, followUpWarnings = []) {
   if (!nonEmptyString(order?.order_number)) {
     throw new UnresolvedSubmissionError(ORDER_UNRESOLVED);
   }
-  const response = { order, artworkLink, reused };
+  const warnings = normalizeWarnings(followUpWarnings);
+  const response = { order, artworkLink, reused, followUpWarnings: warnings };
   try {
     store.setOrder({
       status: "confirmed",
       submissionKey: store.submissionKey,
       order: minimalOrder(order),
       artworkLink: { status: LINK_STATUSES.has(artworkLink?.status) ? artworkLink.status : "unknown" },
+      followUpWarnings: warnings,
     });
   } catch (error) {
     // The order exists; report that the browser couldn't record it.

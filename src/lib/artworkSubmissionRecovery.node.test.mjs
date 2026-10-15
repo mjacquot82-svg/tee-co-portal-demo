@@ -338,6 +338,7 @@ test("failed draft cleanup: saved-order evidence keeps the order confirmed; retr
     submissionKey: "key-401",
     order: { order_number: "TC-000001" },
     artworkLink: { status: "linked" },
+    followUpWarnings: [],
   });
   const retry = await submitOrderWithRecovery(retryStore, deps);
   assert.equal(retry.order.order_number, "TC-000001");
