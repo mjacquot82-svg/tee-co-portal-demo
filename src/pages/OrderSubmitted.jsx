@@ -172,10 +172,11 @@ export default function OrderSubmitted() {
           boxShadow: "0 14px 32px rgba(0,0,0,0.06)",
         }}
       >
-        {location.state?.artworkLinkWarning ? (
+        {view.warnings.map((warning) => (
           <div
+            key={warning}
             role="status"
-            data-testid="artwork-link-warning"
+            data-testid="order-submitted-warning"
             style={{
               borderRadius: "14px",
               border: "1px solid #fcd34d",
@@ -185,25 +186,9 @@ export default function OrderSubmitted() {
               marginBottom: "14px",
             }}
           >
-            {location.state.artworkLinkWarning}
+            {warning}
           </div>
-        ) : null}
-        {location.state?.recoveryWarning ? (
-          <div
-            role="status"
-            data-testid="order-recovery-warning"
-            style={{
-              borderRadius: "14px",
-              border: "1px solid #fcd34d",
-              background: "#fffbeb",
-              color: "#92400e",
-              padding: "12px 14px",
-              marginBottom: "14px",
-            }}
-          >
-            {location.state.recoveryWarning}
-          </div>
-        ) : null}
+        ))}
         <div
           style={{
             display: "flex",

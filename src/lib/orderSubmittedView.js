@@ -10,7 +10,10 @@ function text(value) {
 
 export function buildSubmittedView(state = {}) {
   const orderNumber = text(state.createdOrderNumber || state.orderNumber || state.order_number);
-  const warnings = [text(state.artworkLinkWarning), text(state.recoveryWarning)].filter(Boolean);
+  const followUps = Array.isArray(state.followUpWarnings) ? state.followUpWarnings.map(text) : [];
+  const warnings = Array.from(
+    new Set([text(state.artworkLinkWarning), text(state.recoveryWarning), ...followUps].filter(Boolean))
+  );
 
   if (!orderNumber) return { mode: "missing" };
 

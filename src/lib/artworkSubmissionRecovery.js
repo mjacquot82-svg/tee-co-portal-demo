@@ -409,7 +409,9 @@ export async function submitOrderWithRecovery(store, deps) {
     }
     return confirmOrder(store, outcome.order, { status: "unknown" }, true);
   }
-  return confirmOrder(store, result.order, result.artworkLink || { status: "skipped" }, false);
+  const confirmed = confirmOrder(store, result.order, result.artworkLink || { status: "skipped" }, false);
+  confirmed.followUpWarnings = Array.isArray(result.followUpWarnings) ? result.followUpWarnings : [];
+  return confirmed;
 }
 
 function confirmOrder(store, order, artworkLink, reused) {
@@ -429,4 +431,14 @@ function confirmOrder(store, order, artworkLink, reused) {
     response.evidenceError = error;
   }
   return response;
+}
+
+// Adds the client submission key to an order payload without replacing any
+// other order fields or existing order_metadata keys.
+export function withClientSubmissionKey(orderPayload, submissionKey) {
+  const metadata =
+    orderPayload?.order_metadata && typeof orderPayload.order_metadata === "object" && !Array.isArray(orderPayload.order_metadata)
+      ? orderPayload.order_metadata
+      : {};
+  return { ...orderPayload, order_metadata: { ...metadata, client_submission_key: submissionKey } };
 }

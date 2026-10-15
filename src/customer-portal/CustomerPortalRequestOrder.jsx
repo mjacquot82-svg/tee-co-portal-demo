@@ -7,6 +7,7 @@ import { ensureCustomerProfile } from "../lib/customerProfileStore";
 import { linkOrderToCustomer } from "../lib/customersStore";
 import { createStoredOrderWithArtworkLinkStatus } from "../lib/ordersStore";
 import { findOrderBySubmissionKey } from "../lib/ordersRepository";
+import { FOLLOW_UP_WARNINGS } from "../lib/savedOrderFollowUps";
 import {
   buildRecoveryBinding,
   createRecoveryStore,
@@ -14,6 +15,7 @@ import {
   submitOrderWithRecovery,
   UnresolvedSubmissionError,
   uploadDraftArtworkWithRecovery,
+  withClientSubmissionKey,
   withRecoveryLock,
 } from "../lib/artworkSubmissionRecovery";
 import { validateCustomerIdentity } from "../lib/customerIdentity";
@@ -708,15 +710,16 @@ export default function CustomerPortalRequestOrder() {
     const quote = generateOrderQuoteSnapshot({ line_items: submittedLineItems, setup_fees: [] }, storefrontProducts);
 
     try {
+      let followUpWarnings;
       const {
         order: createdOrder,
         artworkLink,
         reused,
         evidenceError,
+        followUpWarnings: savedFollowUpWarnings = [],
       } = await submitOrderWithRecovery(recoveryStore, {
         reconcileOrder,
-        create: (submissionKey) => createStoredOrderWithArtworkLinkStatus({
-        order_metadata: { client_submission_key: submissionKey },
+        create: (submissionKey) => createStoredOrderWithArtworkLinkStatus(withClientSubmissionKey({
         customer_id: profile?.id || "",
         customer_first_name: identityValidation.identity.firstName,
         customer_last_name: identityValidation.identity.lastName,
@@ -771,9 +774,10 @@ export default function CustomerPortalRequestOrder() {
         deposit_workflow_status: "Pending Decision",
         invoice_status: "Draft",
         quote,
-        }),
+        }, submissionKey)),
       });
 
+      followUpWarnings = savedFollowUpWarnings;
       if (reused) {
         showReceiptOnly({ order: createdOrder, artworkLink, evidenceError });
         return;
@@ -784,6 +788,7 @@ export default function CustomerPortalRequestOrder() {
           await linkOrderToCustomer(profile.id, createdOrder.order_number);
         } catch (linkError) {
           console.error("Order was created but the customer summary could not be updated", linkError);
+          followUpWarnings = [...followUpWarnings, FOLLOW_UP_WARNINGS.accountSummary];
         }
       }
 
@@ -815,6 +820,7 @@ export default function CustomerPortalRequestOrder() {
           recoveryWarning: evidenceError
             ? "Your order was received, but this browser couldn't record that it was sent. Please don't submit it again; check My Orders instead."
             : "",
+          followUpWarnings,
         },
       });
     } catch (error) {

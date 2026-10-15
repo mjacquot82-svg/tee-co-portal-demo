@@ -39,6 +39,7 @@ import {
   linkCustomerArtworkToQuote,
   linkOwnCustomerArtwork,
 } from "../services/customerArtworkService";
+import { FOLLOW_UP_WARNINGS, runSavedOrderFollowUps } from "./savedOrderFollowUps";
 import { triggerNotificationEvent } from "./notificationDeliveryService";
 import { NOTIFICATION_TYPES } from "./notificationTemplatesStore";
 import { createStaffNotification, STAFF_NOTIFICATION_TYPES } from "./staffNotificationsStore";
@@ -1660,6 +1661,7 @@ export async function createStoredOrder(orderInput) {
 
 // Same as createStoredOrder, but waits for artwork linking and reports it:
 // artworkLink.status is "skipped", "linked" or "failed" (the order is saved either way).
+// followUpWarnings lists isolated post-save follow-up failures (Customer Portal only).
 export async function createStoredOrderWithArtworkLinkStatus(orderInput) {
   const currentOrders = getStoredOrders();
   const orderNumber = `TC-${Date.now().toString().slice(-6)}`;
@@ -1706,22 +1708,41 @@ export async function createStoredOrderWithArtworkLinkStatus(orderInput) {
     ...currentOrders.filter((entry) => entry.order_number !== persistedOrder.order_number),
   ];
   saveStoredOrders(nextOrders);
-  await ensureTeeCoProductionProcess(persistedOrder);
-
-  emitCustomerTimelineEventForOrder(
-    persistedOrder,
-    order.operational_visible === false ? "quote_created" : "order_created",
-    `${order.operational_visible === false ? "Quote" : "Order"} ${orderNumber} created.`,
-    {
-      quoteStatus: persistedOrder.quote_status,
-      orderStatus: persistedOrder.status,
-    },
-    createdAt
-  );
-
-  await triggerOrderNotification(NOTIFICATION_TYPES.newCustomerRequest, persistedOrder);
 
   const isCustomerPortalOrder = orderInput.source === "Customer Portal";
+  const followUps = [
+    {
+      run: () => ensureTeeCoProductionProcess(persistedOrder),
+      warning: FOLLOW_UP_WARNINGS.processing,
+    },
+    {
+      run: () =>
+        emitCustomerTimelineEventForOrder(
+          persistedOrder,
+          order.operational_visible === false ? "quote_created" : "order_created",
+          `${order.operational_visible === false ? "Quote" : "Order"} ${orderNumber} created.`,
+          {
+            quoteStatus: persistedOrder.quote_status,
+            orderStatus: persistedOrder.status,
+          },
+          createdAt
+        ),
+      warning: FOLLOW_UP_WARNINGS.timeline,
+    },
+    {
+      run: () => triggerOrderNotification(NOTIFICATION_TYPES.newCustomerRequest, persistedOrder),
+      warning: FOLLOW_UP_WARNINGS.notification,
+    },
+  ];
+  let followUpWarnings = [];
+  if (isCustomerPortalOrder) {
+    // The order is saved; follow-up failures become warnings, never "order failed".
+    followUpWarnings = await runSavedOrderFollowUps(persistedOrder.order_number, followUps);
+  } else {
+    // Staff flows keep their existing behaviour (failures propagate).
+    for (const followUp of followUps) await followUp.run();
+  }
+
   const artworkIdsToLink = Array.from(
     new Set(
       [
@@ -1758,7 +1779,7 @@ export async function createStoredOrderWithArtworkLinkStatus(orderInput) {
     ? { status: "failed", failed: failedLinks.map((result) => result.context) }
     : { status: "linked" };
 
-  return { order: persistedOrder, artworkLink };
+  return { order: persistedOrder, artworkLink, followUpWarnings };
 }
 
 export function findStoredOrder(orderNumber) {
