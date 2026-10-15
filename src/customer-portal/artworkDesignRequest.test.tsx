@@ -1,4 +1,5 @@
 import React from 'react';
+import { webcrypto as nodeWebcrypto } from 'node:crypto';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -12,12 +13,14 @@ import { getOrderLineItems } from '../lib/orderLineItems';
 import { isArtworkApprovalSatisfied } from '../orders/workflowGating';
 import { buildProductionReadiness } from '../quotes/productionReadiness';
 import { requiresCustomerOrderArtwork } from './orderArtworkRequirement';
-const mocks = vi.hoisted(() => ({ save: vi.fn(async (order) => ({ ...order, order_number: 'SYNTHETIC-1' })), upload: vi.fn(async () => ({ id: 'persisted-logo', file_name: 'Logo.svg', storage_path: 'synthetic/logo.svg' })), assets: [], products: [{ id: 'shirt', name: 'Test Shirt', status: 'Active', colors: ['Black'], sizes: ['M'], placements: ['Front'], decoration_type: 'DTF', base_garment_price: 10 }] }));
+const mocks = vi.hoisted(() => ({ save: vi.fn(async (order) => ({ ...order, order_number: 'SYNTHETIC-1' })), saveWithStatus: vi.fn(), upload: vi.fn(async () => ({ id: 'persisted-logo', file_name: 'Logo.svg', storage_path: 'synthetic/logo.svg' })), assets: [], products: [{ id: 'shirt', name: 'Test Shirt', status: 'Active', colors: ['Black'], sizes: ['M'], placements: ['Front'], decoration_type: 'DTF', base_garment_price: 10 }] }));
 vi.mock('../lib/supabaseClient', () => ({ supabase: null, isSupabaseConfigured: false, supabaseConfig: {}, supabaseDiagnostics: {} }));
-vi.mock('../lib/ordersStore', () => ({ createStoredOrder: mocks.save }));
+// The screen now saves through createStoredOrderWithArtworkLinkStatus; it delegates to mocks.save so the
+// existing payload assertions on mocks.save still apply to the exact payload the screen sends.
+vi.mock('../lib/ordersStore', () => ({ createStoredOrder: mocks.save, createStoredOrderWithArtworkLinkStatus: mocks.saveWithStatus }));
 vi.mock('../lib/customerProfileStore', () => ({ ensureCustomerProfile: async () => ({ id: 'synthetic-customer' }) }));
 vi.mock('../lib/customersStore', () => ({ linkOrderToCustomer: vi.fn() }));
-vi.mock('../services/customerArtworkService', () => ({ uploadCustomerArtwork: mocks.upload, listCustomerArtwork: async () => [] }));
+vi.mock('../services/customerArtworkService', () => ({ uploadCustomerArtwork: mocks.upload, listCustomerArtwork: async () => [], buildCustomerArtworkStoragePath: (customerId, fileName) => `${customerId}/synthetic-${fileName}`, findCustomerArtworkByStoragePath: async () => ({ status: 'absent' }) }));
 vi.mock('./useCustomerPortalData', () => ({ useCustomerPortalData: () => ({ profile: {} }) }));
 vi.mock('../lib/catalogLookupsStore', () => ({ useCatalogLookups: () => ({}) }));
 vi.mock('../lib/pendingCustomerArtworkStore', () => ({ getPendingCustomerArtworkAssets: async () => mocks.assets, clearPendingCustomerArtwork: async () => true, savePendingCustomerArtworkAsset: async () => true }));
@@ -26,7 +29,21 @@ const line = (id, extra = {}) => ({ id, productId: 'shirt', garmentName: 'Test S
 const session = { id: 'synthetic-customer', email: 'synthetic@example.test', displayName: 'Synthetic Customer', phone: '5195551234' };
 function mount() { return render(<MemoryRouter initialEntries={[{ pathname: '/request', state: { pendingRequestSource: 'public-garment-flow' } }]}><Routes><Route element={<Outlet context={{ customerSession: session }} />}><Route path="/request" element={<RequestOrder />} /></Route><Route path="*" element={<p>Submitted</p>} /></Routes></MemoryRouter>); }
 function seed(items, artworkLibrary = []) { savePendingCustomerRequest({ productId: 'shirt', lineItems: items, artworkLibrary }); }
-beforeEach(() => { sessionStorage.clear(); localStorage.clear(); mocks.save.mockClear(); mocks.upload.mockClear(); mocks.assets = []; });
+// Exclusive in-memory Web Locks stub (jsdom has no navigator.locks).
+function installLocks() {
+ const held = new Set();
+ Object.defineProperty(navigator, 'locks', { configurable: true, value: { async request(name, options, callback) {
+  if (held.has(name)) return callback(null);
+  held.add(name);
+  try { return await callback({ name, mode: options.mode }); } finally { held.delete(name); }
+ } } });
+}
+// Content fingerprinting needs File.arrayBuffer and crypto.subtle.
+if (typeof File.prototype.arrayBuffer !== 'function') {
+ File.prototype.arrayBuffer = function arrayBuffer() { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error); reader.readAsArrayBuffer(this); }); };
+}
+if (!globalThis.crypto?.subtle) Object.defineProperty(globalThis, 'crypto', { configurable: true, value: nodeWebcrypto });
+beforeEach(() => { sessionStorage.clear(); localStorage.clear(); mocks.save.mockClear(); mocks.upload.mockClear(); mocks.saveWithStatus.mockReset(); mocks.saveWithStatus.mockImplementation(async (order) => ({ order: await mocks.save(order), artworkLink: { status: 'linked' }, followUpWarnings: [] })); mocks.assets = []; installLocks(); });
 afterEach(cleanup);
 test('two design-only garments survive reload and submit with pending approval and no upload', async () => {
  seed([line('a'), line('b')]);
@@ -127,6 +144,8 @@ test('existing upload-only submission still uploads and attaches the resulting a
  expect(mocks.upload).toHaveBeenCalledOnce();
  expect(mocks.save.mock.calls[0][0].line_items[0].artwork_id).toBe('persisted-logo');
  expect(mocks.save.mock.calls[0][0].artwork_status).toBe('Pending Review');
+ expect(mocks.saveWithStatus).toHaveBeenCalledOnce();
+ expect(mocks.saveWithStatus.mock.calls[0][0].order_metadata.client_submission_key).toBeTruthy();
 });
 test('staff garment panel unmistakably shows the request and never labels missing artwork Ready', () => {
  render(<GarmentProductionCards order={{ line_items: [{ id: 'a', garment: 'Test Shirt', quantity: 2, artwork_mode: 'create', artwork_description: 'Blue star' }] }} />);
