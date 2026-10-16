@@ -65,7 +65,10 @@ export async function fileFingerprint(file) {
   if (!file || typeof file.arrayBuffer !== "function" || !globalThis.crypto?.subtle) {
     throw new RecoveryStateError("We couldn't verify this artwork file, so we stopped before uploading it.");
   }
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  // Copy into this realm's Uint8Array: some runtimes (e.g. jsdom File + Node
+  // Web Crypto) hand back a cross-realm ArrayBuffer that digest() rejects.
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
   return `sha256:${toHex(digest)}:${Number(file.size ?? 0) || 0}:${text(file.type)}`;
 }
 
