@@ -21,6 +21,10 @@ const PROTECTED_OWNER_ID = "staff-owner-default";
 const OWNER_AUTH_DIAGNOSTICS_KEY = "__TEE_CO_OWNER_AUTH_DIAGNOSTICS__";
 const TEMP_OWNER_LOGIN_ID = "owner";
 const TEMP_OWNER_PIN = "2468";
+const STAFF_PIN_LOGIN_ENDPOINT = "/.netlify/functions/staff-pin-login";
+// Browser-readable staff_users columns. PIN data is never selected (column grants block it).
+export const STAFF_USER_PUBLIC_COLUMNS =
+  "id, legacy_staff_id, name, role, status, last_active_at, created_at, updated_at, auth_user_id";
 
 export const STAFF_ROLES = ["Owner", "Manager", "Staff"];
 export const STAFF_STATUSES = ["Active", "Inactive"];
@@ -335,10 +339,24 @@ async function fetchStaffUsersFromSupabase() {
     throw new Error("Supabase client is not configured for staff users.");
   }
 
-  const { data, error } = await supabase
-    .from("staff_users")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const { data: sessionData } = (await supabase.auth?.getSession?.()) || {};
+  let data = null;
+  let error = null;
+
+  if (sessionData?.session) {
+    ({ data, error } = await supabase
+      .from("staff_users")
+      .select(STAFF_USER_PUBLIC_COLUMNS)
+      .order("created_at", { ascending: false }));
+  }
+
+  // Signed-out login screen (or a non-staff session): names for the PIN picker only.
+  if (!sessionData?.session || error || (Array.isArray(data) && data.length === 0)) {
+    ({ data, error } = await supabase.rpc("list_pin_login_staff"));
+    if (!error && Array.isArray(data)) {
+      data = data.map((row) => ({ ...row, status: "Active" }));
+    }
+  }
 
   if (error) {
     throw error;
@@ -444,7 +462,7 @@ async function runStaffUsersUpdate(userId, updates) {
         .from("staff_users")
         .update(attempt.payload)
         .eq("id", userId)
-        .select("*")
+        .select(STAFF_USER_PUBLIC_COLUMNS)
         .single();
 
       if (error) {
@@ -927,6 +945,17 @@ export function setActiveStaffUser(user, options = {}) {
 
 export function clearActiveStaffSession(options = {}) {
   setActiveStaffUser(null, options);
+  // End a PIN-issued Supabase session too (email staff/owner sessions are left to their own logout).
+  try {
+    void supabase?.auth?.getSession?.().then(({ data } = {}) => {
+      if (data?.session?.user?.app_metadata?.login_method === "staff_pin") {
+        return supabase.auth.signOut({ scope: "local" });
+      }
+      return null;
+    }).catch(() => {});
+  } catch {
+    // ignore
+  }
 }
 
 export function getActiveStaffUser() {
@@ -968,7 +997,65 @@ export function getActiveStaffUploadCredential() {
   }
 }
 
+async function requestServerStaffPinLogin(staffUserId, pin) {
+  try {
+    const response = await fetch(STAFF_PIN_LOGIN_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ staffUserId, pin: cleanStaffPin(pin) }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body?.ok) {
+      return {
+        ok: false,
+        code: body?.code || (response.status === 423 ? "LOCKED" : "PIN_MISMATCH"),
+        message: body?.message || "That PIN does not match the selected staff member.",
+      };
+    }
+    return body;
+  } catch (error) {
+    console.error("[staff-users] Staff PIN login request failed", error);
+    return { ok: false, code: "NETWORK", message: "Unable to reach the staff login service. Try again." };
+  }
+}
+
+async function attemptServerStaffLogin({ staffUserId, pin, persistSession }) {
+  const result = await requestServerStaffPinLogin(staffUserId, pin);
+  if (!result.ok) {
+    return { ok: false, code: result.code, message: result.message };
+  }
+
+  const { error: sessionError } = await supabase.auth.setSession({
+    access_token: result.session.access_token,
+    refresh_token: result.session.refresh_token,
+  });
+  if (sessionError) {
+    console.error("[staff-users] Unable to store staff Supabase session", { code: sessionError.code });
+    return { ok: false, code: "SESSION_WRITE_FAILED", message: "Unable to start the selected staff session." };
+  }
+
+  const staffUser = normalizeStaffUser({
+    id: result.staff.id,
+    name: result.staff.name,
+    role: result.staff.role,
+    status: "Active",
+  });
+  const sessionUser = persistSession ? setActiveStaffUser(staffUser) : staffUser;
+  if (persistSession && !sessionUser?.id) {
+    return { ok: false, code: "SESSION_WRITE_FAILED", message: "Unable to start the selected staff session." };
+  }
+  if (persistSession) {
+    setActiveStaffUploadCredential(staffUser, pin);
+    void ensureStaffUsersHydrated({ force: true }).catch(() => {});
+  }
+  return { ok: true, user: sessionUser };
+}
+
 export async function attemptStaffLogin({ staffUserId, pin, persistSession = true }) {
+  if (shouldUseSupabase() && supabase?.auth?.setSession) {
+    return attemptServerStaffLogin({ staffUserId, pin, persistSession });
+  }
+
   const users = await getStoredStaffUsers();
   const activeUsers = users.filter((user) => user.status !== "Inactive");
   const selectedUser = activeUsers.find((user) => user.id === staffUserId) || null;
