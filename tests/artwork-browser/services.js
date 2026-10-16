@@ -34,3 +34,9 @@ export const findStoredCustomer = () => null;
 export const getStoredProduct = id => products.find(product => product.id === id);
 export const getStoredProducts = () => products;
 export const supabaseInitializationError = null;
+// Recovery-flow exports used by the submission screen (synthetic, no backend).
+export const buildCustomerArtworkStoragePath = (customerId, fileName) => `${customerId}/synthetic-${fileName}`;
+export const findCustomerArtworkByStoragePath = async () => ({ status: 'absent' });
+export async function createStoredOrderWithArtworkLinkStatus(input) {
+  return { order: await createStoredOrder(input), artworkLink: { status: 'linked' }, followUpWarnings: [] };
+}
