@@ -21,5 +21,6 @@ grant select, insert, update on public.staff_users to authenticated;
 alter table public.staff_users drop column if exists failed_pin_attempts;
 alter table public.staff_users drop column if exists pin_locked_until;
 alter table public.staff_users drop column if exists auth_user_id;
+alter table public.staff_users drop column if exists has_pin;
 alter table public.staff_users drop column if exists pin_hash;
 commit;

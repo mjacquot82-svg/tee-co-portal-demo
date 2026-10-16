@@ -19,19 +19,13 @@ const STAFF_USERS_UPDATED_EVENT = "tee-co-staff-users-updated";
 const ACTIVE_STAFF_UPDATED_EVENT = "tee-co-active-staff-updated";
 const PROTECTED_OWNER_ID = "staff-owner-default";
 const OWNER_AUTH_DIAGNOSTICS_KEY = "__TEE_CO_OWNER_AUTH_DIAGNOSTICS__";
-const TEMP_OWNER_LOGIN_ID = "owner";
-const TEMP_OWNER_PIN = "2468";
 const STAFF_PIN_LOGIN_ENDPOINT = "/.netlify/functions/staff-pin-login";
 // Browser-readable staff_users columns. PIN data is never selected (column grants block it).
 export const STAFF_USER_PUBLIC_COLUMNS =
-  "id, legacy_staff_id, name, role, status, last_active_at, created_at, updated_at, auth_user_id";
+  "id, legacy_staff_id, name, role, status, last_active_at, created_at, updated_at, auth_user_id, has_pin";
 
 export const STAFF_ROLES = ["Owner", "Manager", "Staff"];
 export const STAFF_STATUSES = ["Active", "Inactive"];
-export const TEMP_OWNER_DEMO_CREDENTIALS = {
-  loginId: TEMP_OWNER_LOGIN_ID,
-  pin: TEMP_OWNER_PIN,
-};
 
 const DEFAULT_STAFF_USERS = [
   {
@@ -53,25 +47,9 @@ function shouldLogOwnerDiagnostics(user) {
   return isProtectedStaffUser(user);
 }
 
-function normalizeOwnerLoginId(loginId) {
-  return String(loginId ?? "").trim().toLowerCase();
-}
-
-function buildTemporaryOwnerSession() {
-  return {
-    id: PROTECTED_OWNER_ID,
-    name: "Owner / Admin",
-    role: "Owner",
-    authMode: "temporary-owner",
-    isTemporaryOwnerSession: true,
-  };
-}
-
+// Legacy sessions from the removed hardcoded demo owner login are never restored.
 function isTemporaryOwnerSession(user) {
-  return (
-    isProtectedStaffUser(user) &&
-    user.authMode === "temporary-owner"
-  );
+  return Boolean(user?.isTemporaryOwnerSession || user?.authMode === "temporary-owner");
 }
 
 function pushOwnerAuthDiagnostic(event, details = {}) {
@@ -132,7 +110,9 @@ function normalizeStaffUser(user) {
     id: user?.id || `staff-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: user?.name || "New Staff User",
     role: normalizedRole,
-    pin: formatStaffPin(user?.pin || "0000"),
+    // Supabase never returns PINs; keep a blank PIN plus a "has a PIN" flag for the admin screen.
+    pin: user?.pin ? formatStaffPin(user.pin) : "",
+    hasPin: typeof user?.hasPin === "boolean" ? user.hasPin : Boolean(user?.pin),
     status: normalizedStatus,
     created_at: createdAt,
     updated_at: user?.updated_at || createdAt,
@@ -264,7 +244,8 @@ function mapSupabaseRowToStaffUser(row) {
   return normalizeStaffUser({
     id: row?.id,
     name: row?.name,
-    pin: row?.pin,
+    pin: "",
+    hasPin: Boolean(row?.has_pin),
     role: row?.role,
     status: normalizedStatus,
     created_at: row?.created_at,
@@ -555,7 +536,7 @@ function getStoredActiveStaffUserSnapshot() {
     }
 
     if (isTemporaryOwnerSession(sessionUser)) {
-      return buildTemporaryOwnerSession();
+      return null;
     }
 
     return sessionUser;
@@ -576,21 +557,10 @@ function resolveHydratedActiveStaffUser() {
   }
 
   if (isTemporaryOwnerSession(parsedUser)) {
-    const hydratedUser = buildTemporaryOwnerSession();
-
-    pushAuthDiagnostic("staff-session-hydrated", {
-      userId: hydratedUser.id,
-      resolvedRole: hydratedUser.role,
-      hydrationResult: "restored-temporary-owner",
-    });
-    pushOwnerAuthDiagnostic("session-hydrated", {
-      userId: hydratedUser.id,
-      resolvedRole: hydratedUser.role,
-      hydrationResult: "restored-temporary-owner",
-    });
-
-    return hydratedUser;
+    pushAuthDiagnostic("staff-session-hydrated", { hydrationResult: "rejected-removed-demo-owner" });
+    return null;
   }
+
 
   const matchedUser = resolveStoredStaffUser(parsedUser);
 
@@ -904,19 +874,14 @@ export function setActiveStaffUser(user, options = {}) {
     return null;
   }
 
-  const resolvedUser = isTemporaryOwnerSession(user)
-    ? buildTemporaryOwnerSession()
-    : resolveStoredStaffUser(user) || normalizeStaffUser(user);
+  if (isTemporaryOwnerSession(user)) {
+    return null;
+  }
+  const resolvedUser = resolveStoredStaffUser(user) || normalizeStaffUser(user);
   const nextActiveUser = {
     id: resolvedUser.id,
     name: resolvedUser.name,
     role: resolvedUser.role,
-    ...(isTemporaryOwnerSession(resolvedUser)
-      ? {
-          authMode: resolvedUser.authMode,
-          isTemporaryOwnerSession: true,
-        }
-      : {}),
   };
 
   clearLegacyActiveStaffPersistence();
@@ -1114,60 +1079,6 @@ export async function attemptStaffLogin({ staffUserId, pin, persistSession = tru
       ok: false,
       code: "SESSION_WRITE_FAILED",
       message: "Unable to start the selected staff session.",
-    };
-  }
-
-  return {
-    ok: true,
-    user: sessionUser,
-  };
-}
-
-export function attemptTemporaryOwnerLogin({
-  loginId,
-  pin,
-  persistSession = true,
-} = {}) {
-  const normalizedLoginId = normalizeOwnerLoginId(loginId);
-  const normalizedPin = cleanStaffPin(pin);
-  const ownerUser = buildTemporaryOwnerSession();
-  const credentialsMatch =
-    normalizedLoginId === TEMP_OWNER_LOGIN_ID && normalizedPin === TEMP_OWNER_PIN;
-
-  pushOwnerAuthDiagnostic("temporary-login-attempt", {
-    selectedUserId: ownerUser.id,
-    loginId: normalizedLoginId,
-    pinLength: normalizedPin.length,
-  });
-
-  if (!credentialsMatch) {
-    pushOwnerAuthDiagnostic("temporary-login-result", {
-      selectedUserId: ownerUser.id,
-      resolvedRole: ownerUser.role,
-      loginResult: "credential-mismatch",
-    });
-
-    return {
-      ok: false,
-      code: "PIN_MISMATCH",
-      message: "That owner login or PIN is incorrect.",
-    };
-  }
-
-  const sessionUser = persistSession ? setActiveStaffUser(ownerUser) : ownerUser;
-  const sessionCreated = persistSession ? Boolean(sessionUser?.id) : true;
-
-  pushOwnerAuthDiagnostic("temporary-login-result", {
-    selectedUserId: ownerUser.id,
-    resolvedRole: ownerUser.role,
-    loginResult: sessionCreated ? "success" : "session-write-failed",
-  });
-
-  if (!sessionCreated) {
-    return {
-      ok: false,
-      code: "SESSION_WRITE_FAILED",
-      message: "Unable to start the owner session.",
     };
   }
 

@@ -15,6 +15,7 @@ alter table public.staff_users add column if not exists pin_hash text;
 alter table public.staff_users add column if not exists auth_user_id uuid;
 alter table public.staff_users add column if not exists failed_pin_attempts integer not null default 0;
 alter table public.staff_users add column if not exists pin_locked_until timestamptz;
+alter table public.staff_users add column if not exists has_pin boolean generated always as (pin_hash is not null) stored;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'staff_users_auth_user_id_key') then
     alter table public.staff_users add constraint staff_users_auth_user_id_key unique (auth_user_id);
@@ -50,7 +51,7 @@ update public.staff_users set pin = pin where pin is not null;
 -- Column-level privileges: browser never reads PIN or lockout data
 revoke all on public.staff_users from anon;
 revoke select, insert, update on public.staff_users from authenticated;
-grant select (id, legacy_staff_id, name, role, status, last_active_at, created_at, updated_at, auth_user_id)
+grant select (id, legacy_staff_id, name, role, status, last_active_at, created_at, updated_at, auth_user_id, has_pin)
   on public.staff_users to authenticated;
 grant insert (name, role, status, pin, legacy_staff_id) on public.staff_users to authenticated;
 grant update (name, role, status, pin, last_active_at, updated_at) on public.staff_users to authenticated;
@@ -105,6 +106,11 @@ create table if not exists public.staff_pin_login_attempts (
 create index if not exists staff_pin_login_attempts_ip_idx on public.staff_pin_login_attempts (ip_key, attempted_at);
 alter table public.staff_pin_login_attempts enable row level security;
 revoke all on public.staff_pin_login_attempts from anon, authenticated;
+-- The login function (service role) needs these; Supabase grants them by default, but some
+-- projects (e.g. staging) were created without default service_role table grants.
+grant select, insert on public.staff_pin_login_attempts to service_role;
+grant usage on sequence public.staff_pin_login_attempts_id_seq to service_role;
+grant select, update (auth_user_id) on public.staff_users to service_role;
 
 -- Staff check: PIN-session users must still be an Active staff_users row linked to this auth user
 create or replace function tee_co_private.pin_staff_still_active()
