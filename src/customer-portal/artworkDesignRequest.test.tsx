@@ -13,7 +13,8 @@ import { buildSupabaseOrderPayload, mapSupabaseOrderRowToOrder, createOrderInSup
 import { getOrderLineItems } from '../lib/orderLineItems';
 import { isArtworkApprovalSatisfied } from '../orders/workflowGating';
 import { buildProductionReadiness } from '../quotes/productionReadiness';
-import { requiresCustomerOrderArtwork } from './orderArtworkRequirement';
+import { getCustomerArtworkActionState } from '../lib/customerArtworkActions';
+import { getLineItemsNeedingArtworkFollowUp, requiresCustomerOrderArtwork } from './orderArtworkRequirement';
 const mocks = vi.hoisted(() => ({ save: vi.fn(async (order) => ({ ...order, order_number: 'SYNTHETIC-1' })), saveWithStatus: vi.fn(), upload: vi.fn(async () => ({ id: 'persisted-logo', file_name: 'Logo.svg', storage_path: 'synthetic/logo.svg' })), assets: [], products: [{ id: 'shirt', name: 'Test Shirt', status: 'Active', colors: ['Black'], sizes: ['M'], placements: ['Front'], decoration_type: 'DTF', base_garment_price: 10 }] }));
 vi.mock('../lib/supabaseClient', () => ({ supabase: null, isSupabaseConfigured: false, supabaseConfig: {}, supabaseDiagnostics: {} }));
 // The screen now saves through createStoredOrderWithArtworkLinkStatus; it delegates to mocks.save so the
@@ -87,13 +88,21 @@ test('blank description blocks submission, switching back does not count descrip
  expect(mocks.save).not.toHaveBeenCalled();
  fireEvent.click(screen.getByLabelText('I need Tee & Co to create my artwork'));
  fireEvent.click(screen.getByRole('button', { name: 'Submit Order Request' }));
- await screen.findByText('Artwork Required'); expect(mocks.save).not.toHaveBeenCalled();
+ // No artwork at all is now allowed (Tee & Co follows up); the description is not treated as artwork.
+ await waitFor(() => expect(mocks.save).toHaveBeenCalledOnce());
+ const order = mocks.save.mock.calls[0][0];
+ expect(order.line_items[0].artwork_mode).not.toBe('create');
+ expect(order).toMatchObject({ artwork_status: 'Missing', artwork_requirement: 'Upload Later', artwork_approval_required: true, artwork_approval_status: 'Pending Review' });
+ expect(order.order_metadata).toMatchObject({ artwork_follow_up_needed: true, artwork_follow_up_line_item_ids: ['a'] });
+ expect(getCustomerArtworkActionState(order)).toMatchObject({ required: true, label: 'Action Needed: Upload Artwork' });
+ expect(screen.queryByText('Artwork Required')).toBeNull();
 });
 test('one design request cannot cover a second undecided garment; blank request cannot hide behind uploaded artwork', async () => {
  const create = { decoration_type: 'DTF', artwork_mode: 'create', artwork_description: 'Mountain' };
- expect(requiresCustomerOrderArtwork([create, { decoration_type: 'DTF' }], [])).toBe(true);
- expect(requiresCustomerOrderArtwork([{ ...create, artwork_description: ' ' }], [{ id: 'logo' }])).toBe(true);
- expect(requiresCustomerOrderArtwork([create], [])).toBe(false);
+ expect(requiresCustomerOrderArtwork([create, { decoration_type: 'DTF' }])).toBe(false);
+ expect(getLineItemsNeedingArtworkFollowUp([create, { id: 'b', decoration_type: 'DTF' }], [{ id: 'logo' }]).map((i) => i.id)).toEqual(['b']);
+ expect(requiresCustomerOrderArtwork([{ ...create, artwork_description: ' ' }])).toBe(true);
+ expect(requiresCustomerOrderArtwork([create])).toBe(false);
  await expect(createOrderInSupabase({ source: 'Customer Portal', line_items: [{ ...create, artwork_description: ' ' }] })).rejects.toThrow('Describe the wording');
 });
 

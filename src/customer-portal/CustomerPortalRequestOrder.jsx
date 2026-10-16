@@ -59,6 +59,7 @@ import { useCustomerPortalData } from "./useCustomerPortalData";
 import {
   hasCustomerOrderArtwork,
   isDecoratedOrderLineItem,
+  getLineItemsNeedingArtworkFollowUp,
   requiresCustomerOrderArtwork,
 } from "./orderArtworkRequirement";
 
@@ -552,10 +553,7 @@ export default function CustomerPortalRequestOrder() {
     }
 
     if (
-      requiresCustomerOrderArtwork(
-        configuredLineItems,
-        pendingRequest?.artworkLibrary || []
-      )
+      requiresCustomerOrderArtwork(configuredLineItems)
     ) {
       setArtworkRequirementDialogOpen(true);
       setSubmitState("idle");
@@ -580,6 +578,11 @@ export default function CustomerPortalRequestOrder() {
     const primaryProduct = storefrontProducts.find((product) => product.id === primaryLineItem.product_id);
     const decorationType = primaryLineItem.decoration_type;
     const hasDesignRequest = configuredLineItems.some(needsArtworkCreation);
+    const artworkFollowUpItems = getLineItemsNeedingArtworkFollowUp(
+      configuredLineItems,
+      pendingRequest?.artworkLibrary || []
+    );
+    const needsArtworkFollowUp = artworkFollowUpItems.length > 0;
     const draftArtworkLibrary = (pendingRequest?.artworkLibrary || []).filter((asset) =>
       !hasDesignRequest || configuredLineItems.some((item) => !needsArtworkCreation(item) && item.artwork_id === asset.id)
     );
@@ -758,8 +761,12 @@ export default function CustomerPortalRequestOrder() {
         artwork_reference_names: artworkLibrary.map((asset) => asset.display_name),
         artwork_requirement: hasDesignRequest ? "Design Requested" : artworkLibrary.length ? "Uploaded" : "Upload Later",
         artwork_status: hasDesignRequest ? "Design Requested" : artworkLibrary.length ? "Pending Review" : "Missing",
-        artwork_approval_required: hasDesignRequest || artworkLibrary.length > 0,
-        artwork_approval_status: hasDesignRequest || artworkLibrary.length ? "Pending Review" : "Not Required",
+        // No-artwork garments are allowed; keep approval pending so staff see
+        // "artwork needed" (artwork_status Missing / Upload Later) instead of
+        // "not required".
+        artwork_approval_required: hasDesignRequest || artworkLibrary.length > 0 || needsArtworkFollowUp,
+        artwork_approval_status:
+          hasDesignRequest || artworkLibrary.length || needsArtworkFollowUp ? "Pending Review" : "Not Required",
         approval_status: "Pending Review",
         due_date: needByDate || "",
         notes: finalNotes,
@@ -776,6 +783,14 @@ export default function CustomerPortalRequestOrder() {
         deposit_workflow_status: "Pending Decision",
         invoice_status: "Draft",
         quote,
+        ...(needsArtworkFollowUp
+          ? {
+              order_metadata: {
+                artwork_follow_up_needed: true,
+                artwork_follow_up_line_item_ids: artworkFollowUpItems.map((item) => item.id).filter(Boolean),
+              },
+            }
+          : {}),
         }, submissionKey)),
       });
 
@@ -822,7 +837,9 @@ export default function CustomerPortalRequestOrder() {
           selectedColor: primaryLineItem.selected_color,
           selectedSize: Object.keys(primaryLineItem.size_breakdown).join(", "),
           quantity: normalizedQuantity,
-          artworkName: artworkLibrary.map((asset) => asset.display_name).join(", "),
+          artworkName:
+            artworkLibrary.map((asset) => asset.display_name).join(", ") ||
+            (needsArtworkFollowUp ? "No artwork yet. Tee & Co will follow up about artwork." : ""),
           notes: finalNotes,
           quote,
           artworkLinkWarning: artworkLibrary.some((asset) => asset.persisted)
@@ -997,7 +1014,7 @@ export default function CustomerPortalRequestOrder() {
                   <ReviewItem label="Size" value={Object.entries(lineItem.size_breakdown || {}).map(([size, amount]) => `${size} ×${amount}`).join(" · ") || "Open / mixed sizing"} />
                   <ReviewItem label="Placement" value={lineItem.placement || "Confirm later"} />
                   <ReviewItem label="Decoration" value={lineItem.decoration_type || "Confirm later"} />
-                  <ReviewItem label="Artwork" value={describeArtworkRequest(lineItem) || lineItem.artwork_name || "No artwork selected for this garment"} />
+                  <ReviewItem label="Artwork" value={describeArtworkRequest(lineItem) || lineItem.artwork_name || "No artwork added. Tee & Co will follow up about artwork after you submit."} />
                 </div>
                 {isDecoratedOrderLineItem(configuredLineItems[index]) && <ArtworkCreationOption
                   checked={needsArtworkCreation(lineItem)} description={lineItem.artwork_description || ""}
@@ -1066,7 +1083,7 @@ export default function CustomerPortalRequestOrder() {
                   })}
                 </div>
               ) : (
-                <p style={{ margin: 0, color: "#64748b" }}>No artwork has been added. Tee &amp; Co can confirm artwork after submission.</p>
+                <p style={{ margin: 0, color: "#64748b" }}>No artwork added. Tee &amp; Co will follow up about artwork after you submit.</p>
               )}
             </fieldset>
 
