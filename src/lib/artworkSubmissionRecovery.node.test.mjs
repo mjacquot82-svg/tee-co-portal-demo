@@ -546,3 +546,35 @@ test("(e) resubmitted order uses the receipt-only view without draft values", as
   });
   assert.deepEqual(view, { mode: "receipt", orderNumber: "TC-000001", warnings: [], myOrdersPath: "/portal/orders" });
 });
+
+test("receipts are isolated by customer, signed-in user and draft", () => {
+  const storage = memoryStorage();
+  const owner = open(storage);
+  owner.setOrder({
+    status: "confirmed",
+    submissionKey: owner.submissionKey,
+    order: { order_number: "TC-111111" },
+    artworkLink: { status: "linked" },
+    followUpWarnings: ["warn-1"],
+  });
+  for (const other of [
+    { ...binding, customerId: "cust-2" },
+    { ...binding, authUserId: "auth-2" },
+    { ...binding, draftId: "2026-10-15T11:00:00.000Z" },
+  ]) {
+    assert.notEqual(recoveryStorageKey(other), recoveryStorageKey(binding));
+    const store = open(storage, other);
+    assert.equal(store.blocked, false);
+    assert.equal(store.getOrder(), null, "another identity/draft never sees the receipt");
+    assert.notEqual(store.submissionKey, owner.submissionKey);
+  }
+  // A record planted under another identity's key (binding mismatch) is blocked, not reused or overwritten.
+  const intruder = { ...binding, customerId: "cust-2" };
+  const raw = storage.getItem(recoveryStorageKey(binding));
+  storage.setItem(recoveryStorageKey(intruder), raw);
+  const planted = open(storage, intruder);
+  assert.equal(planted.blocked, true);
+  assert.throws(() => planted.setOrder(null));
+  assert.equal(storage.getItem(recoveryStorageKey(intruder)), raw, "evidence byte-identical");
+  assert.equal(open(storage).getOrder().order.order_number, "TC-111111");
+});
