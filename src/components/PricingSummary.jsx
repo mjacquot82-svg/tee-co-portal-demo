@@ -45,9 +45,10 @@ export default function PricingSummary({
   const additionalFees =
     quote.additional_fees_subtotal ?? quote.setup_subtotal ?? 0;
   const resolvedQuantity = quantity || quote.quantity || 0;
-  const customerTotal = quote.garment_pricing_available
-    ? quote.garment_subtotal
-    : quote.total;
+  // Customer-facing total must match the final review's estimate: the quote
+  // engine's full total (garments, placements, production, setup and tax),
+  // not the garment-only subtotal.
+  const customerTotal = quote.total;
 
   if (mode === "customer") {
     return (
@@ -62,7 +63,7 @@ export default function PricingSummary({
         }}
       >
         <span style={{ fontSize: compact ? "13px" : "14px", opacity: 0.78 }}>
-          Order Total
+          Estimated Total (incl. tax)
         </span>
         <strong style={{ fontSize: compact ? "28px" : "32px", lineHeight: 1 }}>
           {formatPrice(customerTotal, quote.garment_pricing_available)}
