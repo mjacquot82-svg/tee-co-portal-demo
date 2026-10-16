@@ -107,7 +107,7 @@ export default function StaffUsers() {
           user.id,
           {
             name: user.name,
-            pin: user.pin,
+            pin: "",
           },
         ])
       )
@@ -134,7 +134,7 @@ export default function StaffUsers() {
       ...currentDrafts,
       [userId]: {
         name: user.name,
-        pin: user.pin,
+        pin: "",
       },
     }));
   }
@@ -213,6 +213,10 @@ export default function StaffUsers() {
     if (!draft) return;
 
     const nextValue = field === "name" ? draft.name.trim() : draft.pin;
+    // PINs are hidden: a blank PIN box means "keep the current PIN".
+    if (field === "pin" && !nextValue) {
+      return;
+    }
     if (nextValue === user[field]) {
       if (field === "name" && draft.name !== user.name) {
         resetDraft(user.id, user);
@@ -228,6 +232,8 @@ export default function StaffUsers() {
       const nextPin = generateUniqueStaffPin(user.id);
       setDraftValue(user.id, "pin", nextPin);
       await persistStaffUpdate(user, { pin: nextPin });
+      // Shown once: PINs are stored hashed and can't be displayed later.
+      alert(`New PIN for ${user.name}: ${nextPin}. Share it with them now; it won't be shown again.`);
     } catch (error) {
       alert(error.message || "Unable to reset PIN.");
     }
@@ -688,7 +694,7 @@ export default function StaffUsers() {
                     const isProtectedOwner = isProtectedStaffUser(user);
                     const draft = drafts[user.id] || {
                       name: user.name,
-                      pin: user.pin,
+                      pin: "",
                     };
 
                     return (
@@ -732,6 +738,9 @@ export default function StaffUsers() {
                                 letterSpacing: "0.18em",
                               }}
                               value={draft.pin}
+                              placeholder={user.hasPin ? "Set (hidden)" : "Not set"}
+                              aria-label={`New PIN for ${user.name}`}
+                              title="PINs are hidden. Type a new 4-digit PIN to change it."
                               onChange={(e) =>
                                 setDraftValue(user.id, "pin", e.target.value)
                               }

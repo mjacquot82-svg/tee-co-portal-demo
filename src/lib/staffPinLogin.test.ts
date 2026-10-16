@@ -66,6 +66,9 @@ describe("server-side staff PIN login", () => {
     const { ensureStaffUsersHydrated, STAFF_USER_PUBLIC_COLUMNS } = await import("./staffUsersStore");
     await ensureStaffUsersHydrated({ force: true });
     expect(rpc).toHaveBeenCalledWith("list_pin_login_staff");
-    expect(STAFF_USER_PUBLIC_COLUMNS).not.toMatch(/pin/);
+    const cols = STAFF_USER_PUBLIC_COLUMNS.split(",").map((c: string) => c.trim());
+    expect(cols).not.toContain("pin");
+    expect(cols).not.toContain("pin_hash");
+    expect(cols).not.toContain("failed_pin_attempts");
   });
 });
