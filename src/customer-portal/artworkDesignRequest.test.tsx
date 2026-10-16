@@ -1,4 +1,5 @@
 import React from 'react';
+// @ts-ignore -- tsconfig.app has no Node types; vitest runs this under Node.
 import { webcrypto as nodeWebcrypto } from 'node:crypto';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -20,7 +21,7 @@ vi.mock('../lib/supabaseClient', () => ({ supabase: null, isSupabaseConfigured: 
 vi.mock('../lib/ordersStore', () => ({ createStoredOrder: mocks.save, createStoredOrderWithArtworkLinkStatus: mocks.saveWithStatus }));
 vi.mock('../lib/customerProfileStore', () => ({ ensureCustomerProfile: async () => ({ id: 'synthetic-customer' }) }));
 vi.mock('../lib/customersStore', () => ({ linkOrderToCustomer: vi.fn() }));
-vi.mock('../services/customerArtworkService', () => ({ uploadCustomerArtwork: mocks.upload, listCustomerArtwork: async () => [], buildCustomerArtworkStoragePath: (customerId, fileName) => `${customerId}/synthetic-${fileName}`, findCustomerArtworkByStoragePath: async () => ({ status: 'absent' }) }));
+vi.mock('../services/customerArtworkService', () => ({ uploadCustomerArtwork: mocks.upload, listCustomerArtwork: async () => [], buildCustomerArtworkStoragePath: (customerId: string, fileName: string) => `${customerId}/synthetic-${fileName}`, findCustomerArtworkByStoragePath: async () => ({ status: 'absent' }) }));
 vi.mock('./useCustomerPortalData', () => ({ useCustomerPortalData: () => ({ profile: {} }) }));
 vi.mock('../lib/catalogLookupsStore', () => ({ useCatalogLookups: () => ({}) }));
 vi.mock('../lib/pendingCustomerArtworkStore', () => ({ getPendingCustomerArtworkAssets: async () => mocks.assets, clearPendingCustomerArtwork: async () => true, savePendingCustomerArtworkAsset: async () => true }));
@@ -32,7 +33,7 @@ function seed(items, artworkLibrary = []) { savePendingCustomerRequest({ product
 // Exclusive in-memory Web Locks stub (jsdom has no navigator.locks).
 function installLocks() {
  const held = new Set();
- Object.defineProperty(navigator, 'locks', { configurable: true, value: { async request(name, options, callback) {
+ Object.defineProperty(navigator, 'locks', { configurable: true, value: { async request(name: string, options: { mode?: string }, callback: (lock: { name: string; mode?: string } | null) => unknown) {
   if (held.has(name)) return callback(null);
   held.add(name);
   try { return await callback({ name, mode: options.mode }); } finally { held.delete(name); }
@@ -40,7 +41,7 @@ function installLocks() {
 }
 // Content fingerprinting needs File.arrayBuffer and crypto.subtle.
 if (typeof File.prototype.arrayBuffer !== 'function') {
- File.prototype.arrayBuffer = function arrayBuffer() { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error); reader.readAsArrayBuffer(this); }); };
+ File.prototype.arrayBuffer = function arrayBuffer() { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result as ArrayBuffer); reader.onerror = () => reject(reader.error); reader.readAsArrayBuffer(this); }); };
 }
 if (!globalThis.crypto?.subtle) Object.defineProperty(globalThis, 'crypto', { configurable: true, value: nodeWebcrypto });
 beforeEach(() => { sessionStorage.clear(); localStorage.clear(); mocks.save.mockClear(); mocks.upload.mockClear(); mocks.saveWithStatus.mockReset(); mocks.saveWithStatus.mockImplementation(async (order) => ({ order: await mocks.save(order), artworkLink: { status: 'linked' }, followUpWarnings: [] })); mocks.assets = []; installLocks(); });
