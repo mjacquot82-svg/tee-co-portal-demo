@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { handler, __setClientFactory } from "./staff-pin-login.js";
+import { handler, __setClientFactory } from "../../netlify/functions/staff-pin-login.js";
 
 const ID = "11111111-2222-4333-8444-555555555555";
 function fakeAdmin({ verify, ipFailures = 0, authUserId = null } = {}) {
