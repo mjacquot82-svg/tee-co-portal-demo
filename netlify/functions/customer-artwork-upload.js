@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import process from "node:process";
 import { createClient } from "@supabase/supabase-js";
+import { verifyStaffPin } from "./lib/staffPinAuth.js";
 
 const BUCKET = "customer-artwork";
 const TABLE = "customer_artwork";
@@ -52,7 +53,7 @@ async function validateStaff(client, staffUserId, pin) {
   if (error || !data) return null;
   const active = typeof data.active === "boolean" ? data.active : text(data.status || "Active").toLowerCase() !== "inactive";
   const role = text(data.role).toLowerCase();
-  if (!active || cleanPin(data.pin) !== normalizedPin || !["owner", "manager", "staff"].includes(role)) return null;
+  if (!active || !(await verifyStaffPin(client, id, normalizedPin)).ok || !["owner", "manager", "staff"].includes(role)) return null;
   return data;
 }
 function storagePath(customerId, fileName) {

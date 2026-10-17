@@ -8,7 +8,7 @@ import CustomerPortalAccount from "./customer-portal/CustomerPortalAccount";
 import CustomerPortalRequestOrder from "./customer-portal/CustomerPortalRequestOrder";
 import CustomerPortalDeposit from "./customer-portal/CustomerPortalDeposit";
 import CustomerPortalArtwork from "./customer-portal/CustomerPortalArtwork";
-import CustomerPortalPayments from "./customer-portal/CustomerPortalPayments";
+import CustomerPortalPayments from "./customer-portal/CustomerPortalPayments.jsx";
 import CustomerPortalOrderDetail from "./customer-portal/CustomerPortalOrderDetail";
 import CustomerPortalPaymentRequestDetail from "./customer-portal/CustomerPortalPaymentRequestDetail";
 import Home from "./pages/Home";

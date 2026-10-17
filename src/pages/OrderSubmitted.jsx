@@ -1,21 +1,22 @@
 import { Link, useLocation } from "react-router-dom";
 import PricingSummary from "../components/PricingSummary";
+import { buildSubmittedView } from "../lib/orderSubmittedView";
 
 export default function OrderSubmitted() {
   const location = useLocation();
-  const state = location.state || {};
-  const quote = state.quote || null;
-  const requestIdentifier =
-    state.createdOrderNumber || state.orderNumber || state.order_number || "";
-
-  const garmentName = state.garmentName || "Selected Garment";
-  const brand = state.brand || "Tee & Co";
-  const category = state.category || "Apparel";
-  const selectedColor = state.selectedColor || "Black";
-  const selectedSize = state.selectedSize || "M";
-  const quantity = state.quantity || 1;
-  const artworkName = state.artworkName || "No artwork uploaded";
-  const notes = state.notes || "";
+  const view = buildSubmittedView(location.state || {});
+  const requestIdentifier = view.mode === "missing" ? "" : view.orderNumber;
+  const {
+    quote = null,
+    garmentName,
+    brand,
+    category,
+    selectedColor,
+    selectedSize,
+    quantity,
+    artworkName,
+    notes = "",
+  } = view;
 
   if (!requestIdentifier) {
     return (
@@ -89,6 +90,69 @@ export default function OrderSubmitted() {
     );
   }
 
+  if (view.mode === "receipt") {
+    return (
+      <div
+        data-testid="order-receipt-only"
+        style={{
+          maxWidth: "760px",
+          margin: "0 auto",
+          padding: "40px 20px",
+          fontFamily:
+            'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        }}
+      >
+        <div
+          style={{
+            background: "#ffffff",
+            borderRadius: "22px",
+            padding: "28px",
+            border: "1px solid #e7e5e4",
+            boxShadow: "0 14px 32px rgba(0,0,0,0.06)",
+          }}
+        >
+          <h1 style={{ margin: "0 0 8px", color: "#171717", fontSize: "28px" }}>
+            Order request received
+          </h1>
+          <p style={{ color: "#57534e", lineHeight: 1.6, margin: "0 0 14px" }}>
+            Reference {view.orderNumber}. You don't need to submit it again. Open My Orders to see
+            the saved details.
+          </p>
+          {view.warnings.map((warning) => (
+            <div
+              key={warning}
+              role="status"
+              style={{
+                borderRadius: "14px",
+                border: "1px solid #fcd34d",
+                background: "#fffbeb",
+                color: "#92400e",
+                padding: "12px 14px",
+                marginBottom: "14px",
+              }}
+            >
+              {warning}
+            </div>
+          ))}
+          <Link
+            to={view.myOrdersPath}
+            style={{
+              background: "#171717",
+              color: "#ffffff",
+              padding: "12px 16px",
+              borderRadius: "12px",
+              textDecoration: "none",
+              fontWeight: 800,
+              display: "inline-block",
+            }}
+          >
+            Go to My Orders
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -108,6 +172,23 @@ export default function OrderSubmitted() {
           boxShadow: "0 14px 32px rgba(0,0,0,0.06)",
         }}
       >
+        {view.warnings.map((warning) => (
+          <div
+            key={warning}
+            role="status"
+            data-testid="order-submitted-warning"
+            style={{
+              borderRadius: "14px",
+              border: "1px solid #fcd34d",
+              background: "#fffbeb",
+              color: "#92400e",
+              padding: "12px 14px",
+              marginBottom: "14px",
+            }}
+          >
+            {warning}
+          </div>
+        ))}
         <div
           style={{
             display: "flex",

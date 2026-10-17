@@ -21,7 +21,8 @@ test("successful submission does not trigger the empty-request storefront redire
     path.resolve(process.cwd(), "src/customer-portal/CustomerPortalRequestOrder.jsx"),
     "utf8"
   );
-  const confirmationStart = source.indexOf("navigate(PORTAL_ORDER_SUBMITTED_PATH");
+  // The full-success confirmation is the last navigate; an earlier one is the receipt-only recovery path.
+  const confirmationStart = source.lastIndexOf("navigate(PORTAL_ORDER_SUBMITTED_PATH");
   const cleanupStart = source.lastIndexOf("if (pendingRequest) {", confirmationStart);
   const successfulSubmissionCleanup = source.slice(cleanupStart, confirmationStart);
 

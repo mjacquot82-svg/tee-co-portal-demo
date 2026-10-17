@@ -1,0 +1,60 @@
+
+[1A[2K[WebServer] (node:16156) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 2 tests using 1 worker
+
+
+[1A[2K[WebServer] Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+[WebServer]   npx update-browserslist-db@latest
+[WebServer]   Why you should do it regularly: https://github.com/browserslist/update-db#readme
+
+[1A[2K(node:17848) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+
+[1A[2K(node:17848) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[1A[2K[1/2] [isolated-artwork] ΓÇ║ tests\artwork-browser\acceptance.spec.js:51:1 ΓÇ║ mixed order: upload, switch to design and back, browser Back/Forward, then submit
+[1A[2K[2/2] [isolated-artwork] ΓÇ║ tests\artwork-browser\acceptance.spec.js:83:1 ΓÇ║ phone configuration: required description, browser Back/Forward and reload before save
+[1A[2K  1) [isolated-artwork] ΓÇ║ tests\artwork-browser\acceptance.spec.js:83:1 ΓÇ║ phone configuration: required description, browser Back/Forward and reload before save 
+
+    Error: locator.click: Error: strict mode violation: getByRole('button', { name: 'Back', exact: true }) resolved to 2 elements:
+        1) <button type="button">ΓÇª</button> aka getByRole('button', { name: 'Back' }).first()
+        2) <button type="button">Back</button> aka getByRole('button', { name: 'Back' }).nth(1)
+
+    Call log:
+    [2m  - waiting for getByRole('button', { name: 'Back', exact: true })[22m
+
+
+      88 |  await expect(page.getByText('Describe the wording and design wanted for this garment.')).toBeVisible();
+      89 |  await page.getByLabel(description).fill('Gold star with SUMMER CREW');
+    > 90 |  await page.getByRole('button', { name: 'Back', exact: true }).click();
+         |                                                                ^
+      91 |  await expect(page.getByRole('heading', { name: 'Synthetic artwork browser fixture' })).toBeVisible();
+      92 |  await page.goForward();
+      93 |  await expect(page.getByLabel(description)).toHaveValue('Gold star with SUMMER CREW');
+        at C:\Users\mjacq\Documents\Codex\2026-10-14\task\tee-artwork\tests\artwork-browser\acceptance.spec.js:90:64
+
+    attachment #1: screenshot (image/png) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\artwork-browser\acceptance-phone-configura-ee1ed-ward-and-reload-before-save-isolated-artwork\test-failed-1.png
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+    Error Context: test-results\artwork-browser\acceptance-phone-configura-ee1ed-ward-and-reload-before-save-isolated-artwork\error-context.md
+
+    attachment #3: trace (application/zip) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    test-results\artwork-browser\acceptance-phone-configura-ee1ed-ward-and-reload-before-save-isolated-artwork\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\artwork-browser\acceptance-phone-configura-ee1ed-ward-and-reload-before-save-isolated-artwork\trace.zip
+
+    ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+
+[1A[2K[31mTesting stopped early after 1 maximum allowed failures.[39m
+
+[1A[2K  1 failed
+    [isolated-artwork] ΓÇ║ tests\artwork-browser\acceptance.spec.js:83:1 ΓÇ║ phone configuration: required description, browser Back/Forward and reload before save 
+  1 passed (3.8s)
+  1 error was not a part of any test, see above for details

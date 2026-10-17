@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import process from "node:process";
 import { createClient } from "@supabase/supabase-js";
+import { verifyStaffPin } from "./lib/staffPinAuth.js";
 
 const PRODUCT_IMAGES_BUCKET = "product-images";
 const RATE_LIMIT_TABLE = "product_image_upload_attempts";
@@ -225,7 +226,8 @@ async function validateStaffCredentials(supabaseAdmin, staffUserId, pin) {
     };
   }
 
-  if (!data || cleanPin(data.pin) !== normalizedPin || !isActiveStaffRow(data)) {
+  const pinCheck = data ? await verifyStaffPin(supabaseAdmin, normalizedStaffUserId, normalizedPin) : { ok: false };
+  if (!data || !pinCheck.ok || !isActiveStaffRow(data)) {
     return {
       ok: false,
       statusCode: 401,

@@ -1,3 +1,4 @@
+import { describeArtworkRequest } from "../lib/artworkDesignRequest";
 import { getOrderLineItems } from "../lib/orderLineItems";
 import {
   getArtworkDisplayName,
@@ -78,7 +79,7 @@ export default function GarmentProductionCards({ order = {} }) {
                       {value(lineItem.decoration_type || order.decoration_type)}
                     </td>
                     <td data-testid="garment-production-artwork">
-                      <span>{artwork ? getArtworkDisplayName(artwork) : "Not assigned"}</span>
+                      <span>{describeArtworkRequest(lineItem) || (artwork ? getArtworkDisplayName(artwork) : "Not assigned")}</span>
                       <span
                         data-testid="garment-production-file"
                         className={artwork ? "is-ready" : "is-missing"}

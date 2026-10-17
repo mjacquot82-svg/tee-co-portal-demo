@@ -34,7 +34,12 @@ import { getCustomerDisplayName, resolveCustomerForRecord } from "./customerReco
 import { requireCustomerIdentity } from "./customerIdentity";
 import { deriveOperationalWorkflowState } from "./operationalWorkflow";
 import { updateArtworkApprovalStatus } from "./customerArtworkStore";
-import { linkCustomerArtworkToOrder, linkCustomerArtworkToQuote } from "../services/customerArtworkService";
+import {
+  linkCustomerArtworkToOrder,
+  linkCustomerArtworkToQuote,
+  linkOwnCustomerArtwork,
+} from "../services/customerArtworkService";
+import { FOLLOW_UP_WARNINGS, runSavedOrderFollowUps } from "./savedOrderFollowUps";
 import { triggerNotificationEvent } from "./notificationDeliveryService";
 import { NOTIFICATION_TYPES } from "./notificationTemplatesStore";
 import { createStaffNotification, STAFF_NOTIFICATION_TYPES } from "./staffNotificationsStore";
@@ -176,12 +181,18 @@ function mergeHydrationWithConfirmedWrites(
 }
 
 function persistArtworkRelationship(promise, context) {
-  Promise.resolve(promise).catch((error) => {
-    console.error("Unable to persist artwork relationship in Supabase", {
-      context,
-      error,
-    });
-  });
+  // Returns a promise resolving to { status: "linked" | "failed", context, error? }
+  // so callers that care can surface failures instead of only logging them.
+  return Promise.resolve(promise).then(
+    () => ({ status: "linked", context }),
+    (error) => {
+      console.error("Unable to persist artwork relationship in Supabase", {
+        context,
+        error,
+      });
+      return { status: "failed", context, error };
+    }
+  );
 }
 
 function persistArtworkApprovalMetadata(artworkIds, approvalStatus) {
@@ -1644,6 +1655,14 @@ export function seedStoredOrders(seedOrders = demoOrders) {
 }
 
 export async function createStoredOrder(orderInput) {
+  const { order } = await createStoredOrderWithArtworkLinkStatus(orderInput);
+  return order;
+}
+
+// Same as createStoredOrder, but waits for artwork linking and reports it:
+// artworkLink.status is "skipped", "linked" or "failed" (the order is saved either way).
+// followUpWarnings lists isolated post-save follow-up failures (Customer Portal only).
+export async function createStoredOrderWithArtworkLinkStatus(orderInput) {
   const currentOrders = getStoredOrders();
   const orderNumber = `TC-${Date.now().toString().slice(-6)}`;
   const createdAt = new Date().toISOString();
@@ -1689,44 +1708,78 @@ export async function createStoredOrder(orderInput) {
     ...currentOrders.filter((entry) => entry.order_number !== persistedOrder.order_number),
   ];
   saveStoredOrders(nextOrders);
-  await ensureTeeCoProductionProcess(persistedOrder);
 
-  emitCustomerTimelineEventForOrder(
-    persistedOrder,
-    order.operational_visible === false ? "quote_created" : "order_created",
-    `${order.operational_visible === false ? "Quote" : "Order"} ${orderNumber} created.`,
+  const isCustomerPortalOrder = orderInput.source === "Customer Portal";
+  const followUps = [
     {
-      quoteStatus: persistedOrder.quote_status,
-      orderStatus: persistedOrder.status,
+      run: () => ensureTeeCoProductionProcess(persistedOrder),
+      warning: FOLLOW_UP_WARNINGS.processing,
     },
-    createdAt
-  );
-
-  await triggerOrderNotification(NOTIFICATION_TYPES.newCustomerRequest, persistedOrder);
-
-  if (persistedOrder.customer_artwork_id) {
-    if (persistedOrder.operational_visible === false || persistedOrder.quote_status !== "Ready For Production") {
-      persistArtworkRelationship(
-        linkCustomerArtworkToQuote(persistedOrder.customer_artwork_id, persistedOrder.order_number),
-        {
-          artworkId: persistedOrder.customer_artwork_id,
-          orderNumber: persistedOrder.order_number,
-          relationship: "quote",
-        }
-      );
-    } else {
-      persistArtworkRelationship(
-        linkCustomerArtworkToOrder(persistedOrder.customer_artwork_id, persistedOrder.order_number),
-        {
-          artworkId: persistedOrder.customer_artwork_id,
-          orderNumber: persistedOrder.order_number,
-          relationship: "order",
-        }
-      );
-    }
+    {
+      run: () =>
+        emitCustomerTimelineEventForOrder(
+          persistedOrder,
+          order.operational_visible === false ? "quote_created" : "order_created",
+          `${order.operational_visible === false ? "Quote" : "Order"} ${orderNumber} created.`,
+          {
+            quoteStatus: persistedOrder.quote_status,
+            orderStatus: persistedOrder.status,
+          },
+          createdAt
+        ),
+      warning: FOLLOW_UP_WARNINGS.timeline,
+    },
+    {
+      run: () => triggerOrderNotification(NOTIFICATION_TYPES.newCustomerRequest, persistedOrder),
+      warning: FOLLOW_UP_WARNINGS.notification,
+    },
+  ];
+  let followUpWarnings = [];
+  if (isCustomerPortalOrder) {
+    // The order is saved; follow-up failures become warnings, never "order failed".
+    followUpWarnings = await runSavedOrderFollowUps(persistedOrder.order_number, followUps);
+  } else {
+    // Staff flows keep their existing behaviour (failures propagate).
+    for (const followUp of followUps) await followUp.run();
   }
 
-  return persistedOrder;
+  const artworkIdsToLink = Array.from(
+    new Set(
+      [
+        persistedOrder.customer_artwork_id,
+        ...(isCustomerPortalOrder
+          ? (Array.isArray(orderInput.artwork_library) ? orderInput.artwork_library : []).map(
+              (asset) => asset?.persisted ? asset.id : ""
+            )
+          : []),
+      ]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  );
+  const relationship =
+    persistedOrder.operational_visible === false || persistedOrder.quote_status !== "Ready For Production"
+      ? "quote"
+      : "order";
+  const linkResults = await Promise.all(
+    artworkIdsToLink.map((artworkId) => {
+      const context = { artworkId, orderNumber: persistedOrder.order_number, relationship };
+      const linkPromise = isCustomerPortalOrder
+        ? linkOwnCustomerArtwork(artworkId, persistedOrder.order_number, relationship)
+        : relationship === "quote"
+        ? linkCustomerArtworkToQuote(artworkId, persistedOrder.order_number)
+        : linkCustomerArtworkToOrder(artworkId, persistedOrder.order_number);
+      return persistArtworkRelationship(linkPromise, context);
+    })
+  );
+  const failedLinks = linkResults.filter((result) => result.status === "failed");
+  const artworkLink = !linkResults.length
+    ? { status: "skipped" }
+    : failedLinks.length
+    ? { status: "failed", failed: failedLinks.map((result) => result.context) }
+    : { status: "linked" };
+
+  return { order: persistedOrder, artworkLink, followUpWarnings };
 }
 
 export function findStoredOrder(orderNumber) {

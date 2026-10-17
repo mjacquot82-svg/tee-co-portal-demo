@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./customer-mock/fixture.js";
+import { isCustomerEndpoint, requireCustomerRequest } from "./customer-mock/requestBoundary.js";
 
 test("authenticated customer edits canonical profile and order defaults consume it", async ({ page }) => {
   const authUserId = "auth-profile-editor";
@@ -16,9 +17,15 @@ test("authenticated customer edits canonical profile and order defaults consume 
     updated_at: "2026-07-25T12:00:00.000Z",
   };
 
-  await page.route("**/rest/v1/customers*", async (route) => {
+  const writes = [];
+  await page.route((url) => isCustomerEndpoint(url.href), async (route) => {
     const request = route.request();
+    await requireCustomerRequest(route, ["GET", "POST"]);
     if (request.method() === "POST") {
+      const write = request.postDataJSON();
+      expect(write).toMatchObject({ id: persistedCustomer.id, auth_user_id: authUserId,
+        email, name: "Marc A. Jacquot", company: "Jacquot Studio", phone: "+15198816869" });
+      writes.push(write);
       persistedCustomer = {
         ...persistedCustomer,
         ...request.postDataJSON(),
@@ -76,6 +83,7 @@ test("authenticated customer edits canonical profile and order defaults consume 
   await expect(page.getByText("(519) 881-6869", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Edit Profile" })).toBeVisible();
   await expect.poll(() => persistedCustomer.phone).toBe("+15198816869");
+  expect(writes).toHaveLength(1);
 
   await page.evaluate(() => {
     window.sessionStorage.setItem(

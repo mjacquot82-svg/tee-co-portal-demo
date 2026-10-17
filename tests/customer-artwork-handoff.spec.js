@@ -187,7 +187,7 @@ test("review and submission associate existing artwork with its garment", () => 
 
   expect(requestSource).toContain('artwork_id: item.artworkId || ""');
   expect(requestSource).toContain('artwork_name: item.artworkName || ""');
-  expect(requestSource).toContain('label="Artwork" value={lineItem.artwork_name || "No artwork selected for this garment"}');
+  expect(requestSource).toContain('label="Artwork" value={describeArtworkRequest(lineItem) || lineItem.artwork_name || "No artwork selected for this garment"}');
   expect(requestSource).toContain("persistedIdByDraftId");
   expect(requestSource).toContain("artwork_id: artworkId");
   expect(requestSource).toContain("artwork_library: artworkLibrary");

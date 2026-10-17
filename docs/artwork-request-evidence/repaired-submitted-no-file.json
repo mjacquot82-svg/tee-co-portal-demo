@@ -1,0 +1,569 @@
+{
+  "legacy_order_number": "TC-147554",
+  "order_number": "TC-147554",
+  "customer_id": "11111111-1111-4111-8111-111111111111",
+  "customer_name": "Synthetic Customer",
+  "status": "New",
+  "approval_status": "Pending Review",
+  "source": "Customer Portal",
+  "garment": "Synthetic Shirt",
+  "qty": 2,
+  "due_date": null,
+  "order_date": "2026-10-14",
+  "quote_status": "Draft",
+  "quote_archived": false,
+  "request_type": "Order Request",
+  "customer_email": "synthetic@example.invalid",
+  "customer_phone": "+15195550123",
+  "company": "",
+  "operational_visible": false,
+  "production_ready": false,
+  "needs_assignment": true,
+  "assigned_to_staff_user_id": null,
+  "assigned_to_staff_name": "",
+  "assigned_to_staff_role": "",
+  "assigned_at": null,
+  "production_owner_staff_id": "",
+  "production_owner_staff_name": "",
+  "production_owner_staff_role": "",
+  "production_owner_assigned_at": null,
+  "placements": [
+    {
+      "placement": "Front",
+      "decoration_type": "Screen Print",
+      "artwork_id": "",
+      "artwork_name": ""
+    }
+  ],
+  "artwork_files": [],
+  "artwork_approval_required": true,
+  "artwork_approval_status": "Pending Review",
+  "artwork_status": "Design Requested",
+  "approval_note": "",
+  "customer_artwork_id": "",
+  "customer_artwork_name": "",
+  "artwork_reference_names": [],
+  "quote": {
+    "order_number": "",
+    "customer_name": "",
+    "garment": "Synthetic Shirt",
+    "quantity": 2,
+    "line_items": [
+      {
+        "order_number": "",
+        "customer_name": "",
+        "garment": "Synthetic Shirt",
+        "product_id": "22222222-2222-4222-8222-222222222220",
+        "quantity": 2,
+        "garment_unit_price": 20,
+        "garment_subtotal": 40,
+        "garment_pricing_available": true,
+        "placement_lines": [
+          {
+            "placement": "Front",
+            "decoration_type": "Screen Print",
+            "artwork_id": "",
+            "artwork_name": "",
+            "unit_price": 0,
+            "quantity": 2,
+            "line_total": 0
+          }
+        ],
+        "production_method": "Screen Print",
+        "production_lines": [
+          {
+            "production_method": "Screen Print",
+            "unit_price": 0,
+            "quantity": 2,
+            "line_total": 0
+          }
+        ],
+        "production_subtotal": 0,
+        "production_method_subtotal": 0,
+        "production_charges_subtotal": 0,
+        "setup_fees": [],
+        "placement_subtotal": 0,
+        "setup_subtotal": 0,
+        "additional_fees_subtotal": 0,
+        "subtotal": 40,
+        "tax_rate": 0.13,
+        "tax": 5.2,
+        "tax_amount": 5.2,
+        "total": 45.2,
+        "total_amount": 45.2,
+        "generated_at": "2026-10-14T20:19:07.554Z",
+        "id": "line-1792009146294",
+        "size_breakdown": {
+          "M": 2
+        }
+      }
+    ],
+    "garment_unit_price": null,
+    "garment_subtotal": 40,
+    "garment_pricing_available": true,
+    "placement_lines": [
+      {
+        "placement": "Front",
+        "decoration_type": "Screen Print",
+        "artwork_id": "",
+        "artwork_name": "",
+        "unit_price": 0,
+        "quantity": 2,
+        "line_total": 0
+      }
+    ],
+    "production_lines": [
+      {
+        "production_method": "Screen Print",
+        "unit_price": 0,
+        "quantity": 2,
+        "line_total": 0
+      }
+    ],
+    "production_subtotal": 0,
+    "production_method_subtotal": 0,
+    "production_charges_subtotal": 0,
+    "placement_subtotal": 0,
+    "setup_fees": [],
+    "setup_subtotal": 0,
+    "additional_fees_subtotal": 0,
+    "subtotal": 40,
+    "tax_rate": 0.13,
+    "tax": 5.2,
+    "tax_amount": 5.2,
+    "total": 45.2,
+    "total_amount": 45.2,
+    "generated_at": "2026-10-14T20:19:07.554Z",
+    "__tee_co_order_snapshot": {
+      "customer_id": "11111111-1111-4111-8111-111111111111",
+      "customer_first_name": "Synthetic",
+      "customer_last_name": "Customer",
+      "customer_name": "Synthetic Customer",
+      "customer_email": "synthetic@example.invalid",
+      "customer_phone": "+15195550123",
+      "customer_company": "Synthetic Team",
+      "contact_name": "Synthetic Customer",
+      "product_id": "22222222-2222-4222-8222-222222222220",
+      "garment": "Synthetic Shirt",
+      "category": "Apparel",
+      "product_image": "",
+      "product_notes": "",
+      "source": "Customer Portal",
+      "request_type": "Order Request",
+      "request_status": "Pending Staff Review",
+      "staff_review_status": "Pending Review",
+      "status": "New",
+      "quote_status": "Draft",
+      "operational_visible": false,
+      "production_ready": false,
+      "qty": 2,
+      "selected_color": "Black",
+      "selected_size": "M",
+      "size_breakdown": {
+        "M": 2
+      },
+      "line_items": [
+        {
+          "id": "line-1792009146294",
+          "product_id": "22222222-2222-4222-8222-222222222220",
+          "garmentId": "",
+          "garmentName": "Synthetic Shirt",
+          "brand": "Tee & Co",
+          "category": "Apparel",
+          "selected_color": "Black",
+          "placement": "Front",
+          "decoration_type": "Screen Print",
+          "artwork_id": "",
+          "artwork_name": "",
+          "artwork_mode": "create",
+          "artwork_description": "Blue compass and TRAIL TEAM",
+          "size_breakdown": {
+            "M": 2
+          },
+          "quantity": 2,
+          "garment": "Synthetic Shirt",
+          "product_image": "",
+          "product_notes": "",
+          "placements": [
+            {
+              "placement": "Front",
+              "decoration_type": "Screen Print",
+              "artwork_id": "",
+              "artwork_name": ""
+            }
+          ]
+        }
+      ],
+      "placement": "Front",
+      "placements": [
+        {
+          "placement": "Front",
+          "decoration_type": "Screen Print",
+          "artwork_id": "",
+          "artwork_name": ""
+        }
+      ],
+      "decoration_type": "Screen Print",
+      "customer_artwork_id": "",
+      "customer_artwork_name": "",
+      "artwork_library": [],
+      "artwork_files": [],
+      "artwork_reference_names": [],
+      "artwork_requirement": "Design Requested",
+      "artwork_status": "Design Requested",
+      "artwork_approval_required": true,
+      "artwork_approval_status": "Pending Review",
+      "approval_status": "Pending Review",
+      "due_date": "",
+      "notes": "Synthetic Shirt: Tee & Co to create artwork: Blue compass and TRAIL TEAM",
+      "customer_notes": "Synthetic Shirt: Tee & Co to create artwork: Blue compass and TRAIL TEAM",
+      "request_details": "Synthetic Shirt: Tee & Co to create artwork: Blue compass and TRAIL TEAM",
+      "payment_history": [],
+      "total_paid": 0,
+      "amount_paid": 0,
+      "balance_due": 45.2,
+      "deposit_amount": 0,
+      "deposit_required": null,
+      "deposit_requirement": "undecided",
+      "deposit_requirement_status": "Undecided",
+      "deposit_workflow_status": "Pending Decision",
+      "invoice_status": "Draft",
+      "quote": {
+        "order_number": "",
+        "customer_name": "",
+        "garment": "Synthetic Shirt",
+        "quantity": 2,
+        "line_items": [
+          {
+            "order_number": "",
+            "customer_name": "",
+            "garment": "Synthetic Shirt",
+            "product_id": "22222222-2222-4222-8222-222222222220",
+            "quantity": 2,
+            "garment_unit_price": 20,
+            "garment_subtotal": 40,
+            "garment_pricing_available": true,
+            "placement_lines": [
+              {
+                "placement": "Front",
+                "decoration_type": "Screen Print",
+                "artwork_id": "",
+                "artwork_name": "",
+                "unit_price": 0,
+                "quantity": 2,
+                "line_total": 0
+              }
+            ],
+            "production_method": "Screen Print",
+            "production_lines": [
+              {
+                "production_method": "Screen Print",
+                "unit_price": 0,
+                "quantity": 2,
+                "line_total": 0
+              }
+            ],
+            "production_subtotal": 0,
+            "production_method_subtotal": 0,
+            "production_charges_subtotal": 0,
+            "setup_fees": [],
+            "placement_subtotal": 0,
+            "setup_subtotal": 0,
+            "additional_fees_subtotal": 0,
+            "subtotal": 40,
+            "tax_rate": 0.13,
+            "tax": 5.2,
+            "tax_amount": 5.2,
+            "total": 45.2,
+            "total_amount": 45.2,
+            "generated_at": "2026-10-14T20:19:07.554Z",
+            "id": "line-1792009146294",
+            "size_breakdown": {
+              "M": 2
+            }
+          }
+        ],
+        "garment_unit_price": null,
+        "garment_subtotal": 40,
+        "garment_pricing_available": true,
+        "placement_lines": [
+          {
+            "placement": "Front",
+            "decoration_type": "Screen Print",
+            "artwork_id": "",
+            "artwork_name": "",
+            "unit_price": 0,
+            "quantity": 2,
+            "line_total": 0
+          }
+        ],
+        "production_lines": [
+          {
+            "production_method": "Screen Print",
+            "unit_price": 0,
+            "quantity": 2,
+            "line_total": 0
+          }
+        ],
+        "production_subtotal": 0,
+        "production_method_subtotal": 0,
+        "production_charges_subtotal": 0,
+        "placement_subtotal": 0,
+        "setup_fees": [],
+        "setup_subtotal": 0,
+        "additional_fees_subtotal": 0,
+        "subtotal": 40,
+        "tax_rate": 0.13,
+        "tax": 5.2,
+        "tax_amount": 5.2,
+        "total": 45.2,
+        "total_amount": 45.2,
+        "generated_at": "2026-10-14T20:19:07.554Z"
+      },
+      "created_by_staff_id": "",
+      "created_by_staff_name": "Unknown Staff",
+      "created_by_staff_role": "",
+      "order_number": "TC-147554",
+      "date": "Oct 14, 2026",
+      "created_at": "2026-10-14T20:19:07.554Z",
+      "updated_at": "2026-10-14T20:19:07.554Z",
+      "activity_log": [
+        {
+          "id": "activity-1792009147559-6ioldz",
+          "type": "created",
+          "note": "Order created for Synthetic Customer.",
+          "staff_id": "",
+          "staff_name": "Unknown Staff",
+          "staff_role": "",
+          "created_at": "2026-10-14T20:19:07.554Z"
+        }
+      ],
+      "workflow_overrides": {
+        "forceProduction": {
+          "active": false,
+          "usedAt": "",
+          "usedByName": "",
+          "usedByRole": ""
+        },
+        "depositRequirement": {
+          "active": false,
+          "usedAt": "",
+          "usedByName": "",
+          "usedByRole": ""
+        },
+        "artworkApprovalRequirement": {
+          "active": false,
+          "usedAt": "",
+          "usedByName": "",
+          "usedByRole": ""
+        }
+      },
+      "assigned_to_staff_id": "",
+      "assigned_to_staff_name": "",
+      "assigned_to_staff_role": "",
+      "production_owner_staff_id": "",
+      "production_owner_staff_name": "",
+      "production_owner_staff_role": "",
+      "production_owner_assigned_at": null,
+      "needs_assignment": true,
+      "is_rush": false,
+      "workflow_state": "Draft",
+      "subtotal": 40,
+      "tax_amount": 5.2,
+      "total_amount": 45.2,
+      "deposit_applied": 0,
+      "deposit_outstanding": 0,
+      "paid_to_date": 0,
+      "remaining_balance": 45.2,
+      "amount_due_now": 45.2,
+      "payment_status": "Awaiting Payment",
+      "payment_collection_state": "Awaiting Payment",
+      "canonical_payment_state": "Awaiting Payment",
+      "canonical_workflow_state": "Artwork Needed",
+      "canonical_state": {
+        "payment": {
+          "ownerPaymentState": "Awaiting Payment",
+          "payment_state": "Awaiting Payment",
+          "label": "Awaiting Payment",
+          "depositRequired": false,
+          "depositSatisfied": true,
+          "balancePaid": false,
+          "totalPaid": 0,
+          "totalAmount": 45.2,
+          "balanceDue": 45.2,
+          "depositAmount": 0,
+          "hasFailedPayment": false,
+          "awaitingVerification": false,
+          "paymentRequests": [],
+          "payments": [],
+          "paymentEvents": [],
+          "source": "legacy_order_fields"
+        },
+        "workflow": {
+          "workflowState": "Artwork Needed",
+          "workflow_state": "Artwork Needed",
+          "label": "Artwork Needed",
+          "paymentState": {
+            "ownerPaymentState": "Awaiting Payment",
+            "payment_state": "Awaiting Payment",
+            "label": "Awaiting Payment",
+            "depositRequired": false,
+            "depositSatisfied": true,
+            "balancePaid": false,
+            "totalPaid": 0,
+            "totalAmount": 45.2,
+            "balanceDue": 45.2,
+            "depositAmount": 0,
+            "hasFailedPayment": false,
+            "awaitingVerification": false,
+            "paymentRequests": [],
+            "payments": [],
+            "paymentEvents": [],
+            "source": "legacy_order_fields"
+          },
+          "source": "legacy_order_fields"
+        }
+      },
+      "invoice_due_date": "",
+      "is_payment_overdue": false,
+      "deposit_credited_message": "No deposit applied.",
+      "balance_summary": "$45.20 remaining.",
+      "pickup_status": "Pending",
+      "financial_history": [
+        {
+          "id": "invoice-created-TC-147554",
+          "type": "invoice_created",
+          "note": "Invoice created for $45.20.",
+          "tone": "default",
+          "amount": null,
+          "synthetic": true,
+          "staff_name": "Financial System",
+          "staff_role": "Lifecycle",
+          "created_at": "2026-10-14T20:19:07.554Z"
+        }
+      ],
+      "connected_timeline": [
+        {
+          "id": "activity-1792009147559-6ioldz",
+          "type": "created",
+          "note": "Order created for Synthetic Customer.",
+          "staff_id": "",
+          "staff_name": "Unknown Staff",
+          "staff_role": "",
+          "created_at": "2026-10-14T20:19:07.554Z"
+        },
+        {
+          "id": "invoice-created-TC-147554",
+          "type": "invoice_created",
+          "note": "Invoice created for $45.20.",
+          "tone": "default",
+          "amount": null,
+          "synthetic": true,
+          "staff_name": "Financial System",
+          "staff_role": "Lifecycle",
+          "created_at": "2026-10-14T20:19:07.554Z"
+        }
+      ]
+    }
+  },
+  "size_breakdown": {
+    "M": 2
+  },
+  "line_items": [
+    {
+      "id": "line-1792009146294",
+      "product_id": "22222222-2222-4222-8222-222222222220",
+      "garmentId": "",
+      "garmentName": "Synthetic Shirt",
+      "brand": "Tee & Co",
+      "category": "Apparel",
+      "selected_color": "Black",
+      "placement": "Front",
+      "decoration_type": "Screen Print",
+      "artwork_id": "",
+      "artwork_name": "",
+      "artwork_mode": "create",
+      "artwork_description": "Blue compass and TRAIL TEAM",
+      "size_breakdown": {
+        "M": 2
+      },
+      "quantity": 2,
+      "garment": "Synthetic Shirt",
+      "product_image": "",
+      "product_notes": "",
+      "placements": [
+        {
+          "placement": "Front",
+          "decoration_type": "Screen Print",
+          "artwork_id": "",
+          "artwork_name": ""
+        }
+      ]
+    }
+  ],
+  "deposit_status": "Pending Decision",
+  "deposit_required": null,
+  "deposit_workflow_status": "Pending Decision",
+  "deposit_requirement": "undecided",
+  "deposit_requirement_status": "Undecided",
+  "deposit_details": {},
+  "deposit_amount": 0,
+  "deposit_paid_amount": 0,
+  "deposit_paid_at": null,
+  "subtotal": 40,
+  "tax_amount": 5.2,
+  "total_amount": 45.2,
+  "total_paid": 0,
+  "deposit_applied": 0,
+  "deposit_outstanding": 0,
+  "balance_due": 45.2,
+  "payment_status": "Awaiting Payment",
+  "payment_method": "",
+  "payment_reference": "",
+  "payment_collection_state": "Awaiting Payment",
+  "invoice_status": "Draft",
+  "pickup_status": "Pending",
+  "payment_history": [],
+  "workflow_state": {},
+  "workflow_overrides": {
+    "forceProduction": {
+      "active": false,
+      "usedAt": "",
+      "usedByName": "",
+      "usedByRole": ""
+    },
+    "depositRequirement": {
+      "active": false,
+      "usedAt": "",
+      "usedByName": "",
+      "usedByRole": ""
+    },
+    "artworkApprovalRequirement": {
+      "active": false,
+      "usedAt": "",
+      "usedByName": "",
+      "usedByRole": ""
+    }
+  },
+  "is_rush": false,
+  "decoration_type": "Screen Print",
+  "placement": "Front",
+  "order_metadata": {},
+  "notes": "Synthetic Shirt: Tee & Co to create artwork: Blue compass and TRAIL TEAM",
+  "internal_notes": "",
+  "activity_log": [
+    {
+      "id": "activity-1792009147559-6ioldz",
+      "type": "created",
+      "note": "Order created for Synthetic Customer.",
+      "staff_id": "",
+      "staff_name": "Unknown Staff",
+      "staff_role": "",
+      "created_at": "2026-10-14T20:19:07.554Z"
+    }
+  ],
+  "created_by_staff_user_id": null,
+  "updated_by_staff_user_id": null,
+  "created_at": "2026-10-14T20:19:07.554Z",
+  "updated_at": "2026-10-14T20:19:07.554Z"
+}

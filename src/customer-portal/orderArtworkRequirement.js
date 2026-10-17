@@ -1,3 +1,4 @@
+import { needsArtworkCreation, getArtworkDescription } from "../lib/artworkDesignRequest.js";
 const UNDECORATED_TYPES = new Set([
   "blank",
   "blank garment",
@@ -38,10 +39,24 @@ export function hasCustomerOrderArtwork(lineItems = [], artworkLibrary = []) {
   return hasAssignedArtwork || hasLibraryArtwork;
 }
 
-export function requiresCustomerOrderArtwork(lineItems = [], artworkLibrary = []) {
+// Decorated garments with no artwork selected and no design request.
+// Customers may submit these; Tee & Co follows up about artwork (Marc, Oct 2026).
+export function getLineItemsNeedingArtworkFollowUp(lineItems = [], artworkLibrary = []) {
   const decoratedItems = (Array.isArray(lineItems) ? lineItems : []).filter(
     isDecoratedOrderLineItem
   );
+  const uploadItems = decoratedItems.filter((item) => !needsArtworkCreation(item));
+  // Legacy single-garment drafts may carry the upload only in the library.
+  // Multiple garments must each explicitly select artwork or request creation.
+  const legacyLibrary = decoratedItems.length === 1 ? artworkLibrary : [];
+  return uploadItems.filter((item) => !hasCustomerOrderArtwork([item], legacyLibrary));
+}
 
-  return decoratedItems.length > 0 && !hasCustomerOrderArtwork(decoratedItems, artworkLibrary);
+// Only an incomplete design request still blocks submission: a garment that
+// asks Tee & Co to create artwork must describe the design. Missing artwork
+// alone no longer blocks (see getLineItemsNeedingArtworkFollowUp).
+export function requiresCustomerOrderArtwork(lineItems = []) {
+  return (Array.isArray(lineItems) ? lineItems : [])
+    .filter(isDecoratedOrderLineItem)
+    .some((item) => needsArtworkCreation(item) && !getArtworkDescription(item));
 }

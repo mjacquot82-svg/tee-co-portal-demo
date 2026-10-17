@@ -1,3 +1,4 @@
+import { describeArtworkRequest } from "../lib/artworkDesignRequest";
 import { forwardRef } from "react";
 import { normalizeProductionType } from "../constants/productionTypes";
 import { formatShortDate } from "../lib/dateFormatting";
@@ -14,6 +15,7 @@ function buildOrderItems(order = {}) {
       placements: item.placements.map((placement) => placement?.placement).filter(Boolean).join(", ") || item.placement,
       productionType: normalizeProductionType(item.decoration_type || "Screen Printing"),
       artwork: getLineItemArtwork(order, item),
+      artworkRequest: describeArtworkRequest(item),
       sizeBreakdown: item.size_breakdown,
     }));
   }
@@ -189,7 +191,7 @@ const PrintableProductionTicket = forwardRef(function PrintableProductionTicket(
 
                   <div style={{ display: "grid", gap: "2px" }}>
                     <span style={sectionLabelStyle}>Artwork</span>
-                    <span style={sectionValueStyle}>{item.artwork ? getArtworkDisplayName(item.artwork) : "No artwork assigned"}</span>
+                    <span style={sectionValueStyle}>{item.artworkRequest || (item.artwork ? getArtworkDisplayName(item.artwork) : "No artwork assigned")}</span>
                   </div>
 
                   <div style={{ display: "grid", gap: "8px" }}>

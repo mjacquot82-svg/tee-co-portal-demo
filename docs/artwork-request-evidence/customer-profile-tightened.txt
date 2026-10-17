@@ -1,0 +1,43 @@
+
+[1A[2K[WebServer] (node:24952) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[1A[2K[WebServer] Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+[WebServer]   npx update-browserslist-db@latest
+[WebServer]   Why you should do it regularly: https://github.com/browserslist/update-db#readme
+
+Running 4 tests using 1 worker
+
+
+[1A[2K(node:10672) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K(node:10672) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1A[2K[1/4] [customer-mock-desktop] ΓÇ║ tests\customer-hydration-schema-fallback.spec.js:8:1 ΓÇ║ customer hydration retries missing optional columns and replaces stale local profile data
+
+[1A[2K[WebServer] 4:11:59 p.m. [vite] (client) [console.warn] [customersStore] schema fallback removed unsupported optional customer column {"table":"customers","fieldName":"archived","remainingOptionalFields":["external_reference","archived_at","merged_into_customer_id","merged_at","merged_customer_ids"]}
+
+[1A[2K[WebServer] 4:11:59 p.m. [vite] (client) [console.warn] [customersStore] schema fallback removed unsupported optional customer column {"table":"customers","fieldName":"archived_at","remainingOptionalFields":["external_reference","merged_into_customer_id","merged_at","merged_customer_ids"]}
+[1A[2K[2/4] [customer-mock-desktop] ΓÇ║ tests\customer-portal-profile-editing.spec.js:4:1 ΓÇ║ authenticated customer edits canonical profile and order defaults consume it
+
+[1A[2K[WebServer] 4:12:00 p.m. [vite] (client) [console.warn] [garmentLibraryStore] getGarmentLibraryItems returning EMPTY_ITEMS before remote load completes {"hasLoadedRemote":false,"loadStarted":false,"cachedSnapshotCount":0}
+
+[1A[2K(node:30428) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K(node:30428) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+[1A[2K[3/4] [customer-mock-phone] ΓÇ║ tests\customer-hydration-schema-fallback.spec.js:8:1 ΓÇ║ customer hydration retries missing optional columns and replaces stale local profile data
+
+[1A[2K[WebServer] 4:12:02 p.m. [vite] (client) [console.warn] [customersStore] schema fallback removed unsupported optional customer column {"table":"customers","fieldName":"archived","remainingOptionalFields":["external_reference","archived_at","merged_into_customer_id","merged_at","merged_customer_ids"]}
+
+[1A[2K[WebServer] 4:12:02 p.m. [vite] (client) [console.warn] [customersStore] schema fallback removed unsupported optional customer column {"table":"customers","fieldName":"archived_at","remainingOptionalFields":["external_reference","merged_into_customer_id","merged_at","merged_customer_ids"]}
+[1A[2K[4/4] [customer-mock-phone] ΓÇ║ tests\customer-portal-profile-editing.spec.js:4:1 ΓÇ║ authenticated customer edits canonical profile and order defaults consume it
+
+[1A[2K[WebServer] 4:12:03 p.m. [vite] (client) [console.warn] [garmentLibraryStore] getGarmentLibraryItems returning EMPTY_ITEMS before remote load completes {"hasLoadedRemote":false,"loadStarted":false,"cachedSnapshotCount":0}
+[1A[2K  4 passed (6.6s)

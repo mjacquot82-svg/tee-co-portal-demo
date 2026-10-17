@@ -1,9 +1,23 @@
+import ArtworkCreationOption from "../components/ArtworkCreationOption";
+import { needsArtworkCreation, getArtworkDescription, describeArtworkRequest } from "../lib/artworkDesignRequest";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { useCatalogLookups } from "../lib/catalogLookupsStore";
 import { ensureCustomerProfile } from "../lib/customerProfileStore";
 import { linkOrderToCustomer } from "../lib/customersStore";
-import { createStoredOrder } from "../lib/ordersStore";
+import { createStoredOrderWithArtworkLinkStatus } from "../lib/ordersStore";
+import { findOrderBySubmissionKey } from "../lib/ordersRepository";
+import { FOLLOW_UP_WARNINGS } from "../lib/savedOrderFollowUps";
+import {
+  buildRecoveryBinding,
+  createRecoveryStore,
+  reconcileExistingOrder,
+  submitOrderWithRecovery,
+  UnresolvedSubmissionError,
+  uploadDraftArtworkWithRecovery,
+  withClientSubmissionKey,
+  withRecoveryLock,
+} from "../lib/artworkSubmissionRecovery";
 import { validateCustomerIdentity } from "../lib/customerIdentity";
 import { formatNorthAmericanPhoneDisplay } from "../lib/phoneNormalization";
 import { getDefaultDecorationType } from "../lib/orderConfiguration";
@@ -29,7 +43,11 @@ import {
   getProductPlacementConfig,
   useStoredProducts,
 } from "../lib/productsStore";
-import { uploadCustomerArtwork } from "../services/customerArtworkService";
+import {
+  buildCustomerArtworkStoragePath,
+  findCustomerArtworkByStoragePath,
+  uploadCustomerArtwork,
+} from "../services/customerArtworkService";
 import { PortalPage, SectionCard } from "./CustomerPortalShared";
 import {
   PORTAL_ORDER_SUBMITTED_PATH,
@@ -39,9 +57,21 @@ import {
 import { resolveRequestContactDefaults } from "./requestContactDefaults";
 import { useCustomerPortalData } from "./useCustomerPortalData";
 import {
+  hasCustomerOrderArtwork,
   isDecoratedOrderLineItem,
+  getLineItemsNeedingArtworkFollowUp,
   requiresCustomerOrderArtwork,
 } from "./orderArtworkRequirement";
+
+function describeArtworkLinkWarning(status) {
+  if (status === "failed") {
+    return "Your order was received, but we couldn't attach your uploaded artwork to it automatically. Tee & Co. will need to connect it. You don't need to submit the order again.";
+  }
+  if (status === "unknown") {
+    return "Your order was received, but we couldn't confirm that your uploaded artwork is attached to it. Tee & Co. will check it. You don't need to submit the order again.";
+  }
+  return "";
+}
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -237,6 +267,8 @@ export default function CustomerPortalRequestOrder() {
         decoration_type: item.decorationType,
         artwork_id: item.artworkId || "",
         artwork_name: item.artworkName || "",
+        artwork_mode: item.artworkMode || "upload",
+        artwork_description: item.artworkDescription || "",
         size_breakdown: item.size_breakdown,
         quantity: item.quantity,
       })));
@@ -458,6 +490,8 @@ export default function CustomerPortalRequestOrder() {
         decorationType: item.decoration_type || "",
         artworkId: item.artwork_id || "",
         artworkName: item.artwork_name || "",
+        artworkMode: item.artwork_mode || "upload",
+        artworkDescription: item.artwork_description || "",
         size_breakdown: item.size_breakdown || {},
         quantity: getLineItemQuantity(item),
       })),
@@ -512,11 +546,14 @@ export default function CustomerPortalRequestOrder() {
       return;
     }
 
+    if (configuredLineItems.some((item) => needsArtworkCreation(item) && !getArtworkDescription(item))) {
+      setSubmitState("error");
+      setSubmitMessage("Describe the wording and design wanted for each garment that needs Tee & Co to create artwork.");
+      return;
+    }
+
     if (
-      requiresCustomerOrderArtwork(
-        configuredLineItems,
-        pendingRequest?.artworkLibrary || []
-      )
+      requiresCustomerOrderArtwork(configuredLineItems)
     ) {
       setArtworkRequirementDialogOpen(true);
       setSubmitState("idle");
@@ -540,20 +577,92 @@ export default function CustomerPortalRequestOrder() {
     const primaryLineItem = configuredLineItems[0];
     const primaryProduct = storefrontProducts.find((product) => product.id === primaryLineItem.product_id);
     const decorationType = primaryLineItem.decoration_type;
-    const draftArtworkLibrary = pendingRequest?.artworkLibrary || [];
-    const uploadedByDraftId = new Map();
+    const hasDesignRequest = configuredLineItems.some(needsArtworkCreation);
+    const artworkFollowUpItems = getLineItemsNeedingArtworkFollowUp(
+      configuredLineItems,
+      pendingRequest?.artworkLibrary || []
+    );
+    const needsArtworkFollowUp = artworkFollowUpItems.length > 0;
+    const draftArtworkLibrary = (pendingRequest?.artworkLibrary || []).filter((asset) =>
+      !hasDesignRequest || configuredLineItems.some((item) => !needsArtworkCreation(item) && item.artwork_id === asset.id)
+    );
+    let recoveryBinding;
     try {
-      for (const draftAsset of draftArtworkLibrary) {
-        const pendingAsset = pendingArtworkAssets.find((asset) => asset.id === draftAsset.id);
-        if (!pendingAsset?.file) continue;
-        const uploaded = await uploadCustomerArtwork(profile?.id || "", pendingAsset.file, {
-          uploadedBy: customerSession.displayName || customerSession.email || "Customer Portal",
-          notes: "Uploaded with customer order request.",
-        });
-        uploadedByDraftId.set(draftAsset.id, uploaded);
-      }
+      recoveryBinding = buildRecoveryBinding({
+        customerId: profile?.id,
+        authUserId: customerSession.id,
+        draftId: pendingRequest?.created_at,
+      });
     } catch (error) {
       setSubmitState("error");
+      setSubmitMessage(error instanceof Error && error.message ? error.message : "We couldn't prepare this order for submission.");
+      return;
+    }
+    const reconcileOrder = (submissionKey) => findOrderBySubmissionKey(profile?.id || "", submissionKey);
+    const showReceiptOnly = (orderResult, extraWarning = "") => {
+      // Recovered order: show only verified facts, never the current (unsaved) draft.
+      navigate(PORTAL_ORDER_SUBMITTED_PATH, {
+        replace: true,
+        state: {
+          receiptOnly: true,
+          createdOrderNumber: orderResult.order?.order_number || "",
+          artworkLinkWarning: describeArtworkLinkWarning(orderResult.artworkLink?.status),
+          followUpWarnings: orderResult.followUpWarnings || [],
+          recoveryWarning: orderResult.evidenceError
+            ? "This browser couldn't record that the order was sent. Please don't submit it again; check My Orders instead."
+            : extraWarning,
+        },
+      });
+    };
+
+    // All recovery reads/writes for this identity+draft happen under one
+    // exclusive Web Lock (same-browser coordination only; not cross-device).
+    const submitWithinLock = async () => {
+    let recoveryStore;
+    try {
+      recoveryStore = createRecoveryStore(
+        typeof window !== "undefined" ? window.localStorage : null,
+        recoveryBinding
+      );
+      recoveryStore.assertWritable();
+    } catch (error) {
+      setSubmitState("error");
+      setSubmitMessage(error instanceof Error && error.message ? error.message : "We couldn't prepare this order for submission.");
+      return;
+    }
+    // Reconcile any earlier order for this draft BEFORE uploading anything.
+    // The draft (including any edits) is kept; it is not presented as saved.
+    try {
+      const existingOrder = await reconcileExistingOrder(recoveryStore, { reconcileOrder });
+      if (existingOrder) {
+        showReceiptOnly(existingOrder, "This order was already received. Your current draft was not sent again.");
+        return;
+      }
+    } catch (error) {
+      setSubmitState(error instanceof UnresolvedSubmissionError ? "unresolved" : "error");
+      setSubmitMessage(error instanceof Error && error.message ? error.message : "We couldn't confirm your earlier order.");
+      return;
+    }
+    let uploadedByDraftId;
+    try {
+      const uploadableAssets = draftArtworkLibrary
+        .map((draftAsset) => ({
+          id: draftAsset.id,
+          file: pendingArtworkAssets.find((asset) => asset.id === draftAsset.id)?.file,
+        }))
+        .filter((asset) => asset.file);
+      uploadedByDraftId = await uploadDraftArtworkWithRecovery(uploadableAssets, recoveryStore, {
+        buildStoragePath: (asset) => buildCustomerArtworkStoragePath(profile?.id || "", asset.file.name),
+        upload: (asset, { storagePath }) =>
+          uploadCustomerArtwork(profile?.id || "", asset.file, {
+            storagePath,
+            uploadedBy: customerSession.displayName || customerSession.email || "Customer Portal",
+            notes: "Uploaded with customer order request.",
+          }),
+        reconcileUpload: (storagePath) => findCustomerArtworkByStoragePath(profile?.id || "", storagePath),
+      });
+    } catch (error) {
+      setSubmitState(error instanceof UnresolvedSubmissionError ? "unresolved" : "error");
       setSubmitMessage(error instanceof Error && error.message ? error.message : "Artwork could not be uploaded. Please try again.");
       return;
     }
@@ -563,6 +672,7 @@ export default function CustomerPortalRequestOrder() {
       return {
         ...(uploaded || {}),
         id: uploaded?.id || draftAsset.id,
+        persisted: Boolean(uploaded?.id),
         display_name: draftAsset.displayName,
         name: draftAsset.displayName,
         original_filename: draftAsset.originalFilename,
@@ -573,7 +683,7 @@ export default function CustomerPortalRequestOrder() {
     const persistedIdByDraftId = new Map(
       draftArtworkLibrary.map((asset, index) => [asset.id, artworkLibrary[index]?.id || asset.id])
     );
-    const finalNotes = [normalizeText(notes), normalizeText(additionalInstructions)]
+    const finalNotes = [normalizeText(notes), normalizeText(additionalInstructions), ...configuredLineItems.filter(needsArtworkCreation).map((item) => `${item.garment}: ${describeArtworkRequest(item)}`)]
       .filter(Boolean)
       .join("\n\n");
     const artworkFiles = artworkLibrary;
@@ -604,7 +714,17 @@ export default function CustomerPortalRequestOrder() {
     const quote = generateOrderQuoteSnapshot({ line_items: submittedLineItems, setup_fees: [] }, storefrontProducts);
 
     try {
-      const createdOrder = await createStoredOrder({
+      let followUpWarnings;
+      let followUpWarningRecordError = false;
+      const {
+        order: createdOrder,
+        artworkLink,
+        reused,
+        evidenceError,
+        followUpWarnings: savedFollowUpWarnings = [],
+      } = await submitOrderWithRecovery(recoveryStore, {
+        reconcileOrder,
+        create: (submissionKey) => createStoredOrderWithArtworkLinkStatus(withClientSubmissionKey({
         customer_id: profile?.id || "",
         customer_first_name: identityValidation.identity.firstName,
         customer_last_name: identityValidation.identity.lastName,
@@ -639,10 +759,14 @@ export default function CustomerPortalRequestOrder() {
         artwork_library: artworkLibrary,
         artwork_files: artworkFiles,
         artwork_reference_names: artworkLibrary.map((asset) => asset.display_name),
-        artwork_requirement: artworkLibrary.length ? "Uploaded" : "Upload Later",
-        artwork_status: artworkLibrary.length ? "Pending Review" : "Missing",
-        artwork_approval_required: artworkLibrary.length > 0,
-        artwork_approval_status: artworkLibrary.length ? "Pending Review" : "Not Required",
+        artwork_requirement: hasDesignRequest ? "Design Requested" : artworkLibrary.length ? "Uploaded" : "Upload Later",
+        artwork_status: hasDesignRequest ? "Design Requested" : artworkLibrary.length ? "Pending Review" : "Missing",
+        // No-artwork garments are allowed; keep approval pending so staff see
+        // "artwork needed" (artwork_status Missing / Upload Later) instead of
+        // "not required".
+        artwork_approval_required: hasDesignRequest || artworkLibrary.length > 0 || needsArtworkFollowUp,
+        artwork_approval_status:
+          hasDesignRequest || artworkLibrary.length || needsArtworkFollowUp ? "Pending Review" : "Not Required",
         approval_status: "Pending Review",
         due_date: needByDate || "",
         notes: finalNotes,
@@ -659,20 +783,52 @@ export default function CustomerPortalRequestOrder() {
         deposit_workflow_status: "Pending Decision",
         invoice_status: "Draft",
         quote,
+        ...(needsArtworkFollowUp
+          ? {
+              order_metadata: {
+                artwork_follow_up_needed: true,
+                artwork_follow_up_line_item_ids: artworkFollowUpItems.map((item) => item.id).filter(Boolean),
+              },
+            }
+          : {}),
+        }, submissionKey)),
       });
+
+      followUpWarnings = savedFollowUpWarnings;
+      if (reused) {
+        showReceiptOnly({ order: createdOrder, artworkLink, evidenceError, followUpWarnings: savedFollowUpWarnings });
+        return;
+      }
 
       if (profile?.id) {
         try {
           await linkOrderToCustomer(profile.id, createdOrder.order_number);
         } catch (linkError) {
           console.error("Order was created but the customer summary could not be updated", linkError);
+          followUpWarnings = [...followUpWarnings, FOLLOW_UP_WARNINGS.accountSummary];
+          if (!evidenceError) {
+            try {
+              // Still inside the recovery lock; persisted so reopening this draft shows it.
+              recoveryStore.appendFollowUpWarnings([FOLLOW_UP_WARNINGS.accountSummary]);
+            } catch (appendError) {
+              console.error("Could not record the follow-up warning in this browser", appendError);
+              followUpWarningRecordError = true;
+            }
+          }
         }
       }
 
+      // Saved-order evidence was written by submitOrderWithRecovery before this
+      // cleanup and is intentionally never cleared: any later submit of this
+      // identity+draft (including a stale tab) returns this order receipt-only.
       if (pendingRequest) {
         clearPendingCustomerRequest();
       }
-      await clearPendingCustomerArtwork();
+      try {
+        await clearPendingCustomerArtwork();
+      } catch (clearError) {
+        console.error("Order was created but the pending artwork draft could not be cleared", clearError);
+      }
 
       navigate(PORTAL_ORDER_SUBMITTED_PATH, {
         replace: true,
@@ -683,24 +839,47 @@ export default function CustomerPortalRequestOrder() {
           selectedColor: primaryLineItem.selected_color,
           selectedSize: Object.keys(primaryLineItem.size_breakdown).join(", "),
           quantity: normalizedQuantity,
-          artworkName: artworkLibrary.map((asset) => asset.display_name).join(", "),
+          artworkName:
+            artworkLibrary.map((asset) => asset.display_name).join(", ") ||
+            (needsArtworkFollowUp ? "No artwork yet. Tee & Co will follow up about artwork." : ""),
           notes: finalNotes,
           quote,
+          artworkLinkWarning: artworkLibrary.some((asset) => asset.persisted)
+            ? describeArtworkLinkWarning(artworkLink?.status)
+            : "",
+          recoveryWarning: evidenceError
+            ? "Your order was received, but this browser couldn't record that it was sent. Please don't submit it again; check My Orders instead."
+            : followUpWarningRecordError
+            ? "Your order was received. This browser couldn't save the notes below, so they may not appear if you reopen this draft."
+            : "",
+          followUpWarnings,
         },
       });
     } catch (error) {
       console.error("Unable to create customer portal order request", error);
-      setSubmitState("error");
+      setSubmitState(error instanceof UnresolvedSubmissionError ? "unresolved" : "error");
       setSubmitMessage(
         error instanceof Error && error.message
           ? error.message
           : "The request could not be sent. Try again."
       );
     }
+    };
+
+    try {
+      await withRecoveryLock(
+        typeof navigator !== "undefined" ? navigator.locks : null,
+        recoveryBinding,
+        submitWithinLock
+      );
+    } catch (error) {
+      setSubmitState("error");
+      setSubmitMessage(error instanceof Error && error.message ? error.message : "This order could not be submitted safely.");
+    }
   }
 
   function openArtworkSelection(artworkAction) {
-    const decoratedItemIndex = configuredLineItems.findIndex(isDecoratedOrderLineItem);
+    const decoratedItemIndex = configuredLineItems.findIndex((item) => isDecoratedOrderLineItem(item) && !needsArtworkCreation(item) && !hasCustomerOrderArtwork([item]));
     const lineItemIndex = decoratedItemIndex >= 0 ? decoratedItemIndex : 0;
     const lineItem = configuredLineItems[lineItemIndex];
     const pendingLineItem = pendingRequest?.lineItems?.[lineItemIndex] || {};
@@ -837,8 +1016,13 @@ export default function CustomerPortalRequestOrder() {
                   <ReviewItem label="Size" value={Object.entries(lineItem.size_breakdown || {}).map(([size, amount]) => `${size} ×${amount}`).join(" · ") || "Open / mixed sizing"} />
                   <ReviewItem label="Placement" value={lineItem.placement || "Confirm later"} />
                   <ReviewItem label="Decoration" value={lineItem.decoration_type || "Confirm later"} />
-                  <ReviewItem label="Artwork" value={lineItem.artwork_name || "No artwork selected for this garment"} />
+                  <ReviewItem label="Artwork" value={describeArtworkRequest(lineItem) || lineItem.artwork_name || "No artwork added. Tee & Co will follow up about artwork after you submit."} />
                 </div>
+                {isDecoratedOrderLineItem(configuredLineItems[index]) && <ArtworkCreationOption
+                  checked={needsArtworkCreation(lineItem)} description={lineItem.artwork_description || ""}
+                  onChange={(checked) => setLineItems((items) => items.map((item) => item.id === lineItem.id ? { ...item, artwork_mode: checked ? "create" : "upload", artwork_id: "", artwork_name: "" } : item))}
+                  onDescriptionChange={(value) => setLineItems((items) => items.map((item) => item.id === lineItem.id ? { ...item, artwork_description: value } : item))}
+                />}
               </article>
             );
           })}
@@ -901,7 +1085,7 @@ export default function CustomerPortalRequestOrder() {
                   })}
                 </div>
               ) : (
-                <p style={{ margin: 0, color: "#64748b" }}>No artwork has been added. Tee &amp; Co can confirm artwork after submission.</p>
+                <p style={{ margin: 0, color: "#64748b" }}>No artwork added. Tee &amp; Co will follow up about artwork after you submit.</p>
               )}
             </fieldset>
 
@@ -1148,7 +1332,7 @@ export default function CustomerPortalRequestOrder() {
                   style={{ margin: "10px 0 0", color: "#475569", lineHeight: 1.6 }}
                 >
                   Before submitting your order, please upload your artwork or select artwork
-                  you&apos;ve previously uploaded.
+                  you&apos;ve previously uploaded. If you need us to create it, close this message and choose “I need Tee &amp; Co to create my artwork” on each garment that needs design work.
                 </p>
               </div>
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>

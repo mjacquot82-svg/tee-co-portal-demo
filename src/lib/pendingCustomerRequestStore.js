@@ -65,8 +65,10 @@ function normalizeLineItem(item = {}, index = 0) {
     placement: normalizeText(item.placement),
     placements: normalizePlacements(item.placements, item.placement),
     decorationType: normalizeText(item.decorationType || item.decoration_type),
-    artworkId: normalizeText(item.artworkId || item.artwork_id),
-    artworkName: normalizeText(item.artworkName || item.artwork_name),
+    artworkMode: (item.artworkMode || item.artwork_mode) === "create" ? "create" : "upload",
+    artworkDescription: normalizeText(item.artworkDescription ?? item.artwork_description),
+    artworkId: (item.artworkMode || item.artwork_mode) === "create" ? "" : normalizeText(item.artworkId || item.artwork_id),
+    artworkName: (item.artworkMode || item.artwork_mode) === "create" ? "" : normalizeText(item.artworkName || item.artwork_name),
   };
 }
 
