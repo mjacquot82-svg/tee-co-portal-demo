@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { handler, __setClientFactory } from "./security-preflight.js";
+import { handler, __setClientFactory } from "../../netlify/functions/security-preflight.js";
 
 function setEnv(env) {
   for (const k of ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "VITE_SUPABASE_ANON_KEY", "STAFF_PIN_RATE_LIMIT_SALT", "TEE_CO_ALLOWED_UPLOAD_ORIGINS"]) delete process.env[k];

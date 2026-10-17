@@ -15,7 +15,8 @@
     "lint": "eslint .",
     "migrate:product-images": "node scripts/migrate-product-images-to-storage.mjs",
     "seed:garment-model-colors": "node scripts/seed-garment-model-colors-from-products.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:functions": "node --test --test-concurrency=1 tests/functions/"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.1",
