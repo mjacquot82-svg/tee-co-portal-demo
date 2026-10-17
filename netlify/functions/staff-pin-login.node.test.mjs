@@ -97,3 +97,15 @@ test("unknown role is not granted a session", async () => {
   assert.equal(res.statusCode, 500);
   assert.equal(JSON.parse(res.body).session, undefined);
 });
+
+test("auth user that already exists but lost its link (e.g. after a DB rollback) is re-linked", async () => {
+  const admin = fakeAdmin({ verify: () => ({ ok: true, id: ID, name: "Sam", role: "Staff", auth_user_id: null }) });
+  admin.auth.admin.createUser = async () => ({ data: { user: null }, error: { message: "A user with this email address has already been registered" } });
+  admin.auth.admin.generateLink = async () => ({ data: { user: { id: "auth-existing" }, properties: { hashed_token: "th" } }, error: null });
+  __setClientFactory(() => admin);
+  const res = await handler(ev({ staffUserId: ID, pin: "1234" }));
+  assert.equal(res.statusCode, 200);
+  assert.equal(admin.calls.updated[0][0], "auth-existing");
+  assert.equal(admin.calls.updated[0][1].app_metadata.operational_role, "staff");
+  assert.deepEqual(admin.calls.linked[0], { auth_user_id: "auth-existing" });
+});

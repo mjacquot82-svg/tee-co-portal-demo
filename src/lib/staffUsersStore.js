@@ -22,7 +22,7 @@ const OWNER_AUTH_DIAGNOSTICS_KEY = "__TEE_CO_OWNER_AUTH_DIAGNOSTICS__";
 const STAFF_PIN_LOGIN_ENDPOINT = "/.netlify/functions/staff-pin-login";
 // Browser-readable staff_users columns. PIN data is never selected (column grants block it).
 export const STAFF_USER_PUBLIC_COLUMNS =
-  "id, legacy_staff_id, name, role, status, last_active_at, created_at, updated_at, auth_user_id, has_pin";
+  "id, legacy_staff_id, name, role, active, status, last_active_at, created_at, updated_at, auth_user_id, has_pin";
 
 export const STAFF_ROLES = ["Owner", "Manager", "Staff"];
 export const STAFF_STATUSES = ["Active", "Inactive"];
@@ -329,6 +329,18 @@ async function fetchStaffUsersFromSupabase() {
       .from("staff_users")
       .select(STAFF_USER_PUBLIC_COLUMNS)
       .order("created_at", { ascending: false }));
+    // Go-live tolerance: before the column-grant phase (or on a database that is missing one
+    // of the newer columns) fall back to the full row, but never keep PIN data in the browser.
+    if (error) {
+      const fallback = await supabase.from("staff_users").select("*").order("created_at", { ascending: false });
+      if (!fallback.error) {
+        error = null;
+        data = (fallback.data || []).map((row) => {
+          const { pin: _pin, pin_hash: _pinHash, failed_pin_attempts: _f, pin_locked_until: _l, ...rest } = row;
+          return { ...rest, has_pin: rest.has_pin ?? Boolean(_pinHash || _pin) };
+        });
+      }
+    }
   }
 
   // Signed-out login screen (or a non-staff session): names for the PIN picker only.

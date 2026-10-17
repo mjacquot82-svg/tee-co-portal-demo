@@ -68,8 +68,19 @@ export async function issueStaffSession(admin, staff, { emailDomain } = {}) {
     const { data, error } = await admin.auth.admin.createUser({
       email, email_confirm: true, app_metadata, user_metadata: { full_name: staff.name || "" },
     });
-    if (error || !data?.user?.id) return { ok: false, code: "AUTH_USER" };
-    authUserId = data.user.id;
+    if (data?.user?.id) {
+      authUserId = data.user.id;
+    } else if (/already|registered|exists/i.test(String(error?.message || ""))) {
+      // The auth user exists but the link was lost (e.g. after a database rollback):
+      // look it up by its dedicated staff email and re-link it.
+      const { data: existing } = await admin.auth.admin.generateLink({ type: "magiclink", email });
+      if (!existing?.user?.id) return { ok: false, code: "AUTH_USER" };
+      authUserId = existing.user.id;
+      const { error: metaError } = await admin.auth.admin.updateUserById(authUserId, { app_metadata });
+      if (metaError) return { ok: false, code: "AUTH_USER" };
+    } else {
+      return { ok: false, code: "AUTH_USER" };
+    }
     const { error: linkError } = await admin.from("staff_users").update({ auth_user_id: authUserId }).eq("id", staff.id);
     if (linkError) return { ok: false, code: "LINK" };
   }

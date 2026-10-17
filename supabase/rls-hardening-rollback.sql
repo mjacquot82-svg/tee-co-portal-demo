@@ -28,6 +28,18 @@ begin
     end if;
   end loop;
 end $$;
+drop trigger if exists tee_co_link_customer_on_auth on auth.users;
+drop function if exists tee_co_private.link_customer_on_auth();
+drop function if exists tee_co_private.owns_payment_request(text);
 drop function if exists tee_co_private.owns_customer(text);
+do $$ declare d text; begin
+  select policy_sql into d from tee_co_private.rls_hardening_backup where kind = 'function'
+    and table_name = 'is_tee_co_operational_staff' order by captured_at limit 1;
+  if d is not null then
+    execute d;
+    grant execute on function public.is_tee_co_operational_staff() to public, anon, authenticated;
+  end if;
+end $$;
 drop table if exists tee_co_private.rls_hardening_backup;
+notify pgrst, 'reload schema';
 commit;
