@@ -821,7 +821,9 @@ export default function CustomerPortalRequestOrder() {
       // Saved-order evidence was written by submitOrderWithRecovery before this
       // cleanup and is intentionally never cleared: any later submit of this
       // identity+draft (including a stale tab) returns this order receipt-only.
-      if (pendingRequest) clearPendingCustomerRequest();
+      if (pendingRequest) {
+        clearPendingCustomerRequest();
+      }
       try {
         await clearPendingCustomerArtwork();
       } catch (clearError) {
