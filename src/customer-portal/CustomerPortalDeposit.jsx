@@ -7,7 +7,7 @@ import {
   resolveDepositAmount,
   resolveRemainingBalanceAfterDeposit,
 } from "../lib/depositPaymentProviders";
-import { updateStoredOrder } from "../lib/ordersStore";
+import { applyCustomerOrderAction } from "../lib/ordersStore";
 import { formatShortDate } from "../lib/dateFormatting";
 import { EmptyState, PortalPage, SectionCard, DetailPair } from "./CustomerPortalShared";
 import { findPaymentRequestForOrder } from "./customerPortalPayments";
@@ -171,7 +171,9 @@ export default function CustomerPortalDeposit() {
     try {
       const now = new Date().toISOString();
       const note = normalizeText(paymentNote);
-      const updatedOrder = await updateStoredOrder(record.order_number, {
+      // With a database this runs the customer_order_action "deposit_sent" (only the
+      // confirmation fields change); the object below is the demo/local-mode update.
+      const updatedOrder = await applyCustomerOrderAction(record.order_number, "deposit_sent", { note }, {
         deposit_customer_confirmation_status: "Sent",
         deposit_customer_confirmed_at: now,
         deposit_customer_confirmation_note: note,

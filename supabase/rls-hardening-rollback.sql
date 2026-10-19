@@ -2,6 +2,17 @@
 -- policies the hardening dropped, removes rls_hardening_* policies and re-grants anon.
 -- WARNING: rolling back re-opens the tables that were unprotected before.
 begin;
+-- Section 9 objects (approval links + customer order actions). Pending approval links stop working.
+drop function if exists public.customer_order_action(text, text, jsonb);
+drop function if exists public.get_order_approval_file_paths(text, text);
+drop function if exists public.submit_order_approval(text, text, text, text);
+drop function if exists public.get_order_approval(text, text);
+drop function if exists tee_co_private.approval_view(public.orders, tee_co_private.order_approval_tokens);
+drop function if exists public.create_order_approval_token(text, integer);
+drop function if exists tee_co_private.apply_customer_order_change(uuid, jsonb, jsonb, text, text, text, text, text, text);
+drop function if exists tee_co_private.approval_token_hash(text);
+drop function if exists tee_co_private.iso_now();
+drop table if exists tee_co_private.order_approval_tokens;
 do $$
 declare r record; p record;
 begin

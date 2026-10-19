@@ -536,6 +536,49 @@ export async function upsertOrdersInSupabase(orders = []) {
   return Array.isArray(rows) ? rows.map(mapSupabaseOrderRowToOrder) : [];
 }
 
+// ---- Phase B: database functions instead of direct table writes ----------------------------
+// Signed-in customers cannot UPDATE orders directly (RLS). Their four portal actions go through
+// public.customer_order_action, which only changes the fields each action needs, on their own order.
+export function isOrdersServerBacked() {
+  return Boolean(getSupabaseConfigured() && getSupabaseClient());
+}
+
+export function describeOrderRpcError(error, fallback = "Unable to update your order right now.") {
+  const message = String(error?.message || "").trim();
+  if (error?.code === "PGRST202" || /could not find the function/i.test(message)) {
+    return "This action is not available yet. Please contact Tee & Co.";
+  }
+  if (["P0001", "P0002", "22023", "28000"].includes(error?.code) && message) return message;
+  return fallback;
+}
+
+export async function runCustomerOrderActionInSupabase(orderNumber, action, payload = {}) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("customer_order_action", {
+    p_order_number: String(orderNumber || "").trim(),
+    p_action: action,
+    p_payload: payload || {},
+  });
+  if (error) {
+    const failure = new Error(describeOrderRpcError(error));
+    failure.code = error.code || "ORDER_ACTION_FAILED";
+    failure.cause = error;
+    throw failure;
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  return row ? mapSupabaseOrderRowToOrder(row) : null;
+}
+
+// Staff only (checked in the database). Returns the raw token; only its hash is stored.
+export async function createOrderApprovalTokenInSupabase(orderNumber) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("create_order_approval_token", {
+    p_order_number: String(orderNumber || "").trim(),
+  });
+  if (error) throw error;
+  return typeof data === "string" ? data : "";
+}
+
 export function configureOrdersRepositoryForTests({
   supabaseClient = null,
   supabaseConfigured = null,

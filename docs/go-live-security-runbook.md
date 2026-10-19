@@ -36,11 +36,24 @@ editing their own profile, staff-created customers being linked automatically wh
 the same email. Staff (PIN or email login) see everything as before. Square webhooks and the
 notification functions use the service role and are not affected.
 
-Stops working after phase B until a server-side replacement exists (none of these has ever been used
-on live; checked against the Oct 16 backup: 0 uses):
-- The public `/approval/<order number>` page (it read and updated orders without signing in; today
-  anyone who guesses an order number could approve it). The email links to it also point to a
-  placeholder address today, so customers cannot reach it.
-- Customer actions that change an existing order from the portal: "I've sent my deposit",
-  "upload artwork to an existing order", "upload artwork later" and "I need artwork help". Customers
-  can still submit new orders with artwork; staff can still do all of these for them.
+Approval page and customer order changes (added Oct 19, 2026, phase B section 9, rehearsed in memory):
+- `/approval/<order number>?token=<64 hex>`: the link in the "quote ready for approval" email now
+  carries a one-time token. Staff create it automatically when a quote moves to "Awaiting Approval"
+  (`create_order_approval_token`, staff only). Only a SHA-256 hash is stored, in the new private
+  table `tee_co_private.order_approval_tokens` (no change to `orders`). The token expires after 30
+  days, works once, and a newer link cancels older ones. The page loads only order number, garment,
+  placement, decoration, quantity, status and artwork file names (`get_order_approval`); no name,
+  email, phone or prices. Approve / request changes goes through `submit_order_approval`. Artwork
+  previews come from the Netlify function `order-approval-previews` (10-minute signed links, uses the
+  existing `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TEE_CO_ALLOWED_UPLOAD_ORIGINS`; no new env
+  vars). A link without a token, or a wrong/expired one, shows "sign in to your customer portal".
+- Portal "I've sent my deposit", "upload artwork to an existing order", "upload artwork later" and
+  "I need artwork help" go through `customer_order_action`. It only works for a signed-in customer on
+  their own order (`auth.uid()` compared as text), changes only the fields that action needs, and
+  writes the activity log and staff notification on the server. Prices, totals and statuses other
+  than those cannot be changed by customers.
+- Between step 3 (code deployed) and step 6 (phase B) these database functions do not exist yet: the
+  portal actions fall back to the old direct update (still allowed then), and approval emails go out
+  with the old link (the page then asks the customer to sign in to the portal).
+- Rollback B removes the token table and all section 9 functions together with the RLS changes.
+  Customers' emailed approval links stop working after a rollback.
