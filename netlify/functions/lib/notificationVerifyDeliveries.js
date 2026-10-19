@@ -1,6 +1,6 @@
 import { normalizeNorthAmericanPhoneE164 } from "../../../src/lib/phoneNormalization.js";
 import { AUTHORITATIVE_NOTIFICATION_EVENTS } from "../../../src/lib/notificationEngineCutover.js";
-import { CUSTOMER_CONFIRMATION_EVENTS } from "../../../src/lib/customerConfirmationEvents.js";
+import { CUSTOMER_CONFIRMATION_EVENTS, buildApprovalNextStep } from "../../../src/lib/customerConfirmationEvents.js";
 
 const CHANNELS = ["email", "sms", "staff"];
 const MATERIALIZATION_MODES = new Set(["verify", "authoritative"]);
@@ -520,6 +520,16 @@ export async function createVerifyDeliveriesForAcceptedNotification({
       eventMergeContext.company_name || "Tee & Co"
     ),
   };
+  if (accepted.event_type === "quote_approved") {
+    // Server-computed (overrides anything sent by the caller): deposit still due -> link to the
+    // portal deposit page; otherwise "no action is needed". Used by quote_approved template v>=2.
+    const nextStep = buildApprovalNextStep(
+      { ...(order || {}), order_number: mergeContext.order_number },
+      normalizeText(process.env.VITE_SITE_URL || process.env.URL) || undefined
+    );
+    mergeContext.approval_next_step = nextStep.email;
+    mergeContext.approval_next_step_sms = nextStep.sms;
+  }
   const missingRequired = ["customer_name", "order_number", "company_name"]
     .filter((field) => !mergeContext[field]);
   if (missingRequired.length) {

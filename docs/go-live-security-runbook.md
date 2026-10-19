@@ -78,3 +78,6 @@ ask for artwork help. They go through the existing notification pipeline
 - Email problems never block the customer: the action is saved first, the email is announced
   afterwards and failures are only logged.
 - Works before phase B (portal actions use the old direct update) and after (database functions).
+
+### "Order approved" wording
+`customer-confirmation-notifications.sql` also publishes one new "Order approved" version (old versions are kept). The server fills in the next step: if a deposit is still due it says so (no amounts) and links to `/portal/orders/<n>/deposit`; otherwise it keeps "No action is needed". **Deploy the functions before running the SQL**, otherwise that line is blank. The rollback points the policy back to the previous version.

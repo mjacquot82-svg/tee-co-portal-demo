@@ -57,4 +57,31 @@ update public.notification_templates set email_enabled = true, updated_at = time
 where email_enabled = false
   and type in ('approval_changes_requested','deposit_sent_noted','artwork_uploaded','artwork_upload_later','artwork_help_requested');
 
+-- "Order approved" wording (quote_approved): the existing published version always says "No action is
+-- needed". Publish one additive version whose next step is filled in by the server
+-- ({{approval_next_step}}: deposit still due -> link to the portal deposit page, else "no action is
+-- needed"; never amounts) and point the current quote_approved policy at it. Deploy the code first:
+-- older functions leave {{approval_next_step}} empty.
+insert into public.notification_template_versions (id, template_type, version, name, email_subject, email_body, sms_message,
+  required_merge_fields, status, published_at, published_by, created_at)
+select 'quote_approved:v' || n.v, 'quote_approved', n.v, 'Order Approved',
+  'Order approved — {{order_number}}',
+  E'Hi {{customer_name}},\n\nYour order {{order_number}} has been approved.\n\n{{approval_next_step}}\n\nThanks,\nThe {{company_name}} Team',
+  'Hi {{customer_name}}, order {{order_number}} is approved. {{approval_next_step_sms}}',
+  '["customer_name", "order_number", "approval_next_step", "company_name"]'::jsonb,
+  'published', timezone('utc', now()), 'customer-confirmation-notifications', timezone('utc', now())
+from (select coalesce(max(version), 0) + 1 v from public.notification_template_versions where template_type = 'quote_approved') n
+where not exists (select 1 from public.notification_template_versions
+                  where template_type = 'quote_approved' and published_by = 'customer-confirmation-notifications');
+
+update public.notification_policies p
+set channel_template_assignments = (
+      select coalesce(jsonb_object_agg(k, case when v #>> '{}' like 'quote_approved:v%' then to_jsonb(ours.id) else v end), '{}'::jsonb)
+      from jsonb_each(p.channel_template_assignments) as e(k, v)),
+    updated_at = timezone('utc', now())
+from (select id from public.notification_template_versions
+      where template_type = 'quote_approved' and published_by = 'customer-confirmation-notifications') ours
+where p.event_type = 'quote_approved' and p.effective_to is null
+  and p.channel_template_assignments::text not like '%' || ours.id || '"%';
+
 commit;

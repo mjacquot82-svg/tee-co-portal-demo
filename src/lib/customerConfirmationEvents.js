@@ -70,3 +70,29 @@ export function orderMatchesConfirmation(eventType, order = {}) {
       return false;
   }
 }
+
+// "Order approved" email: the next step depends on whether a deposit is still due.
+// Computed on the server from the stored order (never from the caller); no amounts are included.
+export function isDepositStillDue(order = {}) {
+  const amount = Number(order.deposit_amount || 0);
+  const paid = Number(order.deposit_paid_amount || 0);
+  const status = text(order.deposit_status || order.deposit_workflow_status).toLowerCase();
+  if (order.deposit_required === false) return false;
+  if (!(amount > 0) || paid >= amount) return false;
+  return !/paid|received|waived|applied|not_required/.test(status);
+}
+
+export function buildApprovalNextStep(order = {}, siteUrl = "https://teeandco.jdsstudio.ca") {
+  const orderNumber = text(order.order_number);
+  if (orderNumber && isDepositStillDue(order)) {
+    const link = `${text(siteUrl).replace(/\/$/, "")}/portal/orders/${encodeURIComponent(orderNumber)}/deposit`;
+    return {
+      email: `Next step: a deposit is still needed before production can be scheduled. You can send it from your customer portal:\n${link}`,
+      sms: `A deposit is still needed before production can be scheduled: ${link}`,
+    };
+  }
+  return {
+    email: "No action is needed. We'll let you know when it enters production.",
+    sms: "No action is needed. We'll let you know when production begins.",
+  };
+}
