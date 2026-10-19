@@ -13,7 +13,7 @@ begin
     new.failed_pin_attempts := 0;
     new.pin_locked_until := null;
   elsif new.pin is null or btrim(new.pin) = '' then
-    null;
+    null; -- keep existing hash (phase C clears plaintext on purpose)
   else
     raise exception 'Staff PIN must be 4 digits' using errcode = '22023';
   end if;
