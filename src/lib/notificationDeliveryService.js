@@ -103,7 +103,7 @@ export function buildDefaultMergeFields(context = {}) {
   const approvalLink =
     mergeOverrides.approval_link ||
     context.approvalLink ||
-    (orderNumber ? buildCanonicalUrl(`/approval/${encodeURIComponent(orderNumber)}`) : "");
+    (orderNumber ? buildCanonicalUrl(`/portal/orders/${encodeURIComponent(orderNumber)}`) : "");
   const paymentLink =
     mergeOverrides.payment_link ||
     context.paymentLink ||

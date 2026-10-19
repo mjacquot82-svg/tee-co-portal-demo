@@ -87,7 +87,7 @@ export const SAMPLE_MERGE_DATA = Object.freeze({
   "{{quote_total}}": "$285.00",
   "{{deposit_amount}}": "$142.50",
   "{{balance_due}}": "$142.50",
-  "{{approval_link}}": buildCanonicalUrl("/approval/ORD-2024-001"),
+  "{{approval_link}}": buildCanonicalUrl("/portal/orders/ORD-2024-001"),
   "{{payment_link}}": buildCanonicalUrl("/portal/orders/ORD-2024-001/deposit"),
   "{{pickup_date}}": "July 15, 2024",
   "{{company_name}}": "Tee & Co",

@@ -10,14 +10,14 @@ describe("email/SMS links use the real site address", () => {
   it("defaults to the live site when VITE_SITE_URL is not set", () => {
     vi.stubEnv("VITE_SITE_URL", "");
     const fields = buildDefaultMergeFields({ order: { order_number: "TC-1001" } });
-    expect(fields.approval_link).toBe("https://teeandco.jdsstudio.ca/approval/TC-1001");
+    expect(fields.approval_link).toBe("https://teeandco.jdsstudio.ca/portal/orders/TC-1001");
     expect(fields.payment_link).toBe("https://teeandco.jdsstudio.ca/portal/orders/TC-1001/deposit");
   });
 
   it("uses VITE_SITE_URL (e.g. staging)", () => {
     vi.stubEnv("VITE_SITE_URL", "https://teeandco-staging.netlify.app/");
     const fields = buildDefaultMergeFields({ order: { order_number: "TC 1002" } });
-    expect(fields.approval_link).toBe("https://teeandco-staging.netlify.app/approval/TC%201002");
+    expect(fields.approval_link).toBe("https://teeandco-staging.netlify.app/portal/orders/TC%201002");
     expect(fields.payment_link).toBe("https://teeandco-staging.netlify.app/portal/orders/TC%201002/deposit");
   });
 
