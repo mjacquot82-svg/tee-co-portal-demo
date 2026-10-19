@@ -6,6 +6,7 @@ import {
   renderNotificationTemplatePreview,
 } from "./notificationTemplatesStore";
 import { supabase } from "./supabaseClient";
+import { buildCanonicalUrl } from "./siteUrl";
 import {
   processNotificationEventThroughEngine,
   resolveNotificationEngineCutover,
@@ -65,7 +66,7 @@ function normalizeMergeFields(mergeFields = {}) {
   }, {});
 }
 
-function buildDefaultMergeFields(context = {}) {
+export function buildDefaultMergeFields(context = {}) {
   const order = context.order || {};
   const paymentRequest = context.paymentRequest || {};
   const payment = context.payment || {};
@@ -102,12 +103,12 @@ function buildDefaultMergeFields(context = {}) {
   const approvalLink =
     mergeOverrides.approval_link ||
     context.approvalLink ||
-    (orderNumber ? `https://portal.teeandco.local/approval/${orderNumber}` : "");
+    (orderNumber ? buildCanonicalUrl(`/approval/${encodeURIComponent(orderNumber)}`) : "");
   const paymentLink =
     mergeOverrides.payment_link ||
     context.paymentLink ||
     paymentRequest.provider_checkout_url ||
-    (orderNumber ? `https://portal.teeandco.local/deposit/${orderNumber}` : "");
+    (orderNumber ? buildCanonicalUrl(`/portal/orders/${encodeURIComponent(orderNumber)}/deposit`) : "");
   const pickupDate = normalizeText(
     mergeOverrides.pickup_date || context.pickupDate || order.pickup_date || order.due_date
   );
