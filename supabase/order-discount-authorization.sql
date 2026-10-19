@@ -1,6 +1,9 @@
 -- Only signed-in Tee & Co operational staff (owner / manager / staff, including PIN sessions)
--- may set, change or remove an order discount. Run after rls-hardening.sql and
--- staff-pin-auth.sql. Idempotent.
+-- may set, change or remove an order discount. Run after phase B (rls-hardening.sql); works with
+-- phases A/B/C and the server-side PIN sessions (staff check = public.is_tee_co_operational_staff()).
+-- Idempotent. No id comparisons, so live's text ids are unaffected.
+-- Customer changes made through the phase B database functions (customer_order_action,
+-- submit_order_approval) never touch discount fields and pass.
 -- Discount data lives in orders.order_metadata->'owner_discount' and in the order snapshot
 -- orders.quote->'__tee_co_order_snapshot' (discount_type / discount_value / discount_reason);
 -- both must agree. Anyone else (customers, anon) gets error 42501 if they try to change it.
@@ -9,6 +12,9 @@
 -- (Generalises the owner-only guard first prototyped on staging as staging_guard_owner_discount.)
 
 begin;
+
+-- (Snapshot discount values that are not plain numbers, e.g. legacy text, count as 0 instead of
+-- making every update of that order fail.)
 
 create or replace function tee_co_private.guard_order_discount()
  RETURNS trigger
@@ -29,10 +35,12 @@ begin
     old_snapshot := coalesce(old.quote->'__tee_co_order_snapshot','{}'::jsonb);
   end if;
   snapshot_discount := jsonb_build_array(coalesce(new_snapshot->>'discount_type',''),
-    coalesce(nullif(new_snapshot->>'discount_value','')::numeric,0),
+    case when btrim(coalesce(new_snapshot->>'discount_value','')) ~ '^-?[0-9]+(\.[0-9]+)?$'
+      then btrim(new_snapshot->>'discount_value')::numeric else 0 end,
     coalesce(new_snapshot->>'discount_reason',''));
   old_snapshot_discount := jsonb_build_array(coalesce(old_snapshot->>'discount_type',''),
-    coalesce(nullif(old_snapshot->>'discount_value','')::numeric,0),
+    case when btrim(coalesce(old_snapshot->>'discount_value','')) ~ '^-?[0-9]+(\.[0-9]+)?$'
+      then btrim(old_snapshot->>'discount_value')::numeric else 0 end,
     coalesce(old_snapshot->>'discount_reason',''));
   discount_changed := new_metadata is distinct from old_metadata
     or snapshot_discount is distinct from old_snapshot_discount
@@ -51,10 +59,11 @@ begin
     raise exception 'Only Tee & Co staff can change discounts' using errcode = '42501';
   end if;
   if discount_changed and new_metadata <> 'null'::jsonb then
-    if new_metadata->>'type' not in ('percent','fixed')
+    if new_metadata->>'type' is null or new_metadata->>'value' is null
+      or new_metadata->>'type' not in ('percent','fixed')
+      or btrim(new_metadata->>'value') !~ '^-?[0-9]+(\.[0-9]+)?$'
       or (new_metadata->>'value')::numeric <= 0
-      or ((new_metadata->>'type') = 'percent' and (new_metadata->>'value')::numeric > 100)
-      or new_metadata->>'type' is null or new_metadata->>'value' is null then
+      or ((new_metadata->>'type') = 'percent' and (new_metadata->>'value')::numeric > 100) then
       raise exception 'Invalid discount' using errcode = '23514';
     end if;
     if snapshot_discount is distinct from jsonb_build_array(new_metadata->>'type',
@@ -68,7 +77,7 @@ begin
 end $function$;
 
 revoke all on function tee_co_private.guard_order_discount() from public, anon;
-grant execute on function tee_co_private.guard_order_discount() to authenticated;
+grant execute on function tee_co_private.guard_order_discount() to authenticated, service_role;
 
 drop trigger if exists staging_guard_owner_discount on public.orders;
 drop function if exists tee_co_private.guard_owner_discount();
