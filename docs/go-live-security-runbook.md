@@ -57,3 +57,5 @@ Approval page and customer order changes (added Oct 19, 2026, phase B section 9,
   with the old link (the page then asks the customer to sign in to the portal).
 - Rollback B removes the token table and all section 9 functions together with the RLS changes.
   Customers' emailed approval links stop working after a rollback.
+- The old public `/quote/<order number>` page was removed (Oct 19, 2026): nothing linked to it and
+  phase B would have broken it. Customers see quotes in the portal.
