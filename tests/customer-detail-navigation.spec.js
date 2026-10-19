@@ -16,8 +16,6 @@ const ownerUser = {
   id: "staff-owner-default",
   name: "Owner / Admin",
   role: "Owner",
-  authMode: "temporary-owner",
-  isTemporaryOwnerSession: true,
 };
 
 async function installCustomerNavigationState(page) {

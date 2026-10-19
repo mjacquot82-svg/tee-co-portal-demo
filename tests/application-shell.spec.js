@@ -5,8 +5,6 @@ const owner = {
   id: "application-shell-owner",
   name: "Owner / Admin",
   role: "Owner",
-  authMode: "temporary-owner",
-  isTemporaryOwnerSession: true,
 };
 
 async function installOperationalSession(page, user) {
