@@ -49,6 +49,7 @@ import {
   upsertOrdersInSupabase,
 } from "./ordersRepository";
 import { buildCanonicalUrl } from "./siteUrl";
+import { notifyCustomerOrderAction } from "./customerConfirmationNotifications";
 import { canUseLocalPersistenceFallback, getPersistenceMode } from "./persistenceMode";
 import { ensureTeeCoProductionProcess } from "../integrations/teeCoProductionProcess";
 import { recordOrderTransitionDiagnostic } from "./orderTransitionDiagnostics";
@@ -2142,10 +2143,12 @@ export async function applyCustomerOrderAction(orderNumber, action, payload = {}
     })
     .catch(() => undefined);
   const result = await queued;
-  if (result && result.fallback === true) {
-    return updateStoredOrder(orderNumber, localUpdates);
-  }
-  return result;
+  const saved =
+    result && result.fallback === true ? await updateStoredOrder(orderNumber, localUpdates) : result;
+  // Customer confirmation email (existing notification pipeline). Never awaited by the caller's
+  // success path and never throws, so email problems cannot block or undo the action.
+  if (saved) void notifyCustomerOrderAction(action, saved);
+  return saved;
 }
 
 export function updateStoredOrder(orderNumber, updates) {

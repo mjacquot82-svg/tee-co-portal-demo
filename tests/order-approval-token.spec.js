@@ -12,8 +12,13 @@ const VIEW = {
 };
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
 
-async function intercept(page, { getStatus = 200, getBody = VIEW } = {}) {
-  const seen = { tableReads: [], rpc: [], previews: 0 };
+async function intercept(page, { getStatus = 200, getBody = VIEW, emailStatus = 200 } = {}) {
+  const seen = { tableReads: [], rpc: [], previews: 0, emails: [] };
+  await page.route("**/.netlify/functions/notification-event-accept", (route) => {
+    const body = route.request().postDataJSON();
+    seen.emails.push(body.businessEvent);
+    return route.fulfill({ status: emailStatus, json: emailStatus === 200 ? { accepted: true, businessEvent: body.businessEvent } : { error: "down" } });
+  });
   await page.route("**/.netlify/functions/order-approval-previews", (route) => {
     seen.previews += 1;
     return route.fulfill({ json: { ok: true, files: [{ id: "f1", url: "https://signed.approval-tests.invalid/logo.png" }] } });
@@ -28,7 +33,7 @@ async function intercept(page, { getStatus = 200, getBody = VIEW } = {}) {
     if (url.pathname === "/rest/v1/rpc/submit_order_approval") {
       const body = route.request().postDataJSON();
       seen.rpc.push({ name: "submit", body });
-      return route.fulfill({ json: { ...VIEW, decided: true, decision: body.p_decision } });
+      return route.fulfill({ json: { ...VIEW, decided: true, decision: body.p_decision, decided_at: "2026-10-19T17:00:00.123456+00:00" } });
     }
     if (url.pathname.startsWith("/rest/v1/orders")) seen.tableReads.push(url.pathname);
     return route.fulfill({ json: [] });
@@ -59,14 +64,18 @@ test("tokenised link shows minimum fields, preview, and records approval once", 
   expect(seen.rpc[1].body).toEqual({ p_order_number: "TC-APPROVE-1", p_token: TOKEN, p_decision: "approve", p_note: "Looks great" });
   expect(seen.previews).toBe(1);
   expect(seen.tableReads).toEqual([]);
+  await expect.poll(() => seen.emails.length).toBe(1);
+  expect(seen.emails[0]).toMatchObject({ event_type: "quote_approved", subject_id: "TC-APPROVE-1", occurrence_id: "quote_approved:TC-APPROVE-1" });
 });
 
-test("request changes path", async ({ page }) => {
-  const seen = await intercept(page);
+test("request changes path (email service down does not block it)", async ({ page }) => {
+  const seen = await intercept(page, { emailStatus: 500 });
   await page.goto(`/approval/TC-APPROVE-1?token=${TOKEN}`);
   await page.getByRole("button", { name: "Request Changes" }).click();
   await expect(page.getByTestId("approval-decided")).toContainText("change request has been sent");
   expect(seen.rpc[1].body.p_decision).toBe("request_changes");
+  await expect.poll(() => seen.emails.length).toBe(1);
+  expect(seen.emails[0]).toMatchObject({ event_type: "approval_changes_requested", occurrence_id: "approval_changes_requested:TC-APPROVE-1:2026-10-19T17:00:00.123456+00:00" });
 });
 
 test("expired or wrong token shows the invalid-link message", async ({ page }) => {

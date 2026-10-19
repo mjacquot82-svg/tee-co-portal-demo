@@ -1,4 +1,10 @@
 import { createVerifyDeliveriesForAcceptedNotification } from "./lib/notificationVerifyDeliveries.js";
+import {
+  CUSTOMER_CONFIRMATION_EVENTS,
+  orderMatchesConfirmation,
+  parseCustomerConfirmationOccurrenceId,
+  sameInstant,
+} from "../../src/lib/customerConfirmationEvents.js";
 
 const SUPPORTED_EVENT_TYPES = new Set([
   "new_customer_request",
@@ -13,7 +19,10 @@ const SUPPORTED_EVENT_TYPES = new Set([
   "order_in_production",
   "order_ready_for_pickup",
   "order_completed",
+  ...CUSTOMER_CONFIRMATION_EVENTS,
 ]);
+const CUSTOMER_CONFIRMATION_TYPES = new Set(CUSTOMER_CONFIRMATION_EVENTS);
+const DEFAULT_SITE_URL = "https://teeandco.jdsstudio.ca";
 
 function json(statusCode, body) {
   return {
@@ -310,6 +319,49 @@ function validateBusinessEvent(value = {}) {
   return row;
 }
 
+// Customer confirmation events come from an unauthenticated browser call. Accept one only when
+// the stored order really shows that change and the event is tied to the order's current
+// updated_at (one email per real change; nothing can be replayed or invented). The email content is
+// rebuilt here from the order number only, so a caller cannot inject text or links.
+async function verifyCustomerConfirmation(businessEvent, { supabaseUrl, serviceRoleKey }) {
+  const orderNumber = normalizeText(businessEvent.subject_id);
+  if (businessEvent.subject_type !== "order" || !orderNumber) return null;
+  const stamp = parseCustomerConfirmationOccurrenceId(
+    businessEvent.event_type,
+    orderNumber,
+    businessEvent.occurrence_id
+  );
+  if (!stamp) return null;
+  const query = new URLSearchParams({
+    select: "order_number,updated_at,approval_status,artwork_status,deposit_details,quote",
+    order_number: `eq.${orderNumber}`,
+    limit: "1",
+  });
+  const response = await fetch(`${supabaseUrl}/rest/v1/orders?${query}`, {
+    headers: restHeaders(serviceRoleKey),
+  });
+  const rows = await readJson(response);
+  const order = response.ok && Array.isArray(rows) ? rows[0] : null;
+  if (!order || !sameInstant(order.updated_at, stamp)) return null;
+  if (!orderMatchesConfirmation(businessEvent.event_type, order)) return null;
+  const siteUrl = normalizeText(process.env.VITE_SITE_URL || process.env.URL || DEFAULT_SITE_URL).replace(/\/$/, "");
+  return {
+    ...businessEvent,
+    id: `customer-confirmation:${businessEvent.event_type}:${orderNumber}:${stamp}`,
+    source: "customer_confirmation",
+    actor_type: "customer",
+    actor_id: "",
+    occurred_at: normalizeText(order.updated_at) || businessEvent.occurred_at,
+    payload: {
+      notificationMergeContext: {
+        order_number: orderNumber,
+        portal_link: `${siteUrl}/portal/orders/${encodeURIComponent(orderNumber)}`,
+      },
+      legacyNotificationContext: { orderNumber, source: "customer_confirmation" },
+    },
+  };
+}
+
 export async function handler(event) {
   if (event.httpMethod === "OPTIONS") return json(204, {});
   if (event.httpMethod !== "POST") {
@@ -338,6 +390,17 @@ export async function handler(event) {
     businessEvent = validateBusinessEvent(payload.businessEvent);
   } catch (error) {
     return json(400, { error: error.message });
+  }
+
+  if (CUSTOMER_CONFIRMATION_TYPES.has(businessEvent.event_type)) {
+    const verified = await verifyCustomerConfirmation(businessEvent, {
+      supabaseUrl,
+      serviceRoleKey,
+    }).catch(() => null);
+    if (!verified) {
+      return json(409, { error: "This confirmation does not match the order." });
+    }
+    businessEvent = verified;
   }
 
   const response = await fetch(

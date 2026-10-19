@@ -59,3 +59,22 @@ Approval page and customer order changes (added Oct 19, 2026, phase B section 9,
   Customers' emailed approval links stop working after a rollback.
 - The old public `/quote/<order number>` page was removed (Oct 19, 2026): nothing linked to it and
   phase B would have broken it. Customers see quotes in the portal.
+
+## Customer confirmation emails (added Oct 19, 2026)
+Customers get a short plain-text email (same style as the existing customer emails, no prices or
+amounts) when they: approve on the approval page (the existing "Order approved" email), request
+changes on the approval page, mark their deposit as sent, upload artwork, choose "upload later", or
+ask for artwork help. They go through the existing notification pipeline
+(`notification-event-accept` -> `notification_business_events` -> notifications -> deliveries).
+- Run `supabase/customer-confirmation-notifications.sql` once (any time; it does not depend on
+  phases A/B/C). It adds 5 email-only customer policies + templates; owners can edit the wording in
+  Notifications. Rollback: `supabase/customer-confirmation-notifications-rollback.sql` (switches the
+  5 policies off; template versions are immutable and stay unused).
+- Emails are actually sent only where the existing customer emails are sent: Functions running with
+  `VITE_NOTIFICATION_ENGINE_CUTOVER_MODE=authoritative` and the scheduled dispatcher on.
+- One email per real change: the server only accepts the event when the stored order shows that
+  change and the event matches the order's current `updated_at`; repeats are ignored by the
+  existing unique keys. The email text is rebuilt on the server from the order number.
+- Email problems never block the customer: the action is saved first, the email is announced
+  afterwards and failures are only logged.
+- Works before phase B (portal actions use the old direct update) and after (database functions).

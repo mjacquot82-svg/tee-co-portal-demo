@@ -8,6 +8,7 @@ import {
   loadOrderApproval,
   loadOrderApprovalPreviews,
 } from "../lib/orderApprovalService";
+import { notifyApprovalDecision } from "../lib/customerConfirmationNotifications";
 
 const PAGE_STYLE = {
   maxWidth: "900px",
@@ -92,6 +93,7 @@ function TokenApprovalReview() {
       const data = await decideOrderApproval(orderNumber, token, decision, customerNote);
       if (data) setApproval(data);
       setState("decided");
+      void notifyApprovalDecision(orderNumber, decision, data || {});
     } catch (error) {
       setErrorMessage(error?.message || "Unable to record your decision right now.");
     } finally {

@@ -1,9 +1,13 @@
 import { normalizeNorthAmericanPhoneE164 } from "../../../src/lib/phoneNormalization.js";
 import { AUTHORITATIVE_NOTIFICATION_EVENTS } from "../../../src/lib/notificationEngineCutover.js";
+import { CUSTOMER_CONFIRMATION_EVENTS } from "../../../src/lib/customerConfirmationEvents.js";
 
 const CHANNELS = ["email", "sms", "staff"];
 const MATERIALIZATION_MODES = new Set(["verify", "authoritative"]);
-const AUTHORITATIVE_EVENT_TYPES = new Set(AUTHORITATIVE_NOTIFICATION_EVENTS);
+const AUTHORITATIVE_EVENT_TYPES = new Set([
+  ...AUTHORITATIVE_NOTIFICATION_EVENTS,
+  ...CUSTOMER_CONFIRMATION_EVENTS,
+]);
 
 function normalizeText(value) {
   return String(value ?? "").trim();

@@ -380,6 +380,7 @@ returns jsonb language sql stable set search_path = '' as $$
     'artwork_approval_status', coalesce(p_order.artwork_approval_status, ''),
     'decided', p_token.used_at is not null,
     'decision', p_token.used_decision,
+    'decided_at', p_token.used_at,
     'expires_at', p_token.expires_at,
     'artwork_files', (
       select coalesce(jsonb_agg(jsonb_build_object(
