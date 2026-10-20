@@ -5,6 +5,11 @@ import {
   getPersistenceMode,
 } from "./persistenceMode";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
+import {
+  ORDER_PRODUCT_IMAGE_KEYS,
+  externalizeOrderProductImages,
+  isInlineImage,
+} from "./orderImageStorage";
 
 const ORDERS_TABLE = "orders";
 const ORDER_SNAPSHOT_KEY = "__tee_co_order_snapshot";
@@ -120,6 +125,11 @@ export function sanitizePersistedValue(value) {
   const cleaned = {};
   for (const [key, nestedValue] of Object.entries(value)) {
     if (["file", "blob"].includes(key)) continue;
+    // Last line of defence: inline product images never reach the database.
+    if (ORDER_PRODUCT_IMAGE_KEYS.has(key) && isInlineImage(nestedValue)) {
+      cleaned[key] = "";
+      continue;
+    }
     if (["data_url", "dataUrl", "preview_url", "previewUrl", "url", "asset_url", "src"].includes(key)) {
       const text = String(nestedValue || "");
       if (text.startsWith("data:") || text.startsWith("blob:")) continue;
@@ -490,8 +500,38 @@ export async function fetchOrdersFromSupabase() {
   return rows.map(mapSupabaseOrderRowToOrder);
 }
 
+async function prepareOrderForPersistence(order) {
+  const client = getSupabaseClient();
+  if (!client || !getSupabaseConfigured()) return order;
+  return externalizeOrderProductImages(order, client, {
+    onError: (error) => {
+      console.warn("Inline order image could not be moved to Storage; dropping it.", error?.message || error);
+    },
+  });
+}
+
+function stableJson(value) {
+  return JSON.stringify(value ?? null);
+}
+
+// Only the columns whose values actually changed. Timestamps used for audit
+// are always included so updated_at/updated_by stay accurate.
+export function buildSupabaseOrderUpdatePatch(previousOrder, nextOrder) {
+  const nextPayload = buildSupabaseOrderPayload(nextOrder);
+  if (!previousOrder) return nextPayload;
+  const previousPayload = buildSupabaseOrderPayload(previousOrder);
+  const patch = {};
+  for (const [column, value] of Object.entries(nextPayload)) {
+    if (column === "created_at") continue;
+    if (column === "updated_at" || column === "updated_by_staff_user_id" || stableJson(previousPayload[column]) !== stableJson(value)) {
+      patch[column] = value;
+    }
+  }
+  return patch;
+}
+
 export async function createOrderInSupabase(order) {
-  const payload = buildSupabaseOrderPayload(order);
+  const payload = buildSupabaseOrderPayload(await prepareOrderForPersistence(order));
   const row = await runOrderQuery(
     "create",
     (client) =>
@@ -502,8 +542,11 @@ export async function createOrderInSupabase(order) {
   return row ? mapSupabaseOrderRowToOrder(row) : order;
 }
 
-export async function updateOrderInSupabase(orderNumber, order) {
-  const payload = buildSupabaseOrderPayload(order);
+export async function updateOrderInSupabase(orderNumber, order, previousOrder = null) {
+  const preparedOrder = await prepareOrderForPersistence(order);
+  const payload = previousOrder
+    ? buildSupabaseOrderUpdatePatch(previousOrder, preparedOrder)
+    : buildSupabaseOrderPayload(preparedOrder);
   const row = await runOrderQuery(
     "update",
     (client) =>
@@ -520,7 +563,8 @@ export async function updateOrderInSupabase(orderNumber, order) {
 }
 
 export async function upsertOrdersInSupabase(orders = []) {
-  const payload = (Array.isArray(orders) ? orders : []).map(buildSupabaseOrderPayload);
+  const preparedOrders = await Promise.all((Array.isArray(orders) ? orders : []).map(prepareOrderForPersistence));
+  const payload = preparedOrders.map(buildSupabaseOrderPayload);
   if (!payload.length) return [];
 
   const rows = await runOrderQuery(

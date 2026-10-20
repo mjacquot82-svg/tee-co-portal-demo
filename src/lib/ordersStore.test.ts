@@ -375,7 +375,11 @@ describe("orders browser cache", () => {
     expect(finalOrder.artwork_approval_status).toBe("Approved");
     expect(finalOrder.deposit_requirement_status).toBe("Not Required");
     expect(persistedPayloads).toHaveLength(2);
-    expect(persistedPayloads[1].artwork_approval_status).toBe("Approved");
+    // Staff saves send only changed columns (plus the quote snapshot and audit fields).
+    expect(persistedPayloads[0].artwork_approval_status).toBe("Approved");
+    expect(persistedPayloads[1].deposit_requirement_status).toBe("Not Required");
+    expect(persistedPayloads[1]).not.toHaveProperty("artwork_approval_status");
+    expect((persistedPayloads[1].quote as any).__tee_co_order_snapshot.artwork_approval_status).toBe("Approved");
   });
 
   test("keeps deposit workflow activity internal without emitting a second customer notification", async () => {

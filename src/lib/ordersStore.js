@@ -1807,7 +1807,7 @@ async function performStoredOrderUpdate(orderNumber, updates) {
   if (!updatedOrder) return null;
 
   const persistedOrder = normalizeStoredOrder(
-    await updateOrderInSupabase(orderNumber, updatedOrder)
+    await updateOrderInSupabase(orderNumber, updatedOrder, previousOrder)
   );
   updatedOrder = persistedOrder;
   recordSuccessfulOrderWrite(persistedOrder);
