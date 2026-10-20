@@ -109,3 +109,22 @@ describe("changed-fields-only order updates", () => {
     expect(patch).toHaveProperty("line_items");
   });
 });
+
+describe("garment photo sources", () => {
+  it("prefers the first persistable source and skips inline/blob values", async () => {
+    const { pickPersistableImageSource } = await import("./orderImageStorage");
+    expect(pickPersistableImageSource(PNG, "blob:x", "https://cdn.test/g.png", "https://cdn.test/p.png")).toBe("https://cdn.test/g.png");
+    expect(pickPersistableImageSource("", "https://cdn.test/p.png")).toBe("https://cdn.test/p.png");
+    expect(pickPersistableImageSource(PNG)).toBe("");
+  });
+
+  it("uploads garment photos under garment-images and keeps inline on failure", async () => {
+    const { externalizeGarmentImage } = await import("./garmentLibraryStore");
+    const ok = fakeClient();
+    const url = await externalizeGarmentImage(PNG, ok.client);
+    expect(url).toMatch(/^https:\/\/cdn\.test\/garment-images\/[0-9a-f]{64}\.png$/);
+    expect(await externalizeGarmentImage("https://cdn.test/already.png", ok.client)).toBe("https://cdn.test/already.png");
+    const bad = fakeClient({ failUpload: true });
+    expect(await externalizeGarmentImage(PNG, bad.client)).toBe(PNG);
+  });
+});

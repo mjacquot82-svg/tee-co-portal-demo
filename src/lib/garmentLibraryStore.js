@@ -1,3 +1,4 @@
+import { GARMENT_IMAGES_PREFIX, isInlineImage, uploadInlineImageToStorage } from "./orderImageStorage";
 import { useEffect, useSyncExternalStore } from "react";
 import { hasBrowserStorage } from "./browserStorage";
 import { normalizeGarmentText } from "./garmentTextNormalization";
@@ -1000,6 +1001,20 @@ export function useGarmentLibraryStatus() {
   };
 }
 
+// Garment photos live in the product-images bucket; the row stores a URL.
+// Old rows may still hold an inline data: URL, which every reader renders as-is.
+// If the upload fails the inline value is kept so the photo is never lost.
+export async function externalizeGarmentImage(image, client = supabase) {
+  if (!isInlineImage(image) || !client) return image;
+  try {
+    const { publicUrl } = await uploadInlineImageToStorage(image, client, { prefix: GARMENT_IMAGES_PREFIX });
+    return publicUrl;
+  } catch (error) {
+    console.warn("[garmentLibraryStore] garment image upload failed; keeping inline image", error?.message || error);
+    return image;
+  }
+}
+
 export async function createGarmentLibraryItem(values) {
   const normalized = normalizeGarmentLibraryItem(values);
   if (!normalized) {
@@ -1038,6 +1053,7 @@ export async function createGarmentLibraryItem(values) {
 
   try {
     const { id: _unusedId, ...insertPayload } = normalized;
+    insertPayload.image = await externalizeGarmentImage(insertPayload.image);
     console.info("[garmentLibraryStore] remote garment insert start", {
       table: GARMENT_LIBRARY_TABLE,
       insertCount: 1,
@@ -1138,7 +1154,7 @@ export async function updateGarmentLibraryItem(itemId, updates) {
       category_lookup_id: updated.category_lookup_id || null,
       brand_lookup_id: updated.brand_lookup_id || null,
       garment_model_lookup_id: updated.garment_model_lookup_id || null,
-      image: updated.image,
+      image: await externalizeGarmentImage(updated.image),
       variants: updated.variants,
       sizes: updated.sizes,
       default_placements: updated.default_placements,

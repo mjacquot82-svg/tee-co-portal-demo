@@ -54,11 +54,41 @@ async function sha256Hex(bytes) {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export async function buildOrderImageStoragePath(dataUrl) {
+export const GARMENT_IMAGES_PREFIX = "garment-images";
+
+export async function buildOrderImageStoragePath(dataUrl, prefix = ORDER_IMAGES_PREFIX) {
   const parsed = parseInlineImage(dataUrl);
   if (!parsed) return null;
   const hash = await sha256Hex(parsed.bytes);
-  return { ...parsed, hash, path: `${ORDER_IMAGES_PREFIX}/${hash}.${parsed.extension}` };
+  return { ...parsed, hash, path: `${prefix}/${hash}.${parsed.extension}` };
+}
+
+// First candidate that is safe to store on an order (a URL/path, never an
+// inline data: or browser-only blob: value).
+export function pickPersistableImageSource(...candidates) {
+  for (const candidate of candidates) {
+    const value = typeof candidate === "string" ? candidate.trim() : "";
+    if (value && !value.startsWith("data:") && !value.startsWith("blob:")) return value;
+  }
+  return "";
+}
+
+// Upload one inline image (content-addressed) and return its public URL.
+// Throws on failure so callers decide whether to keep or drop the value.
+export async function uploadInlineImageToStorage(dataUrl, client, { prefix = ORDER_IMAGES_PREFIX } = {}) {
+  if (!client?.storage) throw new Error("Storage client unavailable");
+  const target = await buildOrderImageStoragePath(dataUrl, prefix);
+  if (!target) throw new Error("Not an inline image");
+  const bucket = client.storage.from(ORDER_IMAGES_BUCKET);
+  const { error } = await bucket.upload(target.path, target.bytes, {
+    contentType: target.contentType,
+    cacheControl: "31536000",
+    upsert: false,
+  });
+  if (error && !/exists|duplicate|409/i.test(`${error.message || ""} ${error.statusCode || ""}`)) throw error;
+  const publicUrl = bucket.getPublicUrl(target.path)?.data?.publicUrl;
+  if (!publicUrl) throw new Error("No public URL for uploaded image");
+  return { publicUrl, path: target.path, hash: target.hash, bytes: target.bytes.length, contentType: target.contentType };
 }
 
 // Visit every product-image key anywhere in the value.
@@ -99,19 +129,8 @@ export async function externalizeOrderProductImages(order, client, { onError = (
   const replacements = new Map();
   for (const dataUrl of inlineImages) {
     try {
-      if (!client?.storage) throw new Error("Storage client unavailable");
-      const target = await buildOrderImageStoragePath(dataUrl);
-      if (!target) continue;
-      const bucket = client.storage.from(ORDER_IMAGES_BUCKET);
-      const { error } = await bucket.upload(target.path, target.bytes, {
-        contentType: target.contentType,
-        cacheControl: "31536000",
-        upsert: false,
-      });
-      // Content-addressed paths: "already exists" means the same bytes are there.
-      if (error && !/exists|duplicate|409/i.test(`${error.message || ""} ${error.statusCode || ""}`)) throw error;
-      const publicUrl = bucket.getPublicUrl(target.path)?.data?.publicUrl;
-      if (publicUrl) replacements.set(dataUrl, publicUrl);
+      const { publicUrl } = await uploadInlineImageToStorage(dataUrl, client);
+      replacements.set(dataUrl, publicUrl);
     } catch (error) {
       onError(error);
     }

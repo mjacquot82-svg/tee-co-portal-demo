@@ -1,3 +1,4 @@
+import { pickPersistableImageSource } from "../lib/orderImageStorage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { useCatalogLookups } from "../lib/catalogLookupsStore";
@@ -233,6 +234,8 @@ export default function CustomerPortalRequestOrder() {
         brand: item.brand || "",
         category: item.category || "",
         selected_color: item.selectedColor,
+        // Garment photo URL chosen on the storefront (inline values are already stripped).
+        product_image: item.imageSrc || "",
         placement: item.placement,
         decoration_type: item.decorationType,
         artwork_id: item.artworkId || "",
@@ -272,7 +275,8 @@ export default function CustomerPortalRequestOrder() {
       product_id: product?.id || lineItem.product_id,
       garment: product?.name || "Custom garment",
       category: getStorefrontProductCategoryLabel(product, storefrontCategoryLookups),
-      product_image: getStorefrontProductImage(product),
+      // Prefer the garment photo the customer picked; never persist inline data.
+      product_image: pickPersistableImageSource(lineItem.product_image, getStorefrontProductImage(product)),
       product_notes: product?.notes || "",
       placement,
       placements: placement ? [{ placement, decoration_type: decorationType }] : [],

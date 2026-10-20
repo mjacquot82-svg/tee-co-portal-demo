@@ -6,6 +6,8 @@
 //   node scripts/migrate-order-images-to-storage.mjs --dry-run            (default, read-only)
 //   node scripts/migrate-order-images-to-storage.mjs --execute [--order TC-123]
 //   node scripts/migrate-order-images-to-storage.mjs --rollback --rollback-file <dir>/backup.json
+//   add --target garments to do the same for garment_library_items.image
+//   (garment-images/<sha256>.<ext>). Run garments FIRST, then orders.
 //
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 // Safety:
@@ -21,28 +23,48 @@ import path from "node:path";
 import process from "node:process";
 import { createClient } from "@supabase/supabase-js";
 import {
+  GARMENT_IMAGES_PREFIX,
   ORDER_IMAGES_BUCKET,
+  ORDER_IMAGES_PREFIX,
   buildOrderImageStoragePath,
+  isInlineImage,
   collectInlineProductImages,
   replaceInlineProductImages,
 } from "../src/lib/orderImageStorage.js";
 
-const JSON_COLUMNS = ["quote", "line_items", "placements", "artwork_files", "order_metadata"];
+const TARGETS = {
+  orders: { table: "orders", key: "order_number", columns: ["quote", "line_items", "placements", "artwork_files", "order_metadata"], prefix: ORDER_IMAGES_PREFIX },
+  garments: { table: "garment_library_items", key: "id", columns: ["image"], prefix: GARMENT_IMAGES_PREFIX },
+};
+let T = TARGETS.orders;
+let JSON_COLUMNS = T.columns;
+
+function collectImages(target, row) {
+  if (target === TARGETS.garments) return new Set(isInlineImage(row.image) ? [row.image] : []);
+  return collectInlineProductImages(Object.fromEntries(JSON_COLUMNS.map((c) => [c, row[c]])));
+}
+
+function replaceImages(target, column, value, urls) {
+  if (target === TARGETS.garments) return isInlineImage(value) && urls.has(value) ? urls.get(value) : value;
+  return replaceInlineProductImages(value, urls);
+}
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const jsonHash = (value) => sha(JSON.stringify(value ?? null));
 
 function parseArgs(argv) {
-  const args = { mode: "dry-run", orders: [], outputDir: "", rollbackFile: "" };
+  const args = { mode: "dry-run", orders: [], outputDir: "", rollbackFile: "", target: "orders" };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--dry-run") args.mode = "dry-run";
     else if (arg === "--execute") args.mode = "execute";
     else if (arg === "--rollback") args.mode = "rollback";
-    else if (arg === "--order") args.orders.push(argv[++i]);
+    else if (arg === "--order" || arg === "--id") args.orders.push(argv[++i]);
+    else if (arg === "--target") args.target = argv[++i];
     else if (arg === "--output-dir") args.outputDir = argv[++i];
     else if (arg === "--rollback-file") args.rollbackFile = argv[++i];
     else throw new Error(`Unknown argument: ${arg}`);
   }
+  if (!TARGETS[args.target]) throw new Error("--target must be orders or garments");
   if (args.mode === "rollback" && !args.rollbackFile) throw new Error("--rollback needs --rollback-file");
   return args;
 }
@@ -63,23 +85,23 @@ function client() {
 async function listOrderNumbers(db, only) {
   if (only.length) return only;
   // Small select first; heavy JSON columns are fetched one order at a time.
-  const { data, error } = await db.from("orders").select("order_number").order("created_at");
+  const { data, error } = await db.from(T.table).select(T.key).order("created_at");
   if (error) throw error;
-  return data.map((row) => row.order_number);
+  return data.map((row) => row[T.key]);
 }
 
 async function fetchOrder(db, orderNumber) {
   const { data, error } = await db
-    .from("orders")
-    .select(["id", "order_number", "updated_at", ...JSON_COLUMNS].join(","))
-    .eq("order_number", orderNumber)
+    .from(T.table)
+    .select([...new Set(["id", T.key, "updated_at", ...JSON_COLUMNS])].join(","))
+    .eq(T.key, orderNumber)
     .single();
   if (error) throw error;
   return data;
 }
 
 async function uploadVerified(db, dataUrl) {
-  const target = await buildOrderImageStoragePath(dataUrl);
+  const target = await buildOrderImageStoragePath(dataUrl, T.prefix);
   const bucket = db.storage.from(ORDER_IMAGES_BUCKET);
   const { error } = await bucket.upload(target.path, target.bytes, {
     contentType: target.contentType,
@@ -98,17 +120,17 @@ async function uploadVerified(db, dataUrl) {
 async function migrate(args) {
   const db = client();
   const execute = args.mode === "execute";
-  const outDir = args.outputDir || path.join("migration-output", `order-images-${new Date().toISOString().replace(/[:.]/g, "-")}`);
+  const outDir = args.outputDir || path.join("migration-output", `${args.target}-images-${new Date().toISOString().replace(/[:.]/g, "-")}`);
   await fs.mkdir(outDir, { recursive: true });
   const backupFile = path.join(outDir, "backup.json");
   const backup = [];
-  const report = { mode: args.mode, ordersScanned: 0, ordersWithImages: 0, inlineImages: 0, inlineMb: 0, migrated: [], skipped: [], failed: [] };
+  const report = { target: args.target, mode: args.mode, ordersScanned: 0, ordersWithImages: 0, inlineImages: 0, inlineMb: 0, migrated: [], skipped: [], failed: [] };
   const urlCache = new Map();
 
   for (const orderNumber of await listOrderNumbers(db, args.orders)) {
     const row = await fetchOrder(db, orderNumber);
     report.ordersScanned += 1;
-    const images = collectInlineProductImages(Object.fromEntries(JSON_COLUMNS.map((c) => [c, row[c]])));
+    const images = collectImages(T, row);
     if (!images.size) continue;
     report.ordersWithImages += 1;
     report.inlineImages += images.size;
@@ -125,11 +147,12 @@ async function migrate(args) {
       const patch = {};
       for (const column of JSON_COLUMNS) {
         if (row[column] == null) continue;
-        const next = replaceInlineProductImages(row[column], urlCache);
+        const next = replaceImages(T, column, row[column], urlCache);
         if (JSON.stringify(next) !== JSON.stringify(row[column])) patch[column] = next;
       }
       // Back up before writing; flush to disk every time.
       backup.push({
+        target: args.target,
         order_number: orderNumber,
         id: row.id,
         updated_at_before: row.updated_at,
@@ -138,11 +161,11 @@ async function migrate(args) {
       });
       await fs.writeFile(backupFile, JSON.stringify(backup));
       const { data, error } = await db
-        .from("orders")
+        .from(T.table)
         .update(patch)
-        .eq("order_number", orderNumber)
+        .eq(T.key, orderNumber)
         .eq("updated_at", row.updated_at)
-        .select("order_number");
+        .select(T.key);
       if (error) throw error;
       if (!data?.length) {
         backup.pop();
@@ -166,6 +189,8 @@ async function rollback(args) {
   const db = client();
   const entries = JSON.parse(await fs.readFile(args.rollbackFile, "utf8"));
   const result = { restored: [], skipped: [] };
+  const wrongTarget = entries.find((entry) => (entry.target || "orders") !== args.target);
+  if (wrongTarget) throw new Error(`Backup is for --target ${wrongTarget.target}; pass the same --target`);
   for (const entry of entries) {
     const row = await fetchOrder(db, entry.order_number);
     const unchanged = Object.entries(entry.written_hashes).every(([c, h]) => jsonHash(row[c]) === h);
@@ -173,7 +198,7 @@ async function rollback(args) {
       result.skipped.push({ order_number: entry.order_number, reason: "edited after migration; restore by hand" });
       continue;
     }
-    const { error } = await db.from("orders").update(entry.columns).eq("order_number", entry.order_number).eq("updated_at", row.updated_at);
+    const { error } = await db.from(T.table).update(entry.columns).eq(T.key, entry.order_number).eq("updated_at", row.updated_at);
     if (error) result.skipped.push({ order_number: entry.order_number, reason: error.message });
     else result.restored.push(entry.order_number);
   }
@@ -184,6 +209,8 @@ async function rollback(args) {
 }
 
 const args = parseArgs(process.argv.slice(2));
+T = TARGETS[args.target];
+JSON_COLUMNS = T.columns;
 (args.mode === "rollback" ? rollback(args) : migrate(args)).catch((error) => {
   console.error(error?.message || error);
   process.exit(1);
