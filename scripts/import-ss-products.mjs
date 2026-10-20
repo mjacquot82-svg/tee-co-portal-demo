@@ -8,9 +8,14 @@
 //   --file <products.csv>    S&S product data file exported as CSV (one row per SKU). A .zip is
 //                            unpacked with the system `unzip`. Excel files: save as CSV first.
 //   --demo                   the bundled demo set (Gildan 5000 + 64000, scripts/data/ss-demo-colours.json)
+//   --datalibrary <zip|dir>  the S&S Canada "Data Library" download (SNS_Canada_DataLibrary.zip with
+//                            Products.xlsx + Specs.xlsx). Imports colour photos AND size charts.
+//                            Excel is converted with scripts/ss-xlsx-to-csv.py (python3 + openpyxl).
 //   --api                    S&S V2 API, needs SS_ACCOUNT_NUMBER and SS_API_KEY (not set up yet)
 // Filters:
 //   --style "Gildan 5000"    only this brand + style (repeatable). Required with --api.
+//   --catalog <file.json>    only the styles/colours Tee & Co carries (scripts/data/tee-co-ss-styles.json).
+//                            A style with an empty colour list keeps all its S&S colours.
 //
 // Writing (with --apply) needs SUPABASE_URL (staging) and TEECO_STAGING_SERVICE_ROLE_KEY.
 // Examples:
@@ -23,25 +28,83 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import Papa from "papaparse";
-import { buildStyleKey, mapSsProductRowsToColorImages } from "../src/lib/supplierColorPhotos.js";
+import {
+  buildStyleKey,
+  mapSsProductRowsToColorImages,
+  mapSsSpecsToSizeCharts,
+  normalizeKey,
+} from "../src/lib/supplierColorPhotos.js";
 
 const LIVE_PROJECT_REF = "iwbajhxrgyjferbkibkl";
 const TABLE = "supplier_color_images";
+const CHART_TABLE = "supplier_size_charts";
+
+function parseCsv(file) {
+  const parsed = Papa.parse(fs.readFileSync(file, "utf8"), { header: true, skipEmptyLines: true });
+  if (parsed.errors.length) console.warn(`CSV warnings in ${path.basename(file)}: ${parsed.errors.length}`);
+  return parsed.data;
+}
+
+// S&S Data Library zip/folder -> { products: rows, specs: rows }
+export function readDataLibrary(input) {
+  let dir = input;
+  if (/\.zip$/i.test(input)) {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-datalibrary-"));
+    execFileSync("unzip", ["-q", "-o", input, "-d", dir]);
+  }
+  const find = (name) => {
+    for (const ext of ["csv", "xlsx"]) {
+      const hit = fs.readdirSync(dir).find((f) => f.toLowerCase() === `${name}.${ext}`);
+      if (hit) return path.join(dir, hit);
+    }
+    return "";
+  };
+  let products = find("products");
+  let specs = find("specs");
+  if (/\.xlsx$/i.test(products) || /\.xlsx$/i.test(specs)) {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), "ss-csv-"));
+    const helper = new URL("./ss-xlsx-to-csv.py", import.meta.url).pathname;
+    execFileSync("python3", [helper, dir, out], { stdio: "inherit" });
+    products = path.join(out, "Products.csv");
+    specs = fs.existsSync(path.join(out, "Specs.csv")) ? path.join(out, "Specs.csv") : "";
+  }
+  if (!products || !fs.existsSync(products)) throw new Error("No Products sheet in the Data Library download.");
+  return { products: parseCsv(products), specs: specs ? parseCsv(specs) : [] };
+}
+
+// Keep only the styles (and colours) Tee & Co carries.
+export function filterByCatalog(records, catalog, { colors = true } = {}) {
+  if (!catalog) return records;
+  const norm = (c) => normalizeKey(c).replace(/grey/g, "gray").replace(/[^a-z0-9]/g, "");
+  const allowed = new Map();
+  for (const entry of catalog.styles || []) {
+    const parts = String(entry.ss_style || "").trim().split(/\s+/);
+    const key = buildStyleKey(parts.slice(0, -1).join(" "), parts[parts.length - 1]);
+    allowed.set(key, entry.colors?.length ? new Set(entry.colors.map(norm)) : null);
+  }
+  return records.filter((record) => {
+    if (!allowed.has(record.style_key)) return false;
+    const set = allowed.get(record.style_key);
+    return !colors || !set || set.has(norm(record.color_name));
+  });
+}
 
 export function parseArgs(argv) {
-  const opts = { apply: false, demo: false, api: false, file: "", styles: [] };
+  const opts = { apply: false, demo: false, api: false, file: "", datalibrary: "", catalog: "", styles: [] };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--apply") opts.apply = true;
     else if (arg === "--demo") opts.demo = true;
     else if (arg === "--api") opts.api = true;
     else if (arg === "--file") opts.file = argv[++i] || "";
+    else if (arg === "--datalibrary") opts.datalibrary = argv[++i] || "";
+    else if (arg === "--catalog") opts.catalog = argv[++i] || "";
     else if (arg === "--style") opts.styles.push(argv[++i] || "");
     else if (arg === "--help" || arg === "-h") opts.help = true;
     else throw new Error(`Unknown option: ${arg}`);
   }
-  const sources = [opts.demo, opts.api, Boolean(opts.file)].filter(Boolean).length;
-  if (!opts.help && sources !== 1) throw new Error("Pick exactly one source: --file, --demo or --api");
+  const sources = [opts.demo, opts.api, Boolean(opts.file), Boolean(opts.datalibrary)].filter(Boolean).length;
+  if (!opts.help && sources !== 1) throw new Error("Pick exactly one source: --file, --datalibrary, --demo or --api");
   if (opts.api && !opts.styles.length) throw new Error("--api needs at least one --style");
   return opts;
 }
@@ -101,11 +164,12 @@ export function filterByStyles(records, styles) {
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.help) {
-    console.log(fs.readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(1, 22).join("\n"));
+    console.log(fs.readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(1, 28).join("\n"));
     return;
   }
   const styles = opts.styles.map(parseStyleFilter);
   let rows;
+  let specRows = [];
   let source = "ss_product_file";
   if (opts.demo) {
     rows = JSON.parse(fs.readFileSync(new URL("./data/ss-demo-colours.json", import.meta.url), "utf8")).rows;
@@ -113,10 +177,18 @@ async function main() {
   } else if (opts.api) {
     rows = await readApiRows(styles);
     source = "ss_api";
+  } else if (opts.datalibrary) {
+    const library = readDataLibrary(opts.datalibrary);
+    rows = library.products;
+    specRows = library.specs;
+    source = "ss_datalibrary";
   } else {
     rows = readCsvRows(opts.file);
   }
-  const records = filterByStyles(mapSsProductRowsToColorImages(rows, { source }), styles);
+  const catalog = opts.catalog ? JSON.parse(fs.readFileSync(opts.catalog, "utf8")) : null;
+  const records = filterByCatalog(filterByStyles(mapSsProductRowsToColorImages(rows, { source }), styles), catalog);
+  const charts = filterByCatalog(filterByStyles(mapSsSpecsToSizeCharts(specRows, { source }), styles), catalog, { colors: false });
+  console.log(`Size charts: ${charts.length} styles`);
   const byStyle = {};
   for (const record of records) byStyle[record.style_key] = (byStyle[record.style_key] || 0) + 1;
   console.log(`Read ${rows.length} S&S rows -> ${records.length} colours`);
@@ -139,6 +211,12 @@ async function main() {
     if (error) throw new Error(`Upsert failed: ${error.code || ""} ${error.message}`);
   }
   console.log(`Wrote ${records.length} colours to staging ${TABLE}.`);
+  for (let i = 0; i < charts.length; i += 100) {
+    const chunk = charts.slice(i, i + 100).map((chart) => ({ ...chart, updated_at: new Date().toISOString() }));
+    const { error } = await client.from(CHART_TABLE).upsert(chunk, { onConflict: "supplier,style_key" });
+    if (error) throw new Error(`Size chart upsert failed: ${error.code || ""} ${error.message}`);
+  }
+  console.log(`Wrote ${charts.length} size charts to staging ${CHART_TABLE}.`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

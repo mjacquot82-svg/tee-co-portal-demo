@@ -17,8 +17,17 @@ export function normalizeKey(value) {
   return normalizeText(value).toLowerCase().replace(/[™®©�]/g, "").replace(/\s+/g, " ").trim();
 }
 
+// Brand spellings differ between S&S ("CORE365", "BELLA + CANVAS", "Rabbit Skins") and the Tee & Co
+// catalogue ("Core 365", "Bella + Canvas", "Rabbit Skin"), so brands are compared letters/digits only.
+const BRAND_ALIASES = { rabbitskin: "rabbitskins", ypclassic: "ypclassics", bella: "bellacanvas" };
+
+export function normalizeBrandKey(value) {
+  const key = normalizeKey(value).replace(/[^a-z0-9]/g, "");
+  return BRAND_ALIASES[key] || key;
+}
+
 export function buildStyleKey(brandName, styleName) {
-  const brand = normalizeKey(brandName);
+  const brand = normalizeBrandKey(brandName);
   const style = normalizeKey(styleName);
   return brand && style ? `${brand}|${style}` : "";
 }
@@ -149,4 +158,87 @@ export async function fetchSupplierColorImages(client, style) {
 
 export function clearSupplierColorImagesCache() {
   cache.clear();
+  chartCache.clear();
+}
+
+// ---- size charts (S&S Specs file: one row per style + size + measurement) ----
+export const SUPPLIER_SIZE_CHARTS_TABLE = "supplier_size_charts";
+
+function sizeOrderValue(value) {
+  // S&S sizeOrder looks like "B1", "B2"... ; fall back to a common size ladder.
+  const match = String(value ?? "").match(/(\d+)/);
+  return match ? Number(match[1]) : 999;
+}
+
+// Measurements customers care about first; tolerances are left out of the customer chart.
+const SPEC_PRIORITY = ["chest width (laid flat)", "chest circumference", "body length", "sleeve length", "sleeve length (from center back)"];
+
+export function mapSsSpecsToSizeCharts(rows = [], { source = "ss_product_file" } = {}) {
+  const byStyle = new Map();
+  for (const row of rows) {
+    const styleKey = buildStyleKey(row.brandName, row.styleName);
+    const sizeName = normalizeText(row.sizeName);
+    const specName = normalizeText(row.specName);
+    const value = normalizeText(row.value);
+    if (!styleKey || !sizeName || !specName || !value) continue;
+    if (/tolerance/i.test(specName)) continue;
+    if (!byStyle.has(styleKey)) {
+      byStyle.set(styleKey, {
+        brandName: normalizeText(row.brandName),
+        styleName: normalizeText(row.styleName),
+        styleId: Number(row.styleID) || null,
+        sizes: new Map(),
+        specs: new Map(),
+      });
+    }
+    const entry = byStyle.get(styleKey);
+    if (!entry.sizes.has(sizeName)) entry.sizes.set(sizeName, sizeOrderValue(row.sizeOrder));
+    if (!entry.specs.has(specName)) entry.specs.set(specName, {});
+    entry.specs.get(specName)[sizeName] = value;
+  }
+  return [...byStyle.entries()].map(([styleKey, entry]) => {
+    const sizes = [...entry.sizes.entries()].sort((a, b) => a[1] - b[1]).map(([name]) => name);
+    const rank = (name) => {
+      const i = SPEC_PRIORITY.indexOf(name.toLowerCase());
+      return i === -1 ? SPEC_PRIORITY.length : i;
+    };
+    const measurements = [...entry.specs.entries()]
+      .sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0]))
+      .map(([name, values]) => ({ name, values }));
+    return {
+      supplier: SS_SUPPLIER,
+      brand_name: entry.brandName,
+      style_name: entry.styleName,
+      style_key: styleKey,
+      style_id: entry.styleId,
+      unit: "in",
+      sizes,
+      measurements,
+      source,
+      active: true,
+    };
+  });
+}
+
+const chartCache = new Map();
+
+export async function fetchSupplierSizeChart(client, style) {
+  const styleKey = style ? buildStyleKey(style.brand, style.style) : "";
+  if (!client || !styleKey) return null;
+  if (!chartCache.has(styleKey)) {
+    chartCache.set(styleKey, (async () => {
+      const { data, error } = await client
+        .from(SUPPLIER_SIZE_CHARTS_TABLE)
+        .select("unit, sizes, measurements")
+        .eq("style_key", styleKey)
+        .eq("active", true)
+        .limit(1);
+      if (error) {
+        console.warn("[supplierColorPhotos] size chart unavailable", error.code || error.message);
+        return null;
+      }
+      return Array.isArray(data) && data[0] ? data[0] : null;
+    })().catch(() => null));
+  }
+  return chartCache.get(styleKey);
 }

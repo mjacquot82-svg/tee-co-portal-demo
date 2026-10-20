@@ -20,7 +20,8 @@ import {
   useGarmentModelColors,
 } from "../lib/garmentModelColorsStore";
 import { getOrderingWorkflowPaths } from "../customer-portal/customerPortalStartOrderRoute";
-import { useSupplierColorPhotos } from "../lib/useSupplierColorPhotos";
+import { useSupplierColorPhotos, useSupplierSizeChart } from "../lib/useSupplierColorPhotos";
+import SupplierSizeChart from "../components/SupplierSizeChart";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -191,6 +192,7 @@ export default function GarmentView() {
     ? selectedColor
     : availableColors[0] || "";
   const colorPhotoViews = useSupplierColorPhotos(selectedProduct, garment, currentSelectedColor);
+  const sizeChart = useSupplierSizeChart(selectedProduct, garment);
 
   useEffect(() => {
     const handleResize = () => {
@@ -416,6 +418,8 @@ export default function GarmentView() {
               })}
             </div>
           ) : null}
+
+          <SupplierSizeChart chart={sizeChart} />
 
           <div
             style={{

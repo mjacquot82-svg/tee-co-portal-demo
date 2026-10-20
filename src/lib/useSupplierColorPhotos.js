@@ -3,6 +3,7 @@ import { isSupabaseConfigured, supabase } from "./supabaseClient";
 import {
   buildColorPhotoViews,
   fetchSupplierColorImages,
+  fetchSupplierSizeChart,
   findColorPhotoRecord,
   resolveSupplierStyle,
 } from "./supplierColorPhotos";
@@ -34,4 +35,25 @@ export function useSupplierColorPhotos(product, garment, colorName) {
     () => buildColorPhotoViews(findColorPhotoRecord(records, colorName)),
     [records, colorName]
   );
+}
+
+// S&S size chart (inches) for the garment, or null when S&S has none for it.
+export function useSupplierSizeChart(product, garment) {
+  const style = useMemo(() => resolveSupplierStyle(product || {}, garment || {}), [product, garment]);
+  const styleKey = style ? `${style.brand}|${style.style}` : "";
+  const [loaded, setLoaded] = useState({ styleKey: "", chart: null });
+
+  useEffect(() => {
+    let active = true;
+    if (!styleKey || !isSupabaseConfigured || !supabase) return undefined;
+    fetchSupplierSizeChart(supabase, style).then((chart) => {
+      if (active) setLoaded({ styleKey, chart });
+    });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [styleKey]);
+
+  return loaded.styleKey === styleKey ? loaded.chart : null;
 }
