@@ -7,6 +7,8 @@ export const SS_SUPPLIER = "ss_activewear";
 export const SS_IMAGE_HOST = "https://cdn.ssactivewear.com/";
 export const SUPPLIER_COLOR_IMAGES_TABLE = "supplier_color_images";
 
+import { resolveColorAlias } from "./supplierColorAliases.js";
+
 const SIZE_SUFFIX = { small: "_fs", medium: "_fm", large: "_fl" };
 
 function normalizeText(value) {
@@ -87,10 +89,13 @@ export function buildColorPhotoViews(record, size = "large") {
   }).filter(Boolean);
 }
 
-export function findColorPhotoRecord(records = [], colorName = "") {
+export function findColorPhotoRecord(records = [], colorName = "", styleKey = "") {
   const key = normalizeKey(colorName);
   if (!key) return null;
-  return records.find((record) => normalizeKey(record.color_name) === key) || null;
+  const exact = records.find((record) => normalizeKey(record.color_name) === key);
+  if (exact) return exact;
+  const alias = normalizeKey(resolveColorAlias(colorName, styleKey || records[0]?.style_key || ""));
+  return alias ? records.find((record) => normalizeKey(record.color_name) === alias) || null : null;
 }
 
 // S&S product file / API row (one row per SKU = colour + size) -> one row per colour for our table.
@@ -142,7 +147,7 @@ export async function fetchSupplierColorImages(client, style) {
     cache.set(styleKey, (async () => {
       const { data, error } = await client
         .from(SUPPLIER_COLOR_IMAGES_TABLE)
-        .select("color_name, color_hex, color_swatch_image, color_front_image, color_back_image, color_side_image, color_direct_side_image, color_on_model_front_image, color_on_model_back_image, color_on_model_side_image")
+        .select("style_key, color_name, color_hex, color_swatch_image, color_front_image, color_back_image, color_side_image, color_direct_side_image, color_on_model_front_image, color_on_model_back_image, color_on_model_side_image")
         .eq("style_key", styleKey)
         .eq("active", true);
       if (error) {

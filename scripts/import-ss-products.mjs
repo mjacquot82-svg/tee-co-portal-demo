@@ -34,6 +34,7 @@ import {
   mapSsSpecsToSizeCharts,
   normalizeKey,
 } from "../src/lib/supplierColorPhotos.js";
+import { resolveColorAlias } from "../src/lib/supplierColorAliases.js";
 
 const LIVE_PROJECT_REF = "iwbajhxrgyjferbkibkl";
 const TABLE = "supplier_color_images";
@@ -80,7 +81,7 @@ export function filterByCatalog(records, catalog, { colors = true } = {}) {
   for (const entry of catalog.styles || []) {
     const parts = String(entry.ss_style || "").trim().split(/\s+/);
     const key = buildStyleKey(parts.slice(0, -1).join(" "), parts[parts.length - 1]);
-    allowed.set(key, entry.colors?.length ? new Set(entry.colors.map(norm)) : null);
+    allowed.set(key, entry.colors?.length ? new Set(entry.colors.flatMap((c) => [norm(c), norm(resolveColorAlias(c, key))])) : null);
   }
   return records.filter((record) => {
     if (!allowed.has(record.style_key)) return false;

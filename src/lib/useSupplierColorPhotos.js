@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
 import {
   buildColorPhotoViews,
+  buildStyleKey,
   fetchSupplierColorImages,
   fetchSupplierSizeChart,
   findColorPhotoRecord,
@@ -32,8 +33,8 @@ export function useSupplierColorPhotos(product, garment, colorName) {
 
   const records = loaded.styleKey === styleKey ? loaded.rows : EMPTY;
   return useMemo(
-    () => buildColorPhotoViews(findColorPhotoRecord(records, colorName)),
-    [records, colorName]
+    () => buildColorPhotoViews(findColorPhotoRecord(records, colorName, style ? buildStyleKey(style.brand, style.style) : "")),
+    [records, colorName, style]
   );
 }
 
