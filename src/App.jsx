@@ -21,7 +21,6 @@ import OrderSubmitted from "./pages/OrderSubmitted";
 import DepositPayment from "./pages/DepositPayment";
 import PaymentConfirmed from "./pages/PaymentConfirmed";
 import ApprovalReview from "./pages/ApprovalReview";
-import QuoteView from "./public/QuoteView";
 import Dashboard from "./admin/Dashboard";
 import Orders from "./admin/Orders";
 import NewOrder from "./admin/NewOrder";
@@ -70,7 +69,6 @@ export default function App() {
             <Route path="deposit-payment" element={<DepositPayment />} />
             <Route path="payment-confirmed" element={<PaymentConfirmed />} />
             <Route path="approval/:orderNumber" element={<ApprovalReview />} />
-            <Route path="quote/:orderNumber" element={<QuoteView />} />
 
             <Route path="admin" element={<Dashboard />} />
             <Route path="admin/quotes" element={<Quotes />} />

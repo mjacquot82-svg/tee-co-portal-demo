@@ -528,6 +528,48 @@ export function ensureCustomersHydrated() {
   return customersHydrationPromise;
 }
 
+// True for a unique-constraint conflict (Postgres 23505 / HTTP 409), e.g. a
+// second customer row for the same auth_user_id.
+export function isCustomerUniqueConflict(error) {
+  return (
+    error?.code === "23505" ||
+    error?.status === 409 ||
+    /duplicate key value/i.test(String(error?.message || ""))
+  );
+}
+
+// Reads the customer row linked to this signed-in Auth user (RLS allows a
+// customer to read only their own row) and merges it into the local store,
+// replacing any local-only placeholder for the same auth user.
+// Resolves the customer or null; throws if the read itself fails.
+export async function fetchLinkedCustomerByAuthUserId(authUserId) {
+  const normalizedAuthUserId = String(authUserId || "").trim();
+  if (!normalizedAuthUserId || !shouldUseSupabase()) return null;
+  const { data, error } = await supabase
+    .from(SUPABASE_TABLE)
+    .select(buildSupabaseSelectFields())
+    .eq("auth_user_id", normalizedAuthUserId)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const currentCustomers = readCustomersFromStorage();
+  const localCustomer = currentCustomers.find((entry) => customerIdsEqual(entry.id, data.id));
+  const customer = mapSupabaseRowToCustomer(data, localCustomer);
+  persistCustomersSnapshot(
+    [
+      customer,
+      ...currentCustomers.filter(
+        (entry) =>
+          !customerIdsEqual(entry.id, customer.id) &&
+          String(entry.auth_user_id || "").trim() !== normalizedAuthUserId
+      ),
+    ],
+    { emit: true, writeStorage: true }
+  );
+  return customer;
+}
+
 export function getStoredCustomers() {
   const customers = readCustomersFromStorage();
 

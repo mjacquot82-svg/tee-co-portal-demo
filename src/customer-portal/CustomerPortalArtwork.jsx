@@ -8,7 +8,8 @@ import {
   getUploadedOrderArtworkFiles,
   isArtworkImage,
 } from "../lib/orderArtwork";
-import { updateStoredOrder } from "../lib/ordersStore";
+import { applyCustomerOrderAction } from "../lib/ordersStore";
+import { isOrdersServerBacked } from "../lib/ordersRepository";
 import { uploadCustomerArtwork } from "../services/customerArtworkService";
 import { getCustomerArtworkActionState } from "../lib/customerArtworkActions";
 import { EmptyState, PortalPage, SectionCard, DetailPair } from "./CustomerPortalShared";
@@ -178,6 +179,8 @@ export default function CustomerPortalArtwork() {
         skipTimelineEvent: true,
       });
     } catch (error) {
+      // With a database the order can only reference artwork that was really stored.
+      if (isOrdersServerBacked()) throw error;
       console.warn("[portal-artwork] Supabase upload unavailable, using local artwork reference", error);
       return buildLocalArtworkFile(file, { revision: revisionRequested, notes });
     }
@@ -208,7 +211,13 @@ export default function CustomerPortalArtwork() {
         ...artworkFiles,
       ];
       const activityType = revisionRequested ? "artwork_revised" : "artwork_uploaded";
-      const updatedOrder = await updateStoredOrder(record.order_number, {
+      // With a database: customer_order_action "artwork_uploaded" builds the file entry from the
+      // stored artwork row. The object below is the demo/local-mode update.
+      const savedOrder = await applyCustomerOrderAction(
+        record.order_number,
+        "artwork_uploaded",
+        { artwork_id: uploadedArtwork.id || "", notes, revision: revisionRequested },
+        {
         artwork_files: nextArtworkFiles,
         artwork_reference_names: nextArtworkFiles.map((file) => getArtworkDisplayName(file)),
         customer_artwork_id: uploadedArtwork.id || record.customer_artwork_id || "",
@@ -224,7 +233,13 @@ export default function CustomerPortalArtwork() {
         activity_note: revisionRequested
           ? `Customer uploaded revised artwork: ${getArtworkDisplayName(uploadedArtwork)}.`
           : `Customer uploaded artwork: ${getArtworkDisplayName(uploadedArtwork)}.`,
-      });
+        }
+      );
+      // Keep the fresh preview link for this screen (the saved entry has the storage path only).
+      const updatedOrder =
+        savedOrder && Array.isArray(savedOrder.artwork_files) && savedOrder.artwork_files[0]?.id === uploadedArtwork.id
+          ? { ...savedOrder, artwork_files: [{ ...uploadedArtwork, ...savedOrder.artwork_files[0] }, ...savedOrder.artwork_files.slice(1)] }
+          : savedOrder;
 
       setLocalRecord(updatedOrder);
       setSelectedFile(null);
@@ -238,16 +253,22 @@ export default function CustomerPortalArtwork() {
   }
 
   async function handleUploadLater() {
-    const updatedOrder = await updateStoredOrder(record.order_number, {
-      artwork_requirement: "Upload Later",
-      artwork_status: "Missing",
-      artwork_approval_required: true,
-      artwork_approval_status: "Pending Review",
-      activity_type: "artwork_upload_later",
-      activity_note: "Customer chose to upload artwork later.",
-    });
-    setLocalRecord(updatedOrder);
-    setFeedback("Artwork marked for upload later.");
+    setUploadError("");
+    setFeedback("");
+    try {
+      const updatedOrder = await applyCustomerOrderAction(record.order_number, "artwork_upload_later", {}, {
+        artwork_requirement: "Upload Later",
+        artwork_status: "Missing",
+        artwork_approval_required: true,
+        artwork_approval_status: "Pending Review",
+        activity_type: "artwork_upload_later",
+        activity_note: "Customer chose to upload artwork later.",
+      });
+      setLocalRecord(updatedOrder);
+      setFeedback("Artwork marked for upload later.");
+    } catch (error) {
+      setUploadError(error?.message || "Unable to update your order right now.");
+    }
   }
 
   async function handleHelpRequest(event) {
@@ -261,19 +282,23 @@ export default function CustomerPortalArtwork() {
       return;
     }
 
-    const updatedOrder = await updateStoredOrder(record.order_number, {
-      artwork_requirement: "Help Needed",
-      artwork_status: "Help Requested",
-      artwork_approval_required: true,
-      artwork_approval_status: "Pending Review",
-      artwork_help_message: message,
-      customer_artwork_help_requested_at: new Date().toISOString(),
-      activity_type: "artwork_help_requested",
-      activity_note: `Customer requested artwork help: ${message}`,
-    });
-    setLocalRecord(updatedOrder);
-    setHelpMessage("");
-    setFeedback("Artwork help request sent to Tee & Co.");
+    try {
+      const updatedOrder = await applyCustomerOrderAction(record.order_number, "artwork_help", { message }, {
+        artwork_requirement: "Help Needed",
+        artwork_status: "Help Requested",
+        artwork_approval_required: true,
+        artwork_approval_status: "Pending Review",
+        artwork_help_message: message,
+        customer_artwork_help_requested_at: new Date().toISOString(),
+        activity_type: "artwork_help_requested",
+        activity_note: `Customer requested artwork help: ${message}`,
+      });
+      setLocalRecord(updatedOrder);
+      setHelpMessage("");
+      setFeedback("Artwork help request sent to Tee & Co.");
+    } catch (error) {
+      setUploadError(error?.message || "Unable to update your order right now.");
+    }
   }
 
   return (

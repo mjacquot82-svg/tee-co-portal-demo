@@ -40,11 +40,16 @@ import { NOTIFICATION_TYPES } from "./notificationTemplatesStore";
 import { createStaffNotification, STAFF_NOTIFICATION_TYPES } from "./staffNotificationsStore";
 import {
   configureOrdersRepositoryForTests,
+  createOrderApprovalTokenInSupabase,
   createOrderInSupabase,
   fetchOrdersFromSupabase,
+  isOrdersServerBacked,
+  runCustomerOrderActionInSupabase,
   updateOrderInSupabase,
   upsertOrdersInSupabase,
 } from "./ordersRepository";
+import { buildCanonicalUrl } from "./siteUrl";
+import { notifyCustomerOrderAction } from "./customerConfirmationNotifications";
 import { canUseLocalPersistenceFallback, getPersistenceMode } from "./persistenceMode";
 import { ensureTeeCoProductionProcess } from "../integrations/teeCoProductionProcess";
 import { recordOrderTransitionDiagnostic } from "./orderTransitionDiagnostics";
@@ -255,6 +260,7 @@ function buildOrderNotificationContext(eventType, order, source = "orders_store"
     depositAmount: order?.deposit_amount || order?.deposit?.amount,
     balanceDue: order?.balance_due,
     pickupDate: order?.pickup_date || order?.due_date || "",
+    ...(order?.approval_link ? { approvalLink: order.approval_link } : {}),
     businessEvent: {
       subjectType: "order",
       subjectId: order?.id || order?.order_number || "",
@@ -1873,7 +1879,11 @@ async function performStoredOrderUpdate(orderNumber, updates) {
     const orderPath = `/admin/orders/${updatedOrder.order_number}`;
 
     if (previousQuoteStatus !== nextQuoteStatus && nextQuoteStatus === "Awaiting Approval") {
-      await triggerOrderNotification(NOTIFICATION_TYPES.quoteReadyForApproval, updatedOrder);
+      const approvalLink = await buildOrderApprovalLink(updatedOrder.order_number);
+      await triggerOrderNotification(
+        NOTIFICATION_TYPES.quoteReadyForApproval,
+        approvalLink ? { ...updatedOrder, approval_link: approvalLink } : updatedOrder
+      );
     }
 
     const enteredQuoteApprovedState = didOrderEnterQuoteApprovedState(previousOrder, updatedOrder);
@@ -2070,6 +2080,75 @@ async function performStoredOrderUpdate(orderNumber, updates) {
   }
 
   return updatedOrder;
+}
+
+// Public approval link with an unguessable one-time token (created in the database by staff).
+// Returns "" when there is no database (demo mode) or the link could not be created; the
+// notification then falls back to its default link.
+export async function buildOrderApprovalLink(orderNumber) {
+  if (!orderNumber || !isOrdersServerBacked()) return "";
+  try {
+    const token = await createOrderApprovalTokenInSupabase(orderNumber);
+    if (!token) return "";
+    return buildCanonicalUrl(
+      `/approval/${encodeURIComponent(orderNumber)}?token=${encodeURIComponent(token)}`
+    );
+  } catch (error) {
+    console.warn("[ordersStore] approval link could not be created", error?.code || error?.message || error);
+    return "";
+  }
+}
+
+function publishServerOrder(order) {
+  const persistedOrder = normalizeStoredOrder(order);
+  recordSuccessfulOrderWrite(persistedOrder);
+  const publishedOrders = readStoredOrders();
+  const index = publishedOrders.findIndex(
+    (entry) => getOrderRecordKey(entry) === getOrderRecordKey(persistedOrder)
+  );
+  saveStoredOrders(
+    index >= 0
+      ? publishedOrders.map((entry, position) => (position === index ? persistedOrder : entry))
+      : [persistedOrder, ...publishedOrders]
+  );
+  return persistedOrder;
+}
+
+// Customer portal changes to an existing order: "deposit_sent", "artwork_uploaded",
+// "artwork_upload_later", "artwork_help". With a database they go through the
+// customer_order_action function (phase B RLS gives customers no direct UPDATE on orders);
+// in demo/local mode the previous local update is used unchanged.
+export async function applyCustomerOrderAction(orderNumber, action, payload = {}, localUpdates = {}) {
+  if (!isOrdersServerBacked()) {
+    return updateStoredOrder(orderNumber, localUpdates);
+  }
+  const previousUpdate = orderUpdateQueues.get(orderNumber) || Promise.resolve();
+  const queued = previousUpdate
+    .catch(() => undefined)
+    .then(async () => {
+      try {
+        const order = await runCustomerOrderActionInSupabase(orderNumber, action, payload);
+        return order ? publishServerOrder(order) : null;
+      } catch (error) {
+        // Between deploying this code and applying phase B the database function does not
+        // exist yet; the direct update still works then, so keep the previous behaviour.
+        if (error?.code === "PGRST202" || error?.code === "42883") return { fallback: true };
+        throw error;
+      }
+    });
+  orderUpdateQueues.set(orderNumber, queued);
+  void queued
+    .finally(() => {
+      if (orderUpdateQueues.get(orderNumber) === queued) orderUpdateQueues.delete(orderNumber);
+    })
+    .catch(() => undefined);
+  const result = await queued;
+  const saved =
+    result && result.fallback === true ? await updateStoredOrder(orderNumber, localUpdates) : result;
+  // Customer confirmation email (existing notification pipeline). Never awaited by the caller's
+  // success path and never throws, so email problems cannot block or undo the action.
+  if (saved) void notifyCustomerOrderAction(action, saved);
+  return saved;
 }
 
 export function updateStoredOrder(orderNumber, updates) {

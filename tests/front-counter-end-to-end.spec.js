@@ -5,8 +5,6 @@ const owner = {
   id: "staff-owner-default",
   name: "Owner / Admin",
   role: "Owner",
-  authMode: "temporary-owner",
-  isTemporaryOwnerSession: true,
 };
 
 function buildReadyOrder({

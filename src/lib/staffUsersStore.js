@@ -19,15 +19,13 @@ const STAFF_USERS_UPDATED_EVENT = "tee-co-staff-users-updated";
 const ACTIVE_STAFF_UPDATED_EVENT = "tee-co-active-staff-updated";
 const PROTECTED_OWNER_ID = "staff-owner-default";
 const OWNER_AUTH_DIAGNOSTICS_KEY = "__TEE_CO_OWNER_AUTH_DIAGNOSTICS__";
-const TEMP_OWNER_LOGIN_ID = "owner";
-const TEMP_OWNER_PIN = "2468";
+const STAFF_PIN_LOGIN_ENDPOINT = "/.netlify/functions/staff-pin-login";
+// Browser-readable staff_users columns. PIN data is never selected (column grants block it).
+export const STAFF_USER_PUBLIC_COLUMNS =
+  "id, legacy_staff_id, name, role, active, status, last_active_at, created_at, updated_at, auth_user_id, has_pin";
 
 export const STAFF_ROLES = ["Owner", "Manager", "Staff"];
 export const STAFF_STATUSES = ["Active", "Inactive"];
-export const TEMP_OWNER_DEMO_CREDENTIALS = {
-  loginId: TEMP_OWNER_LOGIN_ID,
-  pin: TEMP_OWNER_PIN,
-};
 
 const DEFAULT_STAFF_USERS = [
   {
@@ -49,25 +47,9 @@ function shouldLogOwnerDiagnostics(user) {
   return isProtectedStaffUser(user);
 }
 
-function normalizeOwnerLoginId(loginId) {
-  return String(loginId ?? "").trim().toLowerCase();
-}
-
-function buildTemporaryOwnerSession() {
-  return {
-    id: PROTECTED_OWNER_ID,
-    name: "Owner / Admin",
-    role: "Owner",
-    authMode: "temporary-owner",
-    isTemporaryOwnerSession: true,
-  };
-}
-
+// Legacy sessions from the removed hardcoded demo owner login are never restored.
 function isTemporaryOwnerSession(user) {
-  return (
-    isProtectedStaffUser(user) &&
-    user.authMode === "temporary-owner"
-  );
+  return Boolean(user?.isTemporaryOwnerSession || user?.authMode === "temporary-owner");
 }
 
 function pushOwnerAuthDiagnostic(event, details = {}) {
@@ -128,7 +110,9 @@ function normalizeStaffUser(user) {
     id: user?.id || `staff-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: user?.name || "New Staff User",
     role: normalizedRole,
-    pin: formatStaffPin(user?.pin || "0000"),
+    // Supabase never returns PINs; keep a blank PIN plus a "has a PIN" flag for the admin screen.
+    pin: user?.pin ? formatStaffPin(user.pin) : "",
+    hasPin: typeof user?.hasPin === "boolean" ? user.hasPin : Boolean(user?.pin),
     status: normalizedStatus,
     created_at: createdAt,
     updated_at: user?.updated_at || createdAt,
@@ -260,7 +244,8 @@ function mapSupabaseRowToStaffUser(row) {
   return normalizeStaffUser({
     id: row?.id,
     name: row?.name,
-    pin: row?.pin,
+    pin: "",
+    hasPin: Boolean(row?.has_pin),
     role: row?.role,
     status: normalizedStatus,
     created_at: row?.created_at,
@@ -335,10 +320,36 @@ async function fetchStaffUsersFromSupabase() {
     throw new Error("Supabase client is not configured for staff users.");
   }
 
-  const { data, error } = await supabase
-    .from("staff_users")
-    .select("*")
-    .order("created_at", { ascending: false });
+  const { data: sessionData } = (await supabase.auth?.getSession?.()) || {};
+  let data = null;
+  let error = null;
+
+  if (sessionData?.session) {
+    ({ data, error } = await supabase
+      .from("staff_users")
+      .select(STAFF_USER_PUBLIC_COLUMNS)
+      .order("created_at", { ascending: false }));
+    // Go-live tolerance: before the column-grant phase (or on a database that is missing one
+    // of the newer columns) fall back to the full row, but never keep PIN data in the browser.
+    if (error) {
+      const fallback = await supabase.from("staff_users").select("*").order("created_at", { ascending: false });
+      if (!fallback.error) {
+        error = null;
+        data = (fallback.data || []).map((row) => {
+          const { pin: _pin, pin_hash: _pinHash, failed_pin_attempts: _f, pin_locked_until: _l, ...rest } = row;
+          return { ...rest, has_pin: rest.has_pin ?? Boolean(_pinHash || _pin) };
+        });
+      }
+    }
+  }
+
+  // Signed-out login screen (or a non-staff session): names for the PIN picker only.
+  if (!sessionData?.session || error || (Array.isArray(data) && data.length === 0)) {
+    ({ data, error } = await supabase.rpc("list_pin_login_staff"));
+    if (!error && Array.isArray(data)) {
+      data = data.map((row) => ({ ...row, status: "Active" }));
+    }
+  }
 
   if (error) {
     throw error;
@@ -444,7 +455,7 @@ async function runStaffUsersUpdate(userId, updates) {
         .from("staff_users")
         .update(attempt.payload)
         .eq("id", userId)
-        .select("*")
+        .select(STAFF_USER_PUBLIC_COLUMNS)
         .single();
 
       if (error) {
@@ -537,7 +548,7 @@ function getStoredActiveStaffUserSnapshot() {
     }
 
     if (isTemporaryOwnerSession(sessionUser)) {
-      return buildTemporaryOwnerSession();
+      return null;
     }
 
     return sessionUser;
@@ -558,21 +569,10 @@ function resolveHydratedActiveStaffUser() {
   }
 
   if (isTemporaryOwnerSession(parsedUser)) {
-    const hydratedUser = buildTemporaryOwnerSession();
-
-    pushAuthDiagnostic("staff-session-hydrated", {
-      userId: hydratedUser.id,
-      resolvedRole: hydratedUser.role,
-      hydrationResult: "restored-temporary-owner",
-    });
-    pushOwnerAuthDiagnostic("session-hydrated", {
-      userId: hydratedUser.id,
-      resolvedRole: hydratedUser.role,
-      hydrationResult: "restored-temporary-owner",
-    });
-
-    return hydratedUser;
+    pushAuthDiagnostic("staff-session-hydrated", { hydrationResult: "rejected-removed-demo-owner" });
+    return null;
   }
+
 
   const matchedUser = resolveStoredStaffUser(parsedUser);
 
@@ -886,19 +886,14 @@ export function setActiveStaffUser(user, options = {}) {
     return null;
   }
 
-  const resolvedUser = isTemporaryOwnerSession(user)
-    ? buildTemporaryOwnerSession()
-    : resolveStoredStaffUser(user) || normalizeStaffUser(user);
+  if (isTemporaryOwnerSession(user)) {
+    return null;
+  }
+  const resolvedUser = resolveStoredStaffUser(user) || normalizeStaffUser(user);
   const nextActiveUser = {
     id: resolvedUser.id,
     name: resolvedUser.name,
     role: resolvedUser.role,
-    ...(isTemporaryOwnerSession(resolvedUser)
-      ? {
-          authMode: resolvedUser.authMode,
-          isTemporaryOwnerSession: true,
-        }
-      : {}),
   };
 
   clearLegacyActiveStaffPersistence();
@@ -927,6 +922,17 @@ export function setActiveStaffUser(user, options = {}) {
 
 export function clearActiveStaffSession(options = {}) {
   setActiveStaffUser(null, options);
+  // End a PIN-issued Supabase session too (email staff/owner sessions are left to their own logout).
+  try {
+    void supabase?.auth?.getSession?.().then(({ data } = {}) => {
+      if (data?.session?.user?.app_metadata?.login_method === "staff_pin") {
+        return supabase.auth.signOut({ scope: "local" });
+      }
+      return null;
+    }).catch(() => {});
+  } catch {
+    // ignore
+  }
 }
 
 export function getActiveStaffUser() {
@@ -968,7 +974,65 @@ export function getActiveStaffUploadCredential() {
   }
 }
 
+async function requestServerStaffPinLogin(staffUserId, pin) {
+  try {
+    const response = await fetch(STAFF_PIN_LOGIN_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ staffUserId, pin: cleanStaffPin(pin) }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body?.ok) {
+      return {
+        ok: false,
+        code: body?.code || (response.status === 423 ? "LOCKED" : "PIN_MISMATCH"),
+        message: body?.message || "That PIN does not match the selected staff member.",
+      };
+    }
+    return body;
+  } catch (error) {
+    console.error("[staff-users] Staff PIN login request failed", error);
+    return { ok: false, code: "NETWORK", message: "Unable to reach the staff login service. Try again." };
+  }
+}
+
+async function attemptServerStaffLogin({ staffUserId, pin, persistSession }) {
+  const result = await requestServerStaffPinLogin(staffUserId, pin);
+  if (!result.ok) {
+    return { ok: false, code: result.code, message: result.message };
+  }
+
+  const { error: sessionError } = await supabase.auth.setSession({
+    access_token: result.session.access_token,
+    refresh_token: result.session.refresh_token,
+  });
+  if (sessionError) {
+    console.error("[staff-users] Unable to store staff Supabase session", { code: sessionError.code });
+    return { ok: false, code: "SESSION_WRITE_FAILED", message: "Unable to start the selected staff session." };
+  }
+
+  const staffUser = normalizeStaffUser({
+    id: result.staff.id,
+    name: result.staff.name,
+    role: result.staff.role,
+    status: "Active",
+  });
+  const sessionUser = persistSession ? setActiveStaffUser(staffUser) : staffUser;
+  if (persistSession && !sessionUser?.id) {
+    return { ok: false, code: "SESSION_WRITE_FAILED", message: "Unable to start the selected staff session." };
+  }
+  if (persistSession) {
+    setActiveStaffUploadCredential(staffUser, pin);
+    void ensureStaffUsersHydrated({ force: true }).catch(() => {});
+  }
+  return { ok: true, user: sessionUser };
+}
+
 export async function attemptStaffLogin({ staffUserId, pin, persistSession = true }) {
+  if (shouldUseSupabase() && supabase?.auth?.setSession) {
+    return attemptServerStaffLogin({ staffUserId, pin, persistSession });
+  }
+
   const users = await getStoredStaffUsers();
   const activeUsers = users.filter((user) => user.status !== "Inactive");
   const selectedUser = activeUsers.find((user) => user.id === staffUserId) || null;
@@ -1027,60 +1091,6 @@ export async function attemptStaffLogin({ staffUserId, pin, persistSession = tru
       ok: false,
       code: "SESSION_WRITE_FAILED",
       message: "Unable to start the selected staff session.",
-    };
-  }
-
-  return {
-    ok: true,
-    user: sessionUser,
-  };
-}
-
-export function attemptTemporaryOwnerLogin({
-  loginId,
-  pin,
-  persistSession = true,
-} = {}) {
-  const normalizedLoginId = normalizeOwnerLoginId(loginId);
-  const normalizedPin = cleanStaffPin(pin);
-  const ownerUser = buildTemporaryOwnerSession();
-  const credentialsMatch =
-    normalizedLoginId === TEMP_OWNER_LOGIN_ID && normalizedPin === TEMP_OWNER_PIN;
-
-  pushOwnerAuthDiagnostic("temporary-login-attempt", {
-    selectedUserId: ownerUser.id,
-    loginId: normalizedLoginId,
-    pinLength: normalizedPin.length,
-  });
-
-  if (!credentialsMatch) {
-    pushOwnerAuthDiagnostic("temporary-login-result", {
-      selectedUserId: ownerUser.id,
-      resolvedRole: ownerUser.role,
-      loginResult: "credential-mismatch",
-    });
-
-    return {
-      ok: false,
-      code: "PIN_MISMATCH",
-      message: "That owner login or PIN is incorrect.",
-    };
-  }
-
-  const sessionUser = persistSession ? setActiveStaffUser(ownerUser) : ownerUser;
-  const sessionCreated = persistSession ? Boolean(sessionUser?.id) : true;
-
-  pushOwnerAuthDiagnostic("temporary-login-result", {
-    selectedUserId: ownerUser.id,
-    resolvedRole: ownerUser.role,
-    loginResult: sessionCreated ? "success" : "session-write-failed",
-  });
-
-  if (!sessionCreated) {
-    return {
-      ok: false,
-      code: "SESSION_WRITE_FAILED",
-      message: "Unable to start the owner session.",
     };
   }
 
