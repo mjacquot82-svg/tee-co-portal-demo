@@ -1,0 +1,2201 @@
+{
+ "source": "Tee & Co's own supplier files (Teresa, Oct 21 2026): 'Off Figure Images.zip' + 'SIZE CHARTS.zip'. Catalogue/product data only.",
+ "photos": [
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00540",
+   "color": "Black",
+   "view": "front",
+   "src": "L00540/L00540-Black-front-HiRes.jpg",
+   "key": "supplier-photos/l00540/black-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00540",
+   "color": "Black",
+   "view": "back",
+   "src": "L00540/L00540-Black-back-HiRes.jpg",
+   "key": "supplier-photos/l00540/black-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00540",
+   "color": "Charcoal Heather",
+   "view": "front",
+   "src": "L00540/L00540-Charcoal-front-HiRes.jpg",
+   "key": "supplier-photos/l00540/charcoal-heather-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00540",
+   "color": "Charcoal Heather",
+   "view": "back",
+   "src": "L00540/L00540-Charcoal-back-HiRes.jpg",
+   "key": "supplier-photos/l00540/charcoal-heather-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00540",
+   "color": "Athletic Grey Heather",
+   "view": "side",
+   "src": "L00540/L00540-Athletic-front-HiRes.jpg",
+   "key": "supplier-photos/l00540/athletic-grey-heather-side.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00540",
+   "color": "Athletic Grey Heather",
+   "view": "back",
+   "src": "L00540/L00540-Athletic-back-HiRes.jpg",
+   "key": "supplier-photos/l00540/athletic-grey-heather-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00540",
+   "color": "Navy",
+   "view": "front",
+   "src": "L00540/L00540-Navy-front-HiRes.jpg",
+   "key": "supplier-photos/l00540/navy-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00540",
+   "color": "Navy",
+   "view": "back",
+   "src": "L00540/L00540-Navy-back-HiRes.jpg",
+   "key": "supplier-photos/l00540/navy-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00540",
+   "color": "Royal",
+   "view": "back",
+   "src": "L00540/L00540-Royal-back-HiRes.jpg",
+   "key": "supplier-photos/l00540/royal-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00540",
+   "color": "Red",
+   "view": "front",
+   "src": "L00540/L00540-Red-front-HiRes.jpg",
+   "key": "supplier-photos/l00540/red-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00540",
+   "color": "Red",
+   "view": "back",
+   "src": "L00540/L00540-Red-back-HiRes.jpg",
+   "key": "supplier-photos/l00540/red-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00545",
+   "color": "Black",
+   "view": "front",
+   "src": "L00545/L00545-BLA-F.jpg",
+   "key": "supplier-photos/l00545/black-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00545",
+   "color": "Black",
+   "view": "back",
+   "src": "L00545/L00545-BLA-B.jpg",
+   "key": "supplier-photos/l00545/black-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00545",
+   "color": "Navy",
+   "view": "front",
+   "src": "L00545/L00545-navy-f.jpg",
+   "key": "supplier-photos/l00545/navy-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00545",
+   "color": "Navy",
+   "view": "back",
+   "src": "L00545/L00545-navy-b.jpg",
+   "key": "supplier-photos/l00545/navy-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00545",
+   "color": "Charcoal Heather",
+   "view": "front",
+   "src": "L00545/L00545-CHA-F.jpg",
+   "key": "supplier-photos/l00545/charcoal-heather-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00545",
+   "color": "Charcoal Heather",
+   "view": "back",
+   "src": "L00545/L00545-Cha-B.jpg",
+   "key": "supplier-photos/l00545/charcoal-heather-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00545",
+   "color": "Athletic Grey Heather",
+   "view": "front",
+   "src": "L00545/L00545-AthGre-F.jpg",
+   "key": "supplier-photos/l00545/athletic-grey-heather-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00545",
+   "color": "Athletic Grey Heather",
+   "view": "back",
+   "src": "L00545/L00545-AthGre-B.jpg",
+   "key": "supplier-photos/l00545/athletic-grey-heather-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00545",
+   "color": "Forest Green",
+   "view": "front",
+   "src": "L00545/L00545-Forest-front.jpg",
+   "key": "supplier-photos/l00545/forest-green-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00545",
+   "color": "Forest Green",
+   "view": "back",
+   "src": "L00545/L00545-Forest-back.jpg",
+   "key": "supplier-photos/l00545/forest-green-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00545",
+   "color": "Ivory",
+   "view": "front",
+   "src": "L00545/L00545-Ivory-front.jpg",
+   "key": "supplier-photos/l00545/ivory-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00545",
+   "color": "Ivory",
+   "view": "back",
+   "src": "L00545/L00545-Ivory-back.jpg",
+   "key": "supplier-photos/l00545/ivory-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00545",
+   "color": "Maroon",
+   "view": "front",
+   "src": "L00545/L00545-MAR-F.jpg",
+   "key": "supplier-photos/l00545/maroon-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00545",
+   "color": "Maroon",
+   "view": "back",
+   "src": "L00545/L00545-MAR-B.jpg",
+   "key": "supplier-photos/l00545/maroon-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Black",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550_BLACK_F.jpg",
+   "key": "supplier-photos/l00550/black-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Black",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550_BLACK_B.jpg",
+   "key": "supplier-photos/l00550/black-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Charcoal Heather",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550_CHARCOAL_F.jpg",
+   "key": "supplier-photos/l00550/charcoal-heather-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Charcoal Heather",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550_CHARCOAL_B.jpg",
+   "key": "supplier-photos/l00550/charcoal-heather-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Athletic Grey Heather",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550_GRY_HEATHER_F.jpg",
+   "key": "supplier-photos/l00550/athletic-grey-heather-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Athletic Grey Heather",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550_GRY_HEATHER_B.jpg",
+   "key": "supplier-photos/l00550/athletic-grey-heather-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Navy",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550_NAVY_F.jpg",
+   "key": "supplier-photos/l00550/navy-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Navy",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550_NAVY_B.jpg",
+   "key": "supplier-photos/l00550/navy-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Royal",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550_ROYAL_F.jpg",
+   "key": "supplier-photos/l00550/royal-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Royal",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550_ROYAL_B.jpg",
+   "key": "supplier-photos/l00550/royal-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Forest Green",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550_FOREST_GREEN_F.jpg",
+   "key": "supplier-photos/l00550/forest-green-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Forest Green",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550_FOREST_GREEN_B.jpg",
+   "key": "supplier-photos/l00550/forest-green-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "White",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550_WHITE_F.jpg",
+   "key": "supplier-photos/l00550/white-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "White",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550_WHITE_B.jpg",
+   "key": "supplier-photos/l00550/white-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Purple",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550_PURPLE_F.jpg",
+   "key": "supplier-photos/l00550/purple-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Purple",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550_PURPLE_B.jpg",
+   "key": "supplier-photos/l00550/purple-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Maroon",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550_MAROON_F.jpg",
+   "key": "supplier-photos/l00550/maroon-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Maroon",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550_MAROON_B.jpg",
+   "key": "supplier-photos/l00550/maroon-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Red",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550_RED_F.jpg",
+   "key": "supplier-photos/l00550/red-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Red",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550_RED_B.jpg",
+   "key": "supplier-photos/l00550/red-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Pink",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550_PINK_F.jpg",
+   "key": "supplier-photos/l00550/pink-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Pink",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550_PINK_B.jpg",
+   "key": "supplier-photos/l00550/pink-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Gold",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550_GOLD_F.jpg",
+   "key": "supplier-photos/l00550/gold-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Gold",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550_GOLD_B.jpg",
+   "key": "supplier-photos/l00550/gold-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Brown",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550-Brown-front.jpg",
+   "key": "supplier-photos/l00550/brown-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Brown",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550-Brown-back.jpg",
+   "key": "supplier-photos/l00550/brown-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Caramel",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550-Caramel-front.jpg",
+   "key": "supplier-photos/l00550/caramel-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Caramel",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550-Caramel-back.jpg",
+   "key": "supplier-photos/l00550/caramel-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Heliconia",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550-Holiconia-front.jpg",
+   "key": "supplier-photos/l00550/heliconia-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Heliconia",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550-Heliconia-back.jpg",
+   "key": "supplier-photos/l00550/heliconia-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Light Blue",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550-LightBlue-front.jpg",
+   "key": "supplier-photos/l00550/light-blue-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Light Blue",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550-LightBlue-back.jpg",
+   "key": "supplier-photos/l00550/light-blue-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Sand",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550-Sand-front-HiRes.jpg",
+   "key": "supplier-photos/l00550/sand-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Sand",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550-Sand-back-HiRes.jpg",
+   "key": "supplier-photos/l00550/sand-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Kelly Green",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550-KellyGreen-front.jpg",
+   "key": "supplier-photos/l00550/kelly-green-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Kelly Green",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550-KellyGreen-back.jpg",
+   "key": "supplier-photos/l00550/kelly-green-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Ivory",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550-Ivory-front-HiRes.jpg",
+   "key": "supplier-photos/l00550/ivory-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Ivory",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550-Ivory-back-HiRes.jpg",
+   "key": "supplier-photos/l00550/ivory-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Ash Grey Heather",
+   "view": "front",
+   "src": "L00550 & L0550Y/L00550-AshGrey-front-HiRes.jpg",
+   "key": "supplier-photos/l00550/ash-grey-heather-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Ash Grey Heather",
+   "view": "back",
+   "src": "L00550 & L0550Y/L00550-AshGrey-back-HiRes.jpg",
+   "key": "supplier-photos/l00550/ash-grey-heather-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00555",
+   "color": "Black",
+   "view": "front",
+   "src": "L00555/L00555_BLACK_F.jpg",
+   "key": "supplier-photos/l00555/black-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00555",
+   "color": "Black",
+   "view": "back",
+   "src": "L00555/L00555_BLACK_B.jpg",
+   "key": "supplier-photos/l00555/black-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00555",
+   "color": "Navy",
+   "view": "front",
+   "src": "L00555/L00555_NAVY_F.jpg",
+   "key": "supplier-photos/l00555/navy-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00555",
+   "color": "Navy",
+   "view": "back",
+   "src": "L00555/L00555_NAVY_B.jpg",
+   "key": "supplier-photos/l00555/navy-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00555",
+   "color": "Red",
+   "view": "front",
+   "src": "L00555/L00555_RED_F.jpg",
+   "key": "supplier-photos/l00555/red-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00555",
+   "color": "Red",
+   "view": "back",
+   "src": "L00555/L00555_RED_B.jpg",
+   "key": "supplier-photos/l00555/red-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00555",
+   "color": "Royal",
+   "view": "front",
+   "src": "L00555/L00555_ROYAL_F.jpg",
+   "key": "supplier-photos/l00555/royal-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00555",
+   "color": "Royal",
+   "view": "back",
+   "src": "L00555/L00555_ROYAL_B.jpg",
+   "key": "supplier-photos/l00555/royal-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00555",
+   "color": "Charcoal Heather",
+   "view": "front",
+   "src": "L00555/L00555_CHARCOAL_009.jpg",
+   "key": "supplier-photos/l00555/charcoal-heather-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00555",
+   "color": "Charcoal Heather",
+   "view": "back",
+   "src": "L00555/L00555_CHARCOAL_017.jpg",
+   "key": "supplier-photos/l00555/charcoal-heather-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00555",
+   "color": "Athletic Grey Heather",
+   "view": "front",
+   "src": "L00555/L00555_GRY_HEATHER_004.jpg",
+   "key": "supplier-photos/l00555/athletic-grey-heather-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00555",
+   "color": "Athletic Grey Heather",
+   "view": "back",
+   "src": "L00555/L00555_GRY_HEATHER_011.jpg",
+   "key": "supplier-photos/l00555/athletic-grey-heather-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Black",
+   "view": "front",
+   "src": "S05610/S05610_BLACK_F.jpg",
+   "key": "supplier-photos/s05610/black-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Black",
+   "view": "back",
+   "src": "S05610/S05610_BLACK_B.jpg",
+   "key": "supplier-photos/s05610/black-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Athletic Grey Heather",
+   "view": "front",
+   "src": "S05610/S05610_GREY_HEATHER_F.jpg",
+   "key": "supplier-photos/s05610/athletic-grey-heather-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Athletic Grey Heather",
+   "view": "back",
+   "src": "S05610/S05610_GREY_HEATHER_B.jpg",
+   "key": "supplier-photos/s05610/athletic-grey-heather-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Forest Green",
+   "view": "front",
+   "src": "S05610/S05610_FOREST_GREEN_F.jpg",
+   "key": "supplier-photos/s05610/forest-green-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Forest Green",
+   "view": "back",
+   "src": "S05610/S05610_FOREST_GREEN_B.jpg",
+   "key": "supplier-photos/s05610/forest-green-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Kelly Green",
+   "view": "front",
+   "src": "S05610/S05610_KELLY_GREEN_F.jpg",
+   "key": "supplier-photos/s05610/kelly-green-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Kelly Green",
+   "view": "back",
+   "src": "S05610/S05610_KELLY_GREEN_B.jpg",
+   "key": "supplier-photos/s05610/kelly-green-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Fatigue Green",
+   "view": "front",
+   "src": "S05610/S05610_FATIGUE_GREEN_F.jpg",
+   "key": "supplier-photos/s05610/fatigue-green-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Fatigue Green",
+   "view": "back",
+   "src": "S05610/S05610_FATIGUE_GREEN_B.jpg",
+   "key": "supplier-photos/s05610/fatigue-green-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Navy",
+   "view": "front",
+   "src": "S05610/S05610_NAVY_F.jpg",
+   "key": "supplier-photos/s05610/navy-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Navy",
+   "view": "back",
+   "src": "S05610/S05610_NAVY_B.jpg",
+   "key": "supplier-photos/s05610/navy-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Royal",
+   "view": "front",
+   "src": "S05610/S05610_ROYAL_F.jpg",
+   "key": "supplier-photos/s05610/royal-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Royal",
+   "view": "back",
+   "src": "S05610/S05610_ROYAL_B.jpg",
+   "key": "supplier-photos/s05610/royal-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Sapphire",
+   "view": "front",
+   "src": "S05610/S05610_SAPPHIRE_F.jpg",
+   "key": "supplier-photos/s05610/sapphire-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Sapphire",
+   "view": "back",
+   "src": "S05610/S05610_SAPPHIRE_B.jpg",
+   "key": "supplier-photos/s05610/sapphire-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Light Blue",
+   "view": "front",
+   "src": "S05610/S05610_LIGHT_BLUE_F.jpg",
+   "key": "supplier-photos/s05610/light-blue-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Light Blue",
+   "view": "back",
+   "src": "S05610/S05610_LIGHT_BLUE_B.jpg",
+   "key": "supplier-photos/s05610/light-blue-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Gold",
+   "view": "front",
+   "src": "S05610/S05610_GOLD_F.jpg",
+   "key": "supplier-photos/s05610/gold-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Gold",
+   "view": "back",
+   "src": "S05610/S05610_GOLD_B.jpg",
+   "key": "supplier-photos/s05610/gold-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Yellow",
+   "view": "front",
+   "src": "S05610/S05610_YELLOW_F.jpg",
+   "key": "supplier-photos/s05610/yellow-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Yellow",
+   "view": "back",
+   "src": "S05610/S05610_YELLOW_B.jpg",
+   "key": "supplier-photos/s05610/yellow-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Pink",
+   "view": "front",
+   "src": "S05610/S05610_PINK_F.jpg",
+   "key": "supplier-photos/s05610/pink-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Pink",
+   "view": "back",
+   "src": "S05610/S05610_PINK_B.jpg",
+   "key": "supplier-photos/s05610/pink-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "White",
+   "view": "front",
+   "src": "S05610/S05610_WHITE_F.jpg",
+   "key": "supplier-photos/s05610/white-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "White",
+   "view": "back",
+   "src": "S05610/S05610_WHITE_B.jpg",
+   "key": "supplier-photos/s05610/white-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Purple",
+   "view": "front",
+   "src": "S05610/S05610_PURPLE_F.jpg",
+   "key": "supplier-photos/s05610/purple-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Purple",
+   "view": "back",
+   "src": "S05610/S05610_PURPLE_B.jpg",
+   "key": "supplier-photos/s05610/purple-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Maroon",
+   "view": "front",
+   "src": "S05610/S05610_MAROON_F.jpg",
+   "key": "supplier-photos/s05610/maroon-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Maroon",
+   "view": "back",
+   "src": "S05610/S05610_MAROON_B.jpg",
+   "key": "supplier-photos/s05610/maroon-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Red",
+   "view": "front",
+   "src": "S05610/S05610_RED_F.jpg",
+   "key": "supplier-photos/s05610/red-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Red",
+   "view": "back",
+   "src": "S05610/S05610_RED_B.jpg",
+   "key": "supplier-photos/s05610/red-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Orange",
+   "view": "front",
+   "src": "S05610/S05610_ORANGE_F.jpg",
+   "key": "supplier-photos/s05610/orange-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Orange",
+   "view": "back",
+   "src": "S05610/S05610_ORANGE_B.jpg",
+   "key": "supplier-photos/s05610/orange-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Charcoal Heather",
+   "view": "front",
+   "src": "S05610/S05610_CHA_F.jpg",
+   "key": "supplier-photos/s05610/charcoal-heather-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Charcoal Heather",
+   "view": "back",
+   "src": "S05610/S05610_CHARCOAL_HEATHER_B.jpg",
+   "key": "supplier-photos/s05610/charcoal-heather-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Brown",
+   "view": "front",
+   "src": "S05610/S05610-front-brown.jpg",
+   "key": "supplier-photos/s05610/brown-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Brown",
+   "view": "back",
+   "src": "S05610/S05610-Brown-back.jpg",
+   "key": "supplier-photos/s05610/brown-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Caramel",
+   "view": "front",
+   "src": "S05610/S05610-front-caramel.jpg",
+   "key": "supplier-photos/s05610/caramel-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Caramel",
+   "view": "back",
+   "src": "S05610/S05610-Caramel-back.jpg",
+   "key": "supplier-photos/s05610/caramel-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Heliconia",
+   "view": "front",
+   "src": "S05610/S05610-front-heliconia.jpg",
+   "key": "supplier-photos/s05610/heliconia-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Heliconia",
+   "view": "back",
+   "src": "S05610/S05610-Heliconia-back.jpg",
+   "key": "supplier-photos/s05610/heliconia-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Sand",
+   "view": "front",
+   "src": "S05610/S05610-Sand-front-HiRes.jpg",
+   "key": "supplier-photos/s05610/sand-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Sand",
+   "view": "back",
+   "src": "S05610/S05610-Sand-back-HiRes.jpg",
+   "key": "supplier-photos/s05610/sand-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Ivory",
+   "view": "front",
+   "src": "S05610/S05610-Ivory-front-HiRes.jpg",
+   "key": "supplier-photos/s05610/ivory-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "color": "Ivory",
+   "view": "back",
+   "src": "S05610/S05610-Ivory-back-HiRes.jpg",
+   "key": "supplier-photos/s05610/ivory-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05615",
+   "color": "Charcoal Heather",
+   "view": "front",
+   "src": "S05615/5615-Charcoal-front-HiRes.png",
+   "key": "supplier-photos/s05615/charcoal-heather-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05615",
+   "color": "Athletic Grey Heather",
+   "view": "front",
+   "src": "S05615/5615-Grey-front-HiRes.png",
+   "key": "supplier-photos/s05615/athletic-grey-heather-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05615",
+   "color": "White",
+   "view": "front",
+   "src": "S05615/5615-White-front-HiRes.png",
+   "key": "supplier-photos/s05615/white-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05615",
+   "color": "Navy",
+   "view": "front",
+   "src": "S05615/5615-Navy-front-HiRes.png",
+   "key": "supplier-photos/s05615/navy-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05615",
+   "color": "Royal",
+   "view": "front",
+   "src": "S05615/5615-Royal-front-HiRes.png",
+   "key": "supplier-photos/s05615/royal-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05615",
+   "color": "Red",
+   "view": "front",
+   "src": "S05615/5615-Red-front-HiRes.png",
+   "key": "supplier-photos/s05615/red-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05615",
+   "color": "Orange",
+   "view": "front",
+   "src": "S05615/5615-Orange-front-HiRes.png",
+   "key": "supplier-photos/s05615/orange-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05615",
+   "color": "Black",
+   "view": "front",
+   "src": "S05615/5615-Black-front.jpg",
+   "key": "supplier-photos/s05615/black-front.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L02185",
+   "color": "Black",
+   "view": "front",
+   "src": "L02185 - L02186/L02185_BLACK_F.jpg",
+   "key": "supplier-photos/l02185/black-front.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L02185",
+   "color": "Black",
+   "view": "back",
+   "src": "L02185 - L02186/L02185_BLACK_B.jpg",
+   "key": "supplier-photos/l02185/black-back.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L02185",
+   "color": "Navy",
+   "view": "front",
+   "src": "L02185 - L02186/L02185_NAVY_F.jpg",
+   "key": "supplier-photos/l02185/navy-front.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L02185",
+   "color": "Navy",
+   "view": "back",
+   "src": "L02185 - L02186/L02185_NAVY_B.jpg",
+   "key": "supplier-photos/l02185/navy-back.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L02185",
+   "color": "Charcoal",
+   "view": "front",
+   "src": "L02185 - L02186/L02185_CHARCOAL_F.jpg",
+   "key": "supplier-photos/l02185/charcoal-front.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L02185",
+   "color": "Charcoal",
+   "view": "back",
+   "src": "L02185 - L02186/L02185_CHARCOAL_B.jpg",
+   "key": "supplier-photos/l02185/charcoal-back.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L02186",
+   "color": "Black",
+   "view": "front",
+   "src": "L02185 - L02186/L02186_BLACK_F.jpg",
+   "key": "supplier-photos/l02186/black-front.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L02186",
+   "color": "Black",
+   "view": "back",
+   "src": "L02185 - L02186/L02186_BLACK_B.jpg",
+   "key": "supplier-photos/l02186/black-back.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L02186",
+   "color": "Navy",
+   "view": "front",
+   "src": "L02185 - L02186/L02186_NAVY_F.jpg",
+   "key": "supplier-photos/l02186/navy-front.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L02186",
+   "color": "Navy",
+   "view": "back",
+   "src": "L02185 - L02186/L02186_NAVY_B.jpg",
+   "key": "supplier-photos/l02186/navy-back.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L02186",
+   "color": "Charcoal",
+   "view": "front",
+   "src": "L02185 - L02186/L02186_CHARCOAL_F.jpg",
+   "key": "supplier-photos/l02186/charcoal-front.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L02186",
+   "color": "Charcoal",
+   "view": "back",
+   "src": "L02185 - L02186/L02186_CHARCOAL_B.jpg",
+   "key": "supplier-photos/l02186/charcoal-back.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07260",
+   "color": "Black",
+   "view": "front",
+   "src": "L07260 - L07261/L07260_BLA.jpg",
+   "key": "supplier-photos/l07260/black-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07260",
+   "color": "Black",
+   "view": "back",
+   "src": "L07260 - L07261/L07260_BLA_BV.jpg",
+   "key": "supplier-photos/l07260/black-back.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07260",
+   "color": "Navy",
+   "view": "front",
+   "src": "L07260 - L07261/L07260_Nav.jpg",
+   "key": "supplier-photos/l07260/navy-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07260",
+   "color": "Navy",
+   "view": "back",
+   "src": "L07260 - L07261/L07260_Navy_back.jpg",
+   "key": "supplier-photos/l07260/navy-back.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07260",
+   "color": "Gunmetal",
+   "view": "front",
+   "src": "L07260 - L07261/L07260_Gun.jpg",
+   "key": "supplier-photos/l07260/gunmetal-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07260",
+   "color": "Cobalt",
+   "view": "front",
+   "src": "L07260 - L07261/L07260_Blu.jpg",
+   "key": "supplier-photos/l07260/cobalt-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07260",
+   "color": "Cobalt",
+   "view": "back",
+   "src": "L07260 - L07261/L07260_BueBACK.jpg",
+   "key": "supplier-photos/l07260/cobalt-back.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07260",
+   "color": "Red",
+   "view": "front",
+   "src": "L07260 - L07261/L07260_Red.jpg",
+   "key": "supplier-photos/l07260/red-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07261",
+   "color": "Black",
+   "view": "front",
+   "src": "L07260 - L07261/L07261_Bla.jpg",
+   "key": "supplier-photos/l07261/black-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07261",
+   "color": "Black",
+   "view": "back",
+   "src": "L07260 - L07261/L07261_BLA_BV.jpg",
+   "key": "supplier-photos/l07261/black-back.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07261",
+   "color": "Navy",
+   "view": "front",
+   "src": "L07260 - L07261/L07261_Nav.jpg",
+   "key": "supplier-photos/l07261/navy-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07261",
+   "color": "Gunmetal",
+   "view": "front",
+   "src": "L07260 - L07261/L07261_Gun.jpg",
+   "key": "supplier-photos/l07261/gunmetal-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07261",
+   "color": "Cobalt",
+   "view": "front",
+   "src": "L07260 - L07261/L07261_Blu.jpg",
+   "key": "supplier-photos/l07261/cobalt-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07261",
+   "color": "Cobalt",
+   "view": "back",
+   "src": "L07260 - L07261/L07261_BLU_BV.jpg",
+   "key": "supplier-photos/l07261/cobalt-back.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07261",
+   "color": "Red",
+   "view": "front",
+   "src": "L07260 - L07261/L07261_Red.jpg",
+   "key": "supplier-photos/l07261/red-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L7260Y",
+   "color": "Black",
+   "view": "front",
+   "src": "L07260 - L07261/L7260Y_Bla.jpg",
+   "key": "supplier-photos/l7260y/black-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L7260Y",
+   "color": "Navy",
+   "view": "front",
+   "src": "L07260 - L07261/L7260Y_Nav.jpg",
+   "key": "supplier-photos/l7260y/navy-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07240",
+   "color": "Black",
+   "view": "front",
+   "src": "L07240/L07240-Black-front.jpg",
+   "key": "supplier-photos/l07240/black-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07240",
+   "color": "Navy",
+   "view": "front",
+   "src": "L07240/L07240-Navy-front.jpg",
+   "key": "supplier-photos/l07240/navy-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07240",
+   "color": "Charcoal Melange",
+   "view": "front",
+   "src": "L07240/7240-Front-Charcoal-HIRes.jpg",
+   "key": "supplier-photos/l07240/charcoal-melange-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07240",
+   "color": "Charcoal Melange",
+   "view": "back",
+   "src": "L07240/7240-Back-Charcoal-HIRe.jpg",
+   "key": "supplier-photos/l07240/charcoal-melange-back.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07240",
+   "color": "Silver Melange",
+   "view": "front",
+   "src": "L07240/L07240-SilverMEL-front.jpg",
+   "key": "supplier-photos/l07240/silver-melange-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07240",
+   "color": "Gunmetal",
+   "view": "front",
+   "src": "L07240/L07240-Gunmetal-front.jpg",
+   "key": "supplier-photos/l07240/gunmetal-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07240",
+   "color": "Blue",
+   "view": "front",
+   "src": "L07240/L07240-Blue-front.jpg",
+   "key": "supplier-photos/l07240/blue-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07240",
+   "color": "Red",
+   "view": "front",
+   "src": "L07240/L07240-Red-front.jpg",
+   "key": "supplier-photos/l07240/red-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07240",
+   "color": "Midnight Melange",
+   "view": "front",
+   "src": "L07240/7240-Front-Midnight-HIRes.jpg",
+   "key": "supplier-photos/l07240/midnight-melange-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07240",
+   "color": "Midnight Melange",
+   "view": "back",
+   "src": "L07240/7240-Back-MIdnight-HIRes.jpg",
+   "key": "supplier-photos/l07240/midnight-melange-back.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07240",
+   "color": "Burgundy Melange",
+   "view": "front",
+   "src": "L07240/7240-Front-Burgundy-HIRes.jpg",
+   "key": "supplier-photos/l07240/burgundy-melange-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07240",
+   "color": "Burgundy Melange",
+   "view": "back",
+   "src": "L07240/7240-Back-Burgundy-HIRes.jpg",
+   "key": "supplier-photos/l07240/burgundy-melange-back.jpg"
+  }
+ ],
+ "size_charts": [
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00540",
+   "unit": "in",
+   "sizes": [
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL",
+    "2XL",
+    "3XL",
+    "4XL"
+   ],
+   "measurements": [
+    {
+     "name": "Chest",
+     "values": {
+      "XS": "36",
+      "S": "40",
+      "M": "44",
+      "L": "48",
+      "XL": "52",
+      "2XL": "56",
+      "3XL": "60",
+      "4XL": "64"
+     }
+    },
+    {
+     "name": "Back Body Length",
+     "values": {
+      "XS": "26 1/4",
+      "S": "27 1/2",
+      "M": "28 3/4",
+      "L": "30",
+      "XL": "31",
+      "2XL": "32 1/4",
+      "3XL": "33 1/2",
+      "4XL": "34 1/2"
+     }
+    },
+    {
+     "name": "Sleeve Length",
+     "values": {
+      "XS": "34",
+      "S": "35",
+      "M": "36",
+      "L": "37",
+      "XL": "38",
+      "2XL": "39",
+      "3XL": "40",
+      "4XL": "41"
+     }
+    }
+   ]
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00545",
+   "unit": "in",
+   "sizes": [
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL",
+    "2XL",
+    "3XL",
+    "4XL"
+   ],
+   "measurements": [
+    {
+     "name": "Chest",
+     "values": {
+      "XS": "36",
+      "S": "40",
+      "M": "44",
+      "L": "48",
+      "XL": "52",
+      "2XL": "56",
+      "3XL": "60",
+      "4XL": "64"
+     }
+    },
+    {
+     "name": "Back Body Length",
+     "values": {
+      "XS": "26 1/4",
+      "S": "27 1/2",
+      "M": "28 3/4",
+      "L": "30",
+      "XL": "31",
+      "2XL": "32 1/4",
+      "3XL": "33 1/2",
+      "4XL": "34 1/2"
+     }
+    },
+    {
+     "name": "Sleeve Length",
+     "values": {
+      "XS": "34",
+      "S": "35",
+      "M": "36",
+      "L": "37",
+      "XL": "38",
+      "2XL": "39",
+      "3XL": "40",
+      "4XL": "41"
+     }
+    }
+   ]
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "unit": "in",
+   "sizes": [
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL",
+    "2XL",
+    "3XL",
+    "4XL"
+   ],
+   "measurements": [
+    {
+     "name": "Chest",
+     "values": {
+      "XS": "36",
+      "S": "40",
+      "M": "44",
+      "L": "48",
+      "XL": "52",
+      "2XL": "56",
+      "3XL": "60",
+      "4XL": "64"
+     }
+    },
+    {
+     "name": "Back Body Length",
+     "values": {
+      "XS": "26 1/4",
+      "S": "27 1/2",
+      "M": "28 3/4",
+      "L": "30",
+      "XL": "31",
+      "2XL": "32 1/4",
+      "3XL": "33 1/2",
+      "4XL": "34 1/2"
+     }
+    },
+    {
+     "name": "Sleeve Length",
+     "values": {
+      "XS": "34",
+      "S": "35",
+      "M": "36",
+      "L": "37",
+      "XL": "38",
+      "2XL": "39",
+      "3XL": "40",
+      "4XL": "41"
+     }
+    }
+   ]
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00555",
+   "unit": "in",
+   "sizes": [
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL",
+    "2XL",
+    "3XL",
+    "4XL"
+   ],
+   "measurements": [
+    {
+     "name": "Chest",
+     "values": {
+      "XS": "36",
+      "S": "40",
+      "M": "44",
+      "L": "48",
+      "XL": "52",
+      "2XL": "56",
+      "3XL": "60",
+      "4XL": "64"
+     }
+    },
+    {
+     "name": "Back Body Length",
+     "values": {
+      "XS": "26 1/4",
+      "S": "27 1/2",
+      "M": "28 3/4",
+      "L": "30",
+      "XL": "31",
+      "2XL": "32 1/4",
+      "3XL": "33 1/2",
+      "4XL": "34 1/2"
+     }
+    },
+    {
+     "name": "Sleeve Length",
+     "values": {
+      "XS": "34",
+      "S": "35",
+      "M": "36",
+      "L": "37",
+      "XL": "38",
+      "2XL": "39",
+      "3XL": "40",
+      "4XL": "41"
+     }
+    }
+   ]
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05610",
+   "unit": "in",
+   "sizes": [
+    "S",
+    "M",
+    "L",
+    "XL",
+    "2XL",
+    "3XL",
+    "4XL"
+   ],
+   "measurements": [
+    {
+     "name": "Chest",
+     "values": {
+      "S": "36",
+      "M": "40",
+      "L": "44",
+      "XL": "48",
+      "2XL": "52",
+      "3XL": "56",
+      "4XL": "60"
+     }
+    },
+    {
+     "name": "Back Body Length",
+     "values": {
+      "S": "28",
+      "M": "29",
+      "L": "30",
+      "XL": "31",
+      "2XL": "32",
+      "3XL": "33",
+      "4XL": "34"
+     }
+    },
+    {
+     "name": "Sleeve Length",
+     "values": {
+      "S": "16 1/2",
+      "M": "17 1/2",
+      "L": "18 1/2",
+      "XL": "19 1/2",
+      "2XL": "20 1/2",
+      "3XL": "21 1/2",
+      "4XL": "22 1/2"
+     }
+    }
+   ]
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "S05615",
+   "unit": "in",
+   "sizes": [
+    "S",
+    "M",
+    "L",
+    "XL",
+    "2XL",
+    "3XL",
+    "4XL"
+   ],
+   "measurements": [
+    {
+     "name": "Chest",
+     "values": {
+      "S": "36",
+      "M": "40",
+      "L": "44",
+      "XL": "48",
+      "2XL": "52",
+      "3XL": "56",
+      "4XL": "60"
+     }
+    },
+    {
+     "name": "Back Body Length",
+     "values": {
+      "S": "28",
+      "M": "29",
+      "L": "30",
+      "XL": "31",
+      "2XL": "32",
+      "3XL": "33",
+      "4XL": "34"
+     }
+    },
+    {
+     "name": "Sleeve Length",
+     "values": {
+      "S": "34 1/2",
+      "M": "35 1/2",
+      "L": "36 1/2",
+      "XL": "37 1/2",
+      "2XL": "38 1/2",
+      "3XL": "39 1/2",
+      "4XL": "40 1/2"
+     }
+    }
+   ]
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "unit": "in",
+   "sizes": [
+    "OS"
+   ],
+   "measurements": [
+    {
+     "name": "Inside Circumference",
+     "values": {
+      "OS": "21 3/4"
+     }
+    },
+    {
+     "name": "Crown Height",
+     "values": {
+      "OS": "6 5/8"
+     }
+    },
+    {
+     "name": "Front Two Panel Width",
+     "values": {
+      "OS": "7 1/2"
+     }
+    },
+    {
+     "name": "Visor Length",
+     "values": {
+      "OS": "2 3/4"
+     }
+    }
+   ]
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "unit": "in",
+   "sizes": [
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL"
+   ],
+   "measurements": [
+    {
+     "name": "Chest",
+     "values": {
+      "XS": "31",
+      "S": "33",
+      "M": "35",
+      "L": "37",
+      "XL": "39"
+     }
+    },
+    {
+     "name": "Back Body Length",
+     "values": {
+      "XS": "20 1/2",
+      "S": "22",
+      "M": "23 1/2",
+      "L": "25",
+      "XL": "26 1/2"
+     }
+    },
+    {
+     "name": "Sleeve Length",
+     "values": {
+      "XS": "13",
+      "S": "14",
+      "M": "15",
+      "L": "16",
+      "XL": "17"
+     }
+    }
+   ]
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L02185",
+   "unit": "in",
+   "sizes": [
+    "S",
+    "M",
+    "L",
+    "XL",
+    "2XL",
+    "3XL",
+    "4XL"
+   ],
+   "measurements": [
+    {
+     "name": "Chest",
+     "values": {
+      "S": "44",
+      "M": "47",
+      "L": "50",
+      "XL": "53",
+      "2XL": "56",
+      "3XL": "59",
+      "4XL": "62"
+     }
+    },
+    {
+     "name": "Back Body Length",
+     "values": {
+      "S": "28 1/4",
+      "M": "29",
+      "L": "29 3/4",
+      "XL": "30 3/4",
+      "2XL": "31 3/4",
+      "3XL": "32 3/4",
+      "4XL": "33 3/4"
+     }
+    },
+    {
+     "name": "Sleeve Length",
+     "values": {
+      "S": "35",
+      "M": "35 3/4",
+      "L": "36 1/2",
+      "XL": "37 1/4",
+      "2XL": "38",
+      "3XL": "38 3/4",
+      "4XL": "39 1/2"
+     }
+    }
+   ]
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L02186",
+   "unit": "in",
+   "sizes": [
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL",
+    "2XL"
+   ],
+   "measurements": [
+    {
+     "name": "Chest",
+     "values": {
+      "XS": "37",
+      "S": "40",
+      "M": "43",
+      "L": "46",
+      "XL": "49",
+      "2XL": "52"
+     }
+    },
+    {
+     "name": "Back Body Length",
+     "values": {
+      "XS": "26 1/4",
+      "S": "27",
+      "M": "27 3/4",
+      "L": "28 3/4",
+      "XL": "29 3/4",
+      "2XL": "30 3/4"
+     }
+    },
+    {
+     "name": "Sleeve Length",
+     "values": {
+      "XS": "31 1/2",
+      "S": "32 1/4",
+      "M": "33",
+      "L": "33 3/4",
+      "XL": "34 1/2",
+      "2XL": "35 1/4"
+     }
+    }
+   ]
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L07200",
+   "unit": "in",
+   "sizes": [
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL",
+    "2XL",
+    "3XL",
+    "4XL"
+   ],
+   "measurements": [
+    {
+     "name": "Chest",
+     "values": {
+      "XS": "40",
+      "S": "43",
+      "M": "46",
+      "L": "49",
+      "XL": "52",
+      "2XL": "55",
+      "3XL": "58",
+      "4XL": "61"
+     }
+    },
+    {
+     "name": "Back Body Length",
+     "values": {
+      "XS": "26 1/2",
+      "S": "27",
+      "M": "27 1/2",
+      "L": "28 1/2",
+      "XL": "29 1/2",
+      "2XL": "30",
+      "3XL": "30 1/2",
+      "4XL": "31"
+     }
+    },
+    {
+     "name": "Sleeve Length",
+     "values": {
+      "XS": "33 3/4",
+      "S": "34 1/2",
+      "M": "35 1/4",
+      "L": "36",
+      "XL": "36 3/4",
+      "2XL": "37 1/2",
+      "3XL": "38 1/4",
+      "4XL": "39"
+     }
+    }
+   ]
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L07201",
+   "unit": "in",
+   "sizes": [
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL",
+    "2XL"
+   ],
+   "measurements": [
+    {
+     "name": "Chest",
+     "values": {
+      "XS": "35",
+      "S": "38",
+      "M": "41",
+      "L": "44",
+      "XL": "47",
+      "2XL": "50"
+     }
+    },
+    {
+     "name": "Back Body Length",
+     "values": {
+      "XS": "24",
+      "S": "24 1/2",
+      "M": "25",
+      "L": "25 1/2",
+      "XL": "26",
+      "2XL": "26 1/2"
+     }
+    },
+    {
+     "name": "Sleeve Length",
+     "values": {
+      "XS": "31 1/2",
+      "S": "32 1/4",
+      "M": "33",
+      "L": "33 3/4",
+      "XL": "34 1/2",
+      "2XL": "35 1/4"
+     }
+    }
+   ]
+  },
+  {
+   "brand": "CX2",
+   "style": "L07260",
+   "unit": "in",
+   "sizes": [
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL",
+    "2XL",
+    "3XL",
+    "4XL",
+    "5XL"
+   ],
+   "measurements": [
+    {
+     "name": "Chest",
+     "values": {
+      "XS": "40",
+      "S": "43",
+      "M": "46",
+      "L": "49",
+      "XL": "52",
+      "2XL": "55",
+      "3XL": "58",
+      "4XL": "61",
+      "5XL": "64"
+     }
+    },
+    {
+     "name": "Back Body Length",
+     "values": {
+      "XS": "26 1/2",
+      "S": "27",
+      "M": "27 1/2",
+      "L": "28 1/2",
+      "XL": "29 1/2",
+      "2XL": "30",
+      "3XL": "30 1/2",
+      "4XL": "31",
+      "5XL": "31 1/2"
+     }
+    },
+    {
+     "name": "Sleeve Length",
+     "values": {
+      "XS": "33 3/4",
+      "S": "34 1/2",
+      "M": "35 1/4",
+      "L": "36",
+      "XL": "36 3/4",
+      "2XL": "37 1/2",
+      "3XL": "38 1/4",
+      "4XL": "39",
+      "5XL": "39 3/4"
+     }
+    }
+   ]
+  },
+  {
+   "brand": "CX2",
+   "style": "L07261",
+   "unit": "in",
+   "sizes": [
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL",
+    "2XL"
+   ],
+   "measurements": [
+    {
+     "name": "Chest",
+     "values": {
+      "XS": "34",
+      "S": "37",
+      "M": "40",
+      "L": "43",
+      "XL": "46",
+      "2XL": "49"
+     }
+    },
+    {
+     "name": "Back Body Length",
+     "values": {
+      "XS": "24",
+      "S": "24 1/2",
+      "M": "25",
+      "L": "25 1/2",
+      "XL": "26",
+      "2XL": "26 1/2"
+     }
+    },
+    {
+     "name": "Sleeve Length",
+     "values": {
+      "XS": "31 1/2",
+      "S": "32 1/4",
+      "M": "33",
+      "L": "33 3/4",
+      "XL": "34 1/2",
+      "2XL": "35 1/4"
+     }
+    }
+   ]
+  },
+  {
+   "brand": "CX2",
+   "style": "L7260Y",
+   "unit": "in",
+   "sizes": [
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL"
+   ],
+   "measurements": [
+    {
+     "name": "Chest",
+     "values": {
+      "XS": "31",
+      "S": "34",
+      "M": "37",
+      "L": "40",
+      "XL": "43"
+     }
+    },
+    {
+     "name": "Back Body Length",
+     "values": {
+      "XS": "20 1/2",
+      "S": "22",
+      "M": "23 1/2",
+      "L": "25",
+      "XL": "26 1/2"
+     }
+    },
+    {
+     "name": "Sleeve Length",
+     "values": {
+      "XS": "26",
+      "S": "27 1/2",
+      "M": "29 1/4",
+      "L": "31",
+      "XL": "32 3/4"
+     }
+    }
+   ]
+  },
+  {
+   "brand": "CX2",
+   "style": "L07240",
+   "unit": "in",
+   "sizes": [
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL",
+    "2XL",
+    "3XL",
+    "4XL"
+   ],
+   "measurements": [
+    {
+     "name": "Chest",
+     "values": {
+      "XS": "39",
+      "S": "42",
+      "M": "45",
+      "L": "48",
+      "XL": "51",
+      "2XL": "54",
+      "3XL": "57",
+      "4XL": "60"
+     }
+    },
+    {
+     "name": "Back Body Length",
+     "values": {
+      "XS": "26 1/4",
+      "S": "27",
+      "M": "27 3/4",
+      "L": "28 1/2",
+      "XL": "29 1/4",
+      "2XL": "30",
+      "3XL": "30 3/4",
+      "4XL": "31 1/2"
+     }
+    },
+    {
+     "name": "Sleeve Length",
+     "values": {
+      "XS": "33 1/4",
+      "S": "34",
+      "M": "34 3/4",
+      "L": "35 1/2",
+      "XL": "36 1/4",
+      "2XL": "37",
+      "3XL": "37 3/4",
+      "4XL": "38 1/2"
+     }
+    }
+   ]
+  }
+ ]
+}

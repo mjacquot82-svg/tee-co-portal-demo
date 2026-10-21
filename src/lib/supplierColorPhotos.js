@@ -60,6 +60,12 @@ export function resolveSupplierStyle(product = {}, garment = {}) {
 
   const brandModel = normalizeText(product?.brand_model);
   const name = normalizeText(product?.name || garment?.display_name);
+  // Canadian-supplier names put the style code first: "24/7 All Day Every Day L00545 - Flux - Adult 1/4 Zip"
+  // -> brand "24/7 All Day Every Day", style "L00545".
+  const coded = brandModel.match(/^(.*?)\s+([A-Z]\d{4,5}|[A-Z]\d{3,4}Y)\s+[-–]\s+\S/i);
+  if (coded && coded[1]) {
+    return { brand: explicitBrand || normalizeText(garment?.brand) || coded[1], style: (explicitStyle || coded[2]).toUpperCase() };
+  }
   // brand_model is "<brand> <style>", e.g. "Team 365 TT62" or "YP Classic 6606": brand = all but the last word.
   const brandModelWords = brandModel.split(/\s+/).filter(Boolean);
   const brandFromModel = brandModelWords.length > 1 ? brandModelWords.slice(0, -1).join(" ") : brandModelWords[0] || "";
