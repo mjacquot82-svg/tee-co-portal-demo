@@ -127,9 +127,7 @@
     "Dark Navy",
     "Grey",
     "Khaki",
-    "Kryptek Typhon",
     "Maroon",
-    "Multicam Alpine",
     "Multicam Black",
     "Multicam Green",
     "Navy",
@@ -139,6 +137,10 @@
     "Red",
     "Royal Blue",
     "Spruce"
+   ],
+   "removed_colors": [
+    "Kryptek Typhon",
+    "Multicam Alpine"
    ]
   },
   {
@@ -221,7 +223,6 @@
     "Heather Dark Maroon",
     "Heather Dark Navy",
     "Heather Deep Royal",
-    "Heather Scarlet Red",
     "Heliconia",
     "Indigo Blue",
     "Irish Green",
@@ -245,6 +246,9 @@
     "Sport Grey",
     "Violet",
     "White"
+   ],
+   "removed_colors": [
+    "Heather Scarlet Red"
    ]
   },
   {
@@ -472,7 +476,6 @@
     "Royal",
     "Sapphire",
     "Sport Grey",
-    "Tropical Blue",
     "Violet",
     "White",
     "Aquatic",
@@ -487,6 +490,9 @@
     "Dusty Rose",
     "Graphite Heather",
     "Heather Sapphire"
+   ],
+   "removed_colors": [
+    "Tropical Blue"
    ]
   },
   {
@@ -518,7 +524,9 @@
   {
    "ss_style": "Gildan 5700",
    "styleID": 3900,
-   "colors": [
+   "colors": [],
+   "all_ss_colors": true,
+   "replaced_colors": [
     "Red",
     "White",
     "Royal",
@@ -680,8 +688,10 @@
     "Purple",
     "Red",
     "Royal",
-    "Sapphire",
     "Sport Grey"
+   ],
+   "removed_colors": [
+    "Sapphire"
    ]
   },
   {
@@ -859,12 +869,14 @@
     "Heather Charcoal",
     "Heather Grey",
     "Heather Navy",
-    "Heather Royal",
     "Navy",
     "Neon Pink",
     "Pink",
     "Red",
     "Royal Blue"
+   ],
+   "removed_colors": [
+    "Heather Royal"
    ]
   },
   {
@@ -906,7 +918,9 @@
   {
    "ss_style": "Team 365 TT62",
    "styleID": 13881,
-   "colors": [
+   "colors": [],
+   "all_ss_colors": true,
+   "replaced_colors": [
     "White",
     "Sport Dark Navy",
     "Heather",
@@ -920,7 +934,9 @@
   {
    "ss_style": "YP Classics 6606",
    "styleID": 3783,
-   "colors": [
+   "colors": [],
+   "all_ss_colors": true,
+   "replaced_colors": [
     "White",
     "Black",
     "Brown",
@@ -972,5 +988,6 @@
     "Royal"
    ]
   }
- ]
+ ],
+ "notes": "colors: Tee & Co colour names to import (empty = all S&S colours). all_ss_colors: Teresa offers every S&S colour (two-tone styles, confirmed 2026-10-21). removed_colors: discontinued at S&S, removed with Teresa's OK 2026-10-21."
 }

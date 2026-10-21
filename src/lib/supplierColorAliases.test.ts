@@ -19,3 +19,13 @@ describe("colour aliases", () => {
     expect(resolveColorAlias("Moss", "gildan|64000")).toBe("");
   });
 });
+
+import { resolveSupplierStyle, buildStyleKey } from "./supplierColorPhotos";
+describe("multi-word brands in brand_model", () => {
+  it("keeps the whole brand", () => {
+    const s = resolveSupplierStyle({ brand_model: "Team 365 TT62" });
+    expect(buildStyleKey(s!.brand, s!.style)).toBe("team365|tt62");
+    const y = resolveSupplierStyle({ brand_model: "YP Classic 6606" });
+    expect(buildStyleKey(y!.brand, y!.style)).toBe("ypclassics|6606");
+  });
+});

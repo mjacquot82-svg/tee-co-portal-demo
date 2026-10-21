@@ -60,7 +60,10 @@ export function resolveSupplierStyle(product = {}, garment = {}) {
 
   const brandModel = normalizeText(product?.brand_model);
   const name = normalizeText(product?.name || garment?.display_name);
-  const brand = explicitBrand || normalizeText(garment?.brand) || brandModel.split(/\s+/)[0] || name.split(/\s+/)[0] || "";
+  // brand_model is "<brand> <style>", e.g. "Team 365 TT62" or "YP Classic 6606": brand = all but the last word.
+  const brandModelWords = brandModel.split(/\s+/).filter(Boolean);
+  const brandFromModel = brandModelWords.length > 1 ? brandModelWords.slice(0, -1).join(" ") : brandModelWords[0] || "";
+  const brand = explicitBrand || normalizeText(garment?.brand) || brandFromModel || name.split(/\s+/)[0] || "";
   const styleFrom = (text) => {
     const dash = text.match(/[-–]\s*([A-Z0-9]{2,}[A-Z0-9-]*)\s*$/i);
     if (dash && /\d/.test(dash[1])) return dash[1];
