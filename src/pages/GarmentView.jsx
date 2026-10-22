@@ -20,6 +20,8 @@ import {
   useGarmentModelColors,
 } from "../lib/garmentModelColorsStore";
 import { getOrderingWorkflowPaths } from "../customer-portal/customerPortalStartOrderRoute";
+import { useSupplierColorPhotos, useSupplierSizeChart } from "../lib/useSupplierColorPhotos";
+import SupplierSizeChart from "../components/SupplierSizeChart";
 
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -94,6 +96,7 @@ export default function GarmentView() {
   const location = useLocation();
   const orderingPaths = getOrderingWorkflowPaths(location.pathname);
   const [selectedColor, setSelectedColor] = useState("");
+  const [selectedPhotoView, setSelectedPhotoView] = useState("front");
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.innerWidth < 900 : false
   );
@@ -188,6 +191,8 @@ export default function GarmentView() {
   const currentSelectedColor = availableColors.includes(selectedColor)
     ? selectedColor
     : availableColors[0] || "";
+  const colorPhotoViews = useSupplierColorPhotos(selectedProduct, garment, currentSelectedColor);
+  const sizeChart = useSupplierSizeChart(selectedProduct, garment);
 
   useEffect(() => {
     const handleResize = () => {
@@ -239,7 +244,13 @@ export default function GarmentView() {
     alt: detailTitle,
     size: "medium",
   });
-  const imageSrc = garment?.image || productImage.src;
+  const fallbackImageSrc = garment?.image || productImage.src;
+  const activeColorPhoto =
+    colorPhotoViews.find((photo) => photo.view === selectedPhotoView) || colorPhotoViews[0] || null;
+  const imageSrc = activeColorPhoto?.src || fallbackImageSrc;
+  const imageAlt = activeColorPhoto
+    ? `${detailTitle} in ${currentSelectedColor}, ${activeColorPhoto.label.toLowerCase()} view`
+    : garment?.image ? detailTitle : productImage.alt;
   const startingPrice = resolveProductBasePrice(selectedProduct);
   const availablePlacements =
     selectedProduct?.placement_config?.length
@@ -341,7 +352,8 @@ export default function GarmentView() {
             {imageSrc ? (
               <img
                 src={imageSrc}
-                alt={garment?.image ? detailTitle : productImage.alt}
+                alt={imageAlt}
+                data-testid={activeColorPhoto ? "garment-color-photo" : "garment-main-image"}
                 width="800"
                 height="800"
                 loading="eager"
@@ -362,6 +374,52 @@ export default function GarmentView() {
               />
             )}
           </div>
+
+          {colorPhotoViews.length > 1 ? (
+            <div
+              role="group"
+              aria-label={`${currentSelectedColor} photos`}
+              data-testid="garment-color-photo-views"
+              style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}
+            >
+              {colorPhotoViews.map((photo) => {
+                const isActive = activeColorPhoto?.view === photo.view;
+                return (
+                  <button
+                    key={photo.view}
+                    type="button"
+                    onClick={() => setSelectedPhotoView(photo.view)}
+                    aria-pressed={isActive}
+                    aria-label={`Show ${photo.label.toLowerCase()} view`}
+                    style={{
+                      width: "64px",
+                      padding: "4px",
+                      borderRadius: "12px",
+                      border: isActive ? "2px solid #171717" : "1px solid #e7e5e4",
+                      background: "#ffffff",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <img
+                      src={photo.thumb}
+                      alt=""
+                      width="54"
+                      height="68"
+                      loading="lazy"
+                      style={{ width: "54px", height: "68px", objectFit: "contain", display: "block" }}
+                    />
+                    <span style={{ fontSize: "11px", color: "#44403c", lineHeight: 1.2 }}>{photo.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
+          <SupplierSizeChart chart={sizeChart} />
 
           <div
             style={{

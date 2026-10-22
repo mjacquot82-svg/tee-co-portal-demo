@@ -1,6 +1,7 @@
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useEffect, useMemo } from "react";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
+import WithSupplierImage from "../components/WithSupplierImage";
 import {
   areStoredProductsReady,
   resolveProductBasePrice,
@@ -278,7 +279,8 @@ export default function CategoryView() {
                     overflow: "hidden",
                   }}
                 >
-                  {productImage.src ? (
+                  <WithSupplierImage product={item} image={productImage}>{(productImage) => (
+productImage.src ? (
                     <img
                       src={productImage.src}
                       alt={productImage.alt}
@@ -298,7 +300,8 @@ export default function CategoryView() {
                       titleStyle={{ fontSize: "13px" }}
                       subtitleStyle={{ fontSize: "11px" }}
                     />
-                  )}
+                  )
+)}</WithSupplierImage>
                 </div>
 
               <div style={{ display: "grid", gap: "5px" }}>

@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import NoImagePlaceholder from "../components/NoImagePlaceholder";
+import WithSupplierImage from "../components/WithSupplierImage";
 import { clearPendingCustomerRequest } from "../lib/pendingCustomerRequestStore";
 import { clearPendingCustomerArtwork } from "../lib/pendingCustomerArtworkStore";
 import { useCatalogLookups } from "../lib/catalogLookupsStore";
@@ -278,7 +279,8 @@ export default function Home() {
                         className="storefront-featured-card storefront-phone-product-card"
                       >
                         <div className="storefront-featured-image-shell">
-                          {productImage.src ? (
+                          <WithSupplierImage product={product} image={productImage}>{(productImage) => (
+productImage.src ? (
                             <img
                               src={productImage.src}
                               alt={productImage.alt}
@@ -294,7 +296,8 @@ export default function Home() {
                               titleStyle={{ fontSize: "13px" }}
                               subtitleStyle={{ fontSize: "11px" }}
                             />
-                          )}
+                          )
+)}</WithSupplierImage>
                         </div>
 
                         <div className="storefront-featured-copy">
@@ -358,7 +361,8 @@ export default function Home() {
 
             <Link to={heroLink} className="storefront-merch-hero-product">
               <div className="storefront-merch-hero-visual">
-                {heroProduct && heroImage.src ? (
+                <WithSupplierImage product={heroProduct} image={heroImage}>{(heroImage) => (
+heroProduct && heroImage.src ? (
                   <img
                     src={heroImage.src}
                     alt={heroImage.alt}
@@ -375,7 +379,8 @@ export default function Home() {
                     titleStyle={{ fontSize: "15px" }}
                     subtitleStyle={{ fontSize: "11px" }}
                   />
-                )}
+                )
+)}</WithSupplierImage>
               </div>
 
               <div className="storefront-merch-hero-meta">
@@ -465,7 +470,8 @@ export default function Home() {
                       className="storefront-featured-card storefront-featured-card-vertical"
                     >
                       <div className="storefront-featured-image-shell storefront-featured-image-shell-large">
-                        {productImage.src ? (
+                        <WithSupplierImage product={product} image={productImage}>{(productImage) => (
+productImage.src ? (
                           <img
                             src={productImage.src}
                             alt={productImage.alt}
@@ -481,7 +487,8 @@ export default function Home() {
                             titleStyle={{ fontSize: "13px" }}
                             subtitleStyle={{ fontSize: "11px" }}
                           />
-                        )}
+                        )
+)}</WithSupplierImage>
                       </div>
 
                       <div className="storefront-featured-copy">
@@ -617,7 +624,8 @@ export default function Home() {
                           className="storefront-featured-card"
                         >
                           <div className="storefront-featured-image-shell">
-                            {productImage.src ? (
+                            <WithSupplierImage product={product} image={productImage}>{(productImage) => (
+productImage.src ? (
                               <img
                                 src={productImage.src}
                                 alt={productImage.alt}
@@ -633,7 +641,8 @@ export default function Home() {
                                 titleStyle={{ fontSize: "13px" }}
                                 subtitleStyle={{ fontSize: "11px" }}
                               />
-                            )}
+                            )
+)}</WithSupplierImage>
                           </div>
 
                           <div className="storefront-featured-copy">
