@@ -58,3 +58,30 @@ export function useSupplierSizeChart(product, garment) {
 
   return loaded.styleKey === styleKey ? loaded.chart : null;
 }
+
+// First colour photo (front) for a product card when the product has no image of its own.
+export function useSupplierCardImage(product, enabled = true) {
+  const style = useMemo(() => (enabled ? resolveSupplierStyle(product || {}, {}) : null), [product, enabled]);
+  const styleKey = style ? `${style.brand}|${style.style}` : "";
+  const [loaded, setLoaded] = useState({ styleKey: "", rows: [] });
+  useEffect(() => {
+    let active = true;
+    if (!styleKey || !isSupabaseConfigured || !supabase) return undefined;
+    fetchSupplierColorImages(supabase, style).then((rows) => {
+      if (active) setLoaded({ styleKey, rows });
+    });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [styleKey]);
+  const records = loaded.styleKey === styleKey ? loaded.rows : EMPTY;
+  return useMemo(() => {
+    if (!records.length) return "";
+    const colors = Array.isArray(product?.colors) ? product.colors : [];
+    const key = style ? buildStyleKey(style.brand, style.style) : "";
+    const record = colors.map((c) => findColorPhotoRecord(records, typeof c === "string" ? c : c?.name, key)).find(Boolean) || records[0];
+    const views = buildColorPhotoViews(record, "medium");
+    return (views.find((v) => v.view === "front") || views[0])?.src || "";
+  }, [records, product, style]);
+}

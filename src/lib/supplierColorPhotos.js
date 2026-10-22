@@ -243,7 +243,7 @@ export async function fetchSupplierSizeChart(client, style) {
     chartCache.set(styleKey, (async () => {
       const { data, error } = await client
         .from(SUPPLIER_SIZE_CHARTS_TABLE)
-        .select("unit, sizes, measurements")
+        .select("unit, sizes, measurements, supplier, brand_name")
         .eq("style_key", styleKey)
         .eq("active", true)
         .limit(1);

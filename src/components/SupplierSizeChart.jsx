@@ -1,5 +1,12 @@
 import { useState } from "react";
 
+export function sizeChartSourceNote(chart) {
+  const unit = chart?.unit === "cm" ? "centimetres" : "inches";
+  if (!chart?.supplier || chart.supplier === "ss_activewear") return `Measurements from S&S Activewear, in ${unit}, garment laid flat where noted.`;
+  const brand = String(chart.brand_name || "").trim();
+  return brand ? `Measurements from the ${brand} size chart, in ${unit}.` : `Measurements in ${unit}.`;
+}
+
 // Size chart from S&S (measurements in inches). Hidden when S&S has no chart for the garment.
 export default function SupplierSizeChart({ chart, title = "Size chart" }) {
   const [open, setOpen] = useState(false);
@@ -40,7 +47,7 @@ export default function SupplierSizeChart({ chart, title = "Size chart" }) {
               ))}
             </tbody>
           </table>
-          <p style={{ margin: "8px 0 0", fontSize: "11px", color: "#78716c" }}>Measurements from S&amp;S Activewear, in inches, garment laid flat where noted.</p>
+          <p style={{ margin: "8px 0 0", fontSize: "11px", color: "#78716c" }}>{sizeChartSourceNote(chart)}</p>
         </div>
       ) : null}
     </div>
