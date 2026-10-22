@@ -521,11 +521,39 @@ export function ensureCustomersHydrated() {
       return hydratedCustomers;
     } catch (error) {
       logFallbackActivation("hydration", error);
+      // Not allowed yet (e.g. loaded before staff signed in): let the next sign-in retry.
+      customersHydrationPromise = null;
       return localCustomers;
     }
   })();
 
   return customersHydrationPromise;
+}
+
+// Re-read customers when the signed-in user changes, so a staff member who signs in after the page
+// loaded sees the shop's customer list (database rules decide what each login may read). On sign-out
+// the cached list is dropped so the next person at a shared workstation can't see it.
+let customersAuthSubscribed = false;
+export function handleCustomersAuthChange(event) {
+  if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
+    customersHydrationPromise = null;
+    if (event === "SIGNED_OUT") {
+      persistCustomersSnapshot([], { emit: true, writeStorage: true });
+      return;
+    }
+    if (customerListeners.size) void ensureCustomersHydrated();
+  }
+}
+function subscribeCustomersToAuth() {
+  if (customersAuthSubscribed || typeof window === "undefined" || !shouldUseSupabase()) return;
+  customersAuthSubscribed = true;
+  try {
+    supabase?.auth?.onAuthStateChange?.((event) => {
+      setTimeout(() => handleCustomersAuthChange(event), 0);
+    });
+  } catch {
+    // auth events unavailable: hydration still runs on first use
+  }
 }
 
 // True for a unique-constraint conflict (Postgres 23505 / HTTP 409), e.g. a
@@ -614,6 +642,7 @@ export function subscribeToStoredCustomers(listener) {
 
 export function useStoredCustomers() {
   if (typeof window !== "undefined") {
+    subscribeCustomersToAuth();
     void ensureCustomersHydrated();
   }
 

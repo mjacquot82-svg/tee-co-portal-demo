@@ -79,6 +79,7 @@ export default function GarmentProductionCards({ order = {} }) {
                     </td>
                     <td data-testid="garment-production-artwork">
                       <span>{artwork ? getArtworkDisplayName(artwork) : "Not assigned"}</span>
+                      {lineItem.artwork_location ? <span>Location: {lineItem.artwork_location}</span> : null}
                       <span
                         data-testid="garment-production-file"
                         className={artwork ? "is-ready" : "is-missing"}

@@ -688,6 +688,54 @@ export function normalizePaymentHistory(history, order = {}) {
   );
 }
 
+export function normalizeOrderDiscount(order = {}) {
+  const rawType = normalizeLower(order.discount_type || order.discount?.type);
+  const type = rawType === "percent" || rawType === "percentage" ? "percent" : rawType === "fixed" || rawType === "amount" ? "fixed" : "";
+  const rawValue = parseCurrency(order.discount_value ?? order.discount?.value ?? order.discount_amount);
+  const value = rawValue !== null && rawValue > 0 ? normalizeCurrency(rawValue) : 0;
+  const reason = normalizeText(order.discount_reason || order.discount?.reason);
+  return { type, value, reason };
+}
+
+export function applyOrderDiscount(subtotal, discount = {}) {
+  const baseSubtotal = normalizeCurrency(subtotal);
+  if (baseSubtotal <= 0 || !["percent", "fixed"].includes(discount?.type) || !Number.isFinite(Number(discount.value)) || discount.value <= 0) {
+    return { discount_amount: 0, discounted_subtotal: baseSubtotal };
+  }
+  const requestedAmount = discount.type === "percent"
+    ? baseSubtotal * Math.min(discount.value, 100) / 100
+    : discount.value;
+  const discountAmount = normalizeCurrency(Math.min(Math.max(requestedAmount, 0), baseSubtotal));
+  return {
+    discount_amount: discountAmount,
+    discounted_subtotal: normalizeCurrency(baseSubtotal - discountAmount),
+  };
+}
+
+// With a discount, stored tax/total may already be discounted (saved from an earlier
+// calculation), so dividing stored tax by the undiscounted subtotal would shrink the rate on
+// every save. Take the rate from an explicit tax rate or from the original (pre-discount) quote.
+function resolvePreDiscountTaxRate(order = {}, subtotal = 0, resolvedTaxAmount = null) {
+  const explicit = Number(order.tax_rate ?? order.quote?.tax_rate);
+  if (Number.isFinite(explicit) && explicit >= 0 && (order.tax_rate ?? order.quote?.tax_rate) !== undefined
+      && (order.tax_rate ?? order.quote?.tax_rate) !== null && (order.tax_rate ?? order.quote?.tax_rate) !== "") {
+    return explicit;
+  }
+  const quote = order.quote || {};
+  const quoteSubtotal = parseCurrency(quote.subtotal);
+  const quoteTax = parseCurrency(quote.tax_amount ?? quote.tax ?? quote.taxes);
+  const quoteTotal = parseCurrency(quote.total ?? quote.total_amount);
+  if (quoteSubtotal && quoteSubtotal > 0) {
+    if (quoteTax !== null) return Math.max(quoteTax / quoteSubtotal, 0);
+    if (quoteTotal !== null && quoteTotal >= quoteSubtotal) return (quoteTotal - quoteSubtotal) / quoteSubtotal;
+  }
+  const storedDiscount = parseCurrency(order.discount_amount);
+  if (subtotal > 0 && resolvedTaxAmount !== null && !(storedDiscount > 0)) {
+    return Math.max(resolvedTaxAmount / subtotal, 0);
+  }
+  return DEFAULT_SALES_TAX_RATE;
+}
+
 export function deriveOrderFinancials(order = {}, options = {}) {
   const paymentHistory = normalizePaymentHistory(order.payment_history, order);
   const {
@@ -722,16 +770,34 @@ export function deriveOrderFinancials(order = {}, options = {}) {
     resolvedTaxAmount = repairedTotals.tax_amount;
     resolvedTotalAmount = repairedTotals.total_amount;
   }
+  const discount = normalizeOrderDiscount(order);
+  const { discount_amount: discountAmount, discounted_subtotal: discountedSubtotal } =
+    applyOrderDiscount(subtotal, discount);
+  const hasDiscount = discountAmount > 0;
+  // Discount just removed: stored tax/total are still the discounted ones, so recalculate.
+  const removedStoredDiscount = !hasDiscount && (parseCurrency(order.discount_amount) || 0) > 0 && subtotal > 0;
+  const inferredTaxRate = hasDiscount
+    ? resolvePreDiscountTaxRate(order, subtotal, resolvedTaxAmount)
+    : subtotal > 0 && resolvedTaxAmount !== null
+      ? Math.max(resolvedTaxAmount / subtotal, 0)
+      : Number(order.tax_rate ?? order.quote?.tax_rate ?? DEFAULT_SALES_TAX_RATE);
   const taxAmount = normalizeCurrency(
-    resolvedTaxAmount ??
-      (resolvedTotalAmount !== null && resolvedSubtotal !== null
-        ? Math.max(resolvedTotalAmount - resolvedSubtotal, 0)
-        : 0)
+    removedStoredDiscount
+      ? order.tax_exempt === true ? 0 : subtotal * resolvePreDiscountTaxRate(order, subtotal, null)
+      : hasDiscount
+      ? order.tax_exempt === true
+        ? 0
+        : discountedSubtotal * (Number.isFinite(inferredTaxRate) ? inferredTaxRate : DEFAULT_SALES_TAX_RATE)
+      : resolvedTaxAmount ??
+        (resolvedTotalAmount !== null && resolvedSubtotal !== null
+          ? Math.max(resolvedTotalAmount - resolvedSubtotal, 0)
+          : 0)
   );
   const totalAmount = normalizeCurrency(
-    resolvedTotalAmount ?? subtotal + taxAmount
+    hasDiscount || removedStoredDiscount ? discountedSubtotal + taxAmount : resolvedTotalAmount ?? subtotal + taxAmount
   );
-  const depositAmount = normalizeCurrency(order.deposit_amount ?? order.deposit?.amount);
+  const requestedDepositAmount = normalizeCurrency(order.deposit_amount ?? order.deposit?.amount);
+  const depositAmount = hasDiscount ? Math.min(requestedDepositAmount, totalAmount) : requestedDepositAmount;
   const totalPaid = normalizeCurrency(deriveCanonicalTotalPaid({
     ...order,
     payment_history: paymentHistory,
@@ -818,6 +884,11 @@ export function deriveOrderFinancials(order = {}, options = {}) {
 
   return {
     subtotal,
+    discount_type: discount.type,
+    discount_value: discount.value,
+    discount_reason: discount.reason,
+    discount_amount: discountAmount,
+    discounted_subtotal: discountedSubtotal,
     tax_amount: taxAmount,
     total_amount: totalAmount,
     deposit_amount: depositAmount,

@@ -147,6 +147,9 @@ function buildPersistedOrderSnapshot(order = {}) {
 }
 
 export function buildSupabaseOrderPayload(order = {}) {
+  // This serializer preserves discount metadata; it does not authorize writes.
+  // Owner discount editing must stay disabled until database authorization is deployed.
+
   const quotePayload =
     order.quote && typeof order.quote === "object" && !Array.isArray(order.quote)
       ? sanitizePersistedValue(order.quote)
@@ -243,7 +246,19 @@ export function buildSupabaseOrderPayload(order = {}) {
     is_rush: Boolean(order.is_rush),
     decoration_type: toText(order.decoration_type || order.production_type),
     placement: toText(order.placement),
-    order_metadata: toJsonObject(order.order_metadata),
+    order_metadata: (() => {
+      const metadata = { ...toJsonObject(order.order_metadata) };
+      if (order.discount_type && Number(order.discount_value) > 0) {
+        metadata.owner_discount = {
+          type: order.discount_type,
+          value: Number(order.discount_value),
+          reason: order.discount_reason || "",
+        };
+      } else {
+        delete metadata.owner_discount;
+      }
+      return metadata;
+    })(),
     notes: String(order.notes || ""),
     internal_notes: String(order.internal_notes || ""),
     activity_log: Array.isArray(order.activity_log) ? order.activity_log : [],
@@ -417,6 +432,9 @@ export function mapSupabaseOrderRowToOrder(row = {}) {
     ),
     placement: firstText(row.placement, snapshot.placement),
     order_metadata: toJsonObject(row.order_metadata, snapshot.order_metadata || {}),
+    discount_type: firstText(snapshot.discount_type, row.order_metadata?.owner_discount?.type),
+    discount_value: firstDefined(snapshot.discount_value, row.order_metadata?.owner_discount?.value) ?? 0,
+    discount_reason: firstText(snapshot.discount_reason, row.order_metadata?.owner_discount?.reason),
     notes: row.notes ?? snapshot.notes ?? "",
     internal_notes: row.internal_notes ?? snapshot.internal_notes ?? "",
     activity_log: Array.isArray(row.activity_log) ? row.activity_log : snapshot.activity_log || [],

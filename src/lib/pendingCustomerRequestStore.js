@@ -67,6 +67,7 @@ function normalizeLineItem(item = {}, index = 0) {
     decorationType: normalizeText(item.decorationType || item.decoration_type),
     artworkId: normalizeText(item.artworkId || item.artwork_id),
     artworkName: normalizeText(item.artworkName || item.artwork_name),
+    artworkLocation: normalizeText(item.artworkLocation || item.artwork_location),
   };
 }
 
