@@ -98,6 +98,9 @@ function buildOperationalUser(user) {
     name: buildOperationalDisplayName(user),
     role,
     email: user.email || "",
+    authUserId: user.id,
+    // Set for PIN-issued sessions: the staff_users row this login belongs to.
+    staffUserId: String(user.app_metadata?.staff_user_id || "").trim(),
     authMode: "supabase-session",
     isSupabaseAuthSession: true,
   };

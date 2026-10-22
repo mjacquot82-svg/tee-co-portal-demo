@@ -14,6 +14,7 @@ import {
 } from "../lib/orderArtwork";
 import { getOrderLineItems } from "../lib/orderLineItems";
 import { updateStoredOrder, useStoredOrders } from "../lib/ordersStore";
+import OrderDiscountEditor from "../components/OrderDiscountEditor";
 import { recordOrderTransitionDiagnostic } from "../lib/orderTransitionDiagnostics";
 import { refreshArtworkAccessUrls } from "../services/customerArtworkService";
 import { getActiveStaffUser } from "../lib/staffUsersStore";
@@ -36,6 +37,7 @@ import {
   canManageArchivedQuotes,
   getAdminViewer,
   isStaffWorkspaceView,
+  resolveOperationalRole,
 } from "./adminRoleView";
 import PaymentRequestForm from "./PaymentRequestForm";
 import { requestQuoteDeposit } from "./quoteDepositRequestAction";
@@ -686,6 +688,16 @@ function resolveArtworkChoice(order = {}) {
   return "Upload Later";
 }
 
+// A discount can only change before money is requested or received; otherwise the customer's
+// open deposit/payment request would no longer match the order total.
+function discountLockReason(order = {}, financials = {}) {
+  if (Number(financials?.total_paid || 0) > 0) return "A payment has already been recorded, so the discount is locked.";
+  if (order.deposit_required === true && Number(order.deposit_amount || 0) > 0) {
+    return "A deposit has already been requested, so the discount is locked.";
+  }
+  return "";
+}
+
 function IntakeReviewScreen({
   order,
   financials,
@@ -694,6 +706,8 @@ function IntakeReviewScreen({
   depositStatus,
   historyEvents,
   canManageArchive,
+  canManageDiscount,
+  onUpdateDiscount,
   onApproveRequest,
   onApproveArtwork,
   onRequestArtwork,
@@ -1244,7 +1258,7 @@ function IntakeReviewScreen({
             ) : null}
             <div className="intake-console-table-head" aria-hidden="true">
               <span>Qty</span><span>Garment</span><span>Color</span><span>Sizes</span>
-              <span>Placement</span><span>Decoration</span><span>Artwork</span>
+              <span>Decoration</span><span>Placement</span><span>Artwork</span>
             </div>
             <div data-testid="intake-order-contents" className="intake-console-order-contents">
               {orderLineItems.map((lineItem, index) => {
@@ -1274,7 +1288,7 @@ function IntakeReviewScreen({
                         )}
                       </div>
                       <DetailItem label="Decoration Method" value={lineItem.decoration_type} />
-                      <DetailItem label="Placement" value={lineItem.placement} />
+                      <DetailItem label="Placement" value={lineItem.placement || lineItem.artwork_location} />
                       <DetailItem label="Artwork" value={assignedArtwork ? getArtworkDisplayName(assignedArtwork) : lineItem.artwork_name || "No artwork selected"} />
                       <DetailItem label="Quantity" value={formatValue(lineItem.quantity, "0")} />
                     </div>
@@ -1409,6 +1423,16 @@ function IntakeReviewScreen({
             <div style={{ display: "grid", gap: "14px" }}>
               <DetailItem label="Estimated Total" value={money(financials?.total_amount)} />
               <DetailItem label="Deposit Decision Status" value={depositStatus} />
+              {canManageDiscount ? (
+                <OrderDiscountEditor
+                  order={order}
+                  financials={financials}
+                  onSave={onUpdateDiscount}
+                  disabled={discountLockReason(order, financials) !== ""}
+                  lockedReason={discountLockReason(order, financials)}
+                />
+              ) : null}
+
               {order.pricing_override === true ? <StatusPill tone="warning">Staff Price Override</StatusPill> : null}
               {pricingAttentionReason ? (
                 <div data-testid="intake-pricing-attention" style={{ border: "1px solid #fed7aa", background: "#fff7ed", borderRadius: "12px", padding: "12px" }}>
@@ -1560,6 +1584,8 @@ export default function QuoteDetail() {
   const viewer = getAdminViewer(activeStaffUser);
   const isStaffWorkspace = isStaffWorkspaceView(activeStaffUser);
   const canManageArchive = canManageArchivedQuotes(viewer);
+  // Owner, manager and staff can set discounts; the database enforces the same rule.
+  const canManageDiscount = Boolean(resolveOperationalRole(activeStaffUser));
   const orders = useStoredOrders();
   const savedOrder = location.state?.savedOrder || null;
   const order = useMemo(
@@ -1826,6 +1852,18 @@ export default function QuoteDetail() {
     showWorkflowConfirmation(buildIntakeActionConfirmation("approve_request", { ...order, ...updates }));
   }
 
+  async function handleUpdateDiscount(discount) {
+    if (archived || canceled) return;
+    const removing = !discount.discount_type;
+    await updateStoredOrder(order.order_number, {
+      ...discount,
+      activity_type: "order_discount",
+      activity_note: removing
+        ? `Discount removed by ${activeStaffUser?.name || "staff"}.`
+        : `Discount applied by ${activeStaffUser?.name || "staff"}: ${discount.discount_type === "percent" ? `${discount.discount_value}%` : `$${Number(discount.discount_value).toFixed(2)}`}.`,
+    });
+  }
+
   async function handleRequestArtwork() {
     if (archived || canceled) return;
 
@@ -1984,6 +2022,8 @@ export default function QuoteDetail() {
         depositStatus={depositStatus}
         historyEvents={historyEvents}
         canManageArchive={canManageArchive}
+        canManageDiscount={canManageDiscount}
+        onUpdateDiscount={handleUpdateDiscount}
         onApproveRequest={handleApproveRequest}
         onApproveArtwork={handleApproveArtwork}
         onRequestArtwork={handleRequestArtwork}
@@ -2917,6 +2957,18 @@ export default function QuoteDetail() {
             <DetailItem label="Amount Due Now" value={money(financials?.amount_due_now)} />
             <DetailItem label="Collection Step" value={formatValue(financials?.payment_collection_state)} />
           </div>
+
+          {canManageDiscount && !archived && !canceled ? (
+            <div data-testid="quote-discount-section" style={{ marginBottom: "18px" }}>
+              <OrderDiscountEditor
+                order={order}
+                financials={financials}
+                onSave={handleUpdateDiscount}
+                disabled={discountLockReason(order, financials) !== ""}
+                lockedReason={discountLockReason(order, financials)}
+              />
+            </div>
+          ) : null}
 
           <div
             style={{

@@ -81,3 +81,12 @@ ask for artwork help. They go through the existing notification pipeline
 
 ### "Order approved" wording
 `customer-confirmation-notifications.sql` also publishes one new "Order approved" version (old versions are kept). The server fills in the next step: if a deposit is still due it says so (no amounts) and links to `/portal/orders/<n>/deposit`; otherwise it keeps "No action is needed". **Deploy the functions before running the SQL**, otherwise that line is blank. The rollback points the policy back to the previous version.
+
+## Staff discounts (Teresa's Oct 7 work, branch `feature/teresa-oct7-on-security`)
+Run `supabase/order-discount-authorization.sql` only AFTER phase B and after the code with the
+discount editor is deployed. It adds a database guard: only signed-in operational staff (owner /
+manager / staff, including PIN sessions) or the service role can set, change or remove a discount;
+values must be valid and the two stored copies must agree. Before phase B the current app saves
+orders without signing in, so its discount saves would be refused. Rollback:
+`supabase/order-discount-authorization-rollback.sql` (run it first if rolling back C/B).
+Rehearsed in memory on top of A/B/C with the app's own order payloads (Oct 19, 2026): 37/37 checks.
