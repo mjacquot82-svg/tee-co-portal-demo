@@ -4299,6 +4299,8 @@ export default function GarmentLibrary() {
 
                   <ProductImageUploader
                     image={form.image}
+                    productId={editingId ? `garment-${editingId}` : "garment-draft"}
+                    useProductImageStorage
                     onImageChange={(image) => setForm((current) => ({ ...current, image }))}
                   />
                 </section>

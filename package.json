@@ -16,7 +16,8 @@
     "migrate:product-images": "node scripts/migrate-product-images-to-storage.mjs",
     "seed:garment-model-colors": "node scripts/seed-garment-model-colors-from-products.mjs",
     "preview": "vite preview",
-    "test:functions": "node --test --test-concurrency=1 tests/functions/"
+    "test:functions": "node --test --test-concurrency=1 tests/functions/",
+    "migrate:order-images": "node scripts/migrate-order-images-to-storage.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.1",
