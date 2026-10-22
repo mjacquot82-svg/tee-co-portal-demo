@@ -114,6 +114,7 @@ function normalizeStaffUser(user) {
     pin: user?.pin ? formatStaffPin(user.pin) : "",
     hasPin: typeof user?.hasPin === "boolean" ? user.hasPin : Boolean(user?.pin),
     status: normalizedStatus,
+    ...(user?.auth_user_id ? { auth_user_id: String(user.auth_user_id) } : {}),
     created_at: createdAt,
     updated_at: user?.updated_at || createdAt,
   };
@@ -248,6 +249,7 @@ function mapSupabaseRowToStaffUser(row) {
     hasPin: Boolean(row?.has_pin),
     role: row?.role,
     status: normalizedStatus,
+    auth_user_id: row?.auth_user_id || "",
     created_at: row?.created_at,
     updated_at: row?.updated_at || row?.created_at,
   });
@@ -935,6 +937,23 @@ export function clearActiveStaffSession(options = {}) {
   }
 }
 
+// A signed-in Supabase session (e.g. a new tab after PIN login, where the per-tab staff choice is
+// gone) must act as its staff_users row, never as the raw auth user id: orders reference
+// staff_users.id. Match by the session's staff_user_id claim, then by staff_users.auth_user_id.
+// With no staff row the audit id is left blank (saved as null) instead of an id the DB rejects.
+export function resolveStaffForAuthUser(authUser, staffUsers = []) {
+  if (!authUser?.id) return null;
+  const list = Array.isArray(staffUsers) ? staffUsers : [];
+  const staffId = String(authUser.staffUserId || "").trim();
+  const match =
+    (staffId && list.find((staff) => staff.id === staffId)) ||
+    list.find((staff) => staff.auth_user_id && staff.auth_user_id === (authUser.authUserId || authUser.id));
+  if (match && match.status !== "Inactive") {
+    return { ...authUser, ...match, role: match.role || authUser.role, authUserId: authUser.authUserId || authUser.id, staffUserId: match.id };
+  }
+  return { ...authUser, id: staffId || authUser.id, staffUserId: staffId, authUserId: authUser.authUserId || authUser.id, staffRecordMissing: !staffId };
+}
+
 export function getActiveStaffUser() {
   const operationalAuthUser = getOperationalAuthUser();
   const storedActiveStaffUser = resolveHydratedActiveStaffUser();
@@ -944,7 +963,7 @@ export function getActiveStaffUser() {
   }
 
   if (operationalAuthUser?.id) {
-    return operationalAuthUser;
+    return resolveStaffForAuthUser(operationalAuthUser, getCachedStaffUsers());
   }
 
   return null;
@@ -1197,7 +1216,7 @@ export function buildStaffAuditFields(prefix = "created") {
   }
 
   return {
-    [`${prefix}_by_staff_id`]: activeStaff.id || "",
+    [`${prefix}_by_staff_id`]: activeStaff.staffRecordMissing ? "" : activeStaff.id || "",
     [`${prefix}_by_staff_name`]: activeStaff.name || "Unknown Staff",
     [`${prefix}_by_staff_role`]: activeStaff.role || "",
   };

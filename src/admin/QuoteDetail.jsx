@@ -2958,6 +2958,18 @@ export default function QuoteDetail() {
             <DetailItem label="Collection Step" value={formatValue(financials?.payment_collection_state)} />
           </div>
 
+          {canManageDiscount && !archived && !canceled ? (
+            <div data-testid="quote-discount-section" style={{ marginBottom: "18px" }}>
+              <OrderDiscountEditor
+                order={order}
+                financials={financials}
+                onSave={handleUpdateDiscount}
+                disabled={discountLockReason(order, financials) !== ""}
+                lockedReason={discountLockReason(order, financials)}
+              />
+            </div>
+          ) : null}
+
           <div
             style={{
               border: "1px solid #e2e8f0",
