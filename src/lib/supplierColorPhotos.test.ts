@@ -108,3 +108,20 @@ describe("import script safety", () => {
     expect(filterByStyles(records, [parseStyleFilter("Gildan 64000")])).toHaveLength(16);
   });
 });
+
+import { withLookupBrand as _wlb, resolveSupplierStyle as _rss, buildStyleKey as _bsk } from "./supplierColorPhotos.js";
+describe("brand from the product's brand setting", () => {
+  const brands = [{ id: "b1", name: "Gildan" }, { id: "b2", name: "Core 365" }];
+  const key = (p: Record<string, unknown>) => { const s = _rss(_wlb(p, brands) as never, {}); return s ? _bsk(s.brand, s.style) : ""; };
+  it("ignores a full product name stored in brand_model", () => {
+    expect(key({ name: "Gildan Unisex Heavy Blend Hooded Sweatshirt - 18500", brand_model: "Gildan Gildan Unisex Heavy Blend Hooded Sweatshirt - 18500", brand_lookup_id: "b1" })).toBe("gildan|18500");
+    expect(key({ name: "Wifes Choices", brand_model: "Gildan Gildan Unisex Softstyle T-Shirt 64000", brand_lookup_id: "b1" })).toBe("gildan|64000");
+    expect(key({ name: "Core 365 CORE365 Unisex Fusion T", brand_model: "Core 365 CORE365 Unisex Fusion ChromaSoft Performance T-Shirt - CE111", brand_lookup_id: "b2" })).toBe("core365|ce111");
+  });
+  it("leaves products alone when the brand is unknown or already explicit", () => {
+    const p = { brand_model: "Team 365 TT62", brand_lookup_id: "nope" };
+    expect(_wlb(p, brands)).toBe(p);
+    expect(key({ brand_model: "Team 365 TT62" })).toBe("team365|tt62");
+    expect(_wlb({ supplier_brand: "X", brand_lookup_id: "b1" }, brands)).toEqual({ supplier_brand: "X", brand_lookup_id: "b1" });
+  });
+});

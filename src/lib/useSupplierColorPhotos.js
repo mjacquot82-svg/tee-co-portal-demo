@@ -7,13 +7,21 @@ import {
   fetchSupplierSizeChart,
   findColorPhotoRecord,
   resolveSupplierStyle,
+  withLookupBrand,
 } from "./supplierColorPhotos";
+import { useCatalogLookups } from "./catalogLookupsStore";
+
+function useBrandedProduct(product) {
+  const brands = useCatalogLookups()?.brands;
+  return useMemo(() => withLookupBrand(product, brands), [product, brands]);
+}
 
 // Returns the S&S photo views (front/back/side/on-model) for the selected colour, or [] when
 // S&S has nothing for this garment/colour (the page then keeps its normal garment image).
 const EMPTY = [];
 
-export function useSupplierColorPhotos(product, garment, colorName) {
+export function useSupplierColorPhotos(rawProduct, garment, colorName) {
+  const product = useBrandedProduct(rawProduct);
   const style = useMemo(() => resolveSupplierStyle(product || {}, garment || {}), [product, garment]);
   const styleKey = style ? `${style.brand}|${style.style}` : "";
   const [loaded, setLoaded] = useState({ styleKey: "", rows: [] });
@@ -39,7 +47,8 @@ export function useSupplierColorPhotos(product, garment, colorName) {
 }
 
 // S&S size chart (inches) for the garment, or null when S&S has none for it.
-export function useSupplierSizeChart(product, garment) {
+export function useSupplierSizeChart(rawProduct, garment) {
+  const product = useBrandedProduct(rawProduct);
   const style = useMemo(() => resolveSupplierStyle(product || {}, garment || {}), [product, garment]);
   const styleKey = style ? `${style.brand}|${style.style}` : "";
   const [loaded, setLoaded] = useState({ styleKey: "", chart: null });
@@ -60,7 +69,8 @@ export function useSupplierSizeChart(product, garment) {
 }
 
 // First colour photo (front) for a product card when the product has no image of its own.
-export function useSupplierCardImage(product, enabled = true) {
+export function useSupplierCardImage(rawProduct, enabled = true) {
+  const product = useBrandedProduct(rawProduct);
   const style = useMemo(() => (enabled ? resolveSupplierStyle(product || {}, {}) : null), [product, enabled]);
   const styleKey = style ? `${style.brand}|${style.style}` : "";
   const [loaded, setLoaded] = useState({ styleKey: "", rows: [] });
