@@ -51,6 +51,16 @@ export function buildSsImageUrl(path, size = "medium") {
   return `${SS_IMAGE_HOST}${value}.jpg`;
 }
 
+// Live products often have the whole product name in brand_model ("Gildan Gildan Unisex ... - 18500"),
+// which made the brand come out wrong. Prefer the product's brand setting (brand_lookup_id -> brands.name).
+export function withLookupBrand(product, brands = []) {
+  if (!product || product.supplier_brand) return product;
+  const id = product.brand_lookup_id;
+  const match = id && Array.isArray(brands) ? brands.find((b) => b && String(b.id) === String(id)) : null;
+  const name = normalizeText(match?.name);
+  return name ? { ...product, supplier_brand: name } : product;
+}
+
 // Works out which S&S style a catalog product is, e.g. "Gildan Youth Heavy Cotton T-Shirt - 5000B"
 // or brand_model "Gildan 5000B" -> { brand: "Gildan", style: "5000B" }.
 export function resolveSupplierStyle(product = {}, garment = {}) {
