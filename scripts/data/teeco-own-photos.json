@@ -1,5 +1,5 @@
 {
- "source": "Tee & Co's own supplier files (Teresa, Oct 21 2026): 'Off Figure Images.zip' + 'SIZE CHARTS.zip'. Catalogue/product data only.",
+ "source": "Tee & Co's own supplier files (Teresa, Oct 21 2026): 'Off Figure Images.zip' + 'SIZE CHARTS.zip'. Catalogue/product data only. Plus Teresa's screenshots of Oct 22 2026 (Gmail 1a163d338f2276cf) for the colours/garments that were missing.",
  "photos": [
   {
    "brand": "24/7 All Day Every Day",
@@ -1376,6 +1376,438 @@
    "view": "back",
    "src": "L07240/7240-Back-Burgundy-HIRes.jpg",
    "key": "supplier-photos/l07240/burgundy-melange-back.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00540",
+   "color": "Ivory",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092422.png",
+   "key": "supplier-photos/l00540/ivory-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "L00550",
+   "color": "Orange",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092500.png",
+   "key": "supplier-photos/l00550/orange-front.jpg"
+  },
+  {
+   "brand": "CX2",
+   "style": "L07240",
+   "color": "Green",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092551.png",
+   "key": "supplier-photos/l07240/green-front.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L07200",
+   "color": "Black",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092641.png",
+   "key": "supplier-photos/l07200/black-front.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L07200",
+   "color": "Black",
+   "view": "back",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092650.png",
+   "key": "supplier-photos/l07200/black-back.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L07200",
+   "color": "Navy",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092657.png",
+   "key": "supplier-photos/l07200/navy-front.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L07200",
+   "color": "Navy",
+   "view": "back",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092702.png",
+   "key": "supplier-photos/l07200/navy-back.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L07201",
+   "color": "Black",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092725.png",
+   "key": "supplier-photos/l07201/black-front.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L07201",
+   "color": "Black",
+   "view": "back",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092731.png",
+   "key": "supplier-photos/l07201/black-back.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L07201",
+   "color": "Navy",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092738.png",
+   "key": "supplier-photos/l07201/navy-front.jpg"
+  },
+  {
+   "brand": "Heritage 54",
+   "style": "L07201",
+   "color": "Navy",
+   "view": "back",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092745.png",
+   "key": "supplier-photos/l07201/navy-back.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Black",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092805.png",
+   "key": "supplier-photos/s5610y/black-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "White",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092813.png",
+   "key": "supplier-photos/s5610y/white-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Heather Charcoal",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092819.png",
+   "key": "supplier-photos/s5610y/heather-charcoal-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Navy",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092824.png",
+   "key": "supplier-photos/s5610y/navy-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Athletic Heather",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092830.png",
+   "key": "supplier-photos/s5610y/athletic-heather-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Brown",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092834.png",
+   "key": "supplier-photos/s5610y/brown-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Caramel",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092841.png",
+   "key": "supplier-photos/s5610y/caramel-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Forest Green",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092846.png",
+   "key": "supplier-photos/s5610y/forest-green-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Gold",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092850.png",
+   "key": "supplier-photos/s5610y/gold-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Heliconia",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092855.png",
+   "key": "supplier-photos/s5610y/heliconia-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Ivory",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092900.png",
+   "key": "supplier-photos/s5610y/ivory-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Kelly Green",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092906.png",
+   "key": "supplier-photos/s5610y/kelly-green-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Light Blue",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092911.png",
+   "key": "supplier-photos/s5610y/light-blue-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Maroon",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092917.png",
+   "key": "supplier-photos/s5610y/maroon-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Fatigue Green",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092923.png",
+   "key": "supplier-photos/s5610y/fatigue-green-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Orange",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092927.png",
+   "key": "supplier-photos/s5610y/orange-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Light Pink",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092933.png",
+   "key": "supplier-photos/s5610y/light-pink-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Purple",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092940.png",
+   "key": "supplier-photos/s5610y/purple-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Red",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092946.png",
+   "key": "supplier-photos/s5610y/red-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Royal Blue",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092953.png",
+   "key": "supplier-photos/s5610y/royal-blue-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Sand",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 092957.png",
+   "key": "supplier-photos/s5610y/sand-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Sapphire",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093004.png",
+   "key": "supplier-photos/s5610y/sapphire-front.jpg"
+  },
+  {
+   "brand": "Canada Sportswear",
+   "style": "S5610Y",
+   "color": "Yellow",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093010.png",
+   "key": "supplier-photos/s5610y/yellow-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Caramel and Black",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093047.png",
+   "key": "supplier-photos/h08205/caramel-and-black-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Black",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093053.png",
+   "key": "supplier-photos/h08205/black-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Navy",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093059.png",
+   "key": "supplier-photos/h08205/navy-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Charcoal",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093104.png",
+   "key": "supplier-photos/h08205/charcoal-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Black and White",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093109.png",
+   "key": "supplier-photos/h08205/black-and-white-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Navy and White",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093114.png",
+   "key": "supplier-photos/h08205/navy-and-white-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Grey Heather-White",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093119.png",
+   "key": "supplier-photos/h08205/grey-heather-white-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Grey Heather-Black",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093123.png",
+   "key": "supplier-photos/h08205/grey-heather-black-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Charcoal and Black",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093128.png",
+   "key": "supplier-photos/h08205/charcoal-and-black-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Brown and Khaki",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093131.png",
+   "key": "supplier-photos/h08205/brown-and-khaki-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Moss and Khaki",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093136.png",
+   "key": "supplier-photos/h08205/moss-and-khaki-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Black Camo",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093142.png",
+   "key": "supplier-photos/h08205/black-camo-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Forest Green-Black-White",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093146.png",
+   "key": "supplier-photos/h08205/forest-green-black-white-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Grey",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093150.png",
+   "key": "supplier-photos/h08205/grey-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Gold",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093154.png",
+   "key": "supplier-photos/h08205/gold-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Grey Camo",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093159.png",
+   "key": "supplier-photos/h08205/grey-camo-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Maroon-Black-White",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093204.png",
+   "key": "supplier-photos/h08205/maroon-black-white-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Orange",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093209.png",
+   "key": "supplier-photos/h08205/orange-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Royal-Black-White",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093213.png",
+   "key": "supplier-photos/h08205/royal-black-white-front.jpg"
+  },
+  {
+   "brand": "24/7 All Day Every Day",
+   "style": "H08205",
+   "color": "Red-Black-White",
+   "view": "front",
+   "src": "Gmail 1a163d338f2276cf: Screenshot 2026-10-22 093217.png",
+   "key": "supplier-photos/h08205/red-black-white-front.jpg"
   }
  ],
  "size_charts": [
