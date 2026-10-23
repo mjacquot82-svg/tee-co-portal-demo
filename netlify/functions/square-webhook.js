@@ -241,19 +241,30 @@ export async function syncSupabaseOrderPaymentState(supabase, payment = {}, paym
 
   if (updateResult.error) throw updateResult.error;
 
-  if (!hasActivityEntry) await supabase
-    .from("activity_logs")
-    .insert({
-      entity_type: "order",
-      entity_id: updateResult.data?.id || orderResult.data.id || null,
-      entity_reference: orderNumber,
-      activity_type: activityEntry.type,
-      operational_status: updateResult.data?.status || orderResult.data.status || "",
-      note: activityEntry.note,
-      metadata: activityEntry.metadata,
-      created_at: capturedAt,
-    })
-    .catch(() => null);
+  // The activity log is a side record: the order update above already succeeded, so a failed
+  // log write is reported but must not fail the webhook. Supabase query builders are
+  // "thenable" only (no .catch), so await the result and check .error instead.
+  if (!hasActivityEntry) {
+    try {
+      const activityResult = await supabase
+        .from("activity_logs")
+        .insert({
+          entity_type: "order",
+          entity_id: updateResult.data?.id || orderResult.data.id || null,
+          entity_reference: orderNumber,
+          activity_type: activityEntry.type,
+          operational_status: updateResult.data?.status || orderResult.data.status || "",
+          note: activityEntry.note,
+          metadata: activityEntry.metadata,
+          created_at: capturedAt,
+        });
+      if (activityResult?.error) {
+        console.warn("[square-webhook] activity log write failed", activityResult.error.code || activityResult.error.message);
+      }
+    } catch (error) {
+      console.warn("[square-webhook] activity log write failed", error?.message || error);
+    }
+  }
 
   return updateResult.data;
 }

@@ -138,9 +138,7 @@ class FakeSupabaseQuery {
     return Promise.resolve(this.execute()).then(resolve, reject);
   }
 
-  catch(reject) {
-    return Promise.resolve(this.execute()).catch(reject);
-  }
+  // Like real Supabase query builders: thenable only, no .catch().
 
   tableRows() {
     return this.client.tables[this.tableName] || [];
@@ -161,6 +159,9 @@ class FakeSupabaseQuery {
 
   execute() {
     const rows = this.tableRows();
+    if (this.operation === "insert" && (this.client.failInserts || []).includes(this.tableName)) {
+      return { data: null, error: { code: "42501", message: `insert blocked on ${this.tableName}` } };
+    }
     if (this.operation === "insert") {
       rows.push(...this.payload.map(clone));
       return this.formatResult(this.payload);
@@ -539,6 +540,35 @@ test("refunded Square payment removes paid value from the persisted order rollup
   });
   expect(supabase.rows("activity_logs")).toHaveLength(1);
   expect(supabase.rows("activity_logs")[0]).toMatchObject({ activity_type: "payment_refund" });
+});
+
+test("a failed activity log write does not fail the Square webhook order update", async () => {
+  const seed = {
+    orders: [{
+      id: "order-log-fail", order_number: "TC-LOG-FAIL", status: "Awaiting Deposit", quote_status: "Awaiting Deposit",
+      deposit_required: true, deposit_amount: 25, total_amount: 50, activity_log: [],
+    }],
+    payment_requests: [{
+      id: "request-log-fail", order_number: "TC-LOG-FAIL", request_type: "deposit",
+      status: "paid", amount_requested: 25, amount_paid: 25, paid_at: "2026-06-24T12:01:00.000Z",
+    }],
+    payments: [{
+      id: "payment-log-fail", order_number: "TC-LOG-FAIL", payment_request_id: "request-log-fail",
+      payment_type: "deposit", status: "captured", amount: 25, method: "square", provider: "square",
+      provider_payment_id: "square-payment-log-fail", provider_status: "COMPLETED",
+      captured_at: "2026-06-24T12:01:00.000Z", updated_at: "2026-06-24T12:01:00.000Z",
+    }],
+  };
+  for (const failInserts of [[], ["activity_logs"]]) {
+    const supabase = new FakeSupabaseClient(seed);
+    supabase.failInserts = failInserts;
+    await expect(
+      syncSupabaseOrderPaymentState(supabase, supabase.rows("payments")[0], supabase.rows("payment_requests")[0])
+    ).resolves.toBeTruthy();
+    expect(supabase.rows("orders")[0].total_paid).toBe(25);
+    expect(supabase.rows("orders")[0].activity_log).toHaveLength(1);
+    expect(supabase.rows("activity_logs")).toHaveLength(failInserts.length ? 0 : 1);
+  }
 });
 
 test("Square order reconciliation writes only production order columns", () => {
