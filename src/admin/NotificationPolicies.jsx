@@ -7,6 +7,7 @@ import {
   saveNotificationPolicyVersion,
   validateNotificationPolicyDraft,
 } from "../lib/notificationPolicyAdministration";
+import SmsUsagePanel from "../components/SmsUsagePanel";
 
 const channels = [
   ["email_enabled", "Email", "email"],
@@ -101,6 +102,8 @@ export default function NotificationPolicies() {
           <Link to="/admin/settings/notifications/activity">Activity</Link>
         </nav>
       </header>
+
+      <SmsUsagePanel />
 
       {status.message ? (
         <div role="status" style={{ padding: "10px 12px", borderRadius: "10px", background: status.kind === "error" ? "#fef2f2" : "#f0fdf4", color: status.kind === "error" ? "#991b1b" : "#166534" }}>
