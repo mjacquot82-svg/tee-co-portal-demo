@@ -100,6 +100,7 @@ export async function handler(event = {}) {
   try {
     const result = await runScheduledTwilioSmsDispatcher({
       cutoverEnabled,
+      usageCapEnabled: enabled(process.env.SMS_USAGE_CAP_ENABLED),
       runId,
       workerId,
       adapter: createTwilioSmsAdapter({

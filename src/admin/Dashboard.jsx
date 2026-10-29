@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { SmsUsageAlert } from "../components/SmsUsagePanel";
 import {
   useStoredOrders,
   useStoredOrdersHydrationState,
@@ -448,6 +449,7 @@ function OwnerDashboard({ orders, operationalEvents }) {
             Start with work that needs an owner decision, then check customer-blocked jobs and staff-ready queues.
           </p>
         </header>
+        <SmsUsageAlert />
 
         <WorkspaceSection
           eyebrow="Your Attention"

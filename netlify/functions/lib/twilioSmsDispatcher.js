@@ -7,6 +7,12 @@ import {
   recoverAbandonedTwilioAuthoritativeClaims,
   startTwilioSmsDispatchRun,
 } from "../../../src/lib/notificationDispatcherRepository.js";
+import {
+  buildCapSkipResult,
+  releaseSmsUsage,
+  reserveSmsUsage,
+  shouldReleaseAfterResult,
+} from "./smsUsageGuard.js";
 
 function normalizeText(value) {
   return String(value ?? "").trim();
@@ -79,6 +85,7 @@ export async function runClaimedTwilioSmsDelivery({
   dispatcherClient,
   cutoverEnabled = false,
   retryPolicy,
+  usageCapEnabled = false,
   now = () => new Date(),
 }) {
   if (cutoverEnabled !== true) {
@@ -98,7 +105,26 @@ export async function runClaimedTwilioSmsDelivery({
     notification: envelope.notification,
     businessEvent: envelope.business_event,
   });
-  const result = await adapter.send(request);
+  let reservation = null;
+  let result;
+  if (usageCapEnabled === true) {
+    reservation = await reserveSmsUsage(
+      {
+        deliveryId: request.deliveryId,
+        attemptId: request.attemptId,
+        now: now().toISOString(),
+      },
+      dispatcherClient
+    );
+  }
+  if (reservation?.decision === "blocked") {
+    result = buildCapSkipResult(reservation);
+  } else {
+    result = await adapter.send(request);
+    if (reservation && shouldReleaseAfterResult(result)) {
+      await releaseSmsUsage({ attemptId: request.attemptId }, dispatcherClient);
+    }
+  }
   const completedAt = now().toISOString();
   const delivery = await completeTwilioAuthoritativeDelivery(
     {
@@ -122,6 +148,7 @@ export async function runClaimedTwilioSmsDelivery({
     delivery,
     attemptId: request.attemptId,
     providerResult: result,
+    ...(reservation ? { usage: reservation } : {}),
   };
 }
 
@@ -135,6 +162,7 @@ export async function runScheduledTwilioSmsDispatcher({
   leaseSeconds = 60,
   recoveryLimit = 100,
   retryPolicy,
+  usageCapEnabled = false,
   now = () => new Date(),
 }) {
   if (cutoverEnabled !== true) {
@@ -198,6 +226,7 @@ export async function runScheduledTwilioSmsDispatcher({
             adapter,
             dispatcherClient,
             retryPolicy,
+            usageCapEnabled,
             now,
           })
         );
