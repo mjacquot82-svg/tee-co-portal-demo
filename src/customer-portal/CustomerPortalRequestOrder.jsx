@@ -1,3 +1,4 @@
+import { selectOrderArtwork } from "../lib/customerArtworkUpload";
 import { pickPersistableImageSource } from "../lib/orderImageStorage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useOutletContext } from "react-router-dom";
@@ -546,7 +547,7 @@ export default function CustomerPortalRequestOrder() {
     const primaryLineItem = configuredLineItems[0];
     const primaryProduct = storefrontProducts.find((product) => product.id === primaryLineItem.product_id);
     const decorationType = primaryLineItem.decoration_type;
-    const draftArtworkLibrary = pendingRequest?.artworkLibrary || [];
+    const draftArtworkLibrary = selectOrderArtwork(pendingRequest?.artworkLibrary || [], configuredLineItems);
     const uploadedByDraftId = new Map();
     try {
       for (const draftAsset of draftArtworkLibrary) {

@@ -78,7 +78,7 @@ test("successful artwork upload persists metadata before order creation proceeds
     artworkService.indexOf("export async function", artworkService.indexOf("export async function uploadCustomerArtwork") + 1)
   );
   const storageUpload = uploadFunction.indexOf(
-    ".upload(storagePath, file"
+    "await uploadArtworkFile("
   );
   const metadataInsert = uploadFunction.indexOf(
     "insertArtworkMetadataWithSchemaFallback(insertPayload)"
