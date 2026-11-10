@@ -1,3 +1,4 @@
+import { uploadArtworkFile } from "../lib/customerArtworkUpload";
 import { hasBrowserStorage } from "../lib/browserStorage";
 import {
   getAllCustomerArtwork,
@@ -690,17 +691,12 @@ export async function uploadCustomerArtwork(customerId, file, options = {}) {
     storagePath,
   });
 
-  const { error: uploadError } = await supabase.storage
-    .from(CUSTOMER_ARTWORK_BUCKET)
-    .upload(storagePath, file, {
-      cacheControl: "3600",
-      upsert: false,
-      contentType: file.type || options.fileType || undefined,
-    });
-
-  if (uploadError) {
-    throw new Error(uploadError.message || "Unable to upload artwork file.");
-  }
+  await uploadArtworkFile(
+    supabase.storage.from(CUSTOMER_ARTWORK_BUCKET),
+    storagePath,
+    file,
+    options.fileType
+  );
   console.info("[customerArtworkService] storage upload complete", {
     customerId: normalizedCustomerId,
     storagePath,
